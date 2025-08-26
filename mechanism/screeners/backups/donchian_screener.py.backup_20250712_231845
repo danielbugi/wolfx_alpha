@@ -1,0 +1,942 @@
+# automation/screeners/donchian_screener.py
+"""
+Refactored Donchian Channel Breakout Screener using shared infrastructure
+Detects breakouts and generates lightweight JSON files for frontend consumption
+"""
+
+import pandas as pd
+import numpy as np
+import json
+import os
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Any
+import warnings
+
+# Import shared infrastructure
+import sys
+import os
+
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
+from shared import (
+    config, db, setup_logging, retry_on_failure,
+    timing_decorator, date_utils, data_validation,
+    file_utils, format_number, calculate_percentage_change
+)
+
+warnings.filterwarnings('ignore')
+
+# Setup logging for this module
+logger = setup_logging("donchian_screener")
+
+
+class DonchianScreener:
+    """Enhanced Donchian Channel Breakout Screener with frontend data generation"""
+
+    def __init__(self):
+        """Initialize the screener with shared configuration"""
+        self.criteria = config.get_screening_criteria()
+        self.frontend_data_dir = config.frontend_data_dir
+
+        # Ensure frontend data directory exists
+        file_utils.ensure_directory(self.frontend_data_dir)
+
+        logger.info("Donchian Screener initialized with shared infrastructure")
+        logger.info("🔓 SCREENING MODE: ALL SYMBOLS (no filtering criteria)")
+        logger.info("🎯 DETECTION MODE: BREAKOUTS + NEAR BREAKOUTS")
+        logger.info(f"   ✅ Actual breakouts (price breaks Donchian levels)")
+        logger.info(f"   🎯 Near breakouts (within 2% of Donchian levels)")
+        logger.info(f"Will screen ALL symbols in database for current and imminent breakouts")
+
+    @retry_on_failure(max_retries=3, delay=1.0)
+    def get_active_symbols(self) -> List[str]:
+        """Get ALL symbols from database for screening (no filtering criteria)"""
+        try:
+            # Get all symbols that have any price data - NO FILTERING
+            query = """
+            SELECT DISTINCT p.symbol
+            FROM stock_prices p
+            WHERE p.symbol IS NOT NULL 
+            AND p.symbol != ''
+            ORDER BY p.symbol
+            """
+
+            results = db.execute_query(query)
+            symbols = [row[0] for row in results]
+
+            logger.info(f"Found {len(symbols)} symbols for screening (ALL symbols, no filtering)")
+            return symbols
+
+        except Exception as e:
+            logger.error(f"Error getting symbols: {e}")
+            return []
+
+    @retry_on_failure(max_retries=2, delay=0.5)
+    def get_stock_data(self, symbol: str, days: int = 30) -> Optional[pd.DataFrame]:
+        """Get recent stock data with technical indicators"""
+        try:
+            query = """
+            SELECT 
+                p.date,
+                p.symbol,
+                p.open,
+                p.high,
+                p.low,
+                p.close,
+                p.volume,
+                t.donchian_high_20,
+                t.donchian_low_20,
+                t.donchian_mid_20,
+                t.sma_20,
+                t.sma_50,
+                t.rsi_14,
+                t.atr_14,
+                t.volume_sma_10,
+                t.volume_ratio
+            FROM stock_prices p
+            LEFT JOIN technical_indicators t ON p.symbol = t.symbol AND p.date = t.date
+            WHERE p.symbol = %s
+            AND p.date >= CURRENT_DATE - INTERVAL '%s days'
+            ORDER BY p.date DESC
+            """
+
+            results = db.execute_dict_query(query, (symbol, days))
+
+            if not results:
+                return None
+
+            # Convert to DataFrame
+            df = pd.DataFrame(results)
+            df['date'] = pd.to_datetime(df['date'])
+            df = df.sort_values('date')
+
+            return df
+
+        except Exception as e:
+            logger.error(f"Error getting stock data for {symbol}: {e}")
+            return None
+
+    @retry_on_failure(max_retries=2, delay=0.5)
+    def get_fundamentals(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Get fundamental data for a symbol"""
+        try:
+            query = """
+            SELECT *
+            FROM daily_fundamentals
+            WHERE symbol = %s
+            ORDER BY date DESC
+            LIMIT 1
+            """
+
+            results = db.execute_dict_query(query, (symbol,))
+            return results[0] if results else None
+
+        except Exception as e:
+            logger.error(f"Error getting fundamentals for {symbol}: {e}")
+            return None
+
+    def check_donchian_breakout(self, data: pd.DataFrame) -> Dict[str, Any]:
+        """Check for Donchian channel breakouts AND near breakouts"""
+        try:
+            if len(data) < 2:
+                return {'breakout_type': None, 'score': 0}
+
+            latest = data.iloc[-1]
+            previous = data.iloc[-2]
+
+            result = {
+                'breakout_type': None,
+                'score': 0,
+                'current_price': float(latest['close']),
+                'donchian_high': float(latest['donchian_high_20']) if pd.notna(latest['donchian_high_20']) else None,
+                'donchian_low': float(latest['donchian_low_20']) if pd.notna(latest['donchian_low_20']) else None,
+                'donchian_middle': float(latest['donchian_mid_20']) if pd.notna(latest['donchian_mid_20']) else None,
+                'volume_ratio': float(latest['volume_ratio']) if pd.notna(latest['volume_ratio']) else 1.0,
+                'rsi': float(latest['rsi_14']) if pd.notna(latest['rsi_14']) else None,
+                'atr': float(latest['atr_14']) if pd.notna(latest['atr_14']) else None,
+                'price_change_pct': 0.0,
+                'volume_change_pct': 0.0,
+                'distance_to_breakout': 0.0,
+                'breakout_probability': 0.0
+            }
+
+            # Check for valid Donchian data
+            if pd.isna(latest['donchian_high_20']) or pd.isna(latest['donchian_low_20']):
+                return result
+
+            # Calculate price and volume changes
+            if len(data) >= 2:
+                prev_close = previous['close']
+                prev_volume = previous['volume']
+
+                result['price_change_pct'] = calculate_percentage_change(prev_close, latest['close'])
+                if prev_volume and prev_volume > 0:
+                    result['volume_change_pct'] = calculate_percentage_change(prev_volume, latest['volume'])
+
+            current_price = latest['close']
+            donchian_high = latest['donchian_high_20']
+            donchian_low = latest['donchian_low_20']
+
+            # Calculate distances to breakout levels
+            distance_to_high = ((donchian_high - current_price) / current_price) * 100
+            distance_to_low = ((current_price - donchian_low) / current_price) * 100
+
+            # === ACTUAL BREAKOUTS ===
+
+            # Upward breakout (current behavior)
+            if (current_price > previous['donchian_high_20'] and previous['close'] <= previous['donchian_high_20']):
+                result['breakout_type'] = 'bullish'
+                result['distance_to_breakout'] = 0.0  # Already broke out
+                score = 50  # Base score
+
+                # Volume confirmation (more lenient for all-symbol screening)
+                if result['volume_ratio'] > 1.2:  # Lowered from volume_spike_threshold (1.5)
+                    score += 25
+                elif result['volume_ratio'] > 1.0:  # Any volume increase
+                    score += 15
+
+                # RSI confirmation (not overbought)
+                if result['rsi']:
+                    if result['rsi'] < 80:
+                        score += 10
+                    if result['rsi'] > 50:  # Momentum
+                        score += 5
+
+                # Price momentum
+                if result['donchian_middle']:
+                    if current_price > result['donchian_middle'] * 1.02:  # 2% above middle
+                        score += 10
+
+                # Moving average confirmation
+                if pd.notna(latest['sma_20']) and current_price > latest['sma_20']:
+                    score += 5
+                if pd.notna(latest['sma_50']) and current_price > latest['sma_50']:
+                    score += 5
+
+                result['score'] = min(score, 100)
+
+            # Downward breakout (current behavior)
+            elif (current_price < previous['donchian_low_20'] and previous['close'] >= previous['donchian_low_20']):
+                result['breakout_type'] = 'bearish'
+                result['distance_to_breakout'] = 0.0  # Already broke out
+                score = 50  # Base score
+
+                # Volume confirmation (more lenient for all-symbol screening)
+                if result['volume_ratio'] > 1.2:  # Lowered from volume_spike_threshold (1.5)
+                    score += 25
+                elif result['volume_ratio'] > 1.0:  # Any volume increase
+                    score += 15
+
+                # RSI confirmation (not oversold)
+                if result['rsi']:
+                    if result['rsi'] > 20:
+                        score += 10
+                    if result['rsi'] < 50:  # Weakness
+                        score += 5
+
+                # Price momentum
+                if result['donchian_middle']:
+                    if current_price < result['donchian_middle'] * 0.98:  # 2% below middle
+                        score += 10
+
+                # Moving average confirmation
+                if pd.notna(latest['sma_20']) and current_price < latest['sma_20']:
+                    score += 5
+                if pd.notna(latest['sma_50']) and current_price < latest['sma_50']:
+                    score += 5
+
+                result['score'] = min(score, 100)
+
+            # === NEAR BREAKOUTS ===
+
+            # Near bullish breakout (within 2% of Donchian high)
+            elif distance_to_high <= 3.0 and distance_to_high > 0:
+                result['breakout_type'] = 'near_bullish'
+                result['distance_to_breakout'] = distance_to_high
+                score = 30  # Lower base score for near breakouts
+
+                # Calculate breakout probability based on distance and momentum
+                proximity_score = (2.0 - distance_to_high) / 2.0 * 20  # 0-20 points based on proximity
+                score += proximity_score
+
+                # Price momentum (moving toward breakout)
+                if result['price_change_pct'] > 0:
+                    score += 10  # Positive momentum
+                    if result['price_change_pct'] > 2:
+                        score += 5  # Strong momentum
+
+                # Volume confirmation
+                if result['volume_ratio'] > 1.1:
+                    score += 10
+
+                # RSI momentum
+                if result['rsi']:
+                    if 40 < result['rsi'] < 70:  # Good momentum range
+                        score += 5
+                    if result['rsi'] > 50:  # Bullish momentum
+                        score += 3
+
+                # Above moving averages (trend confirmation)
+                if pd.notna(latest['sma_20']) and current_price > latest['sma_20']:
+                    score += 5
+
+                result['score'] = min(score, 85)  # Cap near breakouts at 85
+                result['breakout_probability'] = min(score / 85 * 100, 100)
+
+            # Near bearish breakout (within 2% of Donchian low)
+            elif distance_to_low <= 3.0 and distance_to_low > 0:
+                result['breakout_type'] = 'near_bearish'
+                result['distance_to_breakout'] = distance_to_low
+                score = 30  # Lower base score for near breakouts
+
+                # Calculate breakout probability based on distance and momentum
+                proximity_score = (2.0 - distance_to_low) / 2.0 * 20  # 0-20 points based on proximity
+                score += proximity_score
+
+                # Price momentum (moving toward breakout)
+                if result['price_change_pct'] < 0:
+                    score += 10  # Negative momentum
+                    if result['price_change_pct'] < -2:
+                        score += 5  # Strong downward momentum
+
+                # Volume confirmation
+                if result['volume_ratio'] > 1.1:
+                    score += 10
+
+                # RSI momentum
+                if result['rsi']:
+                    if 30 < result['rsi'] < 60:  # Good momentum range
+                        score += 5
+                    if result['rsi'] < 50:  # Bearish momentum
+                        score += 3
+
+                # Below moving averages (trend confirmation)
+                if pd.notna(latest['sma_20']) and current_price < latest['sma_20']:
+                    score += 5
+
+                result['score'] = min(score, 85)  # Cap near breakouts at 85
+                result['breakout_probability'] = min(score / 85 * 100, 100)
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Error checking Donchian breakout: {e}")
+            return {'breakout_type': None, 'score': 0}
+
+    @timing_decorator()
+    def screen_symbol(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Screen a single symbol for Donchian breakouts (NO FILTERING - screen all symbols)"""
+        try:
+            logger.debug(f"Screening {symbol}")
+
+            # Get stock data
+            data = self.get_stock_data(symbol)
+            if data is None or len(data) < 21:  # Need enough data for 20-period Donchian
+                logger.debug(f"Insufficient data for {symbol}: {len(data) if data is not None else 0} days")
+                return None
+
+            # Get fundamentals (optional - don't filter if missing)
+            fundamentals = self.get_fundamentals(symbol)
+            if fundamentals is None:
+                logger.debug(f"No fundamentals for {symbol}, using defaults")
+                fundamentals = {
+                    'market_cap': 0,
+                    'sector': 'Unknown',
+                    'industry': 'Unknown',
+                    'overall_quality_score': 0,
+                    'quality_grade': 'N/A',
+                    'pe_ratio': None,
+                    'pb_ratio': None,
+                    'beta': None
+                }
+
+            # REMOVED: Quality score filtering - screen all symbols regardless of quality
+            # if (fundamentals.get('overall_quality_score') and
+            #         fundamentals['overall_quality_score'] < self.criteria['min_quality_score']):
+            #     return None
+
+            # Check for breakout
+            breakout_result = self.check_donchian_breakout(data)
+            if breakout_result['breakout_type'] is None:
+                return None
+
+            # Calculate position sizing and risk metrics
+            latest = data.iloc[-1]
+            risk_metrics = self.calculate_risk_metrics(latest, breakout_result)
+
+            # Compile screening result - include ALL breakouts found
+            result = {
+                'symbol': symbol,
+                'screening_date': datetime.now().date().isoformat(),
+                'screening_timestamp': datetime.now().isoformat(),
+                'breakout_type': breakout_result['breakout_type'],
+                'breakout_score': breakout_result['score'],
+                'current_price': breakout_result['current_price'],
+                'price_change_pct': breakout_result['price_change_pct'],
+                'volume_change_pct': breakout_result['volume_change_pct'],
+                'donchian_high': breakout_result['donchian_high'],
+                'donchian_low': breakout_result['donchian_low'],
+                'donchian_middle': breakout_result['donchian_middle'],
+                'volume_ratio': breakout_result['volume_ratio'],
+                'rsi': breakout_result['rsi'],
+                'atr': breakout_result['atr'],
+                'distance_to_breakout': breakout_result.get('distance_to_breakout', 0.0),
+                'breakout_probability': breakout_result.get('breakout_probability', 0.0),
+                'market_cap': fundamentals.get('market_cap', 0),
+                'market_cap_formatted': format_number(fundamentals.get('market_cap', 0)),
+                'sector': fundamentals.get('sector', 'Unknown'),
+                'industry': fundamentals.get('industry', 'Unknown'),
+                'quality_score': fundamentals.get('overall_quality_score', 0),
+                'quality_grade': fundamentals.get('quality_grade', 'N/A'),
+                'pe_ratio': fundamentals.get('pe_ratio'),
+                'pb_ratio': fundamentals.get('pb_ratio'),
+                'beta': fundamentals.get('beta'),
+                **risk_metrics
+            }
+
+            logger.debug(
+                f"Found {breakout_result['breakout_type']} breakout for {symbol} (Score: {breakout_result['score']})")
+            return result
+
+        except Exception as e:
+            logger.error(f"Error screening {symbol}: {e}")
+            return None
+
+    def calculate_risk_metrics(self, latest_data: pd.Series, breakout_result: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate risk and position sizing metrics"""
+        try:
+            current_price = breakout_result['current_price']
+            atr = breakout_result.get('atr', 0)
+
+            # Position sizing (2% portfolio risk standard)
+            risk_per_share = atr * 2 if atr else current_price * 0.02  # 2 ATR or 2% of price
+            suggested_position_size = min((2.0 / (risk_per_share / current_price * 100)) * 100,
+                                          10.0) if current_price > 0 else 2.0
+
+            # Stop loss and target prices
+            if breakout_result['breakout_type'] == 'bullish':
+                stop_loss_price = current_price - risk_per_share
+                target_price = current_price + (atr * 3 if atr else current_price * 0.06)
+            else:  # bearish
+                stop_loss_price = current_price + risk_per_share
+                target_price = current_price - (atr * 3 if atr else current_price * 0.06)
+
+            return {
+                'suggested_position_size_pct': round(suggested_position_size, 2),
+                'stop_loss_price': round(stop_loss_price, 2),
+                'target_price': round(target_price, 2),
+                'risk_reward_ratio': 3.0,  # Standard 1:3 risk/reward
+                'max_risk_per_share': round(risk_per_share, 2)
+            }
+
+        except Exception as e:
+            logger.error(f"Error calculating risk metrics: {e}")
+            return {
+                'suggested_position_size_pct': 2.0,
+                'stop_loss_price': None,
+                'target_price': None,
+                'risk_reward_ratio': 3.0,
+                'max_risk_per_share': None
+            }
+
+    @timing_decorator()
+    def save_screening_results(self, results: List[Dict[str, Any]]) -> bool:
+        """Save screening results to the breakouts table"""
+        if not results:
+            return True
+
+        try:
+            # Prepare records for database
+            records = []
+            for result in results:
+                record = (
+                    result['symbol'],
+                    result['screening_date'],
+                    result['breakout_type'],
+                    result['current_price'],
+                    result.get('volume_ratio', 1.0),
+                    (result.get('atr', 0) / result['current_price']) * 100 if result.get('atr') and result[
+                        'current_price'] > 0 else 0,
+                    result.get('rsi', 50),
+                    result.get('price_change_pct', 0),
+                    None,  # success - will be determined later
+                    None,  # max_gain_10d - will be calculated later
+                    None,  # max_loss_10d - will be calculated later
+                    None,  # days_to_peak - will be calculated later
+                    datetime.now()
+                )
+                records.append(record)
+
+            # Insert into breakouts table
+            query = """
+                INSERT INTO breakouts (
+                    symbol, date, breakout_type, entry_price, volume_ratio,
+                    atr_pct, rsi_value, price_change_pct, success,
+                    max_gain_10d, max_loss_10d, days_to_peak, created_at
+                )
+                VALUES %s
+                ON CONFLICT (symbol, date, breakout_type) 
+                DO UPDATE SET
+                    entry_price = EXCLUDED.entry_price,
+                    volume_ratio = EXCLUDED.volume_ratio,
+                    atr_pct = EXCLUDED.atr_pct,
+                    rsi_value = EXCLUDED.rsi_value,
+                    price_change_pct = EXCLUDED.price_change_pct,
+                    created_at = EXCLUDED.created_at
+            """
+
+            rows_inserted = db.bulk_insert(query, records)
+            logger.info(f"Successfully saved {rows_inserted} screening results to breakouts table")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error saving screening results: {e}")
+            return False
+
+    def generate_frontend_json(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Generate lightweight JSON data for frontend consumption with breakouts and near breakouts"""
+        try:
+            # Separate different types of breakouts
+            bullish_breakouts = [r for r in results if r['breakout_type'] == 'bullish']
+            bearish_breakouts = [r for r in results if r['breakout_type'] == 'bearish']
+            near_bullish = [r for r in results if r['breakout_type'] == 'near_bullish']
+            near_bearish = [r for r in results if r['breakout_type'] == 'near_bearish']
+
+            # Sort by breakout score (highest first)
+            bullish_breakouts.sort(key=lambda x: x['breakout_score'], reverse=True)
+            bearish_breakouts.sort(key=lambda x: x['breakout_score'], reverse=True)
+            near_bullish.sort(key=lambda x: x['breakout_score'], reverse=True)
+            near_bearish.sort(key=lambda x: x['breakout_score'], reverse=True)
+
+            # Market summary
+            total_breakouts = len(results)
+            actual_breakouts = len(bullish_breakouts) + len(bearish_breakouts)
+            near_breakouts = len(near_bullish) + len(near_bearish)
+            avg_score = np.mean([r['breakout_score'] for r in results]) if results else 0
+            high_quality_breakouts = len([r for r in results if r['breakout_score'] >= 75])
+
+            # Sector breakdown
+            sector_breakdown = {}
+            for result in results:
+                sector = result.get('sector', 'Unknown')
+                breakout_type = result['breakout_type']
+
+                if sector not in sector_breakdown:
+                    sector_breakdown[sector] = {
+                        'total_count': 0, 'bullish': 0, 'bearish': 0,
+                        'near_bullish': 0, 'near_bearish': 0, 'avg_score': 0, 'symbols': []
+                    }
+
+                sector_breakdown[sector]['total_count'] += 1
+                sector_breakdown[sector][breakout_type] += 1
+                sector_breakdown[sector]['symbols'].append(result['symbol'])
+
+            # Calculate average scores for sectors
+            for sector in sector_breakdown:
+                sector_results = [r for r in results if r.get('sector') == sector]
+                sector_breakdown[sector]['avg_score'] = round(
+                    np.mean([r['breakout_score'] for r in sector_results]), 1
+                )
+
+            # Generate frontend-optimized data
+            frontend_data = {
+                'metadata': {
+                    'timestamp': datetime.now().isoformat(),
+                    'last_updated': datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC'),
+                    'screening_date': datetime.now().date().isoformat(),
+                    'total_symbols_screened': total_breakouts,  # This will be updated by caller
+                    'generation_info': {
+                        'version': '2.1',
+                        'features': ['actual_breakouts', 'near_breakouts', 'all_symbols_screening'],
+                        'screening_criteria': 'none_applied',
+                        'data_source': 'trading_production_db'
+                    }
+                },
+                'summary': {
+                    'total_signals': total_breakouts,
+                    'actual_breakouts': actual_breakouts,
+                    'near_breakouts': near_breakouts,
+                    'bullish_count': len(bullish_breakouts),
+                    'bearish_count': len(bearish_breakouts),
+                    'near_bullish_count': len(near_bullish),
+                    'near_bearish_count': len(near_bearish),
+                    'high_quality_count': high_quality_breakouts,
+                    'average_score': round(avg_score, 1),
+                    'sector_breakdown': sector_breakdown
+                },
+                'breakouts': {
+                    'actual': {
+                        'bullish': self.format_breakouts_for_frontend(bullish_breakouts[:20]),
+                        'bearish': self.format_breakouts_for_frontend(bearish_breakouts[:20])
+                    },
+                    'near': {
+                        'bullish': self.format_breakouts_for_frontend(near_bullish[:20]),
+                        'bearish': self.format_breakouts_for_frontend(near_bearish[:20])
+                    }
+                },
+                'top_performers': {
+                    'highest_scores': sorted(results, key=lambda x: x['breakout_score'], reverse=True)[:10],
+                    'highest_volume_ratio': sorted(
+                        [r for r in results if r.get('volume_ratio', 0) > 1],
+                        key=lambda x: x.get('volume_ratio', 0), reverse=True
+                    )[:10],
+                    'imminent_breakouts': sorted(
+                        [r for r in results if r['breakout_type'].startswith('near_')],
+                        key=lambda x: x.get('breakout_probability', 0), reverse=True
+                    )[:10]
+                }
+            }
+
+            return frontend_data
+
+        except Exception as e:
+            logger.error(f"Error generating frontend JSON: {e}")
+            return {
+                'error': str(e),
+                'timestamp': datetime.now().isoformat(),
+                'breakouts': {'actual': {'bullish': [], 'bearish': []}, 'near': {'bullish': [], 'bearish': []}}
+            }
+
+    def format_breakouts_for_frontend(self, breakouts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Format breakouts for optimized frontend consumption with near-breakout support"""
+        formatted = []
+
+        for breakout in breakouts:
+            # Determine display properties based on breakout type
+            is_near_breakout = breakout['breakout_type'].startswith('near_')
+            breakout_display = breakout['breakout_type'].replace('_', ' ').title()
+
+            formatted_breakout = {
+                # Core identification
+                'symbol': breakout['symbol'],
+                'score': breakout['breakout_score'],
+                'type': breakout['breakout_type'],
+                'type_display': breakout_display,
+                'is_near_breakout': is_near_breakout,
+
+                # Price information
+                'price': round(breakout['current_price'], 2),
+                'price_change_pct': round(breakout.get('price_change_pct', 0), 2),
+
+                # Technical levels
+                'donchian_high': round(breakout['donchian_high'], 2) if breakout['donchian_high'] else None,
+                'donchian_low': round(breakout['donchian_low'], 2) if breakout['donchian_low'] else None,
+
+                # Near breakout specific fields
+                'distance_to_breakout': round(breakout.get('distance_to_breakout', 0), 2) if is_near_breakout else 0,
+                'breakout_probability': round(breakout.get('breakout_probability', 0), 1) if is_near_breakout else 100,
+
+                # Volume and momentum
+                'volume_ratio': round(breakout.get('volume_ratio', 1), 2),
+                'rsi': round(breakout['rsi'], 1) if breakout['rsi'] else None,
+
+                # Fundamental data
+                'market_cap': breakout['market_cap_formatted'],
+                'sector': breakout.get('sector'),
+                'quality_grade': breakout.get('quality_grade'),
+                'pe_ratio': round(breakout['pe_ratio'], 1) if breakout.get('pe_ratio') else None,
+
+                # Risk management
+                'stop_loss': breakout.get('stop_loss_price'),
+                'target': breakout.get('target_price'),
+                'position_size_pct': breakout.get('suggested_position_size_pct', 2),
+
+                # Status indicators for frontend
+                'urgency': self._calculate_urgency(breakout),
+                'signal_strength': self._categorize_signal_strength(breakout['breakout_score']),
+
+                # Metadata
+                'timestamp': breakout['screening_timestamp']
+            }
+            formatted.append(formatted_breakout)
+
+        return formatted
+
+    def _calculate_urgency(self, breakout: Dict[str, Any]) -> str:
+        """Calculate urgency level for frontend display"""
+        if breakout['breakout_type'] in ['bullish', 'bearish']:
+            return 'immediate'  # Already broke out
+
+        distance = breakout.get('distance_to_breakout', 100)
+        probability = breakout.get('breakout_probability', 0)
+
+        if distance <= 0.5 and probability >= 70:
+            return 'very_high'
+        elif distance <= 1.0 and probability >= 60:
+            return 'high'
+        elif distance <= 1.5 and probability >= 50:
+            return 'medium'
+        else:
+            return 'low'
+
+    def _categorize_signal_strength(self, score: float) -> str:
+        """Categorize signal strength for frontend display"""
+        if score >= 85:
+            return 'very_strong'
+        elif score >= 70:
+            return 'strong'
+        elif score >= 55:
+            return 'moderate'
+        elif score >= 40:
+            return 'weak'
+        else:
+            return 'very_weak'
+
+    @timing_decorator()
+    def save_frontend_json(self, frontend_data: Dict[str, Any]) -> bool:
+        """Save frontend JSON files"""
+        try:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            date_str = datetime.now().strftime('%Y-%m-%d')
+
+            # Main frontend file (latest)
+            latest_file = os.path.join(self.frontend_data_dir, 'latest_breakouts.json')
+            success1 = file_utils.save_json(frontend_data, latest_file)
+
+            # Timestamped file for history
+            timestamped_file = os.path.join(self.frontend_data_dir, f'breakouts_{timestamp}.json')
+            success2 = file_utils.save_json(frontend_data, timestamped_file)
+
+            # Daily summary file with enhanced structure
+            daily_summary = {
+                'date': date_str,
+                'timestamp': frontend_data['metadata']['timestamp'],
+                'summary': frontend_data['summary'],
+                'top_signals': {
+                    'immediate_breakouts': {
+                        'bullish': frontend_data['breakouts']['actual']['bullish'][:5],
+                        'bearish': frontend_data['breakouts']['actual']['bearish'][:5]
+                    },
+                    'imminent_breakouts': {
+                        'bullish': frontend_data['breakouts']['near']['bullish'][:5],
+                        'bearish': frontend_data['breakouts']['near']['bearish'][:5]
+                    }
+                },
+                'market_insight': {
+                    'total_signals': frontend_data['summary']['total_signals'],
+                    'breakout_ratio': round(
+                        frontend_data['summary']['actual_breakouts'] / max(frontend_data['summary']['total_signals'],
+                                                                           1) * 100, 1
+                    ),
+                    'dominant_direction': 'bullish' if (
+                                                               frontend_data['summary']['bullish_count'] +
+                                                               frontend_data['summary']['near_bullish_count']
+                                                       ) > (
+                                                               frontend_data['summary']['bearish_count'] +
+                                                               frontend_data['summary']['near_bearish_count']
+                                                       ) else 'bearish'
+                }
+            }
+            daily_file = os.path.join(self.frontend_data_dir, f'daily_summary_{date_str}.json')
+            success3 = file_utils.save_json(daily_summary, daily_file)
+
+            if success1 and success2 and success3:
+                logger.info(f"✅ Frontend JSON files saved:")
+                logger.info(f"   📄 Latest: {latest_file}")
+                logger.info(f"   📄 Timestamped: {timestamped_file}")
+                logger.info(f"   📄 Daily summary: {daily_file}")
+
+                # Clean up old files (keep last 30 days)
+                cleanup_count = file_utils.cleanup_old_files(self.frontend_data_dir, days_old=30,
+                                                             pattern="breakouts_*.json")
+                if cleanup_count > 0:
+                    logger.info(f"   🧹 Cleaned up {cleanup_count} old files")
+
+                return True
+            else:
+                logger.error("Failed to save one or more frontend JSON files")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error saving frontend JSON: {e}")
+            return False
+
+    @timing_decorator()
+    def run_screening(self, symbols: Optional[List[str]] = None, save_results: bool = True) -> Dict[str, Any]:
+        """Run Donchian breakout screening with enhanced reporting"""
+        start_time = datetime.now()
+        logger.info(f"🚀 Starting Donchian breakout screening at {start_time}")
+
+        # Get symbols to screen
+        if symbols is None:
+            symbols = self.get_active_symbols()
+
+        if not symbols:
+            logger.warning("No symbols to screen")
+            return {
+                'success': False,
+                'message': 'No symbols found',
+                'breakouts_found': 0,
+                'frontend_file_generated': False
+            }
+
+        breakout_results = []
+        screened_count = 0
+        errors = 0
+
+        # Screen symbols
+        for i, symbol in enumerate(symbols, 1):
+            try:
+                result = self.screen_symbol(symbol)
+                if result:
+                    breakout_results.append(result)
+
+                screened_count += 1
+
+                # Progress reporting
+                if i % 50 == 0:
+                    logger.info(f"Screened {i}/{len(symbols)} symbols, found {len(breakout_results)} breakouts")
+
+            except Exception as e:
+                logger.error(f"Error screening {symbol}: {e}")
+                errors += 1
+                continue
+
+        # Save results to database
+        database_saved = False
+        if save_results and breakout_results:
+            database_saved = self.save_screening_results(breakout_results)
+
+        # Generate and save frontend JSON
+        frontend_saved = False
+        if breakout_results:
+            frontend_data = self.generate_frontend_json(breakout_results)
+            # Update total symbols screened in metadata
+            frontend_data['metadata']['total_symbols_screened'] = screened_count
+            frontend_saved = self.save_frontend_json(frontend_data)
+
+        end_time = datetime.now()
+        duration = end_time - start_time
+
+        # Final reporting
+        actual_bullish = len([r for r in breakout_results if r['breakout_type'] == 'bullish'])
+        actual_bearish = len([r for r in breakout_results if r['breakout_type'] == 'bearish'])
+        near_bullish = len([r for r in breakout_results if r['breakout_type'] == 'near_bullish'])
+        near_bearish = len([r for r in breakout_results if r['breakout_type'] == 'near_bearish'])
+
+        logger.info(f"""
+        🎉 Donchian screening completed in {duration}:
+        📊 Symbols screened: {screened_count}
+        🚀 Total signals found: {len(breakout_results)}
+
+        📈 ACTUAL BREAKOUTS: {actual_bullish + actual_bearish}
+           • Bullish: {actual_bullish}
+           • Bearish: {actual_bearish}
+
+        🎯 NEAR BREAKOUTS: {near_bullish + near_bearish}
+           • Near Bullish: {near_bullish}
+           • Near Bearish: {near_bearish}
+
+        💾 Database saved: {'✅' if database_saved else '❌'}
+        📄 Frontend JSON saved: {'✅' if frontend_saved else '❌'}
+        ⚠️ Errors: {errors}
+        """)
+
+        return {
+            'success': errors < len(symbols) * 0.1,  # Success if <10% errors
+            'duration_seconds': duration.total_seconds(),
+            'symbols_screened': screened_count,
+            'total_signals': len(breakout_results),
+            'actual_breakouts': actual_bullish + actual_bearish,
+            'near_breakouts': near_bullish + near_bearish,
+            'bullish_count': actual_bullish,
+            'bearish_count': actual_bearish,
+            'near_bullish_count': near_bullish,
+            'near_bearish_count': near_bearish,
+            'database_saved': database_saved,
+            'frontend_file_generated': frontend_saved,
+            'errors': errors,
+            'frontend_data_path': os.path.join(self.frontend_data_dir,
+                                               'latest_breakouts.json') if frontend_saved else None
+        }
+
+
+def main():
+    """Main function to run Donchian screening"""
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Enhanced Donchian Screener')
+    parser.add_argument('--test', nargs='+', help='Test with specific symbols')
+    parser.add_argument('--generate-sample', action='store_true', help='Generate sample frontend JSON')
+    parser.add_argument('--config-test', action='store_true', help='Test configuration')
+
+    args = parser.parse_args()
+
+    if args.config_test:
+        # Test configuration
+        print("🔧 Testing Donchian Screener configuration...")
+
+        validation = config.validate_config()
+        print(f"Configuration validation: {validation}")
+
+        criteria = config.get_screening_criteria()
+        print(f"Screening criteria: {criteria}")
+
+        print(f"Frontend data directory: {config.frontend_data_dir}")
+        print(f"Directory exists: {os.path.exists(config.frontend_data_dir)}")
+
+        return
+
+    # Initialize screener
+    screener = DonchianScreener()
+
+    if args.test:
+        # Test mode with specific symbols
+        logger.info(f"🧪 Running test screening with symbols: {args.test}")
+        result = screener.run_screening(symbols=args.test)
+
+    elif args.generate_sample:
+        # Generate sample data for frontend testing
+        logger.info("📄 Generating sample frontend JSON...")
+        sample_data = {
+            'metadata': {
+                'timestamp': datetime.now().isoformat(),
+                'last_updated': datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC'),
+                'screening_date': datetime.now().date().isoformat(),
+                'total_symbols_screened': 0,
+                'generation_info': {'version': '2.1', 'mode': 'sample',
+                                    'features': ['actual_breakouts', 'near_breakouts']}
+            },
+            'summary': {
+                'total_signals': 0,
+                'actual_breakouts': 0,
+                'near_breakouts': 0,
+                'bullish_count': 0,
+                'bearish_count': 0,
+                'near_bullish_count': 0,
+                'near_bearish_count': 0,
+                'high_quality_count': 0,
+                'average_score': 0,
+                'sector_breakdown': {}
+            },
+            'breakouts': {
+                'actual': {'bullish': [], 'bearish': []},
+                'near': {'bullish': [], 'bearish': []}
+            },
+            'top_performers': {
+                'highest_scores': [],
+                'highest_volume_ratio': [],
+                'imminent_breakouts': []
+            }
+        }
+
+        success = screener.save_frontend_json(sample_data)
+        if success:
+            logger.info("✅ Sample frontend JSON generated")
+        else:
+            logger.error("❌ Failed to generate sample JSON")
+
+    else:
+        # Full screening
+        result = screener.run_screening()
+
+        if result['success']:
+            logger.info("🎉 Screening completed successfully!")
+            if result['frontend_file_generated']:
+                logger.info(f"📄 Frontend data available at: {result['frontend_data_path']}")
+        else:
+            logger.warning("⚠️ Screening completed with issues")
+
+
+if __name__ == "__main__":
+    main()
