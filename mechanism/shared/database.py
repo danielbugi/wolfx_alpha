@@ -16,6 +16,7 @@ from contextlib import contextmanager, asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import threading
+import pandas as pd
 
 from .config import config
 from .utils import retry_on_failure, timing_decorator, performance_monitor
@@ -373,6 +374,90 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error closing async pool: {e}")
 
+    def insert_weekly_indicators(self, data: Dict[str, Any]) -> bool:
+        """Insert weekly technical indicators - matches your existing insert patterns"""
+        import logging
+        logger = logging.getLogger(__name__)
+
+        try:
+            # DEBUG: Log what we're trying to insert
+            logger.info(f"DEBUG INSERT: Data keys: {list(data.keys())}")
+            logger.info(f"DEBUG INSERT: Symbol: {data.get('symbol')}")
+            logger.info(f"DEBUG INSERT: Date: {data.get('week_ending_date')}")
+            logger.info(f"DEBUG INSERT: RSI value: {data.get('rsi_14w')} (type: {type(data.get('rsi_14w'))})")
+            logger.info(f"DEBUG INSERT: All data: {data}")
+
+            query = """
+                INSERT INTO weekly_technical_indicators 
+                (symbol, week_ending_date, donchian_high_20w, donchian_low_20w, donchian_mid_20w,
+                 weekly_open, weekly_high, weekly_low, weekly_close, weekly_volume,
+                 sma_10w, sma_20w, rsi_14w, volume_ratio_weekly, price_position_weekly)
+                VALUES (%(symbol)s, %(week_ending_date)s, %(donchian_high_20w)s, %(donchian_low_20w)s,
+                        %(donchian_mid_20w)s, %(weekly_open)s, %(weekly_high)s, %(weekly_low)s,
+                        %(weekly_close)s, %(weekly_volume)s, %(sma_10w)s, %(sma_20w)s,
+                        %(rsi_14w)s, %(volume_ratio_weekly)s, %(price_position_weekly)s)
+                ON CONFLICT (symbol, week_ending_date) DO UPDATE SET
+                    donchian_high_20w = EXCLUDED.donchian_high_20w,
+                    donchian_low_20w = EXCLUDED.donchian_low_20w,
+                    donchian_mid_20w = EXCLUDED.donchian_mid_20w,
+                    rsi_14w = EXCLUDED.rsi_14w,
+                    volume_ratio_weekly = EXCLUDED.volume_ratio_weekly,
+                    price_position_weekly = EXCLUDED.price_position_weekly,
+                    updated_at = NOW()
+            """
+
+            # Use your existing connection pattern
+            with self.get_sync_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, data)
+                conn.commit()
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to insert weekly indicators: {e}")
+            return False
+
+    def get_daily_data_for_weekly_calc(self, symbol: str, weeks: int = 26) -> pd.DataFrame:
+        """Get daily data for weekly calculations - matches your existing query patterns"""
+        query = """
+               SELECT sp.date, sp.open, sp.high, sp.low, sp.close, sp.volume,
+                      ti.donchian_high_20, ti.donchian_low_20, ti.rsi_14
+               FROM stock_prices sp
+               LEFT JOIN technical_indicators ti ON sp.symbol = ti.symbol AND sp.date = ti.date
+               WHERE sp.symbol = %s AND sp.date >= %s
+               ORDER BY sp.date DESC
+           """
+
+        start_date = datetime.now().date() - timedelta(weeks=weeks)
+        return pd.read_sql(query, self.get_connection(), params=[symbol, start_date])
+
+    def insert_monthly_indicators(self, data: Dict[str, Any]) -> bool:
+        """Insert monthly technical indicators"""
+        try:
+            query = """
+                INSERT INTO monthly_technical_indicators 
+                (symbol, month_ending_date, donchian_high_12m, donchian_low_12m, donchian_mid_12m,
+                 monthly_open, monthly_high, monthly_low, monthly_close, monthly_volume,
+                 trend_direction, trend_strength_6m)
+                VALUES (%(symbol)s, %(month_ending_date)s, %(donchian_high_12m)s, %(donchian_low_12m)s,
+                        %(donchian_mid_12m)s, %(monthly_open)s, %(monthly_high)s, %(monthly_low)s,
+                        %(monthly_close)s, %(monthly_volume)s, %(trend_direction)s, %(trend_strength_6m)s)
+                ON CONFLICT (symbol, month_ending_date) DO UPDATE SET
+                    donchian_high_12m = EXCLUDED.donchian_high_12m,
+                    trend_direction = EXCLUDED.trend_direction,
+                    updated_at = NOW()
+            """
+
+            with self.get_sync_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, data)
+                conn.commit()
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to insert monthly indicators: {e}")
+            return False
+
 
 # Utility functions for common database operations
 class DatabaseUtils:
@@ -515,3 +600,8 @@ if __name__ == "__main__":
     else:
         print(f"❌ Database health: ERROR")
         print(f"   Error: {health.get('error')}")
+
+
+# Add these methods to your existing database.py file
+# Location: mechanism/shared/database.py
+
