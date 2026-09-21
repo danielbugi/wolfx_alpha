@@ -1,0 +1,723 @@
+{
+  "index": "NASDAQ100",
+  "timestamp": "20260918_083130",
+  "total_symbols": 102,
+  "symbols": [
+    "ADBE",
+    "AMD",
+    "ABNB",
+    "ALNY",
+    "GOOGL",
+    "GOOG",
+    "AMZN",
+    "AEP",
+    "AMGN",
+    "ADI",
+    "AAPL",
+    "AMAT",
+    "APP",
+    "ARM",
+    "ASML",
+    "ALAB",
+    "ADSK",
+    "ADP",
+    "AXON",
+    "BKR",
+    "BKNG",
+    "AVGO",
+    "CDNS",
+    "CTAS",
+    "CSCO",
+    "CCEP",
+    "CMCSA",
+    "CEG",
+    "CPRT",
+    "CRWV",
+    "COST",
+    "CRWD",
+    "CSX",
+    "DDOG",
+    "DXCM",
+    "FANG",
+    "DASH",
+    "EXC",
+    "FAST",
+    "FER",
+    "FTNT",
+    "GEHC",
+    "GILD",
+    "HONA",
+    "HON",
+    "IDXX",
+    "INTC",
+    "INTU",
+    "ISRG",
+    "KDP",
+    "KLAC",
+    "KHC",
+    "LRCX",
+    "LIN",
+    "LITE",
+    "MAR",
+    "MRVL",
+    "MELI",
+    "META",
+    "MCHP",
+    "MU",
+    "MSFT",
+    "MSTR",
+    "MDLZ",
+    "MPWR",
+    "MNST",
+    "NBIS",
+    "NFLX",
+    "NVDA",
+    "NXPI",
+    "ORLY",
+    "ODFL",
+    "PCAR",
+    "PLTR",
+    "PANW",
+    "PAYX",
+    "PYPL",
+    "PDD",
+    "PEP",
+    "QCOM",
+    "REGN",
+    "RKLB",
+    "ROP",
+    "ROST",
+    "SNDK",
+    "STX",
+    "SHOP",
+    "SPCX",
+    "SBUX",
+    "SNPS",
+    "TMUS",
+    "TTWO",
+    "TER",
+    "TSLA",
+    "TXN",
+    "TRI",
+    "VRTX",
+    "WMT",
+    "WBD",
+    "WDC",
+    "WDAY",
+    "XEL"
+  ],
+  "company_info": [
+    {
+      "symbol": "ADBE",
+      "company_name": "Adobe Inc.",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "AMD",
+      "company_name": "Advanced Micro Devices",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "ABNB",
+      "company_name": "Airbnb",
+      "sector": "Consumer Discretionary",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "ALNY",
+      "company_name": "Alnylam Pharmaceuticals",
+      "sector": "Health Care",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "GOOGL",
+      "company_name": "Alphabet Inc. (Class A)",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "GOOG",
+      "company_name": "Alphabet Inc. (Class C)",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "AMZN",
+      "company_name": "Amazon",
+      "sector": "Consumer Discretionary",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "AEP",
+      "company_name": "American Electric Power",
+      "sector": "Utilities",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "AMGN",
+      "company_name": "Amgen",
+      "sector": "Health Care",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "ADI",
+      "company_name": "Analog Devices",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "AAPL",
+      "company_name": "Apple Inc.",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "AMAT",
+      "company_name": "Applied Materials",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "APP",
+      "company_name": "AppLovin",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "ARM",
+      "company_name": "Arm Holdings",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "ASML",
+      "company_name": "ASML Holding",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "ALAB",
+      "company_name": "Astera Labs",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "ADSK",
+      "company_name": "Autodesk",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "ADP",
+      "company_name": "Automatic Data Processing",
+      "sector": "Industrials",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "AXON",
+      "company_name": "Axon Enterprise",
+      "sector": "Industrials",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "BKR",
+      "company_name": "Baker Hughes",
+      "sector": "Energy",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "BKNG",
+      "company_name": "Booking Holdings",
+      "sector": "Consumer Discretionary",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "AVGO",
+      "company_name": "Broadcom",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "CDNS",
+      "company_name": "Cadence Design Systems",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "CTAS",
+      "company_name": "Cintas",
+      "sector": "Industrials",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "CSCO",
+      "company_name": "Cisco",
+      "sector": "Telecommunications",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "CCEP",
+      "company_name": "Coca-Cola Europacific Partners",
+      "sector": "Consumer Staples",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "CMCSA",
+      "company_name": "Comcast",
+      "sector": "Telecommunications",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "CEG",
+      "company_name": "Constellation Energy",
+      "sector": "Utilities",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "CPRT",
+      "company_name": "Copart",
+      "sector": "Consumer Discretionary",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "CRWV",
+      "company_name": "CoreWeave",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "COST",
+      "company_name": "Costco",
+      "sector": "Consumer Discretionary",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "CRWD",
+      "company_name": "CrowdStrike",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "CSX",
+      "company_name": "CSX Corporation",
+      "sector": "Industrials",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "DDOG",
+      "company_name": "Datadog",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "DXCM",
+      "company_name": "DexCom",
+      "sector": "Health Care",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "FANG",
+      "company_name": "Diamondback Energy",
+      "sector": "Energy",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "DASH",
+      "company_name": "DoorDash",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "EXC",
+      "company_name": "Exelon",
+      "sector": "Utilities",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "FAST",
+      "company_name": "Fastenal",
+      "sector": "Industrials",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "FER",
+      "company_name": "Ferrovial",
+      "sector": "Industrials",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "FTNT",
+      "company_name": "Fortinet",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "GEHC",
+      "company_name": "GE HealthCare",
+      "sector": "Health Care",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "GILD",
+      "company_name": "Gilead Sciences",
+      "sector": "Health Care",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "HONA",
+      "company_name": "Honeywell Aerospace",
+      "sector": "Industrials",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "HON",
+      "company_name": "Honeywell Technologies",
+      "sector": "Industrials",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "IDXX",
+      "company_name": "Idexx Laboratories",
+      "sector": "Health Care",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "INTC",
+      "company_name": "Intel",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "INTU",
+      "company_name": "Intuit",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "ISRG",
+      "company_name": "Intuitive Surgical",
+      "sector": "Health Care",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "KDP",
+      "company_name": "Keurig Dr Pepper",
+      "sector": "Consumer Staples",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "KLAC",
+      "company_name": "KLA Corporation",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "KHC",
+      "company_name": "Kraft Heinz",
+      "sector": "Consumer Staples",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "LRCX",
+      "company_name": "Lam Research",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "LIN",
+      "company_name": "Linde plc",
+      "sector": "Basic Materials",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "LITE",
+      "company_name": "Lumentum",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "MAR",
+      "company_name": "Marriott International",
+      "sector": "Consumer Discretionary",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "MRVL",
+      "company_name": "Marvell Technology",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "MELI",
+      "company_name": "Mercado Libre",
+      "sector": "Consumer Discretionary",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "META",
+      "company_name": "Meta Platforms",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "MCHP",
+      "company_name": "Microchip Technology",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "MU",
+      "company_name": "Micron Technology",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "MSFT",
+      "company_name": "Microsoft",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "MSTR",
+      "company_name": "MicroStrategy",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "MDLZ",
+      "company_name": "Mondelez International",
+      "sector": "Consumer Staples",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "MPWR",
+      "company_name": "Monolithic Power Systems",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "MNST",
+      "company_name": "Monster Beverage",
+      "sector": "Consumer Staples",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "NBIS",
+      "company_name": "Nebius Group",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "NFLX",
+      "company_name": "Netflix, Inc.",
+      "sector": "Consumer Discretionary",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "NVDA",
+      "company_name": "Nvidia",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "NXPI",
+      "company_name": "NXP Semiconductors",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "ORLY",
+      "company_name": "O'Reilly Automotive",
+      "sector": "Consumer Discretionary",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "ODFL",
+      "company_name": "Old Dominion Freight Line",
+      "sector": "Industrials",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "PCAR",
+      "company_name": "Paccar",
+      "sector": "Consumer Discretionary",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "PLTR",
+      "company_name": "Palantir Technologies",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "PANW",
+      "company_name": "Palo Alto Networks",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "PAYX",
+      "company_name": "Paychex",
+      "sector": "Industrials",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "PYPL",
+      "company_name": "PayPal",
+      "sector": "Industrials",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "PDD",
+      "company_name": "PDD Holdings",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "PEP",
+      "company_name": "PepsiCo",
+      "sector": "Consumer Staples",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "QCOM",
+      "company_name": "Qualcomm",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "REGN",
+      "company_name": "Regeneron Pharmaceuticals",
+      "sector": "Health Care",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "RKLB",
+      "company_name": "Rocket Lab",
+      "sector": "Industrials",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "ROP",
+      "company_name": "Roper Technologies",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "ROST",
+      "company_name": "Ross Stores",
+      "sector": "Consumer Discretionary",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "SNDK",
+      "company_name": "Sandisk",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "STX",
+      "company_name": "Seagate Technology",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "SHOP",
+      "company_name": "Shopify",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "SPCX",
+      "company_name": "SpaceX",
+      "sector": "Telecommunications",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "SBUX",
+      "company_name": "Starbucks",
+      "sector": "Consumer Discretionary",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "SNPS",
+      "company_name": "Synopsys",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "TMUS",
+      "company_name": "T-Mobile US",
+      "sector": "Telecommunications",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "TTWO",
+      "company_name": "Take-Two Interactive",
+      "sector": "Consumer Discretionary",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "TER",
+      "company_name": "Teradyne",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "TSLA",
+      "company_name": "Tesla, Inc.",
+      "sector": "Consumer Discretionary",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "TXN",
+      "company_name": "Texas Instruments",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "TRI",
+      "company_name": "Thomson Reuters",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "VRTX",
+      "company_name": "Vertex Pharmaceuticals",
+      "sector": "Health Care",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "WMT",
+      "company_name": "Walmart",
+      "sector": "Consumer Discretionary",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "WBD",
+      "company_name": "Warner Bros. Discovery",
+      "sector": "Consumer Discretionary",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "WDC",
+      "company_name": "Western Digital",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "WDAY",
+      "company_name": "Workday, Inc.",
+      "sector": "Technology",
+      "index": "NASDAQ100"
+    },
+    {
+      "symbol": "XEL",
+      "company_name": "Xcel Energy",
+      "sector": "Utilities",
+      "index": "NASDAQ100"
+    }
+  ]
+}

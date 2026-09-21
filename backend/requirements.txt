@@ -1,0 +1,42 @@
+# File: backend/requirements.txt
+
+# FastAPI and server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Database
+psycopg2-binary==2.9.9
+
+# Environment and configuration
+python-dotenv==1.0.0
+
+# Data processing and utilities
+pandas==2.1.4
+numpy==1.24.3
+
+# HTTP requests (for future enhancements)
+httpx==0.25.2
+
+# Earnings-date lookups for chart markers (services/earnings_service.py),
+# fetched on demand -- not part of the mechanism/ daily batch pipeline.
+# Unpinned deliberately, same rationale as mechanism/requirements.txt: Yahoo
+# Finance's unofficial API breaks periodically and yfinance ships fixes as
+# patch releases; pinning risks staying broken. Run `pip install --upgrade
+# yfinance` if earnings lookups start failing.
+yfinance>=1.7.0
+
+# Logging and monitoring
+structlog==23.2.0
+
+# Development and debugging
+python-multipart==0.0.6
+
+pydantic==2.5.0
+python-multipart==0.0.6
+
+# ML model loading (routers/ml_stats.py loads the trained XGBoost model
+# directly to extract feature importances -- same packages
+# mechanism/ml_enhancement/ml_signal_enhancer.py needs to unpickle it)
+joblib==1.3.2
+xgboost==2.0.3
+scikit-learn==1.3.2

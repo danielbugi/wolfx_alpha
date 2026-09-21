@@ -16,7 +16,9 @@ from .utils import (
     file_utils,
     format_number,
     calculate_percentage_change,
-    safe_divide
+    safe_divide,
+    get_system_stats,
+    ProgressBar
 )
 
 __version__ = "1.0.0"
@@ -38,11 +40,13 @@ __all__ = [
     'timing_decorator',
     'date_utils',
     'data_validation',
-    'performance_utils',
+    'performance_monitor',
     'file_utils',
     'format_number',
     'calculate_percentage_change',
-    'safe_divide'
+    'safe_divide',
+    'get_system_stats',
+    'ProgressBar'
 ]
 
 

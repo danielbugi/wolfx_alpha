@@ -128,6 +128,19 @@ class HistoricalBreakoutGenerator:
             df['date'] = pd.to_datetime(df['date'])
             df = df.sort_values('date').reset_index(drop=True)
 
+            # psycopg2 returns NUMERIC columns as Python Decimal, not float.
+            # calculate_enhanced_outcomes() below mixes these with float
+            # results from pandas aggregations (e.g. Series.std()), which
+            # raises "unsupported operand type(s) for -: 'float' and
+            # 'decimal.Decimal'" the moment any breakout is actually found
+            # (see MILESTONES.md — this only surfaced once the breakout
+            # detection bug above was fixed and real breakouts started
+            # coming through). Normalize to float here, once, rather than
+            # patching every downstream arithmetic op individually.
+            numeric_cols = [c for c in df.columns if c not in ('date', 'symbol')]
+            for col in numeric_cols:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+
             # Validate data quality
             if len(df) < self.ml_config['min_data_points']:
                 logger.warning(f"Insufficient data for {symbol}: {len(df)} days")
@@ -157,24 +170,37 @@ class HistoricalBreakoutGenerator:
                 breakout_type = None
                 breakout_strength = 0
 
-                # Upward breakout detection
-                if (current['close'] > current['donchian_high_20'] and
+                # Upward breakout detection.
+                # NOTE: compares against previous['donchian_high_20'], not
+                # current['donchian_high_20'] -- the current day's channel is
+                # a rolling window that already includes today's own high
+                # (see calculate_donchian_channels() in daily_data_updater.py:
+                # data['high'].rolling(20).max(), inclusive of today), so
+                # current['close'] > current['donchian_high_20'] can never be
+                # true by construction and this loop always found 0
+                # breakouts across the entire history for every symbol (see
+                # MILESTONES.md). Yesterday's channel was built without
+                # today's price action, so comparing against that is what
+                # actually detects a breakout -- matching the pattern
+                # multi_timeframe_screener.py's get_daily_breakout_signals()
+                # already uses correctly (current_price > prev_donchian_high).
+                if (current['close'] > previous['donchian_high_20'] and
                         previous['close'] <= previous['donchian_high_20']):
                     breakout_type = 'bullish'
 
                     # Calculate breakout strength
-                    if current['donchian_high_20'] > 0:
-                        breakout_strength = (current['close'] - current['donchian_high_20']) / current[
+                    if previous['donchian_high_20'] > 0:
+                        breakout_strength = (current['close'] - previous['donchian_high_20']) / previous[
                             'donchian_high_20'] * 100
 
-                # Downward breakout detection
-                elif (current['close'] < current['donchian_low_20'] and
+                # Downward breakout detection (same fix, mirrored)
+                elif (current['close'] < previous['donchian_low_20'] and
                       previous['close'] >= previous['donchian_low_20']):
                     breakout_type = 'bearish'
 
                     # Calculate breakout strength
-                    if current['donchian_low_20'] > 0:
-                        breakout_strength = (current['donchian_low_20'] - current['close']) / current[
+                    if previous['donchian_low_20'] > 0:
+                        breakout_strength = (previous['donchian_low_20'] - current['close']) / previous[
                             'donchian_low_20'] * 100
 
                 if breakout_type:
@@ -542,11 +568,20 @@ class HistoricalBreakoutGenerator:
             # Link with fundamentals data
             enhanced_breakouts = self.link_fundamentals_data(breakouts_with_outcomes)
 
-            # Save to both tables
+            # Save to the real table. ml_training_data is a VIEW joining
+            # breakouts + daily_fundamentals + technical_indicators (see
+            # MILESTONES.md) -- it has no storage of its own and reflects
+            # this write automatically. save_to_ml_training_table() used to
+            # be called here too, attempting a separate INSERT into that
+            # view; it was structurally broken two ways over (referenced
+            # columns that don't exist on the underlying breakouts table,
+            # and Postgres doesn't allow INSERT into a multi-table-JOIN view
+            # without an INSTEAD OF trigger, which was never defined) and
+            # redundant on top of that. Removed rather than fixed, since
+            # there is nothing for it to correctly do.
             breakouts_saved = self.save_to_breakouts_table(enhanced_breakouts)
-            ml_saved = self.save_to_ml_training_table(enhanced_breakouts)
 
-            if breakouts_saved and ml_saved:
+            if breakouts_saved:
                 logger.info(f"✅ Successfully processed {len(enhanced_breakouts)} breakouts for {symbol}")
                 return len(enhanced_breakouts)
             else:

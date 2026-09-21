@@ -1,0 +1,59 @@
+# mechanism/requirements.txt
+# Dependencies for the core pipeline: data_updaters, screeners, ml_enhancement,
+# orchestrators, shared. Derived by scanning actual imports across mechanism/
+# on 2026-09-14 (see MILESTONES.md, Milestone 1).
+
+# Database (sync + async pools — see shared/database.py)
+psycopg2-binary==2.9.9
+asyncpg==0.29.0
+
+# Data fetching
+# NOTE: yfinance is unpinned deliberately. Yahoo Finance changes its
+# internal (unofficial) API frequently, and yfinance ships fixes as patch/
+# minor releases. Pinning to 0.2.40 (the original version here) is exactly
+# what caused the pipeline to go dark for ~10 months (2025-11 to 2026-09) —
+# it returned "possibly delisted" for every symbol until upgraded to 1.7.0.
+# Run `pip install --upgrade yfinance` if data fetching starts failing again.
+yfinance>=1.7.0
+requests==2.31.0
+beautifulsoup4==4.12.3
+
+# Interactive Telegram bot (mechanism/alerts/run_bot.py, added 2026-09-21). The daily broadcast
+# (send_daily_digest.py) only needs `requests`; aiogram is required just for the always-on bot process.
+aiogram>=3.13,<4
+
+# Market-performance card image (mechanism/alerts/market_card.py, added 2026-09-21). Pillow only; the DejaVu font is bundled
+# under mechanism/alerts/assets/fonts/ so the card renders identically on any machine.
+pillow>=10.1
+
+# Per-stock candlestick chart of the private assistant (mechanism/alerts/chart.py, added 2026-09-21), rendered locally from stock_prices.
+# Verified with matplotlib 3.8.3 + mplfinance 0.12.10b0 (mplfinance is a beta line; keep the pin loose but >= 0.12.10).
+matplotlib>=3.8
+mplfinance>=0.12.10b0
+
+# Optional alternate price provider (shared/alpaca_client.py). Inert unless
+# DATA_PROVIDER=alpaca is set in .env — see that file and MILESTONES.md.
+alpaca-py==0.44.0
+
+# Optional alternate price + fundamentals provider (shared/tiingo_client.py).
+# No extra package needed -- it's a plain REST client built on `requests`
+# (already listed above). Inert unless DATA_PROVIDER=tiingo + TIINGO_API_KEY
+# are set in .env — see that file and CLAUDE.md §6a.
+
+# Data processing
+pandas==2.1.4
+numpy==1.24.3
+
+# ML model loading (ml_enhancement/ml_signal_enhancer.py loads
+# momentum_predictor_v*.joblib — an XGBoost model + a scikit-learn scaler —
+# both packages are required to unpickle them even though neither is
+# imported by name in this directory)
+joblib==1.3.2
+xgboost==2.0.3
+scikit-learn==1.3.2
+
+# Config / environment
+python-dotenv==1.0.0
+
+# System monitoring (shared/utils.py get_system_stats)
+psutil==5.9.8

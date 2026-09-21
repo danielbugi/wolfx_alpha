@@ -20,7 +20,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from shared import (
     config, db, setup_logging, retry_on_failure,
     timing_decorator, date_utils, data_validation,
-    format_number, safe_divide
+    format_number, safe_divide, ProgressBar
 )
 
 warnings.filterwarnings('ignore')
@@ -234,19 +234,20 @@ class MonthlyDataUpdater:
 
             logger.info(f"Updating monthly data for {len(symbols)} symbols...")
 
-            for i, symbol in enumerate(symbols, 1):
-                logger.info(f"Processing {symbol} ({i}/{len(symbols)})")
+            progress = ProgressBar(len(symbols), prefix="Monthly update", logger=logger)
+            for symbol in symbols:
+                success = self.update_symbol_monthly(symbol)
 
-                if self.update_symbol_monthly(symbol):
+                if success:
                     stats['successful_updates'] += 1
-                    logger.info(f"✅ Monthly update successful for {symbol}")
+                    progress.log(f"✅ Monthly update successful for {symbol}")
                 else:
                     stats['failed_updates'] += 1
-                    logger.warning(f"⚠️ Monthly update failed for {symbol}")
+                    progress.log(f"⚠️ Monthly update failed for {symbol}", level="warning")
 
-                if i % 50 == 0:
-                    progress = (i / len(symbols)) * 100
-                    logger.info(f"📈 Progress: {progress:.1f}% ({i}/{len(symbols)})")
+                progress.update(success)
+
+            progress.close()
 
             duration = datetime.now() - start_time
             success_rate = (stats['successful_updates'] / stats['total_symbols']) * 100
@@ -393,8 +394,16 @@ def main():
         logger.info(f"🧪 Running monthly test with symbols: {args.test}")
         result = updater.run_monthly_update(test_symbols=args.test)
     else:
-        # Use smart timing
-        result = updater.run_monthly_update_with_timing(limit=args.limit, force=args.force)
+        # NOTE: previously ran through run_monthly_update_with_timing(), whose
+        # should_run_monthly_update() gate silently skipped the entire update
+        # on any day where 5 < day-of-month < 28 (returning success=True,
+        # skipped=True) -- automation_pipeline.sh calls this with no args, so
+        # the daily pipeline reported "SUCCESS: Monthly data update completed"
+        # every run while doing nothing on ~22 of every 30 days. The
+        # underlying per-symbol update is a cheap, idempotent, local-only
+        # upsert (no external API calls), so there's no real cost to just
+        # running it every time instead of trying to be clever about timing.
+        result = updater.run_monthly_update(limit=args.limit)
 
     if result.get('skipped'):
         logger.info(f"⏭️ {result['message']}")

@@ -400,6 +400,13 @@ class DatabaseManager:
                     donchian_high_20w = EXCLUDED.donchian_high_20w,
                     donchian_low_20w = EXCLUDED.donchian_low_20w,
                     donchian_mid_20w = EXCLUDED.donchian_mid_20w,
+                    weekly_open = EXCLUDED.weekly_open,
+                    weekly_high = EXCLUDED.weekly_high,
+                    weekly_low = EXCLUDED.weekly_low,
+                    weekly_close = EXCLUDED.weekly_close,
+                    weekly_volume = EXCLUDED.weekly_volume,
+                    sma_10w = EXCLUDED.sma_10w,
+                    sma_20w = EXCLUDED.sma_20w,
                     rsi_14w = EXCLUDED.rsi_14w,
                     volume_ratio_weekly = EXCLUDED.volume_ratio_weekly,
                     price_position_weekly = EXCLUDED.price_position_weekly,
@@ -429,7 +436,8 @@ class DatabaseManager:
            """
 
         start_date = datetime.now().date() - timedelta(weeks=weeks)
-        return pd.read_sql(query, self.get_connection(), params=[symbol, start_date])
+        with self.get_sync_connection() as conn:
+            return pd.read_sql(query, conn, params=[symbol, start_date])
 
     def insert_monthly_indicators(self, data: Dict[str, Any]) -> bool:
         """Insert monthly technical indicators"""
@@ -444,7 +452,15 @@ class DatabaseManager:
                         %(monthly_close)s, %(monthly_volume)s, %(trend_direction)s, %(trend_strength_6m)s)
                 ON CONFLICT (symbol, month_ending_date) DO UPDATE SET
                     donchian_high_12m = EXCLUDED.donchian_high_12m,
+                    donchian_low_12m = EXCLUDED.donchian_low_12m,
+                    donchian_mid_12m = EXCLUDED.donchian_mid_12m,
+                    monthly_open = EXCLUDED.monthly_open,
+                    monthly_high = EXCLUDED.monthly_high,
+                    monthly_low = EXCLUDED.monthly_low,
+                    monthly_close = EXCLUDED.monthly_close,
+                    monthly_volume = EXCLUDED.monthly_volume,
                     trend_direction = EXCLUDED.trend_direction,
+                    trend_strength_6m = EXCLUDED.trend_strength_6m,
                     updated_at = NOW()
             """
 

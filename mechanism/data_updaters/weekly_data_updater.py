@@ -20,7 +20,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from shared import (
     config, db, setup_logging, retry_on_failure,
     timing_decorator, date_utils, data_validation,
-    format_number, safe_divide
+    format_number, safe_divide, ProgressBar
 )
 
 warnings.filterwarnings('ignore')
@@ -371,32 +371,32 @@ class WeeklyDataUpdater:
             }
             
             logger.info(f"Updating weekly data for {len(symbols)} symbols...")
-            
-            # Process each symbol
-            for i, symbol in enumerate(symbols, 1):
+
+            # Process each symbol, with a live progress bar in the terminal
+            # and a log line (console + rotating file) for every symbol.
+            progress = ProgressBar(len(symbols), prefix="Weekly update", logger=logger)
+            for symbol in symbols:
                 try:
-                    logger.info(f"Processing {symbol} ({i}/{len(symbols)})")
-                    
                     success = self.update_symbol_weekly(symbol)
-                    
+
                     if success:
                         stats['successful_updates'] += 1
-                        logger.info(f"✅ Weekly update successful for {symbol}")
+                        progress.log(f"✅ Weekly update successful for {symbol}")
                     else:
                         stats['failed_updates'] += 1
-                        logger.warning(f"⚠️ Weekly update failed for {symbol}")
-                        
+                        progress.log(f"⚠️ Weekly update failed for {symbol}", level="warning")
+
                 except Exception as e:
                     stats['failed_updates'] += 1
                     error_msg = f"Failed to update {symbol}: {e}"
                     stats['errors'].append(error_msg)
-                    logger.error(error_msg)
-                
-                # Progress reporting (every 50 symbols like your pattern)
-                if i % 50 == 0:
-                    progress = (i / len(symbols)) * 100
-                    logger.info(f"� Progress: {progress:.1f}% ({i}/{len(symbols)})")
-            
+                    progress.log(error_msg, level="error")
+                    success = False
+
+                progress.update(success)
+
+            progress.close()
+
             # Final report (matching your reporting style)
             duration = datetime.now() - start_time
             success_rate = (stats['successful_updates'] / stats['total_symbols']) * 100
@@ -526,8 +526,16 @@ def main():
         logger.info(f"🧪 Running weekly test with symbols: {args.test}")
         result = updater.run_weekly_update(test_symbols=args.test)
     else:
-        # Use smart timing
-        result = updater.run_weekly_update_with_timing(limit=args.limit, force=args.force)
+        # NOTE: previously ran through run_weekly_update_with_timing(), whose
+        # should_run_weekly_update() gate silently skipped the entire update
+        # on Monday-Thursday (returning success=True, skipped=True) --
+        # automation_pipeline.sh calls this with no args, so the daily
+        # pipeline reported success while doing nothing 4 of every 7 days.
+        # Confirmed the same bug pattern as monthly_data_updater.py: 995/1005
+        # symbols were frozen at 2025-09-12. The underlying per-symbol update
+        # is a cheap, idempotent, local-only upsert (no external API calls),
+        # so there's no real cost to just running it every time.
+        result = updater.run_weekly_update(limit=args.limit)
 
     if result.get('skipped'):
         logger.info(f"⏭️ {result['message']}")

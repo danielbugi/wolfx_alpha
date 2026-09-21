@@ -9,6 +9,7 @@ import logging.handlers
 import time
 import functools
 import os
+import sys
 import json
 import pandas as pd
 import numpy as np
@@ -84,6 +85,101 @@ def setup_logging(
     logger.addHandler(file_handler)
 
     return logger
+
+
+# ============================================================================
+# PROGRESS BAR
+# ============================================================================
+
+class ProgressBar:
+    """
+    Console progress bar for long symbol-by-symbol update loops (daily/weekly/
+    monthly/fundamentals updaters run against ~1,000-3,000 symbols with no
+    other visual feedback otherwise). Meant to be watched live in the bash
+    window the pipeline runs in, not just read back from a log file after.
+
+    The bar redraws in place via '\\r' on every update(). Full log lines (via
+    log(), or update()'s own periodic milestones) go through the given
+    `logger` -- console handler AND rotating file handler both see them --
+    but are wrapped with a clear-then-redraw of the bar so they don't get
+    torn apart by the in-place '\\r' redraws sitting on the same terminal line.
+    Thread-safe: daily_data_updater.py ticks this from worker threads.
+    """
+
+    def __init__(self, total: int, prefix: str = "Progress",
+                 logger: Optional[logging.Logger] = None,
+                 width: int = 30, log_every_pct: int = 10):
+        self.total = max(total, 1)
+        self.prefix = prefix
+        self.logger = logger
+        self.width = width
+        self.log_every_pct = log_every_pct
+        self.count = 0
+        self.success = 0
+        self.failed = 0
+        self._last_logged_pct = -1
+        self._start = time.time()
+        self._bar_visible = False
+        self._lock = threading.Lock()
+
+    def _render(self) -> str:
+        pct = self.count / self.total * 100
+        filled = int(self.width * self.count / self.total)
+        bar = "#" * filled + "-" * (self.width - filled)
+        elapsed = time.time() - self._start
+        rate = self.count / elapsed if elapsed > 0 else 0
+        eta_s = (self.total - self.count) / rate if rate > 0 else 0
+        return (f"{self.prefix} [{bar}] {pct:5.1f}% ({self.count}/{self.total}) "
+                f"ok={self.success} fail={self.failed} eta={eta_s:.0f}s")
+
+    def _clear(self):
+        if self._bar_visible:
+            print("\r" + " " * 140 + "\r", end="", flush=True)
+            self._bar_visible = False
+
+    def _draw(self):
+        print(f"\r{self._render()}", end="", flush=True)
+        self._bar_visible = True
+
+    def log(self, message: str, level: str = "info"):
+        """Print/log a normal line without corrupting the in-place bar."""
+        with self._lock:
+            self._clear()
+            if self.logger:
+                getattr(self.logger, level)(message)
+            else:
+                print(message)
+            self._draw()
+
+    def update(self, success: bool = True, symbol: Optional[str] = None):
+        """Advance the bar by one item. Call once per processed symbol."""
+        with self._lock:
+            self.count += 1
+            if success:
+                self.success += 1
+            else:
+                self.failed += 1
+
+            pct = int(self.count / self.total * 100)
+            due_for_log = self.logger and (
+                    pct >= self._last_logged_pct + self.log_every_pct or self.count == self.total
+            )
+
+            if due_for_log:
+                self._last_logged_pct = pct
+                self._clear()
+                self.logger.info(self._render())
+            self._draw()
+
+    def close(self):
+        with self._lock:
+            self._clear()
+            if self.logger:
+                elapsed = time.time() - self._start
+                self.logger.info(
+                    f"{self.prefix} complete: {self.success} ok, {self.failed} failed, "
+                    f"{self.total} total in {elapsed:.0f}s"
+                )
 
 
 # ============================================================================

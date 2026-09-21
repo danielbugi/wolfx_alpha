@@ -1,10 +1,11 @@
+# Dependencies
 node_modules/
+
+# Environment
 .env
 .env.local
-.vite/
-dist/
-*.log
-.DS_Store
+
+# Python
 __pycache__/
 *.pyc
 *.pyo
@@ -12,7 +13,37 @@ __pycache__/
 .Python
 venv/
 .venv/
-stock_lists/
+.pytest_cache/
+
+# Build output
+.vite/
+dist/
+.next/
+.next-build/
+
+# Logs
+*.log
+logs/
+mechanism/logs/
+
+# OS
+.DS_Store
+
+# Generated pipeline output (regenerated daily by automation_pipeline.sh — not source)
 data/
-*.csv
-*.json
+mechanism/data/
+frontend_data/
+mechanism/frontend_data/
+breakout_results/
+mechanism/breakout_results/
+reports/
+mechanism/reports/
+
+# Legacy scratch / old project snapshots (see CLAUDE.md §3.2)
+backups/
+
+# model artifacts (large binaries; regenerate with ml_training) and unrelated agent tooling
+*.joblib
+agent_reports/
+agent_tools/
+.agentignore

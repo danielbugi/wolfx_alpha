@@ -33,7 +33,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from shared import (
     config, db, setup_logging, retry_on_failure,
-    performance_monitor, file_utils
+    performance_monitor, file_utils, ProgressBar
 )
 
 
@@ -66,6 +66,20 @@ class EnhancedDailyDataUpdater:
 
         # Cache for technical indicator calculations
         self.indicator_cache = {}
+
+        # Live progress bar for the current run, set by run_enhanced_update()
+        # so per-symbol log lines from worker threads (update_symbol_enhanced)
+        # can route through it instead of the plain logger.
+        self._progress: Optional[ProgressBar] = None
+
+    def _log_symbol_result(self, message: str, level: str = "info"):
+        """Log a per-symbol result via the active progress bar if one is
+        running (keeps the bar from being torn apart by concurrent worker
+        threads logging directly), else falls back to the plain logger."""
+        if self._progress:
+            self._progress.log(message, level=level)
+        else:
+            getattr(self.logger, level)(message)
 
     def safe_float(self, value):
         """Safely convert to float with better handling including Decimal types"""
@@ -319,28 +333,60 @@ class EnhancedDailyDataUpdater:
                 period = "1y"
                 self.logger.debug(f"{symbol}: New symbol, getting full year of data")
 
-            # Get data from Yahoo Finance with retry logic
-            ticker = yf.Ticker(symbol)
-            hist = ticker.history(period=period)
+            def _fetch_yfinance(sym: str, per: str) -> Optional[pd.DataFrame]:
+                ticker = yf.Ticker(sym)
+                h = ticker.history(period=per)
+                if h.empty:
+                    return None
+                h.reset_index(inplace=True)
+                h['Date'] = pd.to_datetime(h['Date']).dt.date
+                h.rename(columns={
+                    'Date': 'date', 'Open': 'open', 'High': 'high',
+                    'Low': 'low', 'Close': 'close', 'Volume': 'volume'
+                }, inplace=True)
+                h['adj_close'] = h['close']  # yfinance already provides adjusted data
+                return h
 
-            if hist.empty:
+            # Get data from the configured provider. DATA_PROVIDER defaults
+            # to 'yfinance'; set it to 'alpaca' in .env (with
+            # ALPACA_API_KEY/ALPACA_API_SECRET) to use the more reliable,
+            # officially-supported free-tier Alpaca API instead — see
+            # shared/alpaca_client.py and MILESTONES.md for why.
+            #
+            # Alpaca-first with a yfinance fallback, not an either/or: a
+            # 2026-09-14 full-universe test found ~38/1005 symbols (BK, MMC,
+            # FI, EA, HES, WBA, ...) return a genuinely empty result from
+            # Alpaca's free IEX feed -- confirmed not an error (no exception,
+            # just an empty DataFrame) and not transient (reproduced in
+            # isolation, not just under bulk load). IEX is one venue among
+            # several exchanges; its free-tier coverage isn't the full
+            # market the way a paid consolidated (SIP) feed would be. Some
+            # of these ARE genuine 2025 delistings/going-private/M&A (EA,
+            # HES, WBA); others (BK, MMC, FI) are large, clearly still-
+            # trading companies that Alpaca's free feed just doesn't carry.
+            # Falling back to yfinance for exactly the symbols Alpaca can't
+            # cover keeps Alpaca's reliability win for the ~96% it does
+            # cover without losing yfinance's broader (if fragile) coverage
+            # for the rest.
+            hist = None
+            if config.data_provider == 'alpaca':
+                from shared.alpaca_client import get_daily_bars
+                hist = get_daily_bars(symbol, period=period)
+                if hist is None or hist.empty:
+                    self.logger.debug(f"{symbol}: no data from Alpaca, falling back to yfinance")
+                    hist = _fetch_yfinance(symbol, period)
+            elif config.data_provider == 'tiingo':
+                from shared.tiingo_client import get_daily_bars
+                hist = get_daily_bars(symbol, period=period)
+                if hist is None or hist.empty:
+                    self.logger.debug(f"{symbol}: no data from Tiingo, falling back to yfinance")
+                    hist = _fetch_yfinance(symbol, period)
+            else:
+                hist = _fetch_yfinance(symbol, period)
+
+            if hist is None or hist.empty:
                 self.logger.warning(f"No data returned for {symbol}")
                 return None
-
-            # Process data
-            hist.reset_index(inplace=True)
-            hist['Date'] = pd.to_datetime(hist['Date']).dt.date
-
-            hist.rename(columns={
-                'Date': 'date',
-                'Open': 'open',
-                'High': 'high',
-                'Low': 'low',
-                'Close': 'close',
-                'Volume': 'volume'
-            }, inplace=True)
-
-            hist['adj_close'] = hist['close']  # yfinance already provides adjusted data
 
             # Filter to only new data if we have existing data
             if latest_date:
@@ -430,21 +476,30 @@ class EnhancedDailyDataUpdater:
         """
         Get sufficient historical data for technical indicator calculations
         ENHANCED: Only gets what's needed for calculations
+
+        NOTE: previously hard-capped at LIMIT 100 (the most recent 100 rows).
+        bulk_update_technical_indicators() below filters to
+        `date > latest_ti_date` to backfill any gap since the last indicator
+        row — but that only works if the gap is actually *fetched* here
+        first. After the ~10-month pipeline outage (2025-11 to 2026-09, see
+        MILESTONES.md), the LIMIT 100 silently excluded the older ~6 months
+        of the gap from ever being fetched, so technical_indicators stayed
+        permanently missing for that window even after stock_prices was
+        fully backfilled — historical_breakouts_generator.py then found 0
+        breakouts across the entire symbol universe because every row's
+        donchian columns were NULL. Fixed by fetching full available price
+        history instead of a fixed recent window; per-symbol history is a
+        few hundred rows at most, so this is cheap.
         """
         try:
-            # Get enough historical data for indicators (need 50+ days for all indicators)
             query = """
                 SELECT date, open, high, low, close, volume
                 FROM stock_prices
                 WHERE symbol = %s
                 ORDER BY date DESC
-                LIMIT %s
             """
 
-            # Get more data than minimum to ensure we have enough for all indicators
-            limit = max(min_periods * 2, 100)
-
-            result = db.execute_dict_query(query, (symbol, limit))
+            result = db.execute_dict_query(query, (symbol,))
 
             if not result:
                 return None
@@ -494,20 +549,21 @@ class EnhancedDailyDataUpdater:
             data = self.calculate_volume_indicators_fixed(data)  # FIXED volume handling
             data = self.calculate_additional_indicators(data)
 
-            # Get latest technical indicators date
-            query = "SELECT MAX(date) as latest_date FROM technical_indicators WHERE symbol = %s"
-            result = db.execute_dict_query(query, (symbol,))
-            latest_ti_date = result[0]['latest_date'] if result and result[0]['latest_date'] else None
-
-            # ENHANCED: Better date filtering logic
-            if latest_ti_date:
-                # Only update data newer than what we have
-                new_indicator_data = data[data['date'] > latest_ti_date]
-            else:
-                # No existing indicators - calculate for all available data
-                # But limit to recent data to avoid overload
-                cutoff_date = datetime.now().date() - timedelta(days=90)
-                new_indicator_data = data[data['date'] >= cutoff_date]
+            # Find which of the newly computed dates are actually missing from
+            # technical_indicators, instead of just "newer than MAX(date)".
+            # A MAX(date)-based filter can only ever extend forward — it can
+            # never repair a hole earlier in the series, because once
+            # anything writes a row at today's date, MAX(date) stops pointing
+            # at the edge of the hole. That's exactly what happened after the
+            # ~10-month pipeline outage (2025-11 to 2026-09, see
+            # MILESTONES.md): stock_prices backfilled fine, but this filter
+            # left a permanent gap in technical_indicators for the middle of
+            # the backfilled range. Comparing against the actual existing
+            # date set fixes that gap and is self-healing against any future
+            # gap of any size, not just a one-time backfill.
+            existing_dates_query = "SELECT date FROM technical_indicators WHERE symbol = %s"
+            existing_dates = {row['date'] for row in db.execute_dict_query(existing_dates_query, (symbol,))}
+            new_indicator_data = data[~data['date'].isin(existing_dates)]
 
             if new_indicator_data.empty:
                 self.logger.debug(f"No new technical indicator data for {symbol}")
@@ -613,7 +669,7 @@ class EnhancedDailyDataUpdater:
                 return True
 
             if new_price_data.empty:
-                self.logger.warning(f"No valid data for {symbol}")
+                self._log_symbol_result(f"⚠️ No valid data for {symbol}", level="warning")
                 return False
 
             # ENHANCED: Bulk update stock prices
@@ -626,14 +682,14 @@ class EnhancedDailyDataUpdater:
                 # ENHANCED: Bulk update technical indicators with FIXED calculations
                 indicator_records = self.bulk_update_technical_indicators(symbol, full_data)
             else:
-                self.logger.warning(f"Insufficient data for {symbol} technical indicators")
+                self._log_symbol_result(f"⚠️ Insufficient data for {symbol} technical indicators", level="warning")
                 indicator_records = 0
 
-            self.logger.info(f"✅ {symbol}: {price_records} prices, {indicator_records} indicators")
+            self._log_symbol_result(f"✅ {symbol}: {price_records} prices, {indicator_records} indicators")
             return True
 
         except Exception as e:
-            self.logger.error(f"Failed to update {symbol}: {e}")
+            self._log_symbol_result(f"❌ Failed to update {symbol}: {e}", level="error")
             return False
 
     async def update_symbols_concurrent(self, symbols: List[str]) -> Dict[str, bool]:
@@ -664,9 +720,13 @@ class EnhancedDailyDataUpdater:
                         self.stats['failed_updates'] += 1
 
                 except Exception as e:
-                    self.logger.error(f"Concurrent update failed for {symbol}: {e}")
+                    self._log_symbol_result(f"❌ Concurrent update failed for {symbol}: {e}", level="error")
                     results[symbol] = False
+                    success = False
                     self.stats['failed_updates'] += 1
+
+                if self._progress:
+                    self._progress.update(success)
 
         return results
 
@@ -687,7 +747,16 @@ class EnhancedDailyDataUpdater:
         if test_symbols:
             return test_symbols
 
-        query = "SELECT DISTINCT symbol FROM stock_prices ORDER BY symbol"
+        # Excludes confirmed-dead symbols (inactive_symbols, added
+        # 2026-09-15) -- delisted/acquired/gone-private tickers that will
+        # otherwise be retried forever, since this query is DB-driven
+        # (whatever's already in stock_prices) rather than sourced from
+        # mechanism/stock_lists/. See MILESTONES.md Milestone 4.
+        query = """
+            SELECT DISTINCT symbol FROM stock_prices
+            WHERE symbol NOT IN (SELECT symbol FROM inactive_symbols)
+            ORDER BY symbol
+        """
         if limit:
             query += f" LIMIT {limit}"
 
@@ -1058,22 +1127,29 @@ class EnhancedDailyDataUpdater:
             batch_size = self.batch_size
             results_summary = {}
 
-            for i in range(0, len(symbols), batch_size):
-                batch = symbols[i:i + batch_size]
-                batch_num = (i // batch_size) + 1
-                total_batches = (len(symbols) + batch_size - 1) // batch_size
+            # Live progress bar (terminal) + per-symbol log lines, spanning
+            # the whole run across all batches -- see ProgressBar in
+            # shared/utils.py. Worker threads route their per-symbol logs
+            # through self._progress via _log_symbol_result().
+            self._progress = ProgressBar(len(symbols), prefix="Daily update", logger=self.logger)
+            try:
+                for i in range(0, len(symbols), batch_size):
+                    batch = symbols[i:i + batch_size]
+                    batch_num = (i // batch_size) + 1
+                    total_batches = (len(symbols) + batch_size - 1) // batch_size
 
-                self.logger.info(f"Processing batch {batch_num}/{total_batches} ({len(batch)} symbols)")
+                    self._progress.log(f"Processing batch {batch_num}/{total_batches} ({len(batch)} symbols)")
 
-                # Process batch concurrently
-                batch_results = await self.update_symbols_concurrent(batch)
-                results_summary.update(batch_results)
+                    # Process batch concurrently
+                    batch_results = await self.update_symbols_concurrent(batch)
+                    results_summary.update(batch_results)
 
-                # Progress reporting
-                progress = ((i + len(batch)) / len(symbols)) * 100
-                successful_in_batch = sum(1 for success in batch_results.values() if success)
-                self.logger.info(
-                    f"Batch {batch_num} completed: {successful_in_batch}/{len(batch)} successful, {progress:.1f}% total progress")
+                    successful_in_batch = sum(1 for success in batch_results.values() if success)
+                    self._progress.log(
+                        f"Batch {batch_num} completed: {successful_in_batch}/{len(batch)} successful")
+            finally:
+                self._progress.close()
+                self._progress = None
 
             # Generate enhanced lineage report
             self.logger.info("Generating enhanced data lineage report...")

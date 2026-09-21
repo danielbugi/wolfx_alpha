@@ -32,6 +32,13 @@ except ImportError as e:
     print(f"Import error: {e}")
     sys.exit(1)
 
+# Single source of truth for features/breakouts/integrity rules -- the SAME module the trainer's
+# dataset builder uses (ml_training/features/price_features.py), so train and serve cannot drift.
+_PROJECT_ROOT = str(Path(__file__).resolve().parents[2])
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+from ml_training.features import price_features as pf  # noqa: E402
+
 
 def safe_float(value):
     """Safely convert decimal/numeric values to float"""
@@ -73,7 +80,7 @@ class CombinedDonchianScreener:
 
         # Initialize ML components
         self.ml_model = None
-        self.ml_scaler = None
+        self.ml_meta = {}
         self.ml_feature_names = []
         self.ml_model_loaded = False
         self.ml_model_version = None
@@ -123,11 +130,19 @@ class CombinedDonchianScreener:
 
                 for model_file in main_models:
                     base_name = model_file.stem
-                    scaler_file = model_file.parent / f"{base_name}_scaler.joblib"
                     features_file = model_file.parent / f"{base_name}_features.json"
+                    meta_file = model_file.parent / f"{base_name}_meta.json"
 
-                    if scaler_file.exists() and features_file.exists():
-                        all_model_files.append(model_file)
+                    if not features_file.exists():
+                        continue
+                    # Only models trained by the honest-evaluation trainer carry a _meta.json
+                    # contract (feature_set_version + holdout metrics). Older models (no meta) were
+                    # trained on unvalidated data with train/serve feature skew -- see CLAUDE.md
+                    # "ML audit 2026-09-20" -- so they are never auto-served.
+                    if not meta_file.exists():
+                        logger.warning(f"Ignoring legacy model {model_file.name}: no _meta.json contract")
+                        continue
+                    all_model_files.append(model_file)
 
         return all_model_files
 
@@ -156,14 +171,20 @@ class CombinedDonchianScreener:
             self.ml_model = joblib.load(str(latest_model))
             self.ml_model_version = latest_model.stem
 
-            # Load scaler
-            scaler_path = latest_model.parent / f"{latest_model.stem}_scaler.joblib"
-            self.ml_scaler = joblib.load(str(scaler_path))
-
-            # Load feature names
+            # Feature names + training contract. No scaler: the model is a tree ensemble trained on raw
+            # features with NaN kept as NaN.
             features_path = latest_model.parent / f"{latest_model.stem}_features.json"
             with open(features_path, 'r') as f:
                 self.ml_feature_names = json.load(f)
+            with open(latest_model.parent / f"{latest_model.stem}_meta.json", 'r') as f:
+                self.ml_meta = json.load(f)
+
+            if self.ml_meta.get('feature_set_version') != pf.FEATURE_SET_VERSION:
+                logger.error(f"Model {latest_model.name} was trained on feature set "
+                             f"{self.ml_meta.get('feature_set_version')!r}, code provides {pf.FEATURE_SET_VERSION!r} "
+                             f"-- not serving it")
+                self.ml_model = None
+                return False
 
             self.ml_model_loaded = True
             logger.info(f"SUCCESS: ML model loaded ({len(self.ml_feature_names)} features)")
@@ -306,137 +327,84 @@ class CombinedDonchianScreener:
             logger.warning(f"Signal validation failed for {symbol}: {e}")
             return False
 
-    def extract_ml_features_from_data(self, symbol: str, stock_data: List[Dict], fundamentals: Dict) -> Dict:
-        """
-        Extract ML features from the SAME data used for breakout detection
-        FIX: Uses consistent data instead of fetching fresh data
-        """
-        try:
-            if not stock_data:
-                return {}
+    def _unavailable(self, reason: str, detail: str = '') -> Dict:
+        """A prediction that is explicitly NOT available. Never substitutes a default probability."""
+        return {
+            'ml_momentum_probability': None,
+            'ml_confidence': reason,
+            'ml_prediction_available': False,
+            'ml_error': detail or reason,
+        }
 
-            latest = stock_data[0]
-            features = {}
-
-            # Technical features from stock data (using SAME data as breakout detection)
-            features['rsi_14'] = safe_float(latest.get('rsi_14')) or 50
-            features['volume_ratio'] = safe_float(latest.get('volume_ratio')) or 1.0
-            features['price_position'] = safe_float(latest.get('price_position')) or 50
-            features['channel_width_pct'] = safe_float(latest.get('channel_width_pct')) or 5
-            features['atr_14'] = safe_float(latest.get('atr_14')) or 1
-            features['macd'] = safe_float(latest.get('macd')) or 0
-
-            # SMA features
-            sma_10 = safe_float(latest.get('sma_10')) or 0
-            sma_20 = safe_float(latest.get('sma_20')) or 0
-            sma_50 = safe_float(latest.get('sma_50')) or 0
-
-            features['sma_10'] = sma_10
-            features['sma_20'] = sma_20
-            features['sma_50'] = sma_50
-
-            # SMA relationships
-            if sma_20 > 0:
-                features['sma_10_vs_20'] = ((sma_10 - sma_20) / sma_20) * 100
-            else:
-                features['sma_10_vs_20'] = 0
-
-            # Bollinger position
-            bollinger_upper = safe_float(latest.get('bollinger_upper'))
-            bollinger_lower = safe_float(latest.get('bollinger_lower'))
-            current_price = safe_float(latest.get('close'))
-
-            if bollinger_upper and bollinger_lower and current_price:
-                bb_range = bollinger_upper - bollinger_lower
-                if bb_range > 0:
-                    features['bollinger_position'] = ((current_price - bollinger_lower) / bb_range) * 100
-                else:
-                    features['bollinger_position'] = 50
-            else:
-                features['bollinger_position'] = 50
-
-            features['donchian_position'] = features['price_position']
-            features['entry_price'] = current_price or 0
-
-            # Fundamental features
-            features['growth_score'] = (safe_float(fundamentals.get('growth_score')) or 5) / 10
-            features['profitability_score'] = (safe_float(fundamentals.get('profitability_score')) or 5) / 10
-            features['financial_health_score'] = (safe_float(fundamentals.get('financial_health_score')) or 5) / 10
-            features['overall_quality_score'] = (safe_float(fundamentals.get('overall_quality_score')) or 5) / 10
-
-            # Grade encoding
-            grade_mapping = {'A': 1.0, 'B': 0.75, 'C': 0.5, 'D': 0.25, 'F': 0.0}
-            features['quality_grade_numeric'] = grade_mapping.get(fundamentals.get('quality_grade'), 0.5)
-
-            # Valuation ratios
-            features['pe_ratio'] = min(100, max(0, safe_float(fundamentals.get('pe_ratio')) or 15))
-            features['pb_ratio'] = min(20, max(0, safe_float(fundamentals.get('pb_ratio')) or 2))
-            features['beta'] = safe_float(fundamentals.get('beta')) or 1.0
-
-            # Market cap
-            market_cap = safe_float(fundamentals.get('market_cap')) or 1000000000
-            features['log_market_cap'] = np.log10(max(1000000, market_cap))
-
-            # Interaction features
-            features['quality_rsi'] = features['overall_quality_score'] * (features['rsi_14'] / 100)
-            features['quality_volume'] = features['overall_quality_score'] * features['volume_ratio']
-
-            # Sector encoding
-            sector = fundamentals.get('sector', 'Unknown')
-            major_sectors = ['Technology', 'Healthcare', 'Financial Services', 'Consumer Cyclical', 'Industrials']
-            for sector_name in major_sectors:
-                features[f'sector_{sector_name.lower().replace(" ", "_")}'] = 1 if sector == sector_name else 0
-
-            return features
-
-        except Exception as e:
-            logger.warning(f"Feature extraction failed for {symbol}: {e}")
-            return {}
+    def _load_price_window(self, symbol: str, screening_date) -> pd.DataFrame:
+        """Recent OHLCV bars straight from stock_prices (the same source the training dataset is built
+        from). Enough bars for the longest feature lookback plus the discontinuity check."""
+        rows = db.execute_dict_query(
+            "SELECT date, open, high, low, close, volume FROM stock_prices "
+            "WHERE symbol = %s AND date <= %s ORDER BY date DESC LIMIT %s",
+            (symbol, screening_date, pf.LOOKBACK_BARS + 70))
+        px = pd.DataFrame(rows)
+        if px.empty:
+            return px
+        for col in pf.OHLCV:
+            px[col] = pd.to_numeric(px[col], errors='coerce')
+        px['date'] = pd.to_datetime(px['date'])
+        return px.dropna(subset=['close']).sort_values('date').reset_index(drop=True)
 
     def predict_ml_momentum(self, symbol: str, signal_data: Dict, stock_data: List[Dict], fundamentals: Dict) -> Dict:
         """
-        Predict momentum using ML model with CONSISTENT data
-        FIX: Uses same data as breakout detection + validates signal first
+        Score one ACTUAL breakout with the model, using the shared feature module
+        (ml_training/features/price_features.py) on stock_prices -- identical code to training.
+
+        Returns an explicit "unavailable" result (ml_prediction_available=False, reason in ml_confidence)
+        instead of a number whenever the model was not trained for the situation or the inputs cannot be
+        trusted: no model, near-breakout (never trained on), signal no longer valid, price
+        discontinuity in the lookback, illiquid, or any model feature missing. `stock_data` is accepted
+        for call-compatibility and intentionally unused: features come from stock_prices, not from
+        technical_indicators rows that may sit on an older price basis.
         """
         if not self.ml_model_loaded:
-            return {
-                'ml_momentum_probability': None,
-                'ml_confidence': 'no_model',
-                'ml_prediction_available': False,
-                'ml_error': 'Model not loaded'
-            }
+            return self._unavailable('no_model', 'No validated model loaded')
 
         try:
-            # IMPORTANT FIX: Validate signal is still valid before ML enhancement
+            signal_type = signal_data.get('type', '')
+            if signal_type not in ('bullish_breakout', 'bearish_breakout'):
+                # The model was trained only on bars that actually broke the channel.
+                return self._unavailable('not_a_breakout', f'model is only defined for breakouts, got {signal_type}')
+
             screening_date = signal_data.get('screening_date', datetime.now().date())
             if not self.validate_breakout_signal(symbol, signal_data, screening_date):
-                return {
-                    'ml_momentum_probability': None,
-                    'ml_confidence': 'invalid_signal',
-                    'ml_prediction_available': False,
-                    'ml_error': 'Signal no longer valid'
-                }
+                return self._unavailable('invalid_signal', 'Signal no longer valid')
 
-            # Extract features from SAME data used for breakout detection
-            features = self.extract_ml_features_from_data(symbol, stock_data, fundamentals)
+            px = self._load_price_window(symbol, screening_date)
+            if len(px) < pf.LOOKBACK_BARS // 2:
+                return self._unavailable('insufficient_history', f'{len(px)} bars')
 
-            # Add signal-specific features
-            signal_type = signal_data.get('type', '')
-            features['is_bullish'] = 1 if 'bullish' in signal_type else 0
+            disc = pf.find_discontinuities(px)
+            if pf.contaminated_mask(len(px), disc['pos'], forward=0)[-1]:
+                return self._unavailable('data_discontinuity',
+                                         'price series has a discontinuity inside the feature lookback')
 
-            # Create feature vector
-            feature_vector = []
-            for feature_name in self.ml_feature_names:
-                feature_vector.append(features.get(feature_name, 0))
+            ind = pf.compute_indicators(px)
+            direction = pf.detect_breakouts(ind)[-1]
+            expected = 1 if signal_type == 'bullish_breakout' else -1
+            if direction != expected:
+                return self._unavailable('signal_mismatch', 'stock_prices does not reproduce the breakout')
+            if not ind['dollar_vol_20'].iloc[-1] >= pf.MIN_DOLLAR_VOLUME_20:
+                return self._unavailable('illiquid', '20-day dollar volume below the tradability floor')
 
-            # Make prediction
-            X = np.array(feature_vector).reshape(1, -1)
-            X_scaled = self.ml_scaler.transform(X)
+            row = pf.build_breakout_features(ind, np.array([len(px) - 1]), np.array([direction]),
+                                             (fundamentals or {}).get('sector'))
+            missing = [f for f in self.ml_feature_names if f not in row.columns]
+            if missing:
+                logger.error(f"Model {self.ml_model_version} needs features the code does not produce: {missing}")
+                return self._unavailable('feature_mismatch', f'missing features {missing}')
 
-            probability = self.ml_model.predict_proba(X_scaled)[0, 1]
+            probability = float(self.ml_model.predict_proba(row[self.ml_feature_names])[0, 1])
             probability_pct = probability * 100
 
-            # Determine confidence level
+            # Confidence tiers (unchanged thresholds -- known to be uncalibrated relative to the base
+            # rate; tracked as a separate fix in CLAUDE.md "ML audit 2026-09-20").
             if probability >= 0.8:
                 confidence = 'very_high'
             elif probability >= 0.7:
@@ -452,17 +420,14 @@ class CombinedDonchianScreener:
                 'ml_momentum_probability': round(probability_pct, 1),
                 'ml_confidence': confidence,
                 'ml_prediction_available': True,
-                'ml_raw_probability': probability
+                'ml_raw_probability': probability,
+                'ml_model_version': self.ml_model_version,
+                'ml_target': self.ml_meta.get('target'),
             }
 
         except Exception as e:
             logger.warning(f"ML prediction failed for {symbol}: {e}")
-            return {
-                'ml_momentum_probability': None,
-                'ml_confidence': 'error',
-                'ml_prediction_available': False,
-                'ml_error': str(e)
-            }
+            return self._unavailable('error', str(e))
 
     def get_trade_recommendation(self, ml_result: Dict, signal_type: str) -> str:
         """Generate trade recommendation based on ML prediction"""

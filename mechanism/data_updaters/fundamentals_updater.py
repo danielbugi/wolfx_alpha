@@ -11,6 +11,9 @@ import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple, Any
 import warnings
+import concurrent.futures
+
+COMPANY_INFO_TIMEOUT_SECONDS = 20
 
 # Import shared infrastructure
 import sys
@@ -21,7 +24,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 try:
     from shared import (
         config, db, setup_logging, retry_on_failure,
-        performance_monitor, file_utils
+        performance_monitor, file_utils, ProgressBar
     )
 except ImportError as e:
     print(f"Import error: {e}")
@@ -39,7 +42,13 @@ class FundamentalsUpdater:
 
         # Configuration with defaults
         self.batch_size = getattr(config, 'DATA_UPDATE_BATCH_SIZE', 1000)
-        self.rate_limit_delay = 2.0  # Slower for fundamentals
+        # Was 2.0s, tuned defensively back when yfinance was the only
+        # provider. DATA_PROVIDER=tiingo now (10,000 req/hour headroom) with
+        # yfinance only as a per-symbol fallback, so this can run at the same
+        # pace daily_data_updater.py already uses safely against the same
+        # provider -- cuts a full-universe run (~3,000 symbols) from ~100+
+        # min to ~25 min with no change to what gets fetched.
+        self.rate_limit_delay = 0.5
 
         self.logger.info("Fundamentals Updater initialized with shared infrastructure")
 
@@ -194,11 +203,15 @@ class FundamentalsUpdater:
     def get_symbols_to_update(self, limit: Optional[int] = None) -> List[str]:
         """Get symbols that need fundamentals updates"""
         try:
+            # Excludes confirmed-dead symbols (inactive_symbols, added
+            # 2026-09-15) -- same reasoning as daily_data_updater.py's
+            # get_symbols_to_update(): see MILESTONES.md Milestone 4.
             query = """
-            SELECT DISTINCT symbol 
-            FROM stock_prices 
-            WHERE symbol IS NOT NULL 
+            SELECT DISTINCT symbol
+            FROM stock_prices
+            WHERE symbol IS NOT NULL
             AND symbol != ''
+            AND symbol NOT IN (SELECT symbol FROM inactive_symbols)
             ORDER BY symbol
             """
 
@@ -217,12 +230,55 @@ class FundamentalsUpdater:
 
     @retry_on_failure(max_retries=3, delay=2.0)
     def fetch_company_info(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Fetch company information from Yahoo Finance"""
+        """Fetch company information from the configured provider (Tiingo
+        if DATA_PROVIDER=tiingo, falling back to Yahoo Finance otherwise —
+        see shared/tiingo_client.py for the field-coverage gap this
+        implies: shares_outstanding/float_shares/ps_ratio/beta/
+        dividend_yield come back None via Tiingo)."""
+        if config.data_provider == 'tiingo':
+            from shared.tiingo_client import get_fundamentals
+            info = get_fundamentals(symbol)
+            if info is not None:
+                self.logger.debug(f"Successfully fetched company info for {symbol} via Tiingo")
+                return info
+            self.logger.debug(f"{symbol}: no fundamentals from Tiingo, falling back to yfinance")
+
         try:
             self.logger.debug(f"Fetching company info for {symbol}")
 
-            ticker = yf.Ticker(symbol)
-            info = ticker.info
+            # yfinance's ticker.info has no timeout of its own -- confirmed
+            # 2026-09-14: a single symbol (IRM) hung on a stalled network
+            # call for 7.6 hours (eventually surfacing "curl: (6)", a DNS
+            # failure) before the whole 1005-symbol fundamentals run could
+            # continue. yfinance 1.x uses curl_cffi internally, whose
+            # session/timeout config isn't straightforward to reach from
+            # here, so this enforces a hard wall-clock timeout with a
+            # worker thread instead -- guaranteed to work regardless of
+            # what's hanging underneath. One stuck symbol now costs at most
+            # COMPANY_INFO_TIMEOUT_SECONDS, not the rest of the run.
+            def _fetch():
+                ticker = yf.Ticker(symbol)
+                return ticker.info
+
+            # NOT a `with` block: ThreadPoolExecutor.__exit__ calls
+            # shutdown(wait=True) by default, which would block on the
+            # still-running worker thread even after future.result()
+            # already timed out -- exactly defeating the point. shutdown
+            # (wait=False) lets this function return on schedule; the
+            # orphaned worker thread is left to finish (or stay stuck) on
+            # its own in the background, which is an acceptable trade for
+            # "never block the whole run again."
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            future = executor.submit(_fetch)
+            try:
+                info = future.result(timeout=COMPANY_INFO_TIMEOUT_SECONDS)
+            except concurrent.futures.TimeoutError:
+                self.logger.error(
+                    f"Timed out after {COMPANY_INFO_TIMEOUT_SECONDS}s fetching company info for {symbol}"
+                )
+                raise TimeoutError(f"fetch_company_info timed out for {symbol}")
+            finally:
+                executor.shutdown(wait=False)
 
             if not info or len(info) < 5:  # Basic check for valid data
                 self.logger.warning(f"No company info returned for {symbol}")
@@ -441,23 +497,29 @@ class FundamentalsUpdater:
         failed_updates = 0
 
         # Process symbols with longer delays (fundamentals are less time-sensitive)
+        progress = ProgressBar(len(symbols), prefix="Fundamentals update", logger=self.logger)
         for i, symbol in enumerate(symbols, 1):
-            self.logger.info(f"Processing {symbol} ({i}/{len(symbols)})")
-
             try:
-                if self.update_symbol(symbol):
+                success = self.update_symbol(symbol)
+                if success:
                     successful_updates += 1
+                    progress.log(f"✅ {symbol}: fundamentals updated")
                 else:
                     failed_updates += 1
+                    progress.log(f"⚠️ {symbol}: fundamentals update failed", level="warning")
 
                 # Longer delay for fundamentals to avoid rate limiting
                 if i < len(symbols):
                     time.sleep(self.rate_limit_delay)
 
             except Exception as e:
-                self.logger.error(f"Unexpected error processing {symbol}: {e}")
+                progress.log(f"Unexpected error processing {symbol}: {e}", level="error")
                 failed_updates += 1
-                continue
+                success = False
+
+            progress.update(success)
+
+        progress.close()
 
         end_time = datetime.now()
         duration = end_time - start_time

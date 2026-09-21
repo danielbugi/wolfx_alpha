@@ -10,8 +10,11 @@ import yfinance as yf
 from urllib.parse import urljoin
 import warnings
 import re
+import concurrent.futures
 
 warnings.filterwarnings('ignore')
+
+SYMBOL_CHECK_TIMEOUT_SECONDS = 15
 
 
 class StockSymbolScraper:
@@ -33,6 +36,37 @@ class StockSymbolScraper:
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
+    def _get_with_retry(self, url, max_retries=4, initial_delay=5):
+        """
+        GET a Wikipedia page with retry/backoff on rate-limit responses.
+
+        Added 2026-09-15 after the Russell 1000 fetch hit
+        "403 Client Error: Too many requests. Please respect our robot
+        policy" -- a real bot-policy rate limit, not a one-off. Scraping
+        three Wikipedia pages back-to-back with only a flat 2s gap between
+        them isn't polite enough for Wikipedia's current throttling.
+        Backs off on 403/429 specifically (other errors are left to the
+        caller, same as before); also enforces a minimum gap since the
+        session's last request regardless of which page is being fetched.
+        """
+        for attempt in range(max_retries):
+            try:
+                response = self.session.get(url, timeout=30)
+                if response.status_code in (403, 429):
+                    delay = initial_delay * (2 ** attempt)
+                    print(f"   Rate limited ({response.status_code}), waiting {delay}s before retry {attempt + 1}/{max_retries}...")
+                    time.sleep(delay)
+                    continue
+                response.raise_for_status()
+                return response
+            except requests.exceptions.HTTPError:
+                raise
+        # Exhausted retries -- let the caller's existing exception handling
+        # (each scrape_*_symbols already wraps its body in try/except) deal
+        # with it the same way any other failure was always handled.
+        response.raise_for_status()
+        return response
+
     def scrape_sp500_symbols(self):
         """
         Scrape S&P 500 symbols from Wikipedia
@@ -44,8 +78,7 @@ class StockSymbolScraper:
 
         try:
             url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-            response = self.session.get(url)
-            response.raise_for_status()
+            response = self._get_with_retry(url)
 
             # Parse the HTML
             soup = BeautifulSoup(response.content, 'html.parser')
@@ -96,9 +129,18 @@ class StockSymbolScraper:
         print("🔍 Scraping NASDAQ 100 symbols...")
 
         try:
-            url = "https://en.wikipedia.org/wiki/NASDAQ-100"
-            response = self.session.get(url)
-            response.raise_for_status()
+            # NOTE: the constituents table used to live on the main
+            # "Nasdaq-100" article; Wikipedia has since split it out to its
+            # own "List of NASDAQ-100 companies" page (confirmed 2026-09-15
+            # by fetching the raw HTML of both -- the old URL's page no
+            # longer has any table with a Ticker/Company/Symbol header at
+            # all, which is why this always silently returned 0 symbols
+            # with no error). The new page has the exact
+            # id="constituents" table this code already looks for, Ticker
+            # as the first column -- matching cells[0] below -- so only
+            # the URL needed to change.
+            url = "https://en.wikipedia.org/wiki/List_of_NASDAQ-100_companies"
+            response = self._get_with_retry(url)
 
             soup = BeautifulSoup(response.content, 'html.parser')
 
@@ -188,6 +230,101 @@ class StockSymbolScraper:
             print(f"❌ Error scraping Russell 1000: {str(e)}")
             return [], []
 
+    def scrape_russell3000_approx_symbols(self, top_n=3000):
+        """
+        Build an APPROXIMATION of the Russell 3000 by market-cap ranking,
+        not a literal scrape of index membership.
+
+        Why "approximation": Russell indices are FTSE Russell's proprietary
+        IP with no free official constituent API. The usual free-tier
+        workaround is scraping an iShares/Vanguard Russell-tracking ETF's
+        published holdings (IWV, VTHR) -- tried first, 2026-09-18, and
+        both are JS-rendered SPAs behind bot-mitigation that serves the
+        page shell (HTML, not the CSV) to a plain HTTP client regardless of
+        Content-Type headers; would need a headless browser to get past
+        that, which is a heavier dependency than this project carries.
+
+        Instead: pull every US-listed common stock from Nasdaq's public
+        screener API (api.nasdaq.com/api/screener/stocks -- no auth, no
+        bot-gating, used directly by their own public screener page), drop
+        anything that isn't a plain common share (preferred/warrant/unit/
+        rights/notes/depositary-share name patterns, and non-US-domiciled
+        listings -- Russell indices are specifically for US-domiciled
+        companies), then rank by market cap and take the top `top_n`. Since
+        Russell 3000 membership IS (roughly) "the ~3,000 largest US
+        companies by float-adjusted market cap, reconstituted annually,"
+        this lands very close to the real thing in practice, even though
+        it isn't a literal membership list and won't match FTSE Russell's
+        exact inclusion rules, share-class handling, or annual
+        reconstitution date.
+        """
+        print(f"🔍 Building Russell 3000 approximation (top {top_n} by market cap)...")
+
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'application/json',
+            }
+            response = self.session.get(
+                'https://api.nasdaq.com/api/screener/stocks',
+                params={'limit': 10000, 'offset': 0, 'download': 'true'},
+                headers=headers, timeout=60,
+            )
+            response.raise_for_status()
+            rows = response.json()['data']['rows']
+
+            excluded_name_patterns = ['warrant', 'unit', 'right', 'preferred', ' notes', 'depositary']
+
+            candidates = []
+            for row in rows:
+                name = (row.get('name') or '').strip()
+                symbol = (row.get('symbol') or '').strip()
+                market_cap_raw = row.get('marketCap')
+                country = (row.get('country') or '').strip()
+
+                if not symbol or not name or not market_cap_raw:
+                    continue
+                if country and country != 'United States':
+                    continue
+                if any(pattern in name.lower() for pattern in excluded_name_patterns):
+                    continue
+
+                try:
+                    market_cap = float(market_cap_raw)
+                except (ValueError, TypeError):
+                    continue
+                if market_cap <= 0:
+                    continue
+
+                candidates.append({
+                    'symbol': symbol,
+                    'company_name': name,
+                    'sector': row.get('sector') or 'N/A',
+                    'index': 'RUSSELL3000_APPROX',
+                    'market_cap': market_cap,
+                })
+
+            candidates.sort(key=lambda c: c['market_cap'], reverse=True)
+            top = candidates[:top_n]
+
+            symbols = [c['symbol'] for c in top]
+            # market_cap was only needed for ranking -- drop it so this
+            # matches the same {symbol, company_name, sector, index} shape
+            # the other scrape_* methods return (save_symbols_to_files'
+            # combined CSV assumes a consistent column set across sources).
+            company_info = [
+                {k: v for k, v in c.items() if k != 'market_cap'}
+                for c in top
+            ]
+
+            print(f"✅ Built Russell 3000 approximation: {len(symbols)} symbols "
+                  f"(from {len(candidates)} eligible common-stock candidates)")
+            return symbols, company_info
+
+        except Exception as e:
+            print(f"❌ Error building Russell 3000 approximation: {str(e)}")
+            return [], []
+
     def _is_date_like(self, text):
         """Check if text looks like a date"""
         if not text:
@@ -235,9 +372,21 @@ class StockSymbolScraper:
 
             for symbol in batch:
                 try:
-                    # Quick check using yfinance
-                    ticker = yf.Ticker(symbol)
-                    info = ticker.info
+                    # Quick check using yfinance, with a hard wall-clock
+                    # timeout. ticker.info has no timeout of its own -- this
+                    # is the exact same pattern that hung for 7.6 hours on
+                    # one stuck symbol during the 2026-09-14 fundamentals
+                    # run (see MILESTONES.md). Not using a `with
+                    # ThreadPoolExecutor()` block here either, for the same
+                    # reason as that fix: its __exit__ calls
+                    # shutdown(wait=True) by default, which would block on
+                    # a still-hung worker thread anyway.
+                    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+                    future = executor.submit(lambda s=symbol: yf.Ticker(s).info)
+                    try:
+                        info = future.result(timeout=SYMBOL_CHECK_TIMEOUT_SECONDS)
+                    finally:
+                        executor.shutdown(wait=False)
 
                     # Check if symbol has basic required data
                     if info and 'symbol' in info:
@@ -385,6 +534,14 @@ class StockSymbolScraper:
         if russell1000_symbols:
             symbols_data['RUSSELL1000'] = (russell1000_symbols, russell1000_info)
 
+        time.sleep(2)
+
+        # Russell 3000 approximation (market-cap-ranked, see method docstring
+        # for why this isn't a literal index-membership scrape)
+        russell3000_symbols, russell3000_info = self.scrape_russell3000_approx_symbols()
+        if russell3000_symbols:
+            symbols_data['RUSSELL3000_APPROX'] = (russell3000_symbols, russell3000_info)
+
         # Save all data
         print("\n" + "=" * 60)
         print("💾 Saving scraped symbols to files...")
@@ -400,6 +557,7 @@ class StockSymbolScraper:
         print(f"   S&P 500: {len(symbols_data.get('SP500', [[], []])[0])} symbols")
         print(f"   NASDAQ 100: {len(symbols_data.get('NASDAQ100', [[], []])[0])} symbols")
         print(f"   Russell 1000: {len(symbols_data.get('RUSSELL1000', [[], []])[0])} symbols")
+        print(f"   Russell 3000 (approx): {len(symbols_data.get('RUSSELL3000_APPROX', [[], []])[0])} symbols")
         print(f"   Total: {total_symbols} symbols")
 
         return symbols_data

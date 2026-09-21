@@ -59,6 +59,22 @@ class TradingSystemConfig:
     rate_limit_delay: float = field(default_factory=lambda: float(os.getenv('RATE_LIMIT_DELAY', '1.0')))
     api_rate_limit: int = field(default_factory=lambda: int(os.getenv('API_RATE_LIMIT', '100')))
 
+    # Price Data Provider — defaults to yfinance (no signup needed) so
+    # nothing breaks for anyone who hasn't set up a vendor. Set
+    # DATA_PROVIDER=alpaca in .env once ALPACA_API_KEY/ALPACA_API_SECRET
+    # are filled in (free account: https://alpaca.markets/), or
+    # DATA_PROVIDER=tiingo once TIINGO_API_KEY is filled in (paid Power
+    # plan, $30/mo: https://www.tiingo.com/ — see shared/tiingo_client.py
+    # for why this is the migration target for scaling past ~1,000
+    # symbols: consolidated feed, not Alpaca free tier's IEX-only gaps,
+    # and bundles fundamentals at the same tier). See CLAUDE.md /
+    # MILESTONES.md for why (yfinance's unofficial-API fragility caused a
+    # ~10-month outage, 2025-11 to 2026-09).
+    data_provider: str = field(default_factory=lambda: os.getenv('DATA_PROVIDER', 'yfinance'))
+    alpaca_api_key: str = field(default_factory=lambda: os.getenv('ALPACA_API_KEY', ''))
+    alpaca_api_secret: str = field(default_factory=lambda: os.getenv('ALPACA_API_SECRET', ''))
+    tiingo_api_key: str = field(default_factory=lambda: os.getenv('TIINGO_API_KEY', ''))
+
     # Screening Configuration
     min_volume: int = field(default_factory=lambda: int(os.getenv('MIN_VOLUME', '100000')))
     min_price: float = field(default_factory=lambda: float(os.getenv('MIN_PRICE', '5.0')))

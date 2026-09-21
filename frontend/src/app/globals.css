@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+
+/* Professional finance styling */
+.nextui-table-container {
+  font-size: 0.75rem;
+}
+
+.nextui-chip {
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+
+/* Custom scrollbar for professional look */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #64748b;
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Top progress bar sweep (see lib/topProgress.tsx) */
+@keyframes top-progress-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
+.top-progress-fill {
+  animation: top-progress-sweep 1.1s ease-in-out infinite;
+}

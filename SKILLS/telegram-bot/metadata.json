@@ -1,0 +1,11 @@
+{
+  "name": "telegram-bot",
+  "description": "Build Telegram bots with modern frameworks.Use when: creating Telegram bot, chatbot, notification bot.Triggers: \"telegram\", \"tg bot\", \"телеграм бот\", \"teloxide\", \"aiogram\".",
+  "repo": "timequity/vibe-coder",
+  "category": "development",
+  "tags": [
+    "telegram",
+    "bot"
+  ],
+  "stars": 0
+}

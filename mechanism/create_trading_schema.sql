@@ -175,6 +175,9 @@ CREATE TABLE quarterly_fundamentals (
     revenue_growth_yoy DECIMAL(6,2),
     eps_growth_yoy DECIMAL(6,2),
 
+    -- Piotroski F-Score (0-9), Tiingo-only -- see mechanism/add_piotroski_score.sql
+    piotroski_f_score SMALLINT,
+
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
 
@@ -210,7 +213,12 @@ CREATE TABLE breakouts (
 CREATE TABLE ml_models (
     id BIGSERIAL PRIMARY KEY,
     model_name VARCHAR(50) NOT NULL,
-    version VARCHAR(20) NOT NULL,
+    -- 50 not 20: momentum_predictor.py's actual version strings are
+    -- "momentum_predictor_v<YYYYMMDD>_<HHMM>" (34 chars) -- VARCHAR(20)
+    -- went undetected until 2026-09-18's first-ever INSERT (register_model()
+    -- was only just wired up; the table existed but nothing wrote to it
+    -- before that, see CLAUDE.md §4).
+    version VARCHAR(50) NOT NULL,
     model_type VARCHAR(30),
 
     -- Training data info

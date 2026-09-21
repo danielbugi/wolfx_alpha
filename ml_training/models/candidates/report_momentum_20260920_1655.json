@@ -1,0 +1,242 @@
+{
+  "generated_at": "2026-09-20T16:55:45",
+  "feature_set_version": "price_v1",
+  "target": "momentum",
+  "target_definition": "Legacy composite momentum score >= 65 within 25 calendar days",
+  "train_range": [
+    "2018-01-02",
+    "2025-01-27"
+  ],
+  "n_train": 463893,
+  "holdout_range": [
+    "2025-02-27",
+    "2026-08-20"
+  ],
+  "embargo_days": 30,
+  "trees": 114,
+  "params": {
+    "max_depth": 4,
+    "learning_rate": 0.05,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "min_child_weight": 50,
+    "reg_lambda": 5.0,
+    "tree_method": "hist",
+    "random_state": 42,
+    "eval_metric": "logloss",
+    "n_jobs": 4
+  },
+  "excluded_features": [
+    "vol_ratio_10",
+    "vol_ratio_50"
+  ],
+  "holdout": {
+    "n": 118031,
+    "base_rate": 0.3284,
+    "auc": 0.5913,
+    "direction_baseline_auc": 0.5433,
+    "brier": 0.21614,
+    "brier_base_rate": 0.22057,
+    "logloss": 0.62288,
+    "auc_ci95": [
+      0.5696,
+      0.6127
+    ],
+    "auc_bullish": 0.5824,
+    "n_bullish": 68009,
+    "auc_bearish": 0.5818,
+    "n_bearish": 50022,
+    "top_decile_precision": 0.4495,
+    "top_decile_lift": 1.369,
+    "calibration": [
+      {
+        "n": 11804,
+        "mean_pred": 0.238,
+        "observed": 0.2097
+      },
+      {
+        "n": 11803,
+        "mean_pred": 0.2711,
+        "observed": 0.2482
+      },
+      {
+        "n": 11803,
+        "mean_pred": 0.2937,
+        "observed": 0.2763
+      },
+      {
+        "n": 11803,
+        "mean_pred": 0.3128,
+        "observed": 0.3016
+      },
+      {
+        "n": 11803,
+        "mean_pred": 0.3302,
+        "observed": 0.3192
+      },
+      {
+        "n": 11803,
+        "mean_pred": 0.3475,
+        "observed": 0.336
+      },
+      {
+        "n": 11803,
+        "mean_pred": 0.3664,
+        "observed": 0.3554
+      },
+      {
+        "n": 11803,
+        "mean_pred": 0.3898,
+        "observed": 0.3773
+      },
+      {
+        "n": 11803,
+        "mean_pred": 0.4245,
+        "observed": 0.4112
+      },
+      {
+        "n": 11803,
+        "mean_pred": 0.4963,
+        "observed": 0.4495
+      }
+    ],
+    "plan_r_by_score_quintile": [
+      -0.1142,
+      -0.0334,
+      0.0102,
+      0.0141,
+      -0.0241
+    ],
+    "auc_vs_plan_profit": 0.5123,
+    "plan_r_mean_all": -0.0295,
+    "auc_vs_plan_profit_bullish": 0.5008,
+    "auc_vs_plan_profit_bearish": 0.4963
+  },
+  "walk_forward": [
+    {
+      "from": "2020-03-03",
+      "to": "2021-03-29",
+      "n_test": 63611,
+      "base_rate": 0.3435,
+      "auc": 0.5847
+    },
+    {
+      "from": "2021-03-30",
+      "to": "2022-04-25",
+      "n_test": 70357,
+      "base_rate": 0.3078,
+      "auc": 0.5498
+    },
+    {
+      "from": "2022-04-26",
+      "to": "2023-05-23",
+      "n_test": 79949,
+      "base_rate": 0.34,
+      "auc": 0.5594
+    },
+    {
+      "from": "2023-05-24",
+      "to": "2024-06-21",
+      "n_test": 81097,
+      "base_rate": 0.3401,
+      "auc": 0.6053
+    },
+    {
+      "from": "2024-06-24",
+      "to": "2025-07-23",
+      "n_test": 79557,
+      "base_rate": 0.3218,
+      "auc": 0.5686
+    },
+    {
+      "from": "2025-07-24",
+      "to": "2026-08-20",
+      "n_test": 88285,
+      "base_rate": 0.3275,
+      "auc": 0.602
+    }
+  ],
+  "gate": {
+    "holdout_auc": {
+      "value": 0.5913,
+      "required": 0.55,
+      "pass": true
+    },
+    "auc_ci_low": {
+      "value": 0.5696,
+      "required": 0.5,
+      "pass": true
+    },
+    "over_direction_baseline": {
+      "value": 0.048,
+      "required": 0.02,
+      "pass": true
+    },
+    "walk_forward_share_auc_gt_0.5": {
+      "value": 1.0,
+      "required": 0.75,
+      "pass": true
+    },
+    "top_decile_lift": {
+      "value": 1.369,
+      "required": 1.15,
+      "pass": true
+    },
+    "plan_profit_auc_within_direction": {
+      "value": 0.4963,
+      "required": 0.52,
+      "pass": false
+    }
+  },
+  "promoted": false,
+  "top_features": [
+    {
+      "feature": "bar_range_atr",
+      "importance": 0.1889
+    },
+    {
+      "feature": "breakout_dist_atr",
+      "importance": 0.0724
+    },
+    {
+      "feature": "gap_pct",
+      "importance": 0.0645
+    },
+    {
+      "feature": "ret_5d",
+      "importance": 0.0601
+    },
+    {
+      "feature": "bollinger_pos",
+      "importance": 0.0561
+    },
+    {
+      "feature": "atr_pct",
+      "importance": 0.0524
+    },
+    {
+      "feature": "close_location",
+      "importance": 0.0356
+    },
+    {
+      "feature": "pct_from_52w_high",
+      "importance": 0.0355
+    },
+    {
+      "feature": "is_bullish",
+      "importance": 0.0322
+    },
+    {
+      "feature": "dist_sma50_pct",
+      "importance": 0.0293
+    },
+    {
+      "feature": "chan_width_pct",
+      "importance": 0.0275
+    },
+    {
+      "feature": "sma10_vs_20",
+      "importance": 0.0269
+    }
+  ]
+}

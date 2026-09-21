@@ -1,0 +1,103 @@
+symbol,company_name,sector,index
+ADBE,Adobe Inc.,Technology,NASDAQ100
+AMD,Advanced Micro Devices,Technology,NASDAQ100
+ABNB,Airbnb,Consumer Discretionary,NASDAQ100
+ALNY,Alnylam Pharmaceuticals,Health Care,NASDAQ100
+GOOGL,Alphabet Inc. (Class A),Technology,NASDAQ100
+GOOG,Alphabet Inc. (Class C),Technology,NASDAQ100
+AMZN,Amazon,Consumer Discretionary,NASDAQ100
+AEP,American Electric Power,Utilities,NASDAQ100
+AMGN,Amgen,Health Care,NASDAQ100
+ADI,Analog Devices,Technology,NASDAQ100
+AAPL,Apple Inc.,Technology,NASDAQ100
+AMAT,Applied Materials,Technology,NASDAQ100
+APP,AppLovin,Technology,NASDAQ100
+ARM,Arm Holdings,Technology,NASDAQ100
+ASML,ASML Holding,Technology,NASDAQ100
+ALAB,Astera Labs,Technology,NASDAQ100
+ADSK,Autodesk,Technology,NASDAQ100
+ADP,Automatic Data Processing,Industrials,NASDAQ100
+AXON,Axon Enterprise,Industrials,NASDAQ100
+BKR,Baker Hughes,Energy,NASDAQ100
+BKNG,Booking Holdings,Consumer Discretionary,NASDAQ100
+AVGO,Broadcom,Technology,NASDAQ100
+CDNS,Cadence Design Systems,Technology,NASDAQ100
+CTAS,Cintas,Industrials,NASDAQ100
+CSCO,Cisco,Telecommunications,NASDAQ100
+CCEP,Coca-Cola Europacific Partners,Consumer Staples,NASDAQ100
+CMCSA,Comcast,Telecommunications,NASDAQ100
+CEG,Constellation Energy,Utilities,NASDAQ100
+CPRT,Copart,Consumer Discretionary,NASDAQ100
+CRWV,CoreWeave,Technology,NASDAQ100
+COST,Costco,Consumer Discretionary,NASDAQ100
+CRWD,CrowdStrike,Technology,NASDAQ100
+CSX,CSX Corporation,Industrials,NASDAQ100
+DDOG,Datadog,Technology,NASDAQ100
+DXCM,DexCom,Health Care,NASDAQ100
+FANG,Diamondback Energy,Energy,NASDAQ100
+DASH,DoorDash,Technology,NASDAQ100
+EXC,Exelon,Utilities,NASDAQ100
+FAST,Fastenal,Industrials,NASDAQ100
+FER,Ferrovial,Industrials,NASDAQ100
+FTNT,Fortinet,Technology,NASDAQ100
+GEHC,GE HealthCare,Health Care,NASDAQ100
+GILD,Gilead Sciences,Health Care,NASDAQ100
+HONA,Honeywell Aerospace,Industrials,NASDAQ100
+HON,Honeywell Technologies,Industrials,NASDAQ100
+IDXX,Idexx Laboratories,Health Care,NASDAQ100
+INTC,Intel,Technology,NASDAQ100
+INTU,Intuit,Technology,NASDAQ100
+ISRG,Intuitive Surgical,Health Care,NASDAQ100
+KDP,Keurig Dr Pepper,Consumer Staples,NASDAQ100
+KLAC,KLA Corporation,Technology,NASDAQ100
+KHC,Kraft Heinz,Consumer Staples,NASDAQ100
+LRCX,Lam Research,Technology,NASDAQ100
+LIN,Linde plc,Basic Materials,NASDAQ100
+LITE,Lumentum,Technology,NASDAQ100
+MAR,Marriott International,Consumer Discretionary,NASDAQ100
+MRVL,Marvell Technology,Technology,NASDAQ100
+MELI,Mercado Libre,Consumer Discretionary,NASDAQ100
+META,Meta Platforms,Technology,NASDAQ100
+MCHP,Microchip Technology,Technology,NASDAQ100
+MU,Micron Technology,Technology,NASDAQ100
+MSFT,Microsoft,Technology,NASDAQ100
+MSTR,MicroStrategy,Technology,NASDAQ100
+MDLZ,Mondelez International,Consumer Staples,NASDAQ100
+MPWR,Monolithic Power Systems,Technology,NASDAQ100
+MNST,Monster Beverage,Consumer Staples,NASDAQ100
+NBIS,Nebius Group,Technology,NASDAQ100
+NFLX,"Netflix, Inc.",Consumer Discretionary,NASDAQ100
+NVDA,Nvidia,Technology,NASDAQ100
+NXPI,NXP Semiconductors,Technology,NASDAQ100
+ORLY,O'Reilly Automotive,Consumer Discretionary,NASDAQ100
+ODFL,Old Dominion Freight Line,Industrials,NASDAQ100
+PCAR,Paccar,Consumer Discretionary,NASDAQ100
+PLTR,Palantir Technologies,Technology,NASDAQ100
+PANW,Palo Alto Networks,Technology,NASDAQ100
+PAYX,Paychex,Industrials,NASDAQ100
+PYPL,PayPal,Industrials,NASDAQ100
+PDD,PDD Holdings,Technology,NASDAQ100
+PEP,PepsiCo,Consumer Staples,NASDAQ100
+QCOM,Qualcomm,Technology,NASDAQ100
+REGN,Regeneron Pharmaceuticals,Health Care,NASDAQ100
+RKLB,Rocket Lab,Industrials,NASDAQ100
+ROP,Roper Technologies,Technology,NASDAQ100
+ROST,Ross Stores,Consumer Discretionary,NASDAQ100
+SNDK,Sandisk,Technology,NASDAQ100
+STX,Seagate Technology,Technology,NASDAQ100
+SHOP,Shopify,Technology,NASDAQ100
+SPCX,SpaceX,Telecommunications,NASDAQ100
+SBUX,Starbucks,Consumer Discretionary,NASDAQ100
+SNPS,Synopsys,Technology,NASDAQ100
+TMUS,T-Mobile US,Telecommunications,NASDAQ100
+TTWO,Take-Two Interactive,Consumer Discretionary,NASDAQ100
+TER,Teradyne,Technology,NASDAQ100
+TSLA,"Tesla, Inc.",Consumer Discretionary,NASDAQ100
+TXN,Texas Instruments,Technology,NASDAQ100
+TRI,Thomson Reuters,Technology,NASDAQ100
+VRTX,Vertex Pharmaceuticals,Health Care,NASDAQ100
+WMT,Walmart,Consumer Discretionary,NASDAQ100
+WBD,Warner Bros. Discovery,Consumer Discretionary,NASDAQ100
+WDC,Western Digital,Technology,NASDAQ100
+WDAY,"Workday, Inc.",Technology,NASDAQ100
+XEL,Xcel Energy,Utilities,NASDAQ100

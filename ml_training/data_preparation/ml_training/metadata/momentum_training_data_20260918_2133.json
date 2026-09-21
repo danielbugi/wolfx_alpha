@@ -1,0 +1,51 @@
+{
+  "creation_timestamp": "2026-09-18T21:33:03.995486",
+  "data_version": "momentum_v20260918_2133",
+  "labeling_algorithm_version": "momentum_labeler_v2.1",
+  "total_breakouts_processed": 66191,
+  "date_range": {
+    "earliest": "2023-08-21",
+    "latest": "2026-09-14"
+  },
+  "momentum_distribution": {
+    "mean": 50.30263933163119,
+    "std": 21.35447541661728,
+    "percentiles": {
+      "25th": 32.0,
+      "50th": 53.0,
+      "75th": 68.0,
+      "90th": 77.0
+    }
+  },
+  "breakout_type_distribution": {
+    "bullish": 38180,
+    "bearish": 28011
+  },
+  "momentum_category_distribution": {
+    "failed": 18390,
+    "strong": 16989,
+    "moderate": 14408,
+    "weak": 11793,
+    "exceptional": 4270,
+    "insufficient_data": 341
+  },
+  "data_hash": "eaba9f67d38d014d",
+  "data_quality_score": {
+    "overall_score": 94.67,
+    "component_scores": {
+      "completeness": 100.0,
+      "momentum_validity": 99.9939568823556,
+      "class_balance": 73.365636458879
+    },
+    "grade": "A"
+  },
+  "processing_stats": {
+    "processing_duration": "1:01:59.431160",
+    "breakouts_input": 66191,
+    "momentum_records_created": 66191,
+    "success_rate": 100.0,
+    "processing_timestamp": "2026-09-18T21:32:39.143633"
+  },
+  "feature_engineering_ready": true,
+  "recommended_train_test_split": 0.8
+}
