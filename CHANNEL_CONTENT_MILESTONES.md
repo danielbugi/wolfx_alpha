@@ -12,56 +12,72 @@
 `[ ]` not started · `[~]` in progress · `[x]` done and verified · `[!]` blocked (needs the user / an outside decision)
 
 ## M0 — Foundation
-- [ ] M0.1 Save the plan (this file) and commit the previous session's work (B5) — local commit only, no push; `.env`, `reports/`, `logs/`, `backups/`, `*.joblib` excluded
-- [ ] M0.2 Daily snapshot without a send (B3): the update-only run also saves the bot snapshot; a backfill tool for past sessions
-- [ ] M0.3 Reconcile the breakout counts (B2): find why the dashboard screener says 62 of 1,832 and the digest 51 of 2,915; document; make the channel/bot the single source
+- [x] M0.1 Plan saved (this file); previous session's work committed locally (B5) — `.env`, `reports/`, `logs/`, `backups/`, `*.joblib` excluded
+- [x] M0.2 Daily snapshot without a send (B3): `-UpdateOnly` also runs `send_daily_digest.py --snapshot-only`; `backfill_snapshots.py` rebuilt **59 past sessions** (25 Jun – 17 Sep)
+- [x] M0.3 Breakout counts reconciled (B2) — **finding:** the digest's 51 are a strict subset of the screener's 62. 8 of the 11 extras fail the $1M/day liquidity floor (illiquid preferreds such as AFGB/AFGC/AFGD/AFGE), 3 (CYPH, SECZ, USDE) fail the digest's data-integrity rules (short history / discontinuity). The screener has neither guard and needs `technical_indicators` + fundamentals joined (1,832 stocks vs 2,915). **Decision:** the digest is the reference; the channel and the assistant only ever show the digest's counts. The dashboard should adopt the same guards before it is hosted (D16).
 
 ## M1 — Free channel posts I (market context)
-- [ ] M1.1 `market_stats.py`: vectorised market-health facts from the universe history (breadth, % above 50/200-day, new 52-week highs/lows, breakout counts from the digest)
-- [ ] M1.2 P1 Market-health post (image + text) — validated against an independent recomputation
-- [ ] M1.3 P2 Sector-rotation chart (20-session median change per sector)
-- [ ] M1.4 P3 Macro strip (gold, crude, dollar index, Bitcoin)
-- [ ] M1.5 D5 Size tag on list rows (small cap < $2B) + legend line
+- [x] M1.1 `market_stats.py` — wide date x symbol maths; found + fixed on real data: a stray partial date emptied the 200-day statistic (now dropped as "not a session")
+- [x] M1.2 P1 Market-health post (PNG card + text). 200-day breadth and new-highs/lows verified against the digest's own universe (the near-breakout count, 282, equals the digest's; breakouts differ by one stock with a missing bar, see the data notes)
+- [x] M1.3 P2 Sector-rotation card (median 20-session change; median, so one outlier cannot move a sector)
+- [x] M1.4 P3 Macro strip (gold, crude, dollar index, Bitcoin). Bitcoin shows `n/a` for 18 Sep: the stored series has no row for that date (real data gap, not filled)
+- [x] M1.5 D5 "small cap" tag (< $2B market value, no tag when unknown) on digest rows + a legend line
 
 ## M2 — Free channel posts II
-- [ ] M2.1 P4 Gaps and volume (with the options-expiry caveat on third Fridays)
-- [ ] M2.2 P5 Near 52-week high with volume
-- [ ] M2.3 P6 Aligned-timeframes teaser (counts only)
-- [ ] M2.4 P9 Base-rate card (from `ml_breakout_dataset_v2`)
-- [ ] M2.5 P8 Weekly recap
-- [ ] M2.6 P10 Promotion formats (rotating educational / promo posts)
-- [ ] M2.7 `send_channel_posts.py`: the rhythm (≤ 1 extra post per session, rotation, state, dev by default, prod locked)
+- [x] M2.1 P4 Gaps and volume (options-expiry caveat on third Fridays)
+- [x] M2.2 P5 Near 52-week highs on heavy volume
+- [x] M2.3 P6 Aligned-timeframes teaser (counts only; a stock missing yesterday's bar is not dropped from the counts — regression test)
+- [x] M2.4 P9 Base-rate card (329,986 long breakouts, exact wording from the label definition)
+- [x] M2.5 P8 Weekly recap (Sunday; exact digest counts from the stored snapshots)
+- [x] M2.6 P10 Seven rotating education / promotion posts
+- [x] M2.7 `send_channel_posts.py` — ≤ 1 extra silent post per session, weekday rotation with fallbacks, its own gate keys (`posts:<target>`, `recap:<target>`), dev by default, production lock, `--all --send` only to the owner's private chat. All eight kinds accepted by real Telegram in the owner's private chat
 
 ## M3 — News post
-- [ ] M3.1 P7 Market-news post on the day's movers (headline + link + source only; separate from the assistant's news service). **Licence of the news feed is unchecked — dev only, not in the schedule until the user confirms**
+- [x] M3.1 P7 `channel_news.py` + `post_news` — one Alpaca call per mover, headline + source + link only, advice-like headlines dropped (ratings, price targets, "buy" calls). **Off in the rotation until `CHANNEL_NEWS_ENABLED=1`; the news licence is unchecked.** Live dry run: 4 of 7 movers had fresh headlines
 
 ## M4 — Assistant, members first (free beta; tier gating comes with payments)
-- [ ] M4.1 D9 Full lists (all members of a group, three orderings, paged) + CSV of the whole scan
-- [ ] M4.2 D10 Aligned list (names, which levels each is near)
-- [ ] M4.3 D13 Per-stock history (past breakouts of this stock and what followed)
-- [ ] M4.4 D15 Portfolio / watchlist weekly summary (facts only)
+- [x] M4.1 D9 `/full` + "All N" button on Today's lists (three orderings, paged, back-navigation context `f<tab><order><page>`) and `/scan` (CSV of the whole scan, ~2,866 rows)
+- [x] M4.2 D10 `/aligned` (names, which longer-timeframe highs each is near, short-history counts). Same numbers as the channel teaser once the missing-bar fix is applied
+- [x] M4.3 D13 `/history SYM` + "Past breakouts" button on the stock card (real data: MSTR 165 breakouts, 160 followed for 20 sessions)
+- [x] M4.4 D15 `/week` (5-session change of the caller's own lists, split-shaped windows reported as adjusted; isolation test)
 
 ## M5 — Assistant, retention and trust
-- [ ] M5.1 D12 List scoreboard (what happened after each day's lists at 1 / 5 / 20 sessions, against the universe) + a monthly channel note
-- [ ] M5.2 D8 Morning message for opted-in members (only when something changed) + `bot_user_settings`
-- [ ] M5.3 D14 Custom screens (strict filter grammar over the snapshot)
+- [x] M5.1 D12 `scoreboard.py` + `post_scoreboard` — computed on the 59 backfilled sessions. **Result on 25 Jun – 18 Sep: Breakout-list stocks were higher after 1 / 5 / 20 sessions in 41% / 40% / 44% of stock-days (median −0.6% / −1.5% / −1.3%) against 48% / 48% / 49% for all liquid stocks.** It is unflattering and consistent with our earlier studies (no proven edge). **Off in the rotation until `CHANNEL_SCOREBOARD_ENABLED=1` — publishing it is the owner's decision.** Uses a new shared split guard (`price_guard.py`), found necessary because the ML dataset's 3x rule misses 2-for-1 splits
+- [x] M5.2 D8 `/morning on|off` + `morning.py` + sending loop in `run_bot.py`; table `bot_user_settings` (migration applied); opt-in, ≤ 1 message per session, only when one of the member's own stocks changed, stale scans never pushed, blocked/revoked members switched off, removed by `/deleteme` and `/morning off`. **The first message comes with the next scan after opting in**
+- [x] M5.3 D14 `/screen` — strict grammar (`breakout|near|all|scan`, `price|day|vol|range|below` with `> < >= <=`, `sort=`, `top=`); nothing typed is ever evaluated; an unknown value never matches
 
 ## M6 — Operations
-- [ ] M6.1 B1 Register the two Task Scheduler jobs (`-To dev` only) and add the channel-posts step
-- [ ] M6.2 Docs: CLAUDE.md, HANDOFF.md, RUNBOOK, this file; final full test run + mutation checks
-- [ ] M6.3 Final commit (local)
+- [x] M6.1 B1 Two Task Scheduler jobs registered, **`-To dev` only**: `FirstLight-1-UpdatePrices` (05:00) and `FirstLight-2-SendDigest` (06:00), next run Tue 22 Sep. A manual trigger proved the launch path (result 0, gate skipped correctly). `run_first_light_morning.ps1` now sends the extra post after the digest (`-NoExtraPost` to skip) and the recap on Sunday. Bot restarted on the new code (PID changes on every restart)
+- [x] M6.2 Docs: CLAUDE.md, HANDOFF.md, RUNBOOK, the report, this file, memory
+- [x] M6.3 Final commit (local, no push)
 
 ## Blocked — needs the user or something outside the repo
 | Item | Why it is blocked | What unblocks it |
 |---|---|---|
-| Licence check (Yahoo / Alpaca / Tiingo / news) | Needs the vendors' terms read and answered in writing | The user (or a lawyer) confirms redistribution / commercial use |
-| Legal + privacy review (advice regulation in Israel, stored portfolio data) | Not something code can settle | A lawyer; then update `/privacy` |
-| D6 Earnings calendar | No earnings table; the source (free API vs paid) is a decision (Q5) | The user picks a source |
+| Licence check (Yahoo / Alpaca / Tiingo / news) | Needs the vendors' terms read and answered in writing | The user (or a lawyer) confirms redistribution / commercial use. Then set `CHANNEL_NEWS_ENABLED=1` |
+| Publishing the scoreboard | The numbers are unflattering; a business decision | The user; then set `CHANNEL_SCOREBOARD_ENABLED=1` |
+| Legal + privacy review (advice regulation in Israel, stored portfolio data, the new morning switch) | Not something code can settle | A lawyer; then update `/privacy` |
+| D6 Earnings calendar | No earnings table; the source (free API vs paid) is decision Q5 | The user picks a source |
 | D7 Hebrew | Decision Q6 (after English is proven) | The user |
-| D16 Dashboard web access, D17 Intraday alerts | Need hosting / a feed | Hosting decision, feed decision |
+| D16 Dashboard web access, D17 Intraday alerts | Need hosting / a feed (and the dashboard needs the digest's guards, see M0.3) | Hosting decision, feed decision |
 | D18 Payments | Depends on the legal review | Legal review first |
-| B4 Human QA + a friend session | Needs a person on Telegram | The user (RUNBOOK §2, §8) |
+| B4 Human QA + a friend session | Needs a person on Telegram (RUNBOOK §2, §8), including the new commands | The user |
 | Production launch | Locked on purpose | The user's explicit go-ahead |
+| Turning "Allow Groups" off, uploading the avatars | Only the bot owner can, in BotFather | The user |
+
+## Known data notes found on the way (not fixed, not caused by this work)
+- The universe contains both `BRK.B` and `BRK/B` (the same company twice), so the recap and the lists can show it twice.
+- `market_index_prices` has no Bitcoin row for 2026-09-18 (rows exist for the 17th and 19th–21st); the macro card shows `n/a` for it.
+- `HSHP` has missing daily bars (20 Aug, 17 Sep); it is handled (a missing prior bar blanks 1-day figures only) but it is a hole in the price data.
+- The sector Trend history before today uses today's sector tags (approximate).
 
 ## Log
 (newest first; one line per finished item with the evidence)
+- 2026-09-21 M6 — tasks registered and triggered once (exit 0); extra post + Sunday recap wired into the morning script (structural test); bot restarted; all docs updated. 1,494 tests pass (alerts + ML), 39/39 mutation patterns present, all 16 tracker mutants caught after moving the split rule.
+- 2026-09-21 M5.3 — `/screen`: grammar rejects code-like input, an unknown value never matches; 6 tests.
+- 2026-09-21 M5.2 — `bot_user_settings` migration applied; real-Postgres round trip of the five `dm_*` queries (test user removed afterwards); 12 tests incl. blocked / revoked / transient failure / stale scan / isolation.
+- 2026-09-21 M5.1 — scoreboard on real snapshots; the split guard moved to `price_guard.py` and shared with `performance.py`; the mutant "common split factors not recognised" re-pointed and caught.
+- 2026-09-21 M4 — `insights.py` + store queries verified on real Postgres (51 breakouts, 282 near, 2,866 scan rows, MSTR history 165/160); a test found that a stock missing yesterday's bar was silently dropped from the aligned counts (fixed, regression test).
+- 2026-09-21 M3 — news post dry run against Alpaca.
+- 2026-09-21 M2/M1 — eight post kinds; all accepted by real Telegram in the owner's private chat; the two-line chart colours validated (`#4f86e8` / `#bf8514`, dark surface: lightness band, chroma, colour-blind dE 27.8, normal dE 29.3, contrast ≥ 3:1).
+- 2026-09-21 M0 — commit `1f9fc35` (checkpoint), `4d4df43` (M0–M5.1); B2 diagnosed; backfill of 59 sessions.

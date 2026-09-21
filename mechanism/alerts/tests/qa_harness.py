@@ -157,6 +157,32 @@ class MemoryStore:
         self._check()
         return {s: self.prices[s][-n:] for s in symbols if s in self.prices}
 
+    # --- morning message settings (same semantics as PgStore)
+    def dm_on(self, uid, session_date):
+        self._check()
+        self.users.setdefault(uid, {"ack": False})
+        self.dm = getattr(self, "dm", {})
+        self.dm.setdefault(uid, {})["on"] = True
+        self.dm[uid].setdefault("last", session_date)
+
+    def dm_forget(self, uid):
+        self._check()
+        getattr(self, "dm", {}).pop(uid, None)
+
+    def dm_status(self, uid):
+        self._check()
+        return bool(getattr(self, "dm", {}).get(uid, {}).get("on"))
+
+    def dm_pending(self, session_date):
+        self._check()
+        return sorted(u for u, r in getattr(self, "dm", {}).items() if r.get("on") and (r.get("last") is None or r["last"] < session_date))
+
+    def dm_mark(self, uid, session_date):
+        self._check()
+        r = getattr(self, "dm", {}).get(uid)
+        if r is not None and (r.get("last") is None or r["last"] < session_date):
+            r["last"] = session_date
+
     # --- request-access flow + funnel counters (same semantics as PgStore)
     COOLDOWN_S = 7 * 86400
 

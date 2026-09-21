@@ -71,6 +71,11 @@ class Store(Protocol):
     def range_highs(self, symbols: List[str], session_date) -> Dict[str, Dict]: ...
     def breakout_history(self, symbol: str) -> Dict: ...
     def recent_closes(self, symbols: List[str], n: int) -> Dict[str, List]: ...
+    def dm_on(self, uid: int, session_date) -> None: ...
+    def dm_forget(self, uid: int) -> None: ...
+    def dm_status(self, uid: int) -> bool: ...
+    def dm_pending(self, session_date) -> List[int]: ...
+    def dm_mark(self, uid: int, session_date) -> None: ...
     # request-access flow + funnel counters (aggregate only)
     def request_status(self, uid: int) -> Optional[Dict]: ...
     def add_request(self, uid: int) -> bool: ...
@@ -244,6 +249,33 @@ class PgStore:
         for r in rows:
             out.setdefault(r["symbol"], []).append((r["date"], r["close"]))
         return out
+
+    # --- morning message settings (table: mechanism/add_morning_dm_tables.sql). Opt-in; a row holds a switch and the last session messaged, nothing else.
+    def dm_on(self, uid: int, session_date) -> None:
+        """Turn the morning message on. last_dm_session starts at the latest session, so the first message comes with the NEXT scan."""
+        with self.db.get_sync_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("INSERT INTO bot_users (telegram_user_id) VALUES (%s) ON CONFLICT (telegram_user_id) DO NOTHING", (uid,))
+            cur.execute("INSERT INTO bot_user_settings (telegram_user_id, morning_dm, last_dm_session) VALUES (%s, TRUE, %s) "
+                        "ON CONFLICT (telegram_user_id) DO UPDATE SET morning_dm = TRUE, updated_at = NOW()", (uid, session_date))
+            conn.commit()
+
+    def dm_forget(self, uid: int) -> None:
+        self.db.execute_insert("DELETE FROM bot_user_settings WHERE telegram_user_id = %s", (uid,))
+
+    def dm_status(self, uid: int) -> bool:
+        rows = self.db.execute_dict_query("SELECT morning_dm FROM bot_user_settings WHERE telegram_user_id = %s", (uid,))
+        return bool(rows and rows[0]["morning_dm"])
+
+    def dm_pending(self, session_date) -> List[int]:
+        rows = self.db.execute_dict_query(
+            "SELECT telegram_user_id FROM bot_user_settings WHERE morning_dm AND (last_dm_session IS NULL OR last_dm_session < %s) "
+            "ORDER BY telegram_user_id", (session_date,))
+        return [int(r["telegram_user_id"]) for r in rows]
+
+    def dm_mark(self, uid: int, session_date) -> None:
+        self.db.execute_insert("UPDATE bot_user_settings SET last_dm_session = %s, updated_at = NOW() WHERE telegram_user_id = %s "
+                               "AND (last_dm_session IS NULL OR last_dm_session < %s)", (session_date, uid, session_date))
 
     # --- request-access flow (tables: mechanism/add_access_flow_tables.sql). A row exists ONLY after the person tapped "Request access".
     def request_status(self, uid: int) -> Optional[Dict]:

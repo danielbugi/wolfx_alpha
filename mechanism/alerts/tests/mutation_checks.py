@@ -55,7 +55,7 @@ GROUPS = {
         ("banker's rounding instead of half-up", A / "performance.py", "return x.quantize(exp, rounding=ROUND_HALF_UP)",
          "return x.quantize(exp, rounding=__import__('decimal').ROUND_HALF_EVEN)"),
         ("split guard switched off", A / "performance.py", "    if not facts:\n        return False\n    ref_date", "    return False\n    ref_date"),
-        ("common split factors not recognised", A / "performance.py",
+        ("common split factors not recognised", A / "price_guard.py",
          "    return any(abs(r / f - 1) <= SPLIT_TOLERANCE for f in SPLIT_FACTORS)", "    return False"),
         ("SQL leaks other users' tracked rows", A / "bot_service.py", '"WHERE telegram_user_id = %s ORDER BY symbol", (uid,))',
          '"WHERE telegram_user_id <> -1 AND %s IS NOT NULL ORDER BY symbol", (uid,))'),

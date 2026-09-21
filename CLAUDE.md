@@ -24,7 +24,8 @@
 > **Standing rules:** (1) everything is built and tested on the DEV channel; the production channel is locked (`PROD_SENDING_ENABLED=0`, §6)
 > until an explicit launch; (2) **the assistant never posts in a channel** — channels carry data, promotion, news and information, the
 > assistant's screens exist only in the private chat; (3) facts and the user's own numbers only, no advice wording (wording guard).
-> Commands: `python -m pytest mechanism/alerts/tests ml_training/tests -q` (1,364 pass); mutation checks `python mechanism/alerts/tests/mutation_checks.py`
+> **Channel content + member features (2026-09-21, late): built and tested on DEV — see [CHANNEL_CONTENT_MILESTONES.md](CHANNEL_CONTENT_MILESTONES.md)** (one extra silent channel post per session via `send_channel_posts.py`, weekly recap, new assistant commands `/full /aligned /history /week /scan /screen /morning`, list scoreboard; DEV Task Scheduler jobs registered).
+Commands: `python -m pytest mechanism/alerts/tests ml_training/tests -q` (1,494 pass); mutation checks `python mechanism/alerts/tests/mutation_checks.py`
 > (39 mutants, `--check` / `--group access|tracker|flow|guards`); promo images `python mechanism/alerts/promo_assets.py` -> `reports/first_light/promo/`.
 
 ## 1. What this project is
@@ -775,8 +776,7 @@ python mechanism/alerts/send_daily_alerts.py --plan runner --top 10 --news 2
 
 # RUNBOOK_FIRST_LIGHT.md = how to run the bot, a 29-step manual test, and the morning notification.
 # One command for the morning routine (preview by default; -Send [-To prod]; -UpdateOnly / -SkipUpdate for a 2-task schedule):
-#   .
-un_first_light_morning.ps1            (PowerShell, repo root; gate -> index -> prices ~21 min -> digest ~1 min)
+#   .\run_first_light_morning.ps1         (PowerShell, repo root; gate -> index -> prices ~21 min -> digest ~1 min)
 # First Light digest (long side) + interactive bot
 python mechanism/alerts/send_daily_digest.py                  # dry run, prints the 3 messages, writes nothing
 python mechanism/alerts/send_daily_digest.py --send           # DEV channel + saves the snapshot for the bot
@@ -804,6 +804,17 @@ priority once the duplication/cleanup above is settled — deploying the current
 dual-frontend, half-stubbed-backend state as-is would just ship the confusion.
 
 ## 9. Changelog
+
+- **2026-09-21 (channel content + member features built, DEV only)** — Executed CHANNEL_CONTENT_MILESTONES.md M0-M6 (all items that do not need a decision). New modules in `mechanism/alerts/`:
+  `market_stats.py` (wide date x symbol market facts), `channel_cards.py` (health / sector / macro PNG cards; two-line chart colours validated `#4f86e8`/`#bf8514`), `channel_content.py` (pure post builders +
+  weekday rotation), `send_channel_posts.py` (ONE extra silent post per session, Sunday recap, `--all` review, gate keys `posts:<target>` / `recap:<target>`), `channel_news.py` (OFF until
+  `CHANNEL_NEWS_ENABLED=1`; licence unchecked), `scoreboard.py` (OFF until `CHANNEL_SCOREBOARD_ENABLED=1`; **its first result is unflattering: Breakout-list stocks lagged the whole liquid universe over
+  25 Jun - 18 Sep**), `backfill_snapshots.py` (59 past sessions reconstructed), `price_guard.py` (the split-shape rule shared with `performance.py`), `insights.py` + `morning.py` (assistant: full lists, aligned list,
+  past breakouts, `/week`, `/scan` CSV, `/screen` grammar, opt-in morning message; table `bot_user_settings`). The digest rows now carry a "small cap" tag (< $2B, from `daily_fundamentals`).
+  Findings: the dashboard screener's 62 breakouts vs the digest's 51 = the screener has no liquidity floor / integrity guard (digest is the reference); a partial-date row silently emptied 200-day statistics
+  (fixed); the ML dataset's 3x jump rule misses 2-for-1 splits (a stricter shared rule is used for the scoreboard); the universe has BRK.B and BRK/B; Bitcoin has no row for 18 Sep. DEV Task Scheduler jobs
+  `FirstLight-1-UpdatePrices` (05:00) and `FirstLight-2-SendDigest` (06:00) registered; the bot was restarted on the new code. Local commits `1f9fc35`, `4d4df43` + a final one; nothing pushed. 1,494 tests, 39/39 mutation
+  patterns present, 16/16 tracker mutants caught. Production untouched and locked.
 
 - **2026-09-21 (channel content report)** — Wrote [CHANNEL_CONTENT_REPORT_2026-09-21.md](CHANNEL_CONTENT_REPORT_2026-09-21.md): verified data inventory, free-vs-paid split, ten
   extra channel posts buildable from data already stored (market health, sector rotation, gaps/volume, near-highs, aligned-timeframe teaser, news, weekly recap, base-rate card),

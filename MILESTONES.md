@@ -724,7 +724,7 @@ production ("Top Gainers - Daily") is locked (`PROD_SENDING_ENABLED=0`) until la
 - [x] **Safety net** — production lock in the only constructor of the prod sender; channel-isolation tests (the digest/channel modules must not import assistant screens, the tour goes only to
       the owner's private chat); wording guard; **1,364 tests pass; 39 mutation checks all caught** (`mechanism/alerts/tests/mutation_checks.py`).
 - [ ] **Human QA** (RUNBOOK §2, 29 steps + §8 request-access with a second account) and a friend session; popup buttons inside a channel are still untested.
-- [ ] **BotFather:** upload the bot avatar, turn **Allow Groups off** (rename to "First Light Assistant" is done). Upload the channel logo to the dev channel.
+- [ ] **BotFather:** upload the bot avatar, turn **Allow Groups off** (the display name "First Light Trading Assistant" is live). Upload the channel logo to the dev channel.
 - [ ] **Channel content beyond the digest:** market-news post, rotating promo posts, weekly note (awaiting the user's yes; FUNNEL_PLAN §10).
 - [ ] **Scheduling:** register the Task Scheduler jobs with `-To dev` (RUNBOOK §3.3) and watch 5 trading days.
 - [ ] **7.2 Personal morning brief** (opt-in DM, only when something changed) - the retention loop; needs `bot_user_settings`.

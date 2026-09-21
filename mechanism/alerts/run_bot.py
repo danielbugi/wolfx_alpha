@@ -47,13 +47,13 @@ print("Loading the private assistant bot (importing aiogram takes a few seconds)
 from aiogram import Bot, Dispatcher, F, Router  # noqa: E402
 from aiogram.client.default import DefaultBotProperties  # noqa: E402
 from aiogram.enums import ParseMode  # noqa: E402
-from aiogram.exceptions import TelegramBadRequest  # noqa: E402
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError  # noqa: E402
 from aiogram.filters import Command, CommandObject, CommandStart  # noqa: E402
 from aiogram.types import (BotCommand, BotCommandScopeChat, BufferedInputFile, CallbackQuery, ErrorEvent,  # noqa: E402
                            InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, Message, ReplyKeyboardMarkup)
 
 from alerts import chart as chart_mod  # noqa: E402
-from alerts import deeplink, insights, screens, texts  # noqa: E402
+from alerts import deeplink, insights, morning, screens, texts  # noqa: E402
 from alerts.access import INVITE_TTL_HOURS, MODES, OWNER, RETENTION_DAYS, Access, parse_user_id  # noqa: E402
 from alerts.bot_service import SYMBOL_RE, BotService, PgStore, RateLimiter  # noqa: E402
 from alerts.performance import D, fmt_price, pct_change  # noqa: E402
@@ -63,7 +63,7 @@ log = logging.getLogger("first_light_bot")
 PRIVATE = F.chat.type == "private"
 GROUP = F.chat.type.in_({"group", "supergroup"})
 MEMBER_COMMANDS = ("start", "agree", "guide", "today", "stock", "add", "watch", "remove", "unwatch", "portfolio", "p", "watchlist", "w",
-                   "mylist", "levels", "export", "deleteme", "privacy", "help", "about", "full", "aligned", "history", "week", "scan")
+                   "mylist", "levels", "export", "deleteme", "privacy", "help", "about", "full", "aligned", "history", "week", "scan", "morning", "screen")
 COMMANDS = [BotCommand(command="today", description="Today's lists from the channel"),
             BotCommand(command="portfolio", description="Your portfolio since you added it"),
             BotCommand(command="watchlist", description="Your watchlist since you added it"),
@@ -244,6 +244,11 @@ def build_dispatcher(service: BotService, access: Access, msg_limit: RateLimiter
         tracked = store.tracked(uid)
         closes = store.recent_closes([t["symbol"] for t in tracked], insights.WEEK_SESSIONS + 1) if tracked else {}
         return insights.week_screen(insights.week_rows(tracked, closes), store.latest_session(), today_fn())
+
+    def load_screen(uid: int, spec: Dict) -> screens.Screen:
+        session = store.latest_session()
+        rows = store.scan_rows(session["session_date"]) if session else []
+        return insights.screen_screen(session, spec, insights.run_screen(spec, rows), tracker.tracked_map(uid), today_fn())
 
     def scan_file() -> Optional[Tuple[bytes, str]]:
         session = store.latest_session()
@@ -530,6 +535,37 @@ def build_dispatcher(service: BotService, access: Access, msg_limit: RateLimiter
         data, name = got
         await message.answer_document(BufferedInputFile(data, filename=name),
                                       caption="Every stock in the daily scan with its group and facts. End-of-day data, educational.")
+
+    @router.message(Command("morning"), PRIVATE)
+    async def on_morning(message: Message, command: CommandObject):
+        if not await command_gate(message):
+            return
+        uid = message.from_user.id
+        arg = (command.args or "").strip().lower()
+        if arg == "on":
+            session = await db(store.latest_session)
+            await db(store.dm_on, uid, session["session_date"] if session else None)
+            await message.answer(texts.MORNING_ON)
+        elif arg == "off":
+            await db(store.dm_forget, uid)
+            await message.answer(texts.MORNING_OFF)
+        elif arg == "":
+            await message.answer(texts.MORNING_STATUS_ON if await db(store.dm_status, uid) else texts.MORNING_STATUS_OFF)
+        else:
+            await message.answer(texts.MORNING_USAGE)
+
+    @router.message(Command("screen"), PRIVATE)
+    async def on_screen(message: Message, command: CommandObject):
+        if not await command_gate(message):
+            return
+        spec, err = insights.parse_screen(command.args)
+        if command.args is None or (err and not (command.args or "").strip()):
+            await message.answer(insights.SCREEN_USAGE)
+            return
+        if err:
+            await message.answer(html.escape(err, quote=False) + "\n\n" + insights.SCREEN_USAGE)
+            return
+        await send(message, await db(load_screen, message.from_user.id, spec))
 
     @router.message(Command("deleteme"), PRIVATE)
     async def on_deleteme(message: Message):
@@ -888,6 +924,45 @@ def owner_id_from_env() -> Optional[int]:
     return int(raw)
 
 
+async def morning_round(bot, store, access, today: Optional[date] = None) -> Dict[str, int]:
+    """One pass of the morning message: everyone opted in and not yet handled for the latest session gets a message only if one of their own
+    stocks changed. A person who lost access or blocked the bot is switched off (no retry storm); any other send failure is retried next pass."""
+    plan = await asyncio.to_thread(morning.plan_round, store, today)
+    counts = {"sent": 0, "nothing": 0, "switched_off": 0, "failed": 0}
+    for uid, text, sd in plan:
+        if await asyncio.to_thread(access.role, uid) is None:
+            await asyncio.to_thread(store.dm_forget, uid)
+            counts["switched_off"] += 1
+            continue
+        if text:
+            try:
+                await bot.send_message(uid, text, disable_web_page_preview=True)
+            except TelegramForbiddenError:
+                await asyncio.to_thread(store.dm_forget, uid)
+                counts["switched_off"] += 1
+                continue
+            except Exception:                                    # noqa: BLE001 - not marked, so the next pass tries again
+                log.warning("morning message failed for a member; will retry")
+                counts["failed"] += 1
+                continue
+            counts["sent"] += 1
+        else:
+            counts["nothing"] += 1
+        await asyncio.to_thread(store.dm_mark, uid, sd)
+    return counts
+
+
+async def morning_loop(bot, store, access, every_s: int = 300) -> None:
+    while True:
+        try:
+            counts = await morning_round(bot, store, access)
+            if counts["sent"] or counts["switched_off"] or counts["failed"]:
+                log.info("morning round: %s", counts)
+        except Exception:                                        # noqa: BLE001 - a bad pass must not end the loop
+            log.exception("morning round failed")
+        await asyncio.sleep(every_s)
+
+
 async def purge_loop(access: Access) -> None:
     """Once a day: delete the saved data of users revoked more than RETENTION_DAYS ago."""
     while True:
@@ -938,10 +1013,12 @@ async def main() -> None:
         except TelegramBadRequest:                             # the owner has not opened the bot yet: the menu is set next start
             log.info("owner command menu not set (the owner has not started the bot yet)")
     purge_task = asyncio.create_task(purge_loop(access))
+    morning_task = asyncio.create_task(morning_loop(bot, store, access))
     try:
         await dp.start_polling(bot, allowed_updates=["message", "callback_query"])
     finally:
         purge_task.cancel()
+        morning_task.cancel()
 
 
 if __name__ == "__main__":

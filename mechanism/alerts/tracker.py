@@ -163,6 +163,7 @@ class TrackerService:
         return self.store.remove_tracked(uid, None if symbol is None else [symbol])
 
     def delete_everything(self, uid: int) -> int:
+        self.store.dm_forget(uid)                                # the morning-message switch is personal data too
         return self.store.remove_tracked(uid, None)
 
     # ------------------------------------------------------------------ reading

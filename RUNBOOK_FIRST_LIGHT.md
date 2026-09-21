@@ -251,3 +251,24 @@ The old group can simply be left (or deleted in the app). Later, production gets
 `.env`: `BOT_ACCESS_MODE=approve` (default) | `auto` (accept the first `BOT_MAX_MEMBERS`=25 automatically, then queue) | `closed` (no requests); `BOT_MAX_PENDING`=100 caps the waiting list.
 Tell the bot to restart to change the mode. A typed `/invite` link and `/approve <id>` still work.
 
+
+## 9. Channel content and the new assistant commands (added 2026-09-21, late)
+
+**Every morning (DEV, registered in Task Scheduler):** 05:00 `FirstLight-1-UpdatePrices` (index + prices + saves the day's snapshot), 06:00 `FirstLight-2-SendDigest` (the digest, then ONE extra silent post; on Sunday the weekly recap).
+Check `logs/first_light_morning_<date>.log`. Remove a task: `Unregister-ScheduledTask -TaskName FirstLight-1-UpdatePrices -Confirm:$false` (same for `-2-`).
+
+**Preview / review the extra posts (nothing goes to a channel):**
+```powershell
+python mechanism\alerts\send_channel_posts.py                 # today's extra post, printed (dry run)
+python mechanism\alerts\send_channel_posts.py --all           # every kind (images saved under reports\first_light\posts\)
+python mechanism\alerts\send_channel_posts.py --all --send --to owner --force   # every kind in YOUR private chat with the bot (real Telegram check)
+python mechanism\alerts\send_channel_posts.py --kind health --send               # one post to the DEV channel
+```
+Rotation by the session's weekday: Mon sector rotation / macro strip, Tue gaps and volume / news, Wed market health, Thu near 52-week highs / aligned timeframes, Fri education or promotion;
+first Thursday of the month = base rates; first Friday = scoreboard (only if enabled); Sunday = weekly recap.
+**Off until you switch them on in `.env`:** `CHANNEL_NEWS_ENABLED=1` (licence unchecked) and `CHANNEL_SCOREBOARD_ENABLED=1` (unflattering numbers). Production stays locked.
+
+**New assistant commands to try in your private chat (add to the 29-step test):** `/full` and `/full near` (all stocks of a group, sorted by gainers / ATR / volume) · `/aligned` · `/history MSTR` · `/week` (add a stock first) ·
+`/scan` (a CSV of the whole scan) · `/screen breakout vol>3` and `/screen near price>10 below<1.5 sort=vol top=10` (send `/screen` alone for the rules) · `/morning on` (the first message arrives with the next scan; `/morning off` removes it).
+
+**Rebuild history:** `python mechanism\alerts\backfill_snapshots.py --sessions 60` (resumable; reconstructs past sessions from today's adjusted prices; ~30 s each).

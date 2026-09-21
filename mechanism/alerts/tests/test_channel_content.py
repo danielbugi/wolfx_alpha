@@ -583,3 +583,11 @@ def test_the_scoreboard_is_opt_in_in_the_rotation():
     assert "scoreboard" not in cx.pick_kinds(first_friday)                                  # off by default: its numbers may be unflattering
     assert cx.pick_kinds(first_friday, scoreboard_enabled=True)[0] == "scoreboard"
     assert "scoreboard" not in cx.pick_kinds(date(2026, 10, 9), scoreboard_enabled=True)   # only the FIRST Friday
+
+
+def test_the_recap_says_how_many_persistent_names_it_does_not_list():
+    names = [f"S{i:02d}" for i in range(18)]
+    r = _ctx().recap
+    text = cx.post_recap(_ctx(recap={**r, "persistent": names})).text
+    assert "(18)" in text and "and 6 more" in text and text.count("<b><a ") == 12 and tg_html.problems(text) == []
+    assert "more" not in cx.post_recap(_ctx(recap={**r, "persistent": names[:5]})).text.split("(5)")[1].split("\n")[0]

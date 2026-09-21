@@ -249,3 +249,12 @@ def test_channel_senders_do_not_use_the_assistants_screens_or_data(sender):
 def test_the_channel_posts_are_the_daily_data_the_promotion_and_the_start_here_post_only():
     from alerts import channel_posts
     assert {n for n in dir(channel_posts) if n.startswith("post_")} == {"post_start_here", "post_promo"}
+
+
+def test_the_morning_script_sends_the_extra_post_after_the_digest_only_through_the_same_lock():
+    ps1 = open(os.path.join(ROOT, "run_first_light_morning.ps1"), encoding="utf-8").read()
+    assert ps1.index("Step 'daily digest'") < ps1.index("Step 'extra channel post'")            # the digest is the product; the extra post follows it
+    assert "$rc -eq 0 -and -not $NoExtraPost" in ps1 and "'--send', '--to', $To" in ps1          # same target as the digest (dev by default, prod locked)
+    assert ps1.index("PROD_SENDING_ENABLED") < ps1.index("Step 'extra channel post'")            # the launch-lock check comes first
+    assert "'--snapshot-only'" in ps1 and "Step 'daily snapshot'" in ps1                          # the update-only run also saves the snapshot
+    assert "DayOfWeek -eq 'Sunday'" in ps1 and "weekly recap post" in ps1

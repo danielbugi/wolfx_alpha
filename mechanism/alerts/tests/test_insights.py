@@ -250,3 +250,61 @@ def test_a_database_outage_fails_closed_for_the_new_commands():
     svc.store.broken = True
     _, calls = drive([msg(5, "/scan"), msg(5, "/week"), tap(5, "fl:b:g:0", 2)], svc)
     assert not documents(calls)                                                                       # no data, no crash-loop: an error reply or nothing
+
+
+# ================================================================== M5.3 custom screens
+def _scan():
+    return [stock("AAA", "breakout", 12.0, ret=5.0, rvol=4.0, rng=2.0, below=None), stock("BBB", "breakout", 8.0, ret=9.0, rvol=6.0, rng=3.0, below=None),
+            stock("CCC", "near_breakout", 30.0, ret=1.0, rvol=2.0, rng=1.0, below=1.2), stock("DDD", "near_breakout", 55.0, ret=-2.0, rvol=None, rng=None, below=0.4),
+            stock("EEE", None, 70.0, ret=0.5, rvol=1.0, rng=1.0, below=None)]
+
+
+def test_the_screen_grammar_accepts_only_the_documented_forms():
+    spec, err = insights.parse_screen("near price>=10 below<1.5 sort=vol top=5")
+    assert err is None and spec == {"group": "near", "filters": [("price", ">=", 10.0), ("below", "<", 1.5)], "sort": "vol", "top": 5}
+    assert insights.parse_screen("")[0]["group"] == "breakout" and insights.parse_screen("")[0]["top"] == insights.SCREEN_DEFAULT_TOP
+    for bad in ("price>ten", "__import__('os')", "vol>3;drop", "sort=marketcap", "top=0", "top=31", "top=x", "price>10>5", "close>1", "vol>1e9"):
+        spec, err = insights.parse_screen(bad)
+        assert spec is None and err, bad
+    assert insights.parse_screen(" ".join(["vol>1"] * 7))[1] == "Use at most 6 filters."
+
+
+def test_nothing_typed_is_ever_evaluated_the_error_echo_is_short_and_escaped():
+    _, err = insights.parse_screen("<script>" + "x" * 200)
+    assert err and len(err) < 80 and tg_html.problems(err.replace("<", "&lt;").replace(">", "&gt;")) == []
+
+
+def test_run_screen_filters_sorts_and_never_matches_an_unknown_value():
+    spec = insights.parse_screen("all vol>1.5")[0]
+    assert [r["symbol"] for r in insights.run_screen(spec, _scan())] == ["BBB", "AAA", "CCC"]      # DDD has no volume figure: it cannot match; EEE has no group
+    assert [r["symbol"] for r in insights.run_screen(insights.parse_screen("scan sort=price")[0], _scan())] == ["EEE", "DDD", "CCC", "AAA", "BBB"]
+    assert [r["symbol"] for r in insights.run_screen(insights.parse_screen("breakout price<10")[0], _scan())] == ["BBB"]
+    assert [r["symbol"] for r in insights.run_screen(insights.parse_screen("near below<1")[0], _scan())] == ["DDD"]
+    assert insights.run_screen(insights.parse_screen("breakout vol>100")[0], _scan()) == []
+
+
+def test_the_screen_screen_echoes_the_rules_counts_matches_and_offers_cards():
+    spec = insights.parse_screen("all vol>1.5 top=2")[0]
+    s = clean(insights.screen_screen(SESSION, spec, insights.run_screen(spec, _scan()), {"BBB": "watch"}, TODAY))
+    assert "Breakout + Near breakout · volume × &gt; 1.5 · sorted by day change %" in s.text
+    assert "3 stocks match, showing the first 2" in s.text and "✓" in s.text
+    assert [b.data for r in s.rows for b in r] == ["sc:BBB:x", "sc:AAA:x"]
+    empty = clean(insights.screen_screen(SESSION, insights.parse_screen("breakout vol>100")[0], [], {}, TODAY))
+    assert "0 stocks match" in empty.text and "Loosen a filter" in empty.text
+
+
+def test_the_screen_command_answers_usage_errors_and_results_and_refuses_strangers():
+    svc = _svc()
+    _, calls = drive([msg(5, "/screen"), msg(5, "/screen breakout vol>3", 2), msg(5, "/screen vol>abc", 3), msg(5, "/screen all sort=price top=3", 4)], svc)
+    out = [m.text for m in sent(calls)]
+    assert "Filter today's scan" in out[0] and "Groups: breakout" in out[0]
+    assert "Your screen" in out[1] and "MSTR" in out[1]
+    assert "I could not read" in out[2] and "Filter today's scan" in out[2]
+    assert "Your screen" in out[3]
+    stranger = service(STOCKS)
+    _, calls = drive([msg(9, "/screen all")], stranger, enroll=False)
+    assert all("MSTR" not in m.text for m in sent(calls))
+
+
+def test_help_lists_the_screen_command():
+    assert "/screen breakout vol&gt;3" in screens.help_screen(False).text

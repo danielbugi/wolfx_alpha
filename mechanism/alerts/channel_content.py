@@ -259,7 +259,8 @@ def post_recap(ctx: Ctx) -> Optional[Post]:
                      f"weakest {html.escape(worst[0])} {_sign_arrow(worst[1])}.")
     if r.get("persistent"):
         names = ", ".join(f"<b>{_link(s)}</b>" for s in r["persistent"][:12])
-        lines.append(f"In the breakout group on {r['persist_min']}+ of {len(days)} sessions ({len(r['persistent'])}): {names}")
+        more = f" and {len(r['persistent']) - 12} more" if len(r["persistent"]) > 12 else ""
+        lines.append(f"In the breakout group on {r['persist_min']}+ of {len(days)} sessions ({len(r['persistent'])}): {names}{more}")
     lines += ["", _foot()]
     return Post("recap", "\n".join(lines))
 

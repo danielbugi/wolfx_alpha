@@ -6,6 +6,8 @@
 > Binding rules that shape every proposal: a channel carries only data / promotion / news / information; assistant screens stay in the private chat;
 > facts only, no advice wording; no fabricated number; production stays locked (see [HANDOFF.md](HANDOFF.md) §1).
 
+> **Update (later the same day):** this report was executed - see [CHANNEL_CONTENT_MILESTONES.md](CHANNEL_CONTENT_MILESTONES.md) for what was built, the evidence, and what is blocked. Two numbers in this report were ad hoc and are superseded by the built posts: market-health figures use the digest's own universe (>= $1M, 2,915 stocks) instead of the ad hoc $5M subset, and the sector post uses the median 20-session change of each sector's stocks (the ad hoc figure of Technology +0.5% used a different method, daily equal-weight averages compounded; by the median, all 11 sectors were lower on 18 Sep). The 62-vs-51 breakout gap (section 4.3, B2) is explained: the digest's 51 are a strict subset of the screener's 62 (no liquidity floor or integrity guard in the screener).
+
 ## 0. Bottom line
 
 1. **We already own more data than the channel shows.** The channel posts one market card and three lists. The database also holds 10 years of prices, weekly/monthly

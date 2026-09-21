@@ -10,6 +10,9 @@
     1. market index updater   ~5 seconds (the index tiles of the market card)
     2. daily price updater    ~20 minutes (all ~3,000 symbols)   <- skipped with -SkipUpdate
     3. send_daily_digest.py   ~1 minute: market card + header + Breakout + Near breakout, then saves the snapshot the bot reads
+    4. send_channel_posts.py  ~1 minute: ONE extra silent post (market health / sector rotation / gaps / near highs / education ... by weekday),
+                              skipped with -NoExtraPost; on Sunday (no session) the weekly recap instead
+    (-UpdateOnly also saves the day's snapshot, so history has no gaps even when nothing is posted)
 
   The 2.5-hour full pipeline (automation_pipeline.sh) is NOT needed before the digest; run it afterwards.
 
@@ -42,7 +45,8 @@ param(
     [switch]$UpdateOnly,
     [switch]$Force,
     [switch]$NoImage,
-    [switch]$NoButtons
+    [switch]$NoButtons,
+    [switch]$NoExtraPost
 )
 
 Set-Location -LiteralPath $PSScriptRoot
@@ -86,6 +90,11 @@ if ($realRun -and -not $Force) {
     $gate = $LASTEXITCODE
     if ($gate -eq 3) {
         Log "SKIPPED: no new US session to send for '$key' (weekend, holiday, or already sent). Use -Force to run anyway."
+        # Sunday has no session, but it is the day of the weekly recap (one extra post, sent by send_channel_posts.py, which has its own gate).
+        if ($Send -and -not $NoExtraPost -and (Get-Date).DayOfWeek -eq 'Sunday') {
+            $rc = Step 'weekly recap post' @('mechanism/alerts/send_channel_posts.py', '--send', '--to', $To)
+            if ($rc -ne 0) { Log "WARNING: the weekly recap post exited with code $rc" }
+        }
         exit 0
     }
     if ($gate -ne 0) { Log "WARNING: the trading-day gate itself failed (exit $gate) - continuing (fails open)" }
@@ -113,4 +122,14 @@ if ($Send) { $digestArgs += @('--send', '--to', $To) }
 if ($Force) { $digestArgs += '--force' }
 $rc = Step 'daily digest' $digestArgs
 if ($rc -ne 0) { Log "FAILED: the digest step exited with code $rc" }
+
+# One extra post per session after the digest (market health, sector rotation, gaps, ... - see CHANNEL_CONTENT_MILESTONES.md). A preview also
+# previews it. A failure here never changes the digest's exit code: the digest is the product, the extra post is a bonus.
+if ($rc -eq 0 -and -not $NoExtraPost) {
+    $extraArgs = @('mechanism/alerts/send_channel_posts.py')
+    if ($Send) { $extraArgs += @('--send', '--to', $To) }
+    if ($Force) { $extraArgs += '--force' }
+    $rc2 = Step 'extra channel post' $extraArgs
+    if ($rc2 -ne 0) { Log "WARNING: the extra channel post exited with code $rc2 (the digest itself finished)" }
+}
 exit $rc

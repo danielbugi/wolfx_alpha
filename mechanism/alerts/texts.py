@@ -95,9 +95,11 @@ HELP = (
     "/portfolio and /watchlist - how each stock changed since you added it\n"
     "/levels AAPL - the ATR risk framework (educational)\n"
     "/full - every stock in a group, sorted three ways, and /aligned - breakouts near their 20-week or 52-week high\n"
+    "/screen breakout vol&gt;3 - your own filter over today's scan (send /screen for the rules)\n"
     "/history AAPL - a stock's past 20-day-high breakouts and what followed\n"
     "/week - how your own lists changed over the last 5 sessions\n"
     "/scan - the whole daily scan as a file\n"
+    "/morning on - a short private message after each scan when one of your own stocks changed (off by default)\n"
     "/export - your saved data as a file, /deleteme - erase it\n"
     "/guide - the quick tour, /privacy - what is stored, /about - what this is\n\n"
     "Any stock in the daily scan (liquid US stocks) can be added.")
@@ -147,9 +149,18 @@ PRIVACY = (
     "Your Telegram id, the day you accepted the notice, and for each stock you add: the symbol, your price (or the last close), the "
     "day, and your shares if you gave them. No names, no messages. If you asked for access, your Telegram id and the time of the "
     "request were kept only until the owner decided (at most 14 days).\n\n"
+    "If you turn on /morning, one switch and the last session messaged are stored, nothing else; /morning off or /deleteme removes it.\n\n"
     "Only you see your lists. The owner of this bot can technically read the database.\n\n"
     "/export sends everything you saved as a file. /deleteme erases it after you confirm.")
 DELETE_CONFIRM = "Erase everything you saved (your watchlist and your portfolio)? This cannot be undone."
 DELETED = "Done. Your saved lists were erased."
 NOTHING_TO_ERASE = "You had nothing saved."
 EXPORT_EMPTY = "You have nothing saved yet, so there is nothing to export."
+
+MORNING_USAGE = "Use <code>/morning on</code> or <code>/morning off</code>."
+MORNING_ON = ("Morning message is on. After each daily scan you get a short message, only when one of your own stocks changed "
+              "(entered or left a group, is in the channel's lists, or moved at least 2× its ATR). The first one comes with the next scan. "
+              "Turn it off any time with /morning off.")
+MORNING_OFF = "Morning message is off. Nothing about it is stored."
+MORNING_STATUS_ON = "The morning message is on. Turn it off with /morning off."
+MORNING_STATUS_OFF = "The morning message is off. Turn it on with /morning on."

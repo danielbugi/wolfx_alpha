@@ -235,3 +235,82 @@ def scan_csv(session: Dict, rows: Sequence[Dict]) -> str:
         w.writerow([session["session_date"].isoformat(), r["symbol"], group, cell(r["close"], 4), cell(r["ret1_pct"], 2), cell(r["rvol"], 2),
                     cell(r["range_atr"], 2), cell(r["below_high_pct"], 2), cell(r.get("atr"), 4)])
     return buf.getvalue()
+
+
+# ------------------------------------------------------------------ M5.3 custom screens: /screen breakout price>10 vol>3 sort=range top=10
+import re as _re                                                               # noqa: E402
+
+SCREEN_FIELDS = {"price": ("close", "price"), "day": ("ret1_pct", "day change %"), "vol": ("rvol", "volume ×"),
+                 "range": ("range_atr", "range × ATR"), "below": ("below_high_pct", "% below 20-day high")}
+SCREEN_OPS = {">": lambda a, b: a > b, "<": lambda a, b: a < b, ">=": lambda a, b: a >= b, "<=": lambda a, b: a <= b}
+SCREEN_GROUPS = {"breakout": ("breakout",), "near": ("near_breakout",), "all": ("breakout", "near_breakout"), "scan": (None, "breakout", "near_breakout")}
+SCREEN_MAX_FILTERS, SCREEN_MAX_TOP, SCREEN_DEFAULT_TOP = 6, 30, 15
+_FILTER_RE = _re.compile(r"^(price|day|vol|range|below)(>=|<=|>|<)(-?\d{1,7}(?:\.\d{1,4})?)$")
+SCREEN_USAGE = ("Filter today's scan. Examples:\n<code>/screen breakout vol&gt;3</code>\n<code>/screen near price&gt;10 below&lt;1.5 sort=vol top=10</code>\n\n"
+                "Groups: breakout, near, all (both), scan (every stock). Filters: price, day (1-day %), vol (volume ×), range (× ATR), below (% below the "
+                "20-day high), with &gt; &lt; &gt;= &lt;= and a number. sort= day, vol, range or price; top= up to 30. Up to 6 filters.")
+
+
+def parse_screen(text: Optional[str]) -> Tuple[Optional[Dict], Optional[str]]:
+    """(spec, None) or (None, reason). Only the fixed grammar above is accepted; nothing typed is ever evaluated."""
+    spec = {"group": "breakout", "filters": [], "sort": "day", "top": SCREEN_DEFAULT_TOP}
+    for tok in (text or "").lower().replace(" ", " ").split():
+        if tok in SCREEN_GROUPS:
+            spec["group"] = tok
+        elif tok.startswith("sort="):
+            key = tok[5:]
+            if key not in SCREEN_FIELDS:
+                return None, f"I cannot sort by “{key[:20]}”."
+            spec["sort"] = key
+        elif tok.startswith("top="):
+            if not tok[4:].isdigit() or not 1 <= int(tok[4:]) <= SCREEN_MAX_TOP:
+                return None, f"top= must be a whole number from 1 to {SCREEN_MAX_TOP}."
+            spec["top"] = int(tok[4:])
+        else:
+            m = _FILTER_RE.match(tok)
+            if not m:
+                return None, f"I could not read “{tok[:24]}”."
+            spec["filters"].append((m.group(1), m.group(2), float(m.group(3))))
+    if len(spec["filters"]) > SCREEN_MAX_FILTERS:
+        return None, f"Use at most {SCREEN_MAX_FILTERS} filters."
+    return spec, None
+
+
+def run_screen(spec: Dict, rows: Sequence[Dict]) -> List[Dict]:
+    """Rows that pass every filter (a stock with an unknown value never passes a filter on it), sorted, best first, unknown last."""
+    cats = SCREEN_GROUPS[spec["group"]]
+    out = []
+    for r in rows:
+        if r.get("category") not in cats:
+            continue
+        ok = True
+        for name, op, val in spec["filters"]:
+            v = r.get(SCREEN_FIELDS[name][0])
+            if v is None or not SCREEN_OPS[op](float(v), val):
+                ok = False
+                break
+        if ok:
+            out.append(r)
+    field = SCREEN_FIELDS[spec["sort"]][0]
+    return sorted(out, key=lambda r: (r.get(field) is None, -(float(r.get(field)) if r.get(field) is not None else 0), r["symbol"]))
+
+
+def screen_screen(session: Optional[Dict], spec: Dict, matches: Sequence[Dict], tracked: Dict[str, str], today_date: Optional[date] = None) -> Screen:
+    if not session:
+        return Screen("There is no scan data yet. Try again after the next daily scan.")
+    shown = list(matches[:spec["top"]])
+    group = {"breakout": "Breakout", "near": "Near breakout", "all": "Breakout + Near breakout", "scan": "every stock in the scan"}[spec["group"]]
+    rules = " · ".join(f"{SCREEN_FIELDS[n][1]} {o} {v:g}" for n, o, v in spec["filters"]) or "no filters"
+    lines = [f"<b>Your screen</b> · {asof(session['session_date'], today_date)}",
+             f"{esc(group)} · {esc(rules)} · sorted by {esc(SCREEN_FIELDS[spec['sort']][1])}",
+             f"{len(matches)} stocks match" + (f", showing the first {len(shown)}" if len(matches) > len(shown) else ""), ""]
+    if not matches:
+        lines.append("No stock matches. Loosen a filter.")
+    for r in shown:
+        mark = " ✓" if r["symbol"] in tracked else ""
+        cat = GROUP_LABEL.get(r.get("category"), "no group")
+        lines.append(f"<b>{esc(r['symbol'])}</b>{mark}  {arrow_pct(r['ret1_pct'])}  {perf.fmt_price(D(r['close']))}")
+        bits = [cat] + ([f"vol {r['rvol']:.1f}×"] if r.get("rvol") is not None else []) + ([f"range {r['range_atr']:.1f}× ATR"] if r.get("range_atr") is not None else [])
+        lines.append(f"{INDENT}{' · '.join(bits)}")
+    lines += ["", "<i>Filters describe today's stored facts; they are not a forecast. Educational data, not advice.</i>"]
+    return Screen("\n".join(lines), chunk([Btn(("✓ " if r["symbol"] in tracked else "") + r["symbol"], f"sc:{r['symbol']}:x") for r in shown]))
