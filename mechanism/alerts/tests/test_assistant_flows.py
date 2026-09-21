@@ -176,7 +176,8 @@ def test_stock_card_shows_the_facts_the_lists_and_the_way_back():
     assert "Volume 3.1× its 50-day median · range 2.6× ATR" in t and "In today's lists: gainers #3 · ATR #3" in t
     assert "0.0% below" not in t and "Educational data, not advice." in t                                # a breakout has no distance to the high
     assert buttons(e) == [("News", "nw:MSTR:tb0"), ("Chart", "ch:MSTR:tb0"), ("ATR levels", "lv:MSTR:tb0"),
-                          ("Add to watchlist", "aw:MSTR:tb0"), ("Add to portfolio", "ah:MSTR:tb0"), ("‹ Today's lists", "td:b:0")]
+                          ("Add to watchlist", "aw:MSTR:tb0"), ("Add to portfolio", "ah:MSTR:tb0"), ("Past breakouts", "hs:MSTR:tb0"),
+                          ("‹ Today's lists", "td:b:0")]
 
 
 def test_a_stock_outside_the_lists_says_so_and_a_typed_ticker_has_no_back_button():

@@ -66,6 +66,11 @@ class Store(Protocol):
     def history_facts(self, pairs: List) -> Dict[str, Dict]: ...
     def list_rows(self, session_date) -> List[Dict]: ...
     def bars(self, symbol: str, limit: int = 126) -> List[Dict]: ...
+    def category_rows(self, session_date, category: str) -> List[Dict]: ...
+    def scan_rows(self, session_date) -> List[Dict]: ...
+    def range_highs(self, symbols: List[str], session_date) -> Dict[str, Dict]: ...
+    def breakout_history(self, symbol: str) -> Dict: ...
+    def recent_closes(self, symbols: List[str], n: int) -> Dict[str, List]: ...
     # request-access flow + funnel counters (aggregate only)
     def request_status(self, uid: int) -> Optional[Dict]: ...
     def add_request(self, uid: int) -> bool: ...
@@ -198,6 +203,47 @@ class PgStore:
         """The stocks that appear in at least one of the channel's lists on that session (each stock once)."""
         return self.db.execute_dict_query(
             "SELECT * FROM digest_stocks WHERE session_date = %s AND list_ranks IS NOT NULL ORDER BY symbol", (session_date,))
+
+    # --- member insights (alerts/insights.py). All reads of stored data; nothing here is per user, so cost does not grow with the audience.
+    def category_rows(self, session_date, category: str) -> List[Dict]:
+        """Every stock of one group on that session (not only the listed ones)."""
+        return self.db.execute_dict_query(
+            "SELECT * FROM digest_stocks WHERE session_date = %s AND category = %s ORDER BY symbol", (session_date, category))
+
+    def scan_rows(self, session_date) -> List[Dict]:
+        return self.db.execute_dict_query("SELECT * FROM digest_stocks WHERE session_date = %s ORDER BY symbol", (session_date,))
+
+    def range_highs(self, symbols: List[str], session_date) -> Dict[str, Dict]:
+        """Highest high of the last 100 / 252 stored sessions per symbol, with how many bars exist (up to 252): {sym: {hi100, hi252, n}}."""
+        if not symbols:
+            return {}
+        rows = self.db.execute_dict_query(
+            "SELECT symbol, max(high) FILTER (WHERE rn <= 100) AS hi100, max(high) AS hi252, count(*) AS n FROM ("
+            "SELECT symbol, high, ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY date DESC) rn FROM stock_prices "
+            "WHERE symbol = ANY(%s) AND date <= %s AND date > %s::date - 400) t WHERE rn <= 252 GROUP BY symbol",
+            (symbols, session_date, session_date))
+        return {r["symbol"]: {"hi100": r["hi100"], "hi252": r["hi252"], "n": int(r["n"])} for r in rows}
+
+    def breakout_history(self, symbol: str) -> Dict:
+        """A symbol's long 20-day-high breakouts (ml_breakout_dataset_v2): counts and the latest cases that have a 20-session outcome."""
+        rows = self.db.execute_dict_query(
+            "SELECT date, stopped, tp3_hit FROM ml_breakout_dataset_v2 WHERE symbol = %s AND direction = 1 ORDER BY date DESC", (symbol,))
+        matured = [r for r in rows if r["stopped"] is not None]
+        return {"n_total": len(rows), "n_matured": len(matured), "first_year": rows[-1]["date"].year if rows else None,
+                "n_risk": sum(1 for r in matured if r["stopped"]), "n_up3": sum(1 for r in matured if r["tp3_hit"]),
+                "rows": [{"date": r["date"], "risk": bool(r["stopped"]), "up3": bool(r["tp3_hit"]) and not r["stopped"]} for r in matured]}
+
+    def recent_closes(self, symbols: List[str], n: int) -> Dict[str, List]:
+        """The last `n` stored closes per symbol, oldest first: {sym: [(date, close)]}."""
+        if not symbols:
+            return {}
+        rows = self.db.execute_dict_query(
+            "SELECT symbol, date, close FROM (SELECT symbol, date, close, ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY date DESC) rn "
+            "FROM stock_prices WHERE symbol = ANY(%s) AND date >= CURRENT_DATE - 40) t WHERE rn <= %s ORDER BY symbol, date", (symbols, n))
+        out: Dict[str, List] = {}
+        for r in rows:
+            out.setdefault(r["symbol"], []).append((r["date"], r["close"]))
+        return out
 
     # --- request-access flow (tables: mechanism/add_access_flow_tables.sql). A row exists ONLY after the person tapped "Request access".
     def request_status(self, uid: int) -> Optional[Dict]:

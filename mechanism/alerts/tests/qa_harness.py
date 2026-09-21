@@ -136,6 +136,27 @@ class MemoryStore:
         return [{"date": SESSION_DATE - timedelta(days=n - 1 - i), "open": close, "high": close * 1.02, "low": close * 0.98,
                  "close": close, "volume": 1_000_000} for i in range(n)]
 
+    # --- member insights (same semantics as PgStore)
+    def category_rows(self, session_date, category):
+        self._check()
+        return sorted((s for s in self._stocks.values() if s["category"] == category), key=lambda s: s["symbol"])
+
+    def scan_rows(self, session_date):
+        self._check()
+        return sorted(self._stocks.values(), key=lambda s: s["symbol"])
+
+    def range_highs(self, symbols, session_date):
+        self._check()
+        return {s: self.highs[s] for s in symbols if s in getattr(self, "highs", {})}
+
+    def breakout_history(self, symbol):
+        self._check()
+        return getattr(self, "history", {}).get(symbol, {"n_total": 0, "n_matured": 0, "first_year": None, "n_risk": 0, "n_up3": 0, "rows": []})
+
+    def recent_closes(self, symbols, n):
+        self._check()
+        return {s: self.prices[s][-n:] for s in symbols if s in self.prices}
+
     # --- request-access flow + funnel counters (same semantics as PgStore)
     COOLDOWN_S = 7 * 86400
 

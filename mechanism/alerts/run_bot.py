@@ -33,7 +33,7 @@ import sys
 import time
 from datetime import date
 from pathlib import Path
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, Optional, Tuple
 
 MECH = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(MECH))
@@ -53,7 +53,7 @@ from aiogram.types import (BotCommand, BotCommandScopeChat, BufferedInputFile, C
                            InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, Message, ReplyKeyboardMarkup)
 
 from alerts import chart as chart_mod  # noqa: E402
-from alerts import deeplink, screens, texts  # noqa: E402
+from alerts import deeplink, insights, screens, texts  # noqa: E402
 from alerts.access import INVITE_TTL_HOURS, MODES, OWNER, RETENTION_DAYS, Access, parse_user_id  # noqa: E402
 from alerts.bot_service import SYMBOL_RE, BotService, PgStore, RateLimiter  # noqa: E402
 from alerts.performance import D, fmt_price, pct_change  # noqa: E402
@@ -63,7 +63,7 @@ log = logging.getLogger("first_light_bot")
 PRIVATE = F.chat.type == "private"
 GROUP = F.chat.type.in_({"group", "supergroup"})
 MEMBER_COMMANDS = ("start", "agree", "guide", "today", "stock", "add", "watch", "remove", "unwatch", "portfolio", "p", "watchlist", "w",
-                   "mylist", "levels", "export", "deleteme", "privacy", "help", "about")
+                   "mylist", "levels", "export", "deleteme", "privacy", "help", "about", "full", "aligned", "history", "week", "scan")
 COMMANDS = [BotCommand(command="today", description="Today's lists from the channel"),
             BotCommand(command="portfolio", description="Your portfolio since you added it"),
             BotCommand(command="watchlist", description="Your watchlist since you added it"),
@@ -82,7 +82,7 @@ OWNER_COMMANDS = [BotCommand(command="invite", description="One-time invitation 
                   BotCommand(command="status", description="Snapshot age and access counts")]
 TOO_MANY = "Too many requests - please try again in a while."
 PENDING_TTL_S = 600
-NAV_RE = r"^(td|sc|nw|ch|lv|aw|ah|hc|rm|ry|pf|wl|dy|cx|ex|hp|noop)(:|$)"
+NAV_RE = r"^(td|sc|nw|ch|lv|aw|ah|hc|rm|ry|pf|wl|dy|cx|ex|hp|fl|al|hs|noop)(:|$)"
 ADD_USAGE = ("Send a symbol, and optionally your price and shares:\n<code>/add AAPL</code> - watchlist at the last close\n"
              "<code>/add AAPL 140.5</code> - watchlist at your price\n<code>/add AAPL 140.5 10</code> - portfolio: price and shares")
 BAD_NUMBER = "I could not read that. Use plain numbers with a dot, for example <code>/add AAPL 140.5 10</code>."
@@ -224,6 +224,33 @@ def build_dispatcher(service: BotService, access: Access, msg_limit: RateLimiter
     def load_list(uid: int, kind: str, page: int) -> screens.Screen:
         views, totals = tracker.views(uid, kind)
         return screens.tracked_list(kind, views, totals, store.latest_session(), page, today_fn())
+
+    def load_full(uid: int, tab: str, order: str, page: int) -> screens.Screen:
+        session = store.latest_session()
+        cat = screens.TAB_CAT.get(tab, "breakout")
+        rows = store.category_rows(session["session_date"], cat) if session else []
+        return insights.full_list(session, rows, tab, order, page, tracker.tracked_map(uid), today_fn())
+
+    def load_aligned(uid: int, page: int) -> screens.Screen:
+        session = store.latest_session()
+        rows = store.category_rows(session["session_date"], "breakout") if session else []
+        highs = store.range_highs([r["symbol"] for r in rows], session["session_date"]) if rows else {}
+        return insights.aligned_screen(session, rows, highs, tracker.tracked_map(uid), page, today_fn())
+
+    def load_history(sym: str, ctx: str) -> screens.Screen:
+        return insights.history_screen(sym, store.breakout_history(sym), ctx)
+
+    def load_week(uid: int) -> screens.Screen:
+        tracked = store.tracked(uid)
+        closes = store.recent_closes([t["symbol"] for t in tracked], insights.WEEK_SESSIONS + 1) if tracked else {}
+        return insights.week_screen(insights.week_rows(tracked, closes), store.latest_session(), today_fn())
+
+    def scan_file() -> Optional[Tuple[bytes, str]]:
+        session = store.latest_session()
+        if not session:
+            return None
+        text = insights.scan_csv(session, store.scan_rows(session["session_date"]))
+        return text.encode("utf-8-sig"), f"first_light_scan_{session['session_date']:%Y-%m-%d}.csv"
 
     def prompt_screen(uid: int, sym: str, ctx: str) -> screens.Screen:
         q = store.quotes([sym]).get(sym)
@@ -462,6 +489,48 @@ def build_dispatcher(service: BotService, access: Access, msg_limit: RateLimiter
         if await command_gate(message):
             await send_export(message, message.from_user.id)
 
+    @router.message(Command("full"), PRIVATE)
+    async def on_full(message: Message, command: CommandObject):
+        if not await command_gate(message):
+            return
+        arg = (command.args or "").strip().lower()
+        tab = "n" if arg.startswith(("near", "n")) else "b"
+        await send(message, await db(load_full, message.from_user.id, tab, "g", 0))
+
+    @router.message(Command("aligned"), PRIVATE)
+    async def on_aligned(message: Message):
+        if await command_gate(message):
+            await send(message, await db(load_aligned, message.from_user.id, 0))
+
+    @router.message(Command("history"), PRIVATE)
+    async def on_history(message: Message, command: CommandObject):
+        if not await command_gate(message):
+            return
+        toks = (command.args or "").split()
+        if len(toks) != 1 or not SYMBOL_TOKEN.match(toks[0]):
+            await message.answer("Send one symbol, for example <code>/history AAPL</code>.")
+            return
+        await send(message, await db(load_history, toks[0].replace("$", "").upper().rstrip(".-"), "x"))
+
+    @router.message(Command("week"), PRIVATE)
+    async def on_week(message: Message):
+        if await command_gate(message):
+            await send(message, await db(load_week, message.from_user.id))
+
+    @router.message(Command("scan"), PRIVATE)
+    async def on_scan(message: Message):
+        if not await command_gate(message):
+            return
+        if not await rate_ok(message.from_user.id, message.answer, heavy_limit):
+            return
+        got = await db(scan_file)
+        if not got:
+            await message.answer("There is no scan data yet. Try again after the next daily scan.")
+            return
+        data, name = got
+        await message.answer_document(BufferedInputFile(data, filename=name),
+                                      caption="Every stock in the daily scan with its group and facts. End-of-day data, educational.")
+
     @router.message(Command("deleteme"), PRIVATE)
     async def on_deleteme(message: Message):
         if await command_gate(message):
@@ -514,9 +583,9 @@ def build_dispatcher(service: BotService, access: Access, msg_limit: RateLimiter
             return
         if not await nav_gate(cb, popup_limit):
             return
-        sym = sym_of(parts[1]) if len(parts) > 1 and action in ("sc", "nw", "ch", "lv", "aw", "ah", "hc", "rm", "ry") else None
+        sym = sym_of(parts[1]) if len(parts) > 1 and action in ("sc", "nw", "ch", "lv", "aw", "ah", "hc", "rm", "ry", "hs") else None
         ctx = parts[2] if len(parts) > 2 else "x"
-        if action in ("sc", "nw", "ch", "lv", "aw", "ah", "hc", "rm", "ry") and not sym:
+        if action in ("sc", "nw", "ch", "lv", "aw", "ah", "hc", "rm", "ry", "hs") and not sym:
             await safe_answer(cb, "Unknown item.", show_alert=True)
             return
         pending.pop(uid, None)                                 # tapping anywhere else abandons a half-finished prompt
@@ -528,6 +597,19 @@ def build_dispatcher(service: BotService, access: Access, msg_limit: RateLimiter
         elif action == "sc":
             await safe_answer(cb)
             await show(cb, await db(load_card, uid, sym, ctx))
+        elif action == "fl":
+            await safe_answer(cb)
+            tab = parts[1] if len(parts) > 1 else "b"
+            order = parts[2] if len(parts) > 2 else "g"
+            page = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else 0
+            await show(cb, await db(load_full, uid, tab, order, page))
+        elif action == "al":
+            await safe_answer(cb)
+            page = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+            await show(cb, await db(load_aligned, uid, page))
+        elif action == "hs":
+            await safe_answer(cb)
+            await show(cb, await db(load_history, sym, ctx))
         elif action in ("pf", "wl"):
             await safe_answer(cb)
             page = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0

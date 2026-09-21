@@ -15,6 +15,8 @@ MIN_STOCKS_PER_SECTOR = 5                 # fewer than this is noise, not a sect
 # (symbol, label, kind): kind decides the number format and how the delta is expressed
 TILES = [("^GSPC", "S&P 500", "index"), ("^IXIC", "Nasdaq", "index"), ("^RUT", "Russell 2000", "index"),
          ("^DJI", "Dow Jones", "index"), ("^VIX", "VIX (volatility)", "level"), ("^TNX", "10-year yield", "yield")]
+MACRO_TILES = [("GC=F", "Gold", "index"), ("CL=F", "Crude oil (WTI)", "level"), ("DX-Y.NYB", "Dollar index", "level"),
+               ("BTC-USD", "Bitcoin", "price0")]
 
 
 def _tile(symbol: str, label: str, kind: str, series: pd.DataFrame, session) -> Tile:
@@ -26,16 +28,20 @@ def _tile(symbol: str, label: str, kind: str, series: pd.DataFrame, session) -> 
     direction = (last > prev) - (last < prev)
     if kind == "yield":                                                   # stored in percent; a % change of a yield misleads
         return Tile(label, f"{last:.3f}%", f"{abs(last - prev) * 100:.1f} bps", direction, spark)
-    value = f"{last:,.2f}" if kind == "index" else f"{last:.2f}"
+    value = f"{last:,.0f}" if kind == "price0" else f"{last:,.2f}" if kind == "index" else f"{last:.2f}"
     return Tile(label, value, f"{abs(last / prev - 1) * 100:.2f}%", direction, spark)
 
 
-def load_tiles(db, session) -> List[Tile]:
+def load_tiles(db, session, tiles=TILES) -> List[Tile]:
     rows = db.execute_dict_query(
         "SELECT symbol, date, close FROM market_index_prices WHERE symbol = ANY(%s) AND date <= %s AND date > %s::date - 140 "
-        "ORDER BY symbol, date", ([t[0] for t in TILES], session, session))
+        "ORDER BY symbol, date", ([t[0] for t in tiles], session, session))
     df = pd.DataFrame(rows, columns=["symbol", "date", "close"])
-    return [_tile(sym, label, kind, df[df["symbol"] == sym], session) for sym, label, kind in TILES]
+    return [_tile(sym, label, kind, df[df["symbol"] == sym], session) for sym, label, kind in tiles]
+
+
+def load_macro_tiles(db, session) -> List[Tile]:
+    return load_tiles(db, session, MACRO_TILES)
 
 
 def sector_bars(stocks: List[Dict], sector_of: Dict[str, str]) -> Tuple[List[SectorBar], int]:

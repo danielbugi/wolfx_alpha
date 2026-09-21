@@ -16,12 +16,8 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Dict, List, Optional
 
-# A close-to-close move is treated as a split / adjustment (not a price move) when it is beyond ~3x, or lands on a COMMON split factor:
-# 1/3 (3-for-1), 1/2 (2-for-1), 2/3 (3-for-2), 2 and 3 (reverse splits) within SPLIT_TOLERANCE. Anything else stays a real move, because
-# a wrongly-flagged crash only shows "n/a - check your broker", whereas a missed split shows a fabricated return.
-SPLIT_FACTORS = (Decimal(1) / 3, Decimal(1) / 2, Decimal(2) / 3, Decimal(2), Decimal(3))
-SPLIT_TOLERANCE = Decimal("0.03")
-HARD_JUMP_HIGH, HARD_JUMP_LOW = Decimal("3.09"), Decimal("0.323")
+# The split / adjustment rule (a move beyond ~3x, or on a common split factor) lives in price_guard.py, shared with the channel's scoreboard.
+from alerts.price_guard import HARD_JUMP_HIGH, HARD_JUMP_LOW, SPLIT_FACTORS, SPLIT_TOLERANCE, is_split_like  # noqa: E402,F401
 RESTATE_TOLERANCE = Decimal("0.05")     # a stored reference close that differs >5% from today's series for that day was restated
 CENT = Decimal("0.01")
 
@@ -43,16 +39,6 @@ def quantize(x: Decimal, exp: Decimal = CENT) -> Decimal:
 def pct_change(now: Decimal, ref: Decimal) -> Decimal:
     """(now / ref - 1) * 100, unrounded. ref must be > 0."""
     return (now / ref - 1) * 100
-
-
-def is_split_like(ratio) -> bool:
-    """True when a close / previous-close ratio looks like a split or an adjustment rather than a price move."""
-    r = D(ratio)
-    if r is None or r <= 0:
-        return False
-    if r > HARD_JUMP_HIGH or r < HARD_JUMP_LOW:
-        return True
-    return any(abs(r / f - 1) <= SPLIT_TOLERANCE for f in SPLIT_FACTORS)
 
 
 def is_adjusted(row: Dict, facts: Optional[Dict]) -> bool:

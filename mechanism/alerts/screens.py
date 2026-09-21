@@ -95,14 +95,20 @@ def since_line(v: PositionView) -> str:
 
 def parse_ctx(ctx: str) -> Tuple[str, str, int]:
     """'tb0' -> ('t', 'b', 0); 'p2' -> ('p', '', 2); 'x' -> ('x', '', 0). Never raises."""
-    m = re.fullmatch(r"([tpw])([bn]?)(\d{0,3})", ctx or "")
-    if not m or (m.group(1) == "t" and not m.group(2)):
+    m = re.fullmatch(r"(?:([tpw])([bn]?)|f([bn][gav]))(\d{0,3})", ctx or "")
+    if not m:
         return "x", "", 0
-    return m.group(1), m.group(2), int(m.group(3) or 0)
+    if m.group(3):                                                    # a full list: 'fbg2' -> ('f', 'bg', 2) = group b, order g, page 2
+        return "f", m.group(3), int(m.group(4) or 0)
+    if m.group(1) == "t" and not m.group(2):
+        return "x", "", 0
+    return m.group(1), m.group(2), int(m.group(4) or 0)
 
 
 def back_button(ctx: str) -> Optional[Btn]:
     kind, tab, page = parse_ctx(ctx)
+    if kind == "f":
+        return Btn("‹ All " + TAB_TITLE[tab[0]].lower(), f"fl:{tab[0]}:{tab[1]}:{page}")
     if kind == "t":
         return Btn("‹ Today's lists", f"td:{tab}:{page}")
     if kind == "p":
@@ -169,7 +175,8 @@ def today(session: Optional[Dict], rows: Sequence[Dict], tab: str, page: int, tr
     if pages > 1:
         kb.append([Btn("‹ Prev", f"td:{tab}:{page - 1}") if page > 0 else Btn("·", "noop"), Btn(f"{page + 1}/{pages}", "noop"),
                    Btn("Next ›", f"td:{tab}:{page + 1}") if page < pages - 1 else Btn("·", "noop")])
-    kb.append([Btn("What do these mean?", "def:groups")])
+    total_in_group = ((session.get("counts") or {}).get(TAB_CAT[tab]))
+    kb.append([Btn(f"All {total_in_group}" if total_in_group else "All stocks", f"fl:{tab}:g:0"), Btn("What do these mean?", "def:groups")])
     return Screen("\n".join(lines), kb)
 
 
@@ -221,6 +228,7 @@ def stock_card(symbol: str, row: Optional[Dict], session: Optional[Dict], view: 
         kb.append([Btn("Move to portfolio", f"ah:{e}:{ctx}"), Btn("Remove", f"rm:{e}:{ctx}")])
     else:
         kb.append([Btn("Edit price / shares", f"ah:{e}:{ctx}"), Btn("Remove", f"rm:{e}:{ctx}")])
+    kb.append([Btn("Past breakouts", f"hs:{e}:{ctx}")])
     back = back_button(ctx)
     if back:
         kb.append([back])

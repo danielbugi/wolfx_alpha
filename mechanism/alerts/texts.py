@@ -94,6 +94,10 @@ HELP = (
     "/remove AAPL - remove a stock from your lists\n"
     "/portfolio and /watchlist - how each stock changed since you added it\n"
     "/levels AAPL - the ATR risk framework (educational)\n"
+    "/full - every stock in a group, sorted three ways, and /aligned - breakouts near their 20-week or 52-week high\n"
+    "/history AAPL - a stock's past 20-day-high breakouts and what followed\n"
+    "/week - how your own lists changed over the last 5 sessions\n"
+    "/scan - the whole daily scan as a file\n"
     "/export - your saved data as a file, /deleteme - erase it\n"
     "/guide - the quick tour, /privacy - what is stored, /about - what this is\n\n"
     "Any stock in the daily scan (liquid US stocks) can be added.")

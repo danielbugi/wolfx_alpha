@@ -98,7 +98,13 @@ if ($doUpdate) {
     if ($rc -ne 0) { Log 'ABORT: the price update failed, so nothing is sent (the digest would describe old data).'; exit $rc }
 }
 
-if ($UpdateOnly) { Log 'Update-only run finished.'; exit 0 }
+if ($UpdateOnly) {
+    # Save the day's snapshot (what the bot reads and the scoreboard measures) even when nothing is posted, so history has no gaps.
+    $rc = Step 'daily snapshot' @('mechanism/alerts/send_daily_digest.py', '--snapshot-only')
+    if ($rc -ne 0) { Log "WARNING: the snapshot step exited with code $rc (the bot keeps showing the previous session)" }
+    Log 'Update-only run finished.'
+    exit 0
+}
 
 $digestArgs = @('mechanism/alerts/send_daily_digest.py')
 if (-not $NoImage) { $digestArgs += '--image' }

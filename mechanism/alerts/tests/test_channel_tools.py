@@ -231,7 +231,8 @@ def _imports(source):
     return names
 
 
-@pytest.mark.parametrize("sender", ["send_daily_digest.py", "channel_posts.py", "send_daily_alerts.py", "digest_format.py", "market_card.py"])
+@pytest.mark.parametrize("sender", ["send_daily_digest.py", "channel_posts.py", "send_daily_alerts.py", "digest_format.py", "market_card.py",
+                                    "channel_content.py", "channel_cards.py", "market_stats.py", "send_channel_posts.py", "backfill_snapshots.py", "channel_news.py"])
 def test_channel_senders_do_not_use_the_assistants_screens_or_data(sender):
     """Structural guard: what a channel receives is built from public daily data only. Nothing of the assistant (its screens, the user's
     lists, the access flow, the tracker, the bot process) may be IMPORTED by a module that posts to a channel, and none of them may query the

@@ -71,8 +71,9 @@ def _font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
 class _Canvas:
     """Thin wrapper: every coordinate is in output pixels; the wrapper scales by SS."""
 
-    def __init__(self):
-        self.img = Image.new("RGB", (W * SS, H * SS), SURFACE)
+    def __init__(self, height: int = H):
+        self.h = height
+        self.img = Image.new("RGB", (W * SS, height * SS), SURFACE)
         self.d = ImageDraw.Draw(self.img)
 
     def text(self, x, y, s, size, fill=INK, bold=False, anchor="ls"):
@@ -110,7 +111,7 @@ class _Canvas:
         self.d.polygon([(x * SS, y * SS) for x, y in pts], fill=UP if direction > 0 else DOWN)
 
     def png(self) -> bytes:
-        out = self.img.resize((W, H), Image.LANCZOS)
+        out = self.img.resize((W, self.h), Image.LANCZOS)
         buf = io.BytesIO()
         out.save(buf, format="PNG", optimize=True)
         return buf.getvalue()
@@ -175,9 +176,10 @@ def _breadth(c: _Canvas, y, up_n: int, down_n: int, universe_n: int):
         c.text(W // 2, by + bh + 32, f"{_fmt_int(flat_n)} unchanged", 22, MUTED, anchor="ms")
 
 
-def _sectors(c: _Canvas, y, sectors: List[SectorBar], unclassified_n: int):
-    c.text(MARGIN, y, "Average 1-day change by sector", 30, INK, bold=True)
-    c.text(MARGIN, y + 32, "equal-weighted across the stocks in the daily scan", 22, MUTED)
+def _sectors(c: _Canvas, y, sectors: List[SectorBar], unclassified_n: int,
+             title: str = "Average 1-day change by sector", subtitle: str = "equal-weighted across the stocks in the daily scan"):
+    c.text(MARGIN, y, title, 30, INK, bold=True)
+    c.text(MARGIN, y + 32, subtitle, 22, MUTED)
     if not sectors:
         c.text(MARGIN, y + 90, "Sector data unavailable today.", 24, MUTED)
         return

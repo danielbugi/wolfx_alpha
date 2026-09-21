@@ -92,6 +92,20 @@ def analyse_universe(df: pd.DataFrame, session_date):
     return rows, universe_n, breadth, skipped
 
 
+def attach_market_caps(rows) -> int:
+    """Put the latest known market value on each row (in memory only: it is a label for the message, not part of the snapshot).
+    Returns how many stocks got one; a stock without a market cap simply gets no size tag."""
+    caps = {r["symbol"]: float(r["market_cap"]) for r in db.execute_dict_query(
+        "SELECT DISTINCT ON (symbol) symbol, market_cap FROM daily_fundamentals WHERE market_cap IS NOT NULL AND market_cap > 0 "
+        "ORDER BY symbol, date DESC")}
+    n = 0
+    for r in rows:
+        if r["symbol"] in caps:
+            r["mcap"] = caps[r["symbol"]]
+            n += 1
+    return n
+
+
 def index_line(session_date):
     """['S&P 500 +0.4%', 'VIX (volatility index) 14.8'] from market_index_prices, only rows dated on the session date."""
     rows = db.execute_dict_query(
@@ -151,6 +165,7 @@ def main():
     df = load_universe_history(session)
     print(f"Loaded {len(df):,} rows in {time.time() - t0:.0f}s; analysing ...")
     rows, universe_n, breadth, skipped = analyse_universe(df, session)
+    attach_market_caps(rows)
     digest = dbld.build_digest(rows, top_n=args.top, min_dv=args.min_dv)
     print(f"Analysed in {time.time() - t0:.0f}s total | liquid universe {universe_n:,} | groups {digest['counts']}")
 

@@ -13,7 +13,8 @@ from alerts.digest_builder import LISTS, LONG_CATEGORIES
 from alerts.message_format import fmt_price
 from alerts.texts import DEFINITIONS, DISCLAIMER_SHORT
 
-INDENT = " "          # em space: survives Telegram's whitespace trimming, indents the detail line
+SMALL_CAP_USD = 2_000_000_000.0     # "small cap" tag: market value under $2B (a fact from daily_fundamentals; no tag when unknown)
+INDENT =" "          # em space: survives Telegram's whitespace trimming, indents the detail line
 
 GROUPS = {
     "breakout": ("BREAKOUT", "closed above their 20-day high"),
@@ -51,6 +52,8 @@ def _row(i: int, cat: str, lst: str, r: Dict, multi: Dict[str, List[str]]) -> st
         detail.append(f"{r['below_high_pct']:.1f}% below high")
     if cat == "breakout" and r["prev_cat"] == "near_breakout":
         detail.append("was near yesterday")
+    if r.get("mcap") is not None and r["mcap"] < SMALL_CAP_USD:
+        detail.append("small cap")
     return head + (f"\n{INDENT}" + " · ".join(detail) if detail else "")
 
 
@@ -76,6 +79,7 @@ def _legend() -> str:
         html.escape(DEFINITIONS["vol"], quote=False),
         "★ = the stock is in more than one list.",
         "NEW = it was not a near breakout yesterday. \"was near yesterday\" = it was a near breakout the session before.",
+        "small cap = market value under $2B (latest fundamentals; no tag when unknown).",
         "Tap a ticker to open its chart.",
         "In the bot: /levels TICKER shows an ATR-based risk framework for any stock in the scan (educational).",
     ])
