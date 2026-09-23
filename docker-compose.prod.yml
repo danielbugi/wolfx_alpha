@@ -1,0 +1,92 @@
+# docker-compose.prod.yml — production overlay. Used via /opt/donchian/scripts/deploy.sh and
+# rollback.sh on the VPS (Phase 4B.1/4B.2) — see docs/devops/CD_DESIGN.md.
+#
+# Would be run as:
+#   IMAGE_TAG=<sha> docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps <changed-service>
+# — never a blanket `up -d` for every service (see docs/devops/CICD_STRATEGY.md §5's reasoning).
+#
+# Prerequisites this file assumes but does NOT create: a real `.env` on the VPS (never committed,
+# not the docker/.env.example placeholder used for local validation), images already pushed to
+# ghcr.io under the tags referenced by ${IMAGE_TAG}, a real domain for the reverse proxy's automatic
+# HTTPS to attach to.
+
+services:
+  postgres:
+    restart: unless-stopped
+    # No published port here either — production Postgres is exactly as internal-only as the
+    # local validation stack's, see docker-compose.yml's own comment on this.
+
+  backend:
+    build: !reset null   # production deploys a pulled image, never builds on the VPS
+    image: ghcr.io/danielbugi/wolfx_alpha-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env   # the real production secrets file — lives only on the VPS, never in git
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      API_HOST: 0.0.0.0
+
+  frontend:
+    # Not deployed here under the recommended architecture (Vercel handles it — see
+    # docs/devops/TARGET_ARCHITECTURE.md §2, Option C). Kept only as the Option A fallback should
+    # Vercel ever be rejected; disabled by default via `profiles:` so `up -d` never starts it
+    # under this overlay by accident.
+    profiles: ["self-hosted-frontend-fallback"]
+    build: !reset null
+    image: ghcr.io/danielbugi/wolfx_alpha-frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  reverse-proxy:
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/Caddyfile.prod:/etc/caddy/Caddyfile:ro   # a real-domain, real-TLS Caddyfile — not written yet, see MIGRATION_PLAN.md Phase 5
+      - caddy_data:/data   # ACME certificate persistence — must survive container recreation
+    # Under the recommended architecture the frontend lives on Vercel, not this VPS (see
+    # TARGET_ARCHITECTURE.md §2, Option C) — the base file's `depends_on: frontend` would break
+    # `docker compose config` here since `frontend` is profile-gated off by default in this overlay
+    # (see that service below). Reset to just the one dependency that's actually always present.
+    depends_on: !override
+      backend:
+        condition: service_healthy
+
+  bot:
+    profiles: []   # unlike the base file, production DOES want the bot always on — no profile gate
+    build: !reset null
+    image: ghcr.io/danielbugi/wolfx_alpha-mechanism:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+
+  pipeline:
+    build: !reset null
+    image: ghcr.io/danielbugi/wolfx_alpha-mechanism:${IMAGE_TAG:-latest}
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+    # The one resource cap flagged as load-bearing in docs/devops/RESOURCE_REQUIREMENTS.md §2 —
+    # protects the always-on backend/bot from CPU/RAM contention during the nightly pipeline +
+    # ML retrain (steps 10-12) without needing a second VPS. Tune these against real numbers from
+    # a production run, not the estimate this file ships with.
+    mem_limit: 3g
+    cpus: "2.0"
+
+  channel-sender:
+    build: !reset null
+    image: ghcr.io/danielbugi/wolfx_alpha-mechanism:${IMAGE_TAG:-latest}
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+
+volumes:
+  caddy_data:

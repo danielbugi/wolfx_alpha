@@ -1,0 +1,443 @@
+name: CI
+
+# Verifies every PR and push to main is safe to build. Does NOT deploy anything, does NOT push
+# images to a registry, and needs zero secrets — see docs/devops/CI_IMPLEMENTATION.md for the full
+# design writeup, including why each job is scoped the way it is.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Least privilege for the whole workflow (item 7 of the Phase 3 brief) -- nothing here writes to
+# the repo, comments on PRs, or publishes anything, so read-only is enough everywhere.
+permissions:
+  contents: read
+
+# A new push to the same PR cancels the previous run's jobs instead of letting them finish --
+# saves runner minutes on force-pushes/rapid iteration; harmless for push-to-main since each
+# commit there gets its own group key.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------------------------
+  # Path-based change detection. Every other job is gated off this one's outputs so an unrelated
+  # change (e.g. frontend/** only) doesn't rebuild/retest backend or mechanism.
+  #
+  # Dependency reasoning (not blind directory filtering -- see docs/devops/CI_IMPLEMENTATION.md):
+  #   - backend/  imports mechanism.alerts.* and mechanism.shared.* by path (sys.path append --
+  #     see backend/services/telegram_control_service.py, bot_access_service.py,
+  #     momentum_board_service.py) AND transitively needs ml_training/ (bot_access_service's chain,
+  #     confirmed empirically during Phase 2). So backend-ci must also run when those change.
+  #   - mechanism/ml_enhancement imports ml_training/features/price_features.py for live inference
+  #     (CLAUDE.md's documented data-flow). So mechanism-ci must also run when ml_training/ changes.
+  #   - "infra" (Dockerfiles, compose files, dependency lockfiles, this workflow file itself)
+  #     changing anything about how the repo is built/tested means every job should re-verify,
+  #     per the Phase 3 brief's explicit instruction.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend }}
+      mechanism: ${{ steps.filter.outputs.mechanism }}
+      infra: ${{ steps.filter.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            infra:
+              - '**/Dockerfile'
+              - 'docker-compose.yml'
+              - 'docker-compose.prod.yml'
+              - '.dockerignore'
+              - '**/.dockerignore'
+              - 'backend/requirements.txt'
+              - 'mechanism/requirements.txt'
+              - 'ml_training/requirements.txt'
+              - 'frontend/package.json'
+              - 'frontend/package-lock.json'
+              - 'docker/.env.example'
+              - '.github/workflows/**'
+            frontend:
+              - 'frontend/**'
+            backend:
+              - 'backend/**'
+              - 'mechanism/shared/**'
+              - 'mechanism/alerts/**'
+              - 'ml_training/**'
+            mechanism:
+              - 'mechanism/**'
+              - 'ml_training/**'
+
+  # ---------------------------------------------------------------------------------------------
+  frontend-ci:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies (from lockfile)
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        # NEXT_DIST_DIR=.next-build matches this repo's own existing convention (CLAUDE.md §8) --
+        # verified locally (Phase 3 inspection) that using any OTHER dist-dir name causes Next.js
+        # to rewrite tsconfig.json's `include` array as a side effect, which would leave an
+        # unintended diff in a read-only CI checkout. Using the established name avoids that.
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+          NEXT_DIST_DIR: .next-build
+
+  # ---------------------------------------------------------------------------------------------
+  backend-ci:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: |
+            backend/requirements.txt
+            mechanism/requirements.txt
+
+      - name: Install dependencies
+        # Mirrors backend/Dockerfile's install list EXACTLY (backend/requirements.txt +
+        # mechanism/requirements.txt), not just backend's own file. This is deliberate: the Phase 2
+        # local-validation bug this project actually hit (two routers silently failing to import --
+        # "No module named 'asyncpg'" / "No module named 'ml_training'") was a missing-dependency
+        # bug, not a code bug, and only reproduces in a clean environment that installs exactly
+        # what the Dockerfile installs. If backend/Dockerfile's install list ever changes, this
+        # step needs updating to match -- see docs/devops/CI_IMPLEMENTATION.md.
+        run: pip install -r backend/requirements.txt -r mechanism/requirements.txt pytest
+
+      - name: Python syntax check (py_compile)
+        run: |
+          python -m py_compile $(git ls-files 'backend/*.py' 'backend/**/*.py')
+
+      - name: Import validation (routers/services -- no live DB required)
+        # Dynamically discovers every module under backend/routers/ and backend/services/ and
+        # imports each one directly (never `main`, which opens a real DB connection pool at
+        # import time by design -- confirmed empirically during Phase 3 inspection; validating
+        # main.py's own import chain happens in db-bootstrap-integration instead, which has a
+        # real Postgres service). This is exactly the check that would have caught the Phase 2
+        # router-import regression in a clean environment.
+        working-directory: backend
+        run: |
+          python -c "
+          import sys, pkgutil, importlib
+          failed = []
+          tested = []
+          for pkg_name in ('routers', 'services'):
+              pkg = importlib.import_module(pkg_name)
+              for _, mod_name, _ in pkgutil.iter_modules(pkg.__path__, pkg_name + '.'):
+                  try:
+                      importlib.import_module(mod_name)
+                      tested.append(mod_name)
+                  except Exception as e:
+                      failed.append(f'{mod_name}: {type(e).__name__}: {e}')
+          if failed:
+              print('IMPORT FAILURES:')
+              for f in failed:
+                  print(' -', f)
+              sys.exit(1)
+          print(f'All {len(tested)} router/service modules imported cleanly')
+          "
+
+      - name: pytest (backend/auth/tests -- documented as no-DB-needed, CLAUDE.md §8)
+        run: python -m pytest backend/auth/tests -q
+
+  # ---------------------------------------------------------------------------------------------
+  mechanism-ci:
+    needs: changes
+    if: needs.changes.outputs.mechanism == 'true' || needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: |
+            mechanism/requirements.txt
+            ml_training/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r mechanism/requirements.txt -r ml_training/requirements.txt pytest
+
+      - name: Python syntax check (py_compile)
+        # Excludes two files with pre-existing invalid UTF-8 byte sequences (a genuine, existing
+        # bug -- confirmed during Phase 3 inspection, not introduced here). Both are already
+        # documented in CLAUDE.md as legacy/retired and not part of the active pipeline:
+        #   - mechanism/quick_analyzer.py (CLAUDE.md §3.2: "one-off debug/fixer script... not part
+        #     of the pipeline")
+        #   - ml_training/deployment/ml_integration.py (CLAUDE.md: "Retired, do not run to build
+        #     data... reads the stale-basis tables")
+        # Not fixed here per the Phase 3 instruction to stop and explain before touching existing
+        # application code -- flagged in docs/devops/CI_IMPLEMENTATION.md instead. If either file
+        # is ever needed again, its encoding will need fixing first.
+        run: |
+          FILES=$(git ls-files 'mechanism/*.py' 'mechanism/**/*.py' 'ml_training/*.py' 'ml_training/**/*.py' \
+            | grep -v -e 'mechanism/quick_analyzer.py' -e 'ml_training/deployment/ml_integration.py')
+          python -m py_compile $FILES
+
+      - name: pytest
+        # DB-dependent tests (e.g. ml_training/tests/test_feature_parity_db.py, and the
+        # staleness-gate tests in mechanism/data_updaters/tests/test_earnings_calendar_updater.py)
+        # self-skip when Postgres is unreachable -- this job deliberately has no postgres service,
+        # matching the codebase's own existing skip-if-unreachable convention. Schema/DB-level
+        # correctness is covered separately by db-bootstrap-integration below.
+        run: python -m pytest mechanism/alerts/tests mechanism/data_updaters/tests ml_training/tests -q
+
+  # ---------------------------------------------------------------------------------------------
+  docker-validate:
+    needs: changes
+    if: >-
+      needs.changes.outputs.frontend == 'true' ||
+      needs.changes.outputs.backend == 'true' ||
+      needs.changes.outputs.mechanism == 'true' ||
+      needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate docker-compose.yml
+        run: docker compose --env-file docker/.env.example config --quiet
+
+      - name: Validate docker-compose.prod.yml overlay
+        run: docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file docker/.env.example config --quiet
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Each build uses its own GHA cache scope so the three images' caches don't evict each
+      # other. `push: false, load: true` -- proves the image builds and loads into the local
+      # daemon; nothing is pushed anywhere (Phase 3 explicitly excludes CD/registry pushes).
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: false
+          load: true
+          tags: donchian-screener-backend:ci
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build mechanism image
+        # This is the heavy one (matplotlib/xgboost/alpaca-py/aiogram -- ~455s uncached locally
+        # per the Phase 3 brief). The GHA cache above directly targets this: once the dependency
+        # layer is cached, only a real requirements.txt change invalidates it.
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: mechanism/Dockerfile
+          push: false
+          load: true
+          tags: donchian-screener-mechanism:ci
+          cache-from: type=gha,scope=mechanism
+          cache-to: type=gha,mode=max,scope=mechanism
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          push: false
+          load: true
+          tags: donchian-screener-frontend:ci
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+  # ---------------------------------------------------------------------------------------------
+  db-bootstrap-integration:
+    needs: changes
+    if: needs.changes.outputs.mechanism == 'true' || needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # A fresh, disposable Postgres for this job only -- torn down with the runner VM afterward.
+    # No production data, no production credentials; the password below is a CI-only throwaway,
+    # not a secret (it protects nothing and is never reused anywhere else).
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: donchian_ci_test
+          POSTGRES_USER: trading_user
+          POSTGRES_PASSWORD: ci_test_only_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U trading_user -d donchian_ci_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGPASSWORD: ci_test_only_password
+      PGHOST: localhost
+      PGUSER: trading_user
+      PGDATABASE: donchian_ci_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Apply all 16 bootstrap/migration SQL files, in the same order docker-compose.yml uses
+        # This is the exact regression guard for both bugs found during Phase 2 local validation
+        # (an invalid `GRANT ... ON ALL VIEWS IN SCHEMA` and two invalid `PRINT` statements in
+        # mechanism/create_trading_schema.sql, both fixed with explicit approval at the time --
+        # see docs/devops/*.md). `-v ON_ERROR_STOP=1` makes psql fail the step (and therefore this
+        # job) the moment any file errors, exactly like Postgres's own docker-entrypoint-initdb.d
+        # behavior that originally surfaced these bugs.
+        run: |
+          for f in \
+            mechanism/create_trading_schema.sql \
+            mechanism/add_multi_timeframe_tables.sql \
+            mechanism/add_market_data_tables.sql \
+            mechanism/add_ml_dataset_tables.sql \
+            mechanism/add_alerts_tables.sql \
+            mechanism/add_digest_tables.sql \
+            mechanism/add_tracker_tables.sql \
+            mechanism/add_assistant_tables.sql \
+            mechanism/add_access_flow_tables.sql \
+            mechanism/add_telegram_control_tables.sql \
+            mechanism/add_telegram_control_phase2.sql \
+            mechanism/add_dashboard_auth_tables.sql \
+            mechanism/add_earnings_calendar_table.sql \
+            mechanism/add_morning_dm_tables.sql \
+            mechanism/add_piotroski_score.sql \
+            mechanism/widen_ml_models_version.sql \
+            mechanism/add_ml_prediction_tracking_tables.sql \
+          ; do
+            echo "::group::Applying $f"
+            psql -v ON_ERROR_STOP=1 -f "$f"
+            echo "::endgroup::"
+          done
+
+      - name: Verify expected tables exist (40, matching Phase 4A.6's verified count -- 36 original + 4 captured drifted tables)
+        run: |
+          count=$(psql -tAc "SELECT count(*) FROM pg_tables WHERE schemaname='public'")
+          echo "Tables found: $count"
+          test "$count" -ge 40 || { echo "Expected at least 40 tables, found $count"; exit 1; }
+
+      - name: Verify expected views exist (3, matching Phase 2's verified count)
+        run: |
+          count=$(psql -tAc "SELECT count(*) FROM pg_views WHERE schemaname='public'")
+          echo "Views found: $count"
+          test "$count" -ge 3 || { echo "Expected at least 3 views, found $count"; exit 1; }
+
+      - name: Verify trading_user can read/write a table and read both key views
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "
+            INSERT INTO companies (symbol, company_name) VALUES ('CITEST01', 'CI Bootstrap Test');
+            SELECT symbol, company_name FROM companies WHERE symbol = 'CITEST01';
+            DELETE FROM companies WHERE symbol = 'CITEST01';
+            SELECT * FROM latest_stock_data LIMIT 1;
+            SELECT * FROM ml_training_data LIMIT 1;
+          "
+
+      - name: Verify the 4 captured-drift tables' essential structure (Phase 4A.6 regression guard)
+        # Protects mechanism/add_ml_prediction_tracking_tables.sql from silently regressing --
+        # existence alone isn't enough (that's already covered by the table-count check above),
+        # so this asserts the specific PK/FK/sequence/grant facts captured from production in
+        # PRODUCTION_SCHEMA_DRIFT.md, the same way db-bootstrap-integration already guards the two
+        # SQL bugs found in create_trading_schema.sql during Phase 2.
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "
+            DO \$\$
+            BEGIN
+              -- Primary keys
+              IF (SELECT conname FROM pg_constraint WHERE conname = 'inactive_symbols_pkey') IS NULL THEN
+                RAISE EXCEPTION 'inactive_symbols_pkey missing';
+              END IF;
+              IF (SELECT conname FROM pg_constraint WHERE conname = 'ml_predictions_pkey') IS NULL THEN
+                RAISE EXCEPTION 'ml_predictions_pkey missing';
+              END IF;
+              IF (SELECT conname FROM pg_constraint WHERE conname = 'ml_prediction_outcomes_pkey') IS NULL THEN
+                RAISE EXCEPTION 'ml_prediction_outcomes_pkey missing';
+              END IF;
+              IF (SELECT conname FROM pg_constraint WHERE conname = 'ml_performance_metrics_pkey') IS NULL THEN
+                RAISE EXCEPTION 'ml_performance_metrics_pkey missing';
+              END IF;
+              -- The one FK relationship among the captured tables
+              IF (SELECT conname FROM pg_constraint WHERE conname = 'ml_prediction_outcomes_prediction_id_fkey' AND contype = 'f') IS NULL THEN
+                RAISE EXCEPTION 'ml_prediction_outcomes -> ml_predictions foreign key missing';
+              END IF;
+              -- The unique constraint that makes ml_predictions upsert-safe
+              IF (SELECT conname FROM pg_constraint WHERE conname = 'ml_predictions_symbol_prediction_date_key') IS NULL THEN
+                RAISE EXCEPTION 'ml_predictions (symbol, prediction_date) unique constraint missing';
+              END IF;
+              -- Sequences exist and are owned by their table's id column
+              IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relkind = 'S' AND relname = 'ml_predictions_id_seq') THEN
+                RAISE EXCEPTION 'ml_predictions_id_seq missing';
+              END IF;
+              IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relkind = 'S' AND relname = 'ml_prediction_outcomes_id_seq') THEN
+                RAISE EXCEPTION 'ml_prediction_outcomes_id_seq missing';
+              END IF;
+              IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relkind = 'S' AND relname = 'ml_performance_metrics_id_seq') THEN
+                RAISE EXCEPTION 'ml_performance_metrics_id_seq missing';
+              END IF;
+              -- trading_user must actually be able to use these tables, not just own them
+              IF NOT has_table_privilege('trading_user', 'inactive_symbols', 'INSERT') THEN
+                RAISE EXCEPTION 'trading_user lacks INSERT on inactive_symbols';
+              END IF;
+              IF NOT has_table_privilege('trading_user', 'ml_predictions', 'SELECT') THEN
+                RAISE EXCEPTION 'trading_user lacks SELECT on ml_predictions';
+              END IF;
+            END
+            \$\$;
+          "
+          echo "All 4 captured-drift tables' essential structure verified."
+
+      - name: Verify a real INSERT/SELECT round trip through the FK relationship
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "
+            INSERT INTO ml_predictions (symbol, prediction_date, breakout_type, ml_probability)
+              VALUES ('CITEST02', CURRENT_DATE, 'bullish_breakout', 0.5)
+              RETURNING id \gset pred_
+            INSERT INTO ml_prediction_outcomes (prediction_id, symbol, prediction_date, evaluation_date)
+              VALUES (:pred_id, 'CITEST02', CURRENT_DATE, CURRENT_DATE);
+            SELECT p.symbol, o.evaluation_date FROM ml_predictions p
+              JOIN ml_prediction_outcomes o ON o.prediction_id = p.id
+              WHERE p.symbol = 'CITEST02';
+            DELETE FROM ml_prediction_outcomes WHERE symbol = 'CITEST02';
+            DELETE FROM ml_predictions WHERE symbol = 'CITEST02';
+          "

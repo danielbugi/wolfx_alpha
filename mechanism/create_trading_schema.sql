@@ -392,7 +392,6 @@ WHERE b.created_at >= NOW() - INTERVAL '2 years';
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO trading_user;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO trading_user;
 GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO trading_user;
-GRANT ALL PRIVILEGES ON ALL VIEWS IN SCHEMA public TO trading_user;
 
 -- Set default privileges for future objects
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO trading_user;
@@ -432,6 +431,3 @@ AND proname LIKE '%update%' OR proname LIKE '%fresh%' OR proname LIKE '%fundamen
 -- Test functions
 SELECT get_last_update_date('AAPL'); -- Should return NULL initially
 SELECT check_data_freshness('AAPL'); -- Should return NULL initially
-
-PRINT 'PostgreSQL schema created successfully!';
-PRINT 'Ready for data migration from SQLite.';

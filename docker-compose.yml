@@ -1,0 +1,183 @@
+# docker-compose.yml — base stack for local development / validation.
+# See docs/devops/RESOURCE_REQUIREMENTS.md §5 and docs/devops/CICD_STRATEGY.md for the design
+# reasoning. Run with:
+#   docker compose --env-file docker/.env.example build
+#   docker compose --env-file docker/.env.example up -d postgres backend frontend reverse-proxy
+# `bot`, `pipeline`, `channel-sender` are NOT started by a bare `up` (Compose `profiles:` —
+# see each service below) since they're either long-running-but-external-facing (bot, talks to
+# real Telegram) or one-shot batch jobs meant to be invoked explicitly, not left running.
+#
+# docker-compose.prod.yml is a separate overlay (pinned image tags, resource limits, a real
+# secrets file) — design-only per this session's scope, not used by the commands above.
+
+name: donchian-screener
+
+networks:
+  app_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-donchian_docker_dev}
+      POSTGRES_USER: ${DB_USER:-trading_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-docker_local_dev_only_change_me}
+    # Deliberately NOT published to the host — see docs/devops/PRODUCTION_READINESS_CHECKLIST.md's
+    # "Firewall" section. Every other service reaches it as `postgres:5432` on app_net.
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Schema bootstrap: mounts the repo's own SQL files (no duplication) into Postgres's
+      # official run-once-on-first-init directory, numbered to control apply order (the
+      # `add_*.sql` files are additive per CLAUDE.md, but a couple ALTER tables the base
+      # schema creates, so those run last).
+      - ./mechanism/create_trading_schema.sql:/docker-entrypoint-initdb.d/01_create_trading_schema.sql:ro
+      - ./mechanism/add_multi_timeframe_tables.sql:/docker-entrypoint-initdb.d/02_add_multi_timeframe_tables.sql:ro
+      - ./mechanism/add_market_data_tables.sql:/docker-entrypoint-initdb.d/03_add_market_data_tables.sql:ro
+      - ./mechanism/add_ml_dataset_tables.sql:/docker-entrypoint-initdb.d/04_add_ml_dataset_tables.sql:ro
+      - ./mechanism/add_alerts_tables.sql:/docker-entrypoint-initdb.d/05_add_alerts_tables.sql:ro
+      - ./mechanism/add_digest_tables.sql:/docker-entrypoint-initdb.d/06_add_digest_tables.sql:ro
+      - ./mechanism/add_tracker_tables.sql:/docker-entrypoint-initdb.d/07_add_tracker_tables.sql:ro
+      - ./mechanism/add_assistant_tables.sql:/docker-entrypoint-initdb.d/08_add_assistant_tables.sql:ro
+      - ./mechanism/add_access_flow_tables.sql:/docker-entrypoint-initdb.d/09_add_access_flow_tables.sql:ro
+      - ./mechanism/add_telegram_control_tables.sql:/docker-entrypoint-initdb.d/10_add_telegram_control_tables.sql:ro
+      - ./mechanism/add_telegram_control_phase2.sql:/docker-entrypoint-initdb.d/11_add_telegram_control_phase2.sql:ro
+      - ./mechanism/add_dashboard_auth_tables.sql:/docker-entrypoint-initdb.d/12_add_dashboard_auth_tables.sql:ro
+      - ./mechanism/add_earnings_calendar_table.sql:/docker-entrypoint-initdb.d/13_add_earnings_calendar_table.sql:ro
+      - ./mechanism/add_morning_dm_tables.sql:/docker-entrypoint-initdb.d/14_add_morning_dm_tables.sql:ro
+      - ./mechanism/add_piotroski_score.sql:/docker-entrypoint-initdb.d/15_add_piotroski_score.sql:ro
+      - ./mechanism/widen_ml_models_version.sql:/docker-entrypoint-initdb.d/16_widen_ml_models_version.sql:ro
+      - ./mechanism/add_ml_prediction_tracking_tables.sql:/docker-entrypoint-initdb.d/17_add_ml_prediction_tracking_tables.sql:ro
+    networks: [app_net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-trading_user} -d ${DB_NAME:-donchian_docker_dev}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - docker/.env.example
+    environment:
+      # Overrides docker/.env.example's own copies of these — kept in both places so the file
+      # is self-documenting, but Compose's `environment:` always wins over `env_file:`, and this
+      # is the one place that actually has to be correct for the container to reach Postgres.
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-donchian_docker_dev}
+      DB_USER: ${DB_USER:-trading_user}
+      DB_PASSWORD: ${DB_PASSWORD:-docker_local_dev_only_change_me}
+      API_HOST: 0.0.0.0
+    volumes:
+      - ./breakout_results:/app/breakout_results
+      - ./frontend_data:/app/frontend_data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [app_net]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+    restart: unless-stopped
+    networks: [app_net]
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  reverse-proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "8080:8080"   # the ONLY published port in this stack — see PRODUCTION_READINESS_CHECKLIST.md
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+    networks: [app_net]
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+
+  bot:
+    build:
+      context: .
+      dockerfile: mechanism/Dockerfile
+    profiles: ["bot"]   # not started by a bare `up` — talks to the real Telegram Bot API
+    restart: unless-stopped
+    command: ["python", "mechanism/alerts/run_bot.py"]
+    env_file:
+      - docker/.env.example
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-donchian_docker_dev}
+      DB_USER: ${DB_USER:-trading_user}
+      DB_PASSWORD: ${DB_PASSWORD:-docker_local_dev_only_change_me}
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [app_net]
+
+  pipeline:
+    build:
+      context: .
+      dockerfile: mechanism/Dockerfile
+    profiles: ["tools"]   # one-shot: `docker compose run --rm pipeline`, never `up`
+    command: ["./automation_pipeline.sh"]
+    env_file:
+      - docker/.env.example
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-donchian_docker_dev}
+      DB_USER: ${DB_USER:-trading_user}
+      DB_PASSWORD: ${DB_PASSWORD:-docker_local_dev_only_change_me}
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./breakout_results:/app/breakout_results
+      - ./frontend_data:/app/frontend_data
+      - ./reports:/app/reports
+      - ./ml_training/models:/app/ml_training/models
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [app_net]
+
+  channel-sender:
+    build:
+      context: .
+      dockerfile: mechanism/Dockerfile
+    profiles: ["tools"]   # one-shot: `docker compose run --rm channel-sender mechanism/alerts/send_daily_digest.py ...`
+    entrypoint: ["python"]
+    env_file:
+      - docker/.env.example
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-donchian_docker_dev}
+      DB_USER: ${DB_USER:-trading_user}
+      DB_PASSWORD: ${DB_PASSWORD:-docker_local_dev_only_change_me}
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./reports:/app/reports
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [app_net]

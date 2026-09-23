@@ -1,0 +1,163 @@
+name: CD (manual, production)
+
+# Manual-only production deployment. NEVER triggers automatically on push -- per
+# docs/devops/CD_DESIGN.md: "I do NOT want every push to main automatically changing production."
+# Requires: (1) a human clicking "Run workflow", AND (2) that job then needs a second, independent
+# approval via the GitHub Environment protection rule on `production` before it's allowed to run.
+#
+# NOT ACTIVATED YET -- this file exists in the repo but has not been pushed/run. See
+# docs/devops/CD_DESIGN.md for the full design writeup this implements, and the Phase 4B.1/4B.2
+# report for exactly what manual GitHub configuration is required before this can be used for real.
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Which service to build/deploy"
+        required: true
+        type: choice
+        options:
+          - backend
+          - mechanism
+      confirm_ci_passed:
+        description: 'Type "yes" to confirm the target commit has a passing CI run on GitHub'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  # Requirement 2 from the Phase 4B instructions: "CI must pass before production deployment is
+  # possible." GitHub Actions has no built-in "block workflow_dispatch unless another workflow
+  # passed on this SHA" primitive, so this is enforced two ways: (a) the required manual
+  # confirm_ci_passed input above, checked here, and (b) re-running the same test suite CI already
+  # runs, right before build+push, so a bad build can't slip through even if someone mistypes "yes".
+  verify-ci-precondition:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Confirm CI passed (manual attestation)
+        run: |
+          if [ "${{ github.event.inputs.confirm_ci_passed }}" != "yes" ]; then
+            echo "::error::You must confirm CI passed on this commit before deploying (type 'yes')."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Re-run the relevant test suite as a hard gate (backend)
+        # Deliberately duplicates a slice of ci.yml rather than trusting the manual confirmation
+        # alone -- this is what makes requirement 2 ("CI must pass before production deployment is
+        # possible") actually enforced by the deploy workflow itself, not just asked nicely.
+        if: github.event.inputs.service == 'backend'
+        run: |
+          pip install -r backend/requirements.txt -r mechanism/requirements.txt pytest
+          python -m pytest backend/auth/tests -q
+
+      - name: Re-run the relevant test suite as a hard gate (mechanism)
+        if: github.event.inputs.service == 'mechanism'
+        run: |
+          pip install -r mechanism/requirements.txt -r ml_training/requirements.txt pytest
+          python -m pytest mechanism/alerts/tests mechanism/data_updaters/tests ml_training/tests -q
+
+  build-and-push:
+    needs: verify-ci-precondition
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write   # the one job in this whole repo that needs this -- never granted to ci.yml
+    outputs:
+      image_tag: ${{ steps.sha.outputs.short_sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: sha
+        run: echo "short_sha=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}   # automatic, repo-scoped -- no manual secret needed for the PUSH side
+
+      - name: Build and push backend
+        if: github.event.inputs.service == 'backend'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/danielbugi/wolfx_alpha-backend:${{ steps.sha.outputs.short_sha }}
+            ghcr.io/danielbugi/wolfx_alpha-backend:latest
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build and push mechanism
+        if: github.event.inputs.service == 'mechanism'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: mechanism/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/danielbugi/wolfx_alpha-mechanism:${{ steps.sha.outputs.short_sha }}
+            ghcr.io/danielbugi/wolfx_alpha-mechanism:latest
+          cache-from: type=gha,scope=mechanism
+          cache-to: type=gha,mode=max,scope=mechanism
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    # The actual production gate: a GitHub Environment can require one or more specific reviewers
+    # to approve THIS job before it's allowed to start, even though the workflow itself was already
+    # triggered. See the Phase 4B.1/4B.2 report for the exact manual setup this requires.
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - name: Skip live deploy for mechanism (bot/pipeline/channel-sender stay disabled)
+        # "mechanism" is an IMAGE name, not a compose SERVICE name -- the real services built from
+        # it are bot/pipeline/channel-sender. Building and pushing that image (done in the previous
+        # job) is exercised and proven here; actually starting any of those services is a separate,
+        # explicit decision for later (bot must stay off during this validation phase, and
+        # pipeline/channel-sender are one-shot `docker compose run` invocations, not `up -d`
+        # targets, so neither fits this deploy step's health-gated up-and-verify model anyway).
+        if: github.event.inputs.service == 'mechanism'
+        run: |
+          echo "::notice::mechanism image built and pushed to GHCR (see the build-and-push job)."
+          echo "::notice::Live deployment to bot/pipeline/channel-sender is intentionally not performed by this workflow yet -- see docs/devops/CD_DESIGN.md and the Phase 4B.2 safety constraints."
+
+      - name: Deploy via SSH
+        # Application secrets (DB_PASSWORD, JWT_SECRET, TELEGRAM_BOT_TOKEN, etc.) are never
+        # referenced here -- they live only in /opt/donchian/env/.env on the VPS itself (see
+        # docs/devops/SECRETS_STRATEGY.md). This step only needs to know HOW to reach the VPS.
+        if: github.event.inputs.service == 'backend'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Pinned to the VPS's real, independently-verified ed25519 host key (captured directly
+          # from the server, not trust-on-first-connect) -- a MITM on this connection would now be
+          # caught, not silently accepted, unlike the `StrictHostKeyChecking=accept-new` this
+          # replaced.
+          echo "116.203.220.219 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFtpQUInzevzQMbBXsTCCT1KwbKdUseYBNpHYyXSo/2/" > ~/.ssh/known_hosts
+          ssh -o StrictHostKeyChecking=yes -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+            "/opt/donchian/scripts/deploy.sh ${{ github.event.inputs.service }} ${{ needs.build-and-push.outputs.image_tag }}"
+          # deploy.sh itself exits non-zero on a failed health check (see the script) -- a failure
+          # here fails this step, fails this job, and fails the workflow run. Nothing here treats a
+          # failure as success (requirement 14).

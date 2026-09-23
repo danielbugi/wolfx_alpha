@@ -1,0 +1,56 @@
+# Root .dockerignore — applies to any build context rooted at the repo root
+# (backend/Dockerfile and mechanism/Dockerfile both build from `.` so they can
+# COPY sibling directories, e.g. backend/ needs mechanism/ alongside it for its
+# sys.path imports — see backend/services/*.py and backend/utils.py).
+
+# Never bake real secrets into an image layer
+.env
+.env.*
+!docker/.env.example
+backend/.env*
+
+# Version control / editor / IDE
+.git
+.gitignore
+.idea
+.claude
+.agentignore
+
+# Python virtualenvs — each image installs its own deps fresh, never reuses a host venv
+.venv
+backend/.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+
+# Node — frontend/Dockerfile has its own .dockerignore for its own context;
+# this keeps node_modules out of the backend/mechanism build contexts too,
+# since neither needs it and it's the single largest directory in the repo
+node_modules
+frontend/node_modules
+frontend/.next
+frontend/.next-build
+
+# Generated/output data — mounted as volumes at runtime, not baked into the image
+logs
+breakout_results
+frontend_data
+reports
+data
+ml_training/models
+mechanism/logs
+mechanism/data
+mechanism/frontend_data
+mechanism/breakout_results
+mechanism/reports
+
+# Old, explicitly-flagged-legacy scratch directory (CLAUDE.md §3.2) — ~21,000
+# files including a nested venv/node_modules; never wanted in a build context
+backups
+
+# Docs — not needed at runtime
+*.md
+docs
+SKILLS
+agent_reports
+agent_tools
