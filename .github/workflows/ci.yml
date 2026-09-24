@@ -246,7 +246,23 @@ jobs:
         run: docker compose --env-file docker/.env.example config --quiet
 
       - name: Validate docker-compose.prod.yml overlay
-        run: docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file docker/.env.example config --quiet
+        # docker-compose.prod.yml's backend/bot/pipeline/channel-sender services each declare
+        # `env_file: - .env` -- the REAL production secrets file, which correctly never exists in
+        # this checkout (see that file's own header comment). `docker compose config` checks that a
+        # declared env_file path exists on disk before it will even parse the rest of the file
+        # (unlike a bind-mount source, which isn't checked until `up`), so validating the prod
+        # overlay at all needs *some* file at that path. `--env-file docker/.env.example` already
+        # supplies every substitution variable (${IMAGE_TAG} etc.) the compose files need; this only
+        # satisfies the separate env_file-must-exist check, and an empty file is sufficient for that
+        # -- `config` parses the file, it doesn't require it to be non-empty or valid. Never populated
+        # with real values. This mirrors the identical Compose-version quirk already hit and fixed
+        # the same way on the real VPS (`touch /opt/donchian/compose/.env`, Phase 4B.2) -- not a new
+        # workaround, the same one already proven necessary and sufficient here. Production's real
+        # `.env` on the VPS is untouched by this; its own hard-failure-if-missing behavior there is
+        # unchanged.
+        run: |
+          touch .env
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file docker/.env.example config --quiet
 
       - uses: docker/setup-buildx-action@v3
 

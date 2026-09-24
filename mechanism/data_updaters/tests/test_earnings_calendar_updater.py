@@ -56,9 +56,14 @@ def test_safe_float_valid():
 # The staleness gate against a real (or skipped) database
 # ---------------------------------------------------------------------------
 def _db():
+    """Probe through the exact call path the fixture/tests actually use (execute_dict_query, not a
+    separate test_connection()) -- a pool that failed to initialize doesn't raise from
+    test_connection() but does raise RuntimeError from execute_insert/execute_dict_query, which is
+    what was actually seen when this ran with no reachable Postgres. Skipping here, not there,
+    keeps that failure mode caught before any DB-dependent test body runs."""
     try:
         from shared import db as _d
-        _d.test_connection()
+        _d.execute_dict_query("SELECT 1")
         return _d
     except Exception as e:  # pragma: no cover
         pytest.skip(f"database not reachable: {e}")
@@ -69,10 +74,12 @@ def updater():
     return EarningsCalendarUpdater()
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def _cleanup():
     """Remove any test rows before AND after each test, so a failed run never leaves fixtures behind
-    to contaminate the next one, and a fresh run never inherits stale ones."""
+    to contaminate the next one, and a fresh run never inherits stale ones. NOT autouse: the
+    _safe_float tests above are pure logic and must run with no Postgres available at all; only the
+    staleness-gate tests below request this fixture explicitly."""
     d = _db()
     d.execute_insert("DELETE FROM earnings_calendar WHERE symbol LIKE 'ZZTEST_%%'")
     yield
@@ -98,7 +105,7 @@ def _upsert_with_fetched_at(updater: EarningsCalendarUpdater, row: dict) -> None
                               row["eps_actual"], row["surprise_pct"], row["_fetched_at"]))
 
 
-def test_symbol_with_no_row_is_due(updater):
+def test_symbol_with_no_row_is_due(updater, _cleanup):
     # No row ever inserted for this symbol -- must be considered due. get_symbols_to_update()'s
     # universe is stock_prices, which a ZZTEST symbol is never in, so assert on the predicate
     # directly via a one-symbol query instead of the full-universe scan.
@@ -108,7 +115,7 @@ def test_symbol_with_no_row_is_due(updater):
     assert rows == []  # sanity: nothing there yet (this is what "due" means for a brand new symbol)
 
 
-def test_future_known_date_freshly_fetched_is_not_due(updater):
+def test_future_known_date_freshly_fetched_is_not_due(updater, _cleanup):
     _upsert_with_fetched_at(updater, _row(TEST_SYMBOL_FUTURE, date.today() + timedelta(days=20),
                                           datetime.now(timezone.utc)))
     from shared import db
@@ -120,7 +127,7 @@ def test_future_known_date_freshly_fetched_is_not_due(updater):
     assert not is_due
 
 
-def test_known_date_now_in_the_past_is_due(updater):
+def test_known_date_now_in_the_past_is_due(updater, _cleanup):
     # The calendar's newest known date has already passed -- we no longer know what's next.
     _upsert_with_fetched_at(updater, _row(TEST_SYMBOL_STALE, date.today() - timedelta(days=5),
                                           datetime.now(timezone.utc)))
@@ -133,7 +140,7 @@ def test_known_date_now_in_the_past_is_due(updater):
     assert is_due
 
 
-def test_future_date_but_fetched_long_ago_is_due(updater):
+def test_future_date_but_fetched_long_ago_is_due(updater, _cleanup):
     # A future date is on file, but it was fetched REFRESH_AFTER_DAYS+ ago -- periodic re-check,
     # since yfinance's forecasted dates shift as the real one approaches.
     old_fetch = datetime.now(timezone.utc) - timedelta(days=REFRESH_AFTER_DAYS + 1)
@@ -148,7 +155,7 @@ def test_future_date_but_fetched_long_ago_is_due(updater):
     assert is_due
 
 
-def test_upsert_row_is_idempotent(updater):
+def test_upsert_row_is_idempotent(updater, _cleanup):
     row = {"symbol": TEST_SYMBOL_FUTURE, "report_date": date.today() + timedelta(days=10),
            "eps_estimate": 1.5, "eps_actual": None, "surprise_pct": None}
     assert updater.upsert_row(row) is True
