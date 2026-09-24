@@ -397,8 +397,9 @@ recorded here so the exact values are ready when PRE-MIGRATION/CUTOVER actually 
 At cutover, this means:
 - Frontend production env var: `NEXT_PUBLIC_API_BASE_URL=https://api.first-light.finance`
 - Backend production `.env`: `ALLOWED_ORIGINS=https://dashboard.first-light.finance`
-- Caddy's public-domain config (`docker/Caddyfile.prod`, not yet written — see `docker-compose.prod.yml`'s
-  comment) will request a cert for `api.first-light.finance`
+- Caddy (`docker/Caddyfile.prod`) takes its site address from `API_SITE_ADDRESS` in the VPS `.env`:
+  `:80` (plain HTTP, no ACME) during staging; set `API_SITE_ADDRESS=api.first-light.finance` at DNS
+  cutover and Caddy obtains/renews the certificate itself
 - DNS: an A/AAAA record for `api.first-light.finance` → the VPS's public IP; `dashboard.first-light.finance`
   is configured on Vercel's side (CNAME per Vercel's own instructions), not on the VPS
 

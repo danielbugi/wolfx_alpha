@@ -1,0 +1,13 @@
+[Unit]
+Description=First Light: restrict internet access to Docker-published ports (80/443 only)
+After=docker.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/donchian-docker-firewall.sh
+
+[Install]
+WantedBy=multi-user.target docker.service

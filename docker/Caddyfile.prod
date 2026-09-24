@@ -1,0 +1,22 @@
+# Production reverse proxy for the API host only (the dashboard is served by Vercel, not this VPS).
+#
+# Site address comes from the API_SITE_ADDRESS environment variable (set by docker-compose.prod.yml):
+#   ":80"                    -> plain HTTP on port 80, no ACME/TLS. Used on the VPS before DNS exists
+#                               (staging validation), so Caddy never attempts certificate issuance
+#                               for a hostname that doesn't resolve here yet.
+#   "api.first-light.finance" -> set at DNS cutover (PRODUCTION_MIGRATION_RUNBOOK.md, "Domain"):
+#                               Caddy obtains/renews a Let's Encrypt certificate automatically,
+#                               serves HTTPS on :443 and redirects :80 to it.
+#
+# FastAPI stays on the internal Docker network only (backend:8000 is never published).
+{$API_SITE_ADDRESS} {
+	encode gzip
+
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+
+	reverse_proxy backend:8000
+}

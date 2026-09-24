@@ -267,9 +267,49 @@ jobs:
         # workaround, the same one already proven necessary and sufficient here. Production's real
         # `.env` on the VPS is untouched by this; its own hard-failure-if-missing behavior there is
         # unchanged.
+        # IMAGE_TAG: the prod overlay deliberately refuses to render without one (no silent
+        # fallback to :latest); this dummy value is only for config rendering, nothing is pulled.
+        env:
+          IMAGE_TAG: ci-config-validation
         run: |
           touch .env
           docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file docker/.env.example config --quiet
+
+      - name: Assert production overlay safety properties
+        # Regression guard for properties that are easy to lose silently in an overlay merge:
+        # only 80/443 published, Postgres never auto-bootstraps a production volume, no production
+        # service reads the committed docker/.env.example placeholders, the bot is not started by a
+        # blanket `up`, and every image is pinned to the supplied immutable tag.
+        env:
+          IMAGE_TAG: ci-config-validation
+        run: |
+          touch .env
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file docker/.env.example config --format json > /tmp/prod.json
+          python3 - <<'PY'
+          import json, sys
+          cfg = json.load(open("/tmp/prod.json"))
+          svcs = cfg["services"]
+          errors = []
+          published = sorted({str(p.get("published")) for s in svcs.values() for p in (s.get("ports") or [])})
+          if published != ["443", "80"]:
+              errors.append(f"published ports must be exactly 80/443, got {published}")
+          for v in svcs["postgres"].get("volumes", []):
+              if "docker-entrypoint-initdb.d" in str(v.get("target", "")):
+                  errors.append("production postgres must not mount schema bootstrap files")
+          for name, s in svcs.items():
+              for ef in (s.get("env_file") or []):
+                  path = ef.get("path") if isinstance(ef, dict) else ef
+                  if path and ".env.example" in path:
+                      errors.append(f"{name} reads committed placeholder env file {path}")
+              img = s.get("image", "")
+              if img.startswith("ghcr.io/") and not img.endswith(":ci-config-validation"):
+                  errors.append(f"{name} image not pinned to IMAGE_TAG: {img}")
+          if "bot" in svcs:
+              errors.append("bot must be profile-gated (not part of a default `up`)")
+          if errors:
+              print("\n".join(errors)); sys.exit(1)
+          print("production overlay safety properties OK:", published, sorted(svcs))
+          PY
 
       - uses: docker/setup-buildx-action@v3
 
@@ -457,16 +497,39 @@ jobs:
           echo "All 4 captured-drift tables' essential structure verified."
 
       - name: Verify a real INSERT/SELECT round trip through the FK relationship
+        # Pure SQL on purpose: `psql -c` cannot mix SQL with psql meta-commands, so the earlier
+        # `RETURNING id \gset` + `:pred_id` version was a syntax error that never ran (masked by
+        # this job failing earlier on missing migration files). The CTE carries the new id into the
+        # child insert; the DO blocks assert exactly one joined row and that the FK rejects an orphan.
         run: |
           psql -v ON_ERROR_STOP=1 -c "
-            INSERT INTO ml_predictions (symbol, prediction_date, breakout_type, ml_probability)
-              VALUES ('CITEST02', CURRENT_DATE, 'bullish_breakout', 0.5)
-              RETURNING id \gset pred_
+            WITH p AS (
+              INSERT INTO ml_predictions (symbol, prediction_date, breakout_type, ml_probability)
+                VALUES ('CITEST02', CURRENT_DATE, 'bullish_breakout', 0.5)
+                RETURNING id
+            )
             INSERT INTO ml_prediction_outcomes (prediction_id, symbol, prediction_date, evaluation_date)
-              VALUES (:pred_id, 'CITEST02', CURRENT_DATE, CURRENT_DATE);
-            SELECT p.symbol, o.evaluation_date FROM ml_predictions p
-              JOIN ml_prediction_outcomes o ON o.prediction_id = p.id
-              WHERE p.symbol = 'CITEST02';
+              SELECT id, 'CITEST02', CURRENT_DATE, CURRENT_DATE FROM p;
+            DO \$\$
+            DECLARE n integer;
+            BEGIN
+              SELECT count(*) INTO n FROM ml_predictions p
+                JOIN ml_prediction_outcomes o ON o.prediction_id = p.id
+                WHERE p.symbol = 'CITEST02';
+              IF n <> 1 THEN
+                RAISE EXCEPTION 'expected exactly 1 joined prediction/outcome row, found %', n;
+              END IF;
+            END
+            \$\$;
+            DO \$\$
+            BEGIN
+              INSERT INTO ml_prediction_outcomes (prediction_id, symbol, prediction_date, evaluation_date)
+                VALUES (-1, 'CITEST02', CURRENT_DATE, CURRENT_DATE);
+              RAISE EXCEPTION 'FK did not reject an outcome pointing at a nonexistent prediction';
+            EXCEPTION WHEN foreign_key_violation THEN
+              NULL;
+            END
+            \$\$;
             DELETE FROM ml_prediction_outcomes WHERE symbol = 'CITEST02';
             DELETE FROM ml_predictions WHERE symbol = 'CITEST02';
           "

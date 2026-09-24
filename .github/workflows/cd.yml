@@ -5,9 +5,9 @@ name: CD (manual, production)
 # Requires: (1) a human clicking "Run workflow", AND (2) that job then needs a second, independent
 # approval via the GitHub Environment protection rule on `production` before it's allowed to run.
 #
-# NOT ACTIVATED YET -- this file exists in the repo but has not been pushed/run. See
-# docs/devops/CD_DESIGN.md for the full design writeup this implements, and the Phase 4B.1/4B.2
-# report for exactly what manual GitHub configuration is required before this can be used for real.
+# Deploys to the Hetzner VPS in STAGING mode until cutover: backend + Postgres + Caddy only, bot /
+# pipeline / channel-sender never started by this workflow, and PROD_SENDING_ENABLED stays 0 in the
+# VPS's own .env. See docs/devops/CD_DESIGN.md and deploy/vps/README.md.
 
 on:
   workflow_dispatch:
@@ -79,7 +79,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - id: sha
-        run: echo "short_sha=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+        run: echo "short_sha=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"   # exactly 12 hex, what the VPS forced command accepts
 
       - uses: docker/setup-buildx-action@v3
 
@@ -138,10 +138,18 @@ jobs:
           echo "::notice::mechanism image built and pushed to GHCR (see the build-and-push job)."
           echo "::notice::Live deployment to bot/pipeline/channel-sender is intentionally not performed by this workflow yet -- see docs/devops/CD_DESIGN.md and the Phase 4B.2 safety constraints."
 
+      - uses: actions/checkout@v4
+        if: github.event.inputs.service == 'backend'
+
       - name: Deploy via SSH
         # Application secrets (DB_PASSWORD, JWT_SECRET, TELEGRAM_BOT_TOKEN, etc.) are never
         # referenced here -- they live only in /opt/donchian/env/.env on the VPS itself (see
         # docs/devops/SECRETS_STRATEGY.md). This step only needs to know HOW to reach the VPS.
+        #
+        # The deploy key is pinned on the VPS to a forced command (deploy/vps/ci-entry.sh): the only
+        # thing it accepts is `deploy backend <12-hex-sha>` plus this commit's release bundle
+        # (Compose files + production Caddyfile) on stdin, so the Compose config deployed always
+        # matches the image's commit and a rollback restores both together.
         if: github.event.inputs.service == 'backend'
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
@@ -156,8 +164,9 @@ jobs:
           # caught, not silently accepted, unlike the `StrictHostKeyChecking=accept-new` this
           # replaced.
           echo "116.203.220.219 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFtpQUInzevzQMbBXsTCCT1KwbKdUseYBNpHYyXSo/2/" > ~/.ssh/known_hosts
-          ssh -o StrictHostKeyChecking=yes -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
-            "/opt/donchian/scripts/deploy.sh ${{ github.event.inputs.service }} ${{ needs.build-and-push.outputs.image_tag }}"
+          tar -czf - docker-compose.yml docker-compose.prod.yml docker/Caddyfile.prod \
+            | ssh -o StrictHostKeyChecking=yes -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+                "deploy backend ${{ needs.build-and-push.outputs.image_tag }}"
           # deploy.sh itself exits non-zero on a failed health check (see the script) -- a failure
           # here fails this step, fails this job, and fails the workflow run. Nothing here treats a
           # failure as success (requirement 14).

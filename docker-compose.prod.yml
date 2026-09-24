@@ -5,22 +5,35 @@
 #   IMAGE_TAG=<sha> docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps <changed-service>
 # — never a blanket `up -d` for every service (see docs/devops/CICD_STRATEGY.md §5's reasoning).
 #
-# Prerequisites this file assumes but does NOT create: a real `.env` on the VPS (never committed,
-# not the docker/.env.example placeholder used for local validation), images already pushed to
-# ghcr.io under the tags referenced by ${IMAGE_TAG}, a real domain for the reverse proxy's automatic
-# HTTPS to attach to.
+# Prerequisites this file assumes but does NOT create: a real `.env` next to this file on the VPS
+# (never committed, not the docker/.env.example placeholder used for local validation), and images
+# already pushed to ghcr.io under the tags referenced by ${IMAGE_TAG}.
+#
+# Three deliberate differences from a plain merge onto the base file:
+#   * `env_file: !override` — the base file's services read docker/.env.example (committed dev
+#     placeholders, including a JWT_SECRET anyone with the repo can read). A plain overlay APPENDS
+#     `.env` after it, so any key missing from the real .env would silently fall back to the
+#     committed placeholder. Production services read the real .env ONLY.
+#   * `ports: !override` on the reverse proxy — otherwise the base's local-validation 8080 would be
+#     published alongside 80/443.
+#   * postgres `volumes: !override` — production Postgres never auto-runs the 17-file schema
+#     bootstrap. A production volume is populated by restoring a pg_dump (PRODUCTION_MIGRATION_RUNBOOK.md);
+#     an accidentally empty volume must fail loudly (backend health = degraded / missing tables),
+#     not silently come up as a healthy-looking database with an empty schema and no data.
 
 services:
   postgres:
     restart: unless-stopped
     # No published port here either — production Postgres is exactly as internal-only as the
     # local validation stack's, see docker-compose.yml's own comment on this.
+    volumes: !override
+      - postgres_data:/var/lib/postgresql/data
 
   backend:
     build: !reset null   # production deploys a pulled image, never builds on the VPS
-    image: ghcr.io/danielbugi/wolfx_alpha-backend:${IMAGE_TAG:-latest}
+    image: ghcr.io/danielbugi/wolfx_alpha-backend:${IMAGE_TAG:?IMAGE_TAG must be set to an immutable commit SHA}
     restart: unless-stopped
-    env_file:
+    env_file: !override
       - .env   # the real production secrets file — lives only on the VPS, never in git
     environment:
       DB_HOST: postgres
@@ -34,31 +47,41 @@ services:
     # under this overlay by accident.
     profiles: ["self-hosted-frontend-fallback"]
     build: !reset null
-    image: ghcr.io/danielbugi/wolfx_alpha-frontend:${IMAGE_TAG:-latest}
+    image: ghcr.io/danielbugi/wolfx_alpha-frontend:${IMAGE_TAG:?IMAGE_TAG must be set to an immutable commit SHA}
     restart: unless-stopped
 
   reverse-proxy:
     restart: unless-stopped
-    ports:
+    ports: !override
       - "80:80"
       - "443:443"
-    volumes:
-      - ./docker/Caddyfile.prod:/etc/caddy/Caddyfile:ro   # a real-domain, real-TLS Caddyfile — not written yet, see MIGRATION_PLAN.md Phase 5
-      - caddy_data:/data   # ACME certificate persistence — must survive container recreation
+    environment:
+      # Caddy site address. Default ":80" = plain HTTP on port 80, no ACME/TLS (staging, before DNS
+      # exists). At DNS cutover set API_SITE_ADDRESS=api.first-light.finance in .env: Caddy then
+      # obtains and renews a Let's Encrypt certificate for it automatically on :443.
+      API_SITE_ADDRESS: ${API_SITE_ADDRESS:-:80}
+    volumes: !override
+      - ./docker/Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data     # ACME certificate persistence — must survive container recreation
+      - caddy_config:/config
     # Under the recommended architecture the frontend lives on Vercel, not this VPS (see
     # TARGET_ARCHITECTURE.md §2, Option C) — the base file's `depends_on: frontend` would break
     # `docker compose config` here since `frontend` is profile-gated off by default in this overlay
-    # (see that service below). Reset to just the one dependency that's actually always present.
+    # (see that service above). Reset to just the one dependency that's actually always present.
     depends_on: !override
       backend:
         condition: service_healthy
 
   bot:
-    profiles: []   # unlike the base file, production DOES want the bot always on — no profile gate
+    # Kept behind a profile until the scheduler/bot cutover (PRODUCTION_MIGRATION_RUNBOOK.md,
+    # CUTOVER): a second copy of the bot polling the same token as the existing Windows-hosted one
+    # would fight it for updates, and a stray blanket `up -d` must never start it. Start explicitly
+    # with `--profile bot` at cutover only.
+    profiles: ["bot"]
     build: !reset null
-    image: ghcr.io/danielbugi/wolfx_alpha-mechanism:${IMAGE_TAG:-latest}
+    image: ghcr.io/danielbugi/wolfx_alpha-mechanism:${IMAGE_TAG:?IMAGE_TAG must be set to an immutable commit SHA}
     restart: unless-stopped
-    env_file:
+    env_file: !override
       - .env
     environment:
       DB_HOST: postgres
@@ -66,8 +89,8 @@ services:
 
   pipeline:
     build: !reset null
-    image: ghcr.io/danielbugi/wolfx_alpha-mechanism:${IMAGE_TAG:-latest}
-    env_file:
+    image: ghcr.io/danielbugi/wolfx_alpha-mechanism:${IMAGE_TAG:?IMAGE_TAG must be set to an immutable commit SHA}
+    env_file: !override
       - .env
     environment:
       DB_HOST: postgres
@@ -81,8 +104,8 @@ services:
 
   channel-sender:
     build: !reset null
-    image: ghcr.io/danielbugi/wolfx_alpha-mechanism:${IMAGE_TAG:-latest}
-    env_file:
+    image: ghcr.io/danielbugi/wolfx_alpha-mechanism:${IMAGE_TAG:?IMAGE_TAG must be set to an immutable commit SHA}
+    env_file: !override
       - .env
     environment:
       DB_HOST: postgres
@@ -90,3 +113,4 @@ services:
 
 volumes:
   caddy_data:
+  caddy_config:
