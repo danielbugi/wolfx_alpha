@@ -1,0 +1,8 @@
+[Unit]
+Description=First Light: nightly production database backup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/donchian/scripts/nightly_backup.sh trading_production
