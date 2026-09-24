@@ -101,7 +101,13 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Lint
+        # `next lint` loads next.config.ts with PHASE_PRODUCTION_BUILD internally (confirmed via
+        # node_modules/next/dist/cli/next-lint.js), so the production-build guard in next.config.ts
+        # (NEXT_PUBLIC_API_BASE_URL required) fires here too, not just in the Production build step
+        # below. Same non-secret placeholder value, not a real backend -- lint never calls it.
         run: npm run lint
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
 
       - name: Production build
         # NEXT_DIST_DIR=.next-build matches this repo's own existing convention (CLAUDE.md §8) --

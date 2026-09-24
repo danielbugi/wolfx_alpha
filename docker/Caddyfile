@@ -1,0 +1,19 @@
+# Local/validation reverse proxy — plain HTTP on :8080, no ACME/TLS.
+# Production would use a real domain on :80/:443 (Caddy's automatic HTTPS handles that
+# with zero extra config once a real hostname is used instead of a bare port) — see
+# docs/devops/INFRASTRUCTURE_PLAN.md §Phase 6/7 and docs/devops/CICD_STRATEGY.md §6.
+#
+# Path-based routing matches how frontend/src/services/api.ts actually calls the API:
+# it uses a bare origin as axios's baseURL and includes the `/api/...` prefix in each
+# call site (confirmed: backend/main.py's own health route is `/api/health`), so
+# routing everything under /api/* to the backend and everything else to the frontend
+# reproduces that with a single published port.
+:8080 {
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
+}
