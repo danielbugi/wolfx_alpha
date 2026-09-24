@@ -18,6 +18,13 @@ networks:
 
 volumes:
   postgres_data:
+  # Named (not bind) volume for the pipeline's ml_training/models directory -- see the pipeline
+  # service below. A named volume auto-seeds from the image's own content the first time it's
+  # used (Docker copies whatever's baked into the image at that path into the empty volume before
+  # mounting), so the trainer source shipped in the image is always present; a bind mount to an
+  # arbitrary host directory does not do this and can silently shadow it (see .dockerignore's
+  # ml_training/models comment for the incident this fixes).
+  ml_training_models:
 
 services:
   postgres:
@@ -153,7 +160,7 @@ services:
       - ./breakout_results:/app/breakout_results
       - ./frontend_data:/app/frontend_data
       - ./reports:/app/reports
-      - ./ml_training/models:/app/ml_training/models
+      - ml_training_models:/app/ml_training/models
     depends_on:
       postgres:
         condition: service_healthy

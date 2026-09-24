@@ -37,7 +37,16 @@ breakout_results
 frontend_data
 reports
 data
-ml_training/models
+# ml_training/models mixes trainer SOURCE (momentum_predictor.py, __init__.py) with generated
+# artifacts (*.joblib, candidates/, archive/, backup/, experiments/, production/) in the same
+# directory. Excluding the whole tree here silently dropped the trainer script from every image
+# build (mechanism AND backend both COPY ml_training/) -- found 2026-09-24 when a real VPS
+# pipeline run's ML training step failed with "No such file or directory" for
+# ml_training/models/momentum_predictor.py. Keep .py source out of the ignore list; only the
+# generated artifacts stay excluded (persisted instead via the ml_training_models named volume in
+# docker-compose.yml, which auto-seeds from the image's own copy of this directory on first use).
+ml_training/models/*
+!ml_training/models/*.py
 mechanism/logs
 mechanism/data
 mechanism/frontend_data

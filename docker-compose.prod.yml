@@ -97,9 +97,13 @@ services:
       DB_PORT: "5432"
     # The one resource cap flagged as load-bearing in docs/devops/RESOURCE_REQUIREMENTS.md §2 —
     # protects the always-on backend/bot from CPU/RAM contention during the nightly pipeline +
-    # ML retrain (steps 10-12) without needing a second VPS. Tune these against real numbers from
-    # a production run, not the estimate this file ships with.
-    mem_limit: 3g
+    # ML retrain (steps 10-12) without needing a second VPS. Raised from 3g to 5g 2026-09-24: a
+    # real production run on the 8GB VPS was OOM-killed by the cgroup at step 11 (ML training,
+    # momentum target) — momentum_predictor.py peaked around ~3.1GB resident, over the old 3g cap
+    # (kernel log: "Killed process ... python.exe ... anon-rss:3132224kB"). 5g leaves ~2.5GB of
+    # headroom on this box for postgres+backend+caddy+OS at the same time (verified against a real
+    # run before raising this — see docs/devops/PRODUCTION_MIGRATION_RUNBOOK.md / Gate 4 report).
+    mem_limit: 5g
     cpus: "2.0"
 
   channel-sender:
