@@ -200,9 +200,16 @@ jobs:
           cache-dependency-path: |
             mechanism/requirements.txt
             ml_training/requirements.txt
+            backend/requirements.txt
 
       - name: Install dependencies
-        run: pip install -r mechanism/requirements.txt -r ml_training/requirements.txt pytest
+        # backend/requirements.txt is included on purpose: mechanism/alerts/tests/test_channel_control.py
+        # is the Telegram Control Center's suite and intentionally covers BOTH halves of it -- the
+        # rules in mechanism/alerts/channel_control.py and the token gate in
+        # backend/routers/telegram_control.py (which imports FastAPI). mutation_checks.py's "control"
+        # group relies on that same suite to catch mutants planted in the backend router, so the test
+        # stays where it is and this job installs what it intentionally imports.
+        run: pip install -r mechanism/requirements.txt -r ml_training/requirements.txt -r backend/requirements.txt pytest
 
       - name: Python syntax check (py_compile)
         # Excludes two files with pre-existing invalid UTF-8 byte sequences (a genuine, existing

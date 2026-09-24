@@ -64,7 +64,7 @@ jobs:
       - name: Re-run the relevant test suite as a hard gate (mechanism)
         if: github.event.inputs.service == 'mechanism'
         run: |
-          pip install -r mechanism/requirements.txt -r ml_training/requirements.txt pytest
+          pip install -r mechanism/requirements.txt -r ml_training/requirements.txt -r backend/requirements.txt pytest
           python -m pytest mechanism/alerts/tests mechanism/data_updaters/tests ml_training/tests -q
 
   build-and-push:
