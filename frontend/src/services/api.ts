@@ -246,15 +246,16 @@ export interface ScreenerResponse {
 
 export interface FilterOptions {
   sectors: Array<{ name: string; stock_count: number }>;
+  // null = unknown (no rows to aggregate yet), never a fabricated 0
   price_ranges: {
-    min: number;
-    max: number;
-    percentiles: { '25th': number; median: number; '75th': number };
+    min: number | null;
+    max: number | null;
+    percentiles: { '25th': number | null; median: number | null; '75th': number | null };
   };
   market_cap_ranges: {
-    min: number;
-    max: number;
-    percentiles: { '25th': number; median: number; '75th': number };
+    min: number | null;
+    max: number | null;
+    percentiles: { '25th': number | null; median: number | null; '75th': number | null };
   };
   quality_grades: string[];
   technical_ranges: {

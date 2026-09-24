@@ -32,6 +32,11 @@ class MarketFilter:
     quality_grade: Optional[List[str]] = None
 
 
+def _num(value, cast):
+    """SQL NULL (e.g. MIN/MAX over zero rows) stays None instead of raising or becoming 0."""
+    return None if value is None else cast(value)
+
+
 class MarketService:
     """Advanced market data service with sophisticated analytics"""
 
@@ -445,22 +450,24 @@ class MarketService:
                     }
                     for sector in sectors
                 ],
+                # Aggregates over an empty table come back as NULL: report "unknown" (None), never
+                # crash on float(None) and never invent a 0 that looks like a real price/market cap.
                 "price_ranges": {
-                    "min": float(price_stats['min_price']),
-                    "max": float(price_stats['max_price']),
+                    "min": _num(price_stats['min_price'], float),
+                    "max": _num(price_stats['max_price'], float),
                     "percentiles": {
-                        "25th": float(price_stats['price_25th']),
-                        "median": float(price_stats['price_median']),
-                        "75th": float(price_stats['price_75th'])
+                        "25th": _num(price_stats['price_25th'], float),
+                        "median": _num(price_stats['price_median'], float),
+                        "75th": _num(price_stats['price_75th'], float)
                     }
                 },
                 "market_cap_ranges": {
-                    "min": int(market_cap_stats['min_market_cap']) if market_cap_stats['min_market_cap'] else 0,
-                    "max": int(market_cap_stats['max_market_cap']) if market_cap_stats['max_market_cap'] else 0,
+                    "min": _num(market_cap_stats['min_market_cap'], int),
+                    "max": _num(market_cap_stats['max_market_cap'], int),
                     "percentiles": {
-                        "25th": int(market_cap_stats['mc_25th']) if market_cap_stats['mc_25th'] else 0,
-                        "median": int(market_cap_stats['mc_median']) if market_cap_stats['mc_median'] else 0,
-                        "75th": int(market_cap_stats['mc_75th']) if market_cap_stats['mc_75th'] else 0
+                        "25th": _num(market_cap_stats['mc_25th'], int),
+                        "median": _num(market_cap_stats['mc_median'], int),
+                        "75th": _num(market_cap_stats['mc_75th'], int)
                     }
                 },
                 "quality_grades": ["A", "B", "C", "D", "F"],

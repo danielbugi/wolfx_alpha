@@ -181,7 +181,7 @@ jobs:
           "
 
       - name: pytest (backend/auth/tests -- documented as no-DB-needed, CLAUDE.md §8)
-        run: python -m pytest backend/auth/tests -q
+        run: python -m pytest backend/auth/tests backend/tests -q
 
   # ---------------------------------------------------------------------------------------------
   mechanism-ci:

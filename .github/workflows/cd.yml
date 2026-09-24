@@ -59,7 +59,7 @@ jobs:
         if: github.event.inputs.service == 'backend'
         run: |
           pip install -r backend/requirements.txt -r mechanism/requirements.txt pytest
-          python -m pytest backend/auth/tests -q
+          python -m pytest backend/auth/tests backend/tests -q
 
       - name: Re-run the relevant test suite as a hard gate (mechanism)
         if: github.event.inputs.service == 'mechanism'
