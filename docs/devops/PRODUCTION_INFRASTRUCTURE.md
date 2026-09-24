@@ -8,15 +8,16 @@
 ## 1. Production topology — confirmed, not changed
 
 ```
-                    Vercel (frontend, free tier, auto-deploy from `main`)
+     Vercel — dashboard.first-light.finance (frontend, free tier, auto-deploy from `main`)
                                  │  HTTPS
                                  ▼
                  ┌─────────────────────────────────────┐
                  │         One Linux VPS (Docker Compose)  │
                  │                                          │
    HTTPS ────────┼─► Caddy (reverse proxy, auto TLS)          │
-   (api domain)  │        │                                  │
-                 │        ▼                                  │
+   api.first-light.finance      │                             │
+   (approved hostname,          ▼                             │
+    not yet live)               │                             │
                  │   Backend API (uvicorn, no --reload)       │
                  │        │                                  │
                  │        ▼                                  │

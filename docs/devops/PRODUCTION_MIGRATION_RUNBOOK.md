@@ -379,7 +379,28 @@ with an already-present-but-unused `ALLOWED_ORIGINS` env var) is now fixed, test
 see the Phase 4A.5 report for the full diff, test results (5/5 passing, including an explicit
 fail-closed check on `ALLOWED_ORIGINS=*`), and end-to-end Docker stack re-verification. **No longer
 a blocker for cutover** — the remaining action is simply *setting* `ALLOWED_ORIGINS` to the real
-Vercel domain on the VPS once that domain exists (Phase 4B), not further code changes.
+production frontend domain on the VPS once DNS/Vercel are actually cut over (Phase 4B) — see
+"Domain (approved, not yet live)" immediately below for the exact value.
+
+## Domain (approved 2026-09-24, not yet live)
+
+The owner has purchased `first-light.finance` and approved the following production hostnames.
+**Nothing below has been acted on** — no DNS record has been created, no Vercel project/domain has
+been configured, no Caddy config references a public domain, and no cutover has happened. This is
+recorded here so the exact values are ready when PRE-MIGRATION/CUTOVER actually run.
+
+| Component | Hostname | Target |
+|---|---|---|
+| Frontend/dashboard | `https://dashboard.first-light.finance` | Vercel |
+| Backend API | `https://api.first-light.finance` | Hetzner VPS → Caddy → FastAPI (`backend` container) |
+
+At cutover, this means:
+- Frontend production env var: `NEXT_PUBLIC_API_BASE_URL=https://api.first-light.finance`
+- Backend production `.env`: `ALLOWED_ORIGINS=https://dashboard.first-light.finance`
+- Caddy's public-domain config (`docker/Caddyfile.prod`, not yet written — see `docker-compose.prod.yml`'s
+  comment) will request a cert for `api.first-light.finance`
+- DNS: an A/AAAA record for `api.first-light.finance` → the VPS's public IP; `dashboard.first-light.finance`
+  is configured on Vercel's side (CNAME per Vercel's own instructions), not on the VPS
 
 ---
 
@@ -405,10 +426,12 @@ Vercel domain on the VPS once that domain exists (Phase 4B), not further code ch
 - [ ] **Secrets ready**: production `.env` manually provisioned on the VPS per `SECRETS_STRATEGY.md`
       §5, `chmod 600`, never committed
 - [x] **CORS**: `ALLOWED_ORIGINS` now read from environment (Phase 4A.5) — remaining action is
-      setting its value to the real Vercel domain once known, not a code change
-- [ ] **Domain + TLS prerequisite**: a real domain points at the VPS, Caddy can obtain a certificate
-      (needed before Vercel's frontend can call the backend without a mixed-content block, per
-      `TARGET_ARCHITECTURE.md` §2's Option C prerequisite)
+      setting its value to `https://dashboard.first-light.finance` (approved 2026-09-24, see "Domain"
+      above), not a code change
+- [ ] **Domain + TLS prerequisite**: `api.first-light.finance` points at the VPS, Caddy can obtain a
+      certificate (needed before Vercel's `dashboard.first-light.finance` frontend can call the
+      backend without a mixed-content block, per `TARGET_ARCHITECTURE.md` §2's Option C prerequisite)
+      — **not yet done**, no DNS record exists yet
 
 ## DEPLOYMENT
 
@@ -442,11 +465,11 @@ Vercel domain on the VPS once that domain exists (Phase 4B), not further code ch
 
 - [ ] **Prevent duplicate schedulers** (§5's plan): disable the old Windows Task Scheduler jobs
       *before* enabling the new VPS cron entries — never both active simultaneously, even briefly
-- [ ] **DNS/frontend/API configuration changes**: point the production domain's DNS at the VPS
+- [ ] **DNS/frontend/API configuration changes**: point `api.first-light.finance`'s DNS at the VPS
       (if not already done during provisioning); deploy the frontend to Vercel with
-      `NEXT_PUBLIC_API_BASE_URL` set to the real HTTPS backend domain; confirm CORS
-      (`ALLOWED_ORIGINS`, per `CURRENT_ARCHITECTURE.md` §7's known gap — must be wired in before
-      this step, not discovered as broken during it)
+      `NEXT_PUBLIC_API_BASE_URL=https://api.first-light.finance`; confirm CORS
+      (`ALLOWED_ORIGINS=https://dashboard.first-light.finance`, per `CURRENT_ARCHITECTURE.md` §7's
+      known gap — must be wired in before this step, not discovered as broken during it)
 - [ ] **Flip `PROD_SENDING_ENABLED` to `1`** on the new environment only once every above check has
       passed — this is the actual moment the new environment becomes "live" for the one truly
       irreversible action

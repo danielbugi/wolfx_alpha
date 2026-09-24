@@ -31,8 +31,9 @@
 - [ ] `.env` on the VPS is **not** in git, is not world-readable (`chmod 600`), and is owned by the
       deploy user only.
 - [ ] `ALLOWED_ORIGINS` is actually wired into `backend/main.py`'s CORS middleware (currently a
-      dead/unused variable — CURRENT_ARCHITECTURE.md §7) and set to the real hosted frontend domain,
-      not left as the hardcoded `localhost` list.
+      dead/unused variable — CURRENT_ARCHITECTURE.md §7) and set to
+      `https://dashboard.first-light.finance` (approved hostname, PRODUCTION_MIGRATION_RUNBOOK.md's
+      "Domain" section — not yet live), not left as the hardcoded `localhost` list.
 - [ ] One secure secondary copy of the production `.env` exists outside the VPS (password
       manager/encrypted note — DISASTER_RECOVERY.md §4), so a VPS loss doesn't also mean
       re-requesting every third-party credential from scratch.
@@ -94,20 +95,24 @@
       off-box copy).
 
 ## HTTPS
-- [ ] A real domain points at the VPS (or at Vercel, for the frontend) — no service is reachable over
-      plain HTTP in production.
+- [ ] `api.first-light.finance` points at the VPS and `dashboard.first-light.finance` at Vercel
+      (approved hostnames, PRODUCTION_MIGRATION_RUNBOOK.md's "Domain" section — **neither is live
+      yet**, no DNS/Vercel changes have been made) — no service is reachable over plain HTTP in
+      production.
 - [ ] TLS certificates are automated (Let's Encrypt via Traefik/Caddy's built-in ACME support, or
       Certbot) — not a manually-renewed certificate that will quietly expire.
-- [ ] Mixed-content is verified impossible: the Vercel-hosted (HTTPS) frontend's
-      `NEXT_PUBLIC_API_BASE_URL` points at the backend's `https://` URL, not `http://` — confirmed by
-      loading the deployed frontend in a real browser and checking for console mixed-content errors,
-      not just by reading the env var value (TARGET_ARCHITECTURE.md §1, Option C's stated
-      prerequisite).
+- [ ] Mixed-content is verified impossible: the Vercel-hosted (HTTPS) `dashboard.first-light.finance`
+      frontend's `NEXT_PUBLIC_API_BASE_URL` points at `https://api.first-light.finance`, not
+      `http://` — confirmed by loading the deployed frontend in a real browser and checking for
+      console mixed-content errors, not just by reading the env var value (TARGET_ARCHITECTURE.md
+      §1, Option C's stated prerequisite).
 
 ## DNS
-- [ ] A/AAAA (or CNAME, per provider) records for the API domain point at the VPS's IP, with a TTL
-      short enough to allow a fast cutover/rollback if the VPS ever needs to change (e.g., 300s during
-      the migration window, raised afterward).
+- [ ] A/AAAA (or CNAME, per provider) record for `api.first-light.finance` points at the VPS's IP,
+      with a TTL short enough to allow a fast cutover/rollback if the VPS ever needs to change (e.g.,
+      300s during the migration window, raised afterward). `dashboard.first-light.finance` is
+      configured on Vercel's side instead (its own CNAME/verification instructions), not as a
+      VPS-pointed record. **Not yet done.**
 - [ ] The domain used for 2FA emails (`SMTP_FROM`) has correct SPF/DKIM records if a real mailbox is
       used in production, so 2FA codes don't land in spam — a live, not just theoretical, login-flow
       risk.
