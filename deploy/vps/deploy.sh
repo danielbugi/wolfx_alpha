@@ -33,6 +33,10 @@ for f in docker-compose.yml docker-compose.prod.yml docker/Caddyfile.prod; do
 done
 [ -f "$ENV_FILE" ] || { echo "missing $ENV_FILE" >&2; exit 1; }
 
+# Compose stats the current directory while loading files; never depend on where the caller was
+# (e.g. `su deploy` from /root fails with "stat .: permission denied").
+cd "$COMPOSE_DIR"
+
 exec 9>"$BASE/.deploy.lock"
 flock -n 9 || { echo "another deploy/rollback is already running" >&2; exit 1; }
 
@@ -115,4 +119,5 @@ if [ -n "$PREV" ] && [ "$PREV" != "$TAG" ]; then
     log "restoring $PREV ALSO failed health - manual intervention required"
   fi
 fi
+log "backend now running: $(docker inspect -f '{{.Config.Image}} ({{.State.Health.Status}})' "$(dc ps -q backend)" 2>/dev/null || echo 'none')"
 exit 1
