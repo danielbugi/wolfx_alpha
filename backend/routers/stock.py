@@ -4,6 +4,8 @@ Stock Detail API Router - Comprehensive per-symbol data
 """
 
 from fastapi import APIRouter, HTTPException, Depends, Query
+
+from auth.dependencies import require_authenticated_user
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import logging
@@ -19,6 +21,7 @@ stock_router = APIRouter(
     prefix="/api/stock",
     tags=["stock"],
     responses={404: {"description": "Not found"}},
+    dependencies=[Depends(require_authenticated_user)],
 )
 
 SIGNAL_BUCKETS = ["bullish_breakout", "bearish_breakout", "near_bullish", "near_bearish"]

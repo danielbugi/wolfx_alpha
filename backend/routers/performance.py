@@ -6,7 +6,9 @@ this exists and what it measures.
 """
 
 from datetime import datetime
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from auth.dependencies import require_authenticated_user
 from pydantic import BaseModel
 import logging
 
@@ -35,7 +37,7 @@ def _overall_status(statuses: list) -> str:
     return 'healthy'
 
 
-@performance_router.get("/")
+@performance_router.get("/", dependencies=[Depends(require_authenticated_user)])
 async def full_report():
     from main import get_database_connection, db_pool
 
@@ -56,17 +58,17 @@ async def full_report():
     }
 
 
-@performance_router.get("/endpoints")
+@performance_router.get("/endpoints", dependencies=[Depends(require_authenticated_user)])
 async def endpoints_report():
     return tracker.get_endpoint_report()
 
 
-@performance_router.get("/routes")
+@performance_router.get("/routes", dependencies=[Depends(require_authenticated_user)])
 async def routes_report():
     return tracker.get_route_report()
 
 
-@performance_router.get("/database")
+@performance_router.get("/database", dependencies=[Depends(require_authenticated_user)])
 async def database_report():
     from main import get_database_connection, db_pool
     return measure_database(get_database_connection, pooling_active=db_pool is not None)
@@ -75,6 +77,11 @@ async def database_report():
 @performance_router.post("/client-metric")
 async def record_client_metric(payload: ClientMetricPayload):
     """Frontend calls this after each route load to report real, in-browser
-    timing -- see frontend/src/components/perf/RoutePerfCollector.tsx."""
+    timing -- see frontend/src/components/perf/RoutePerfCollector.tsx.
+    Deliberately not behind require_authenticated_user: it fires on the very
+    first hard load of /login, before any access token exists, so gating it
+    would mean that load -- the one that matters most -- can never be
+    recorded. The payload (a route path, a metric name, a duration) carries
+    nothing sensitive."""
     tracker.record_route_metric(payload.route, payload.metric, payload.duration_ms)
     return {"recorded": True}

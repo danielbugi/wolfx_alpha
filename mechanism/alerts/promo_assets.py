@@ -40,8 +40,8 @@ PROMO_COPY = {                                     # every string on the promo i
     "f1_title": "Today's lists", "f1_body": "The channel's lists, every stock once.",
     "f2_title": "Stock cards", "f2_body": "Numbers, news and a chart in one tap.",
     "f3_title": "Since you added it", "f3_body": "Follow a stock from the day you add it.",
-    "cta": "Free during the beta  ·  by invitation", "cta_sub": "Tap \"Private assistant\" under today's post",
-    "footer": "Example screens. Educational data from public price sources, not investment advice.",
+    "cta": "Access on request  ·  seats limited", "cta_sub": "Tap \"Request access\" under today's post",
+    "footer": "Example screens.",
 }
 
 

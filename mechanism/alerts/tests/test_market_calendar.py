@@ -62,6 +62,27 @@ def test_settle_minutes_is_configurable(monkeypatch):
     assert mc.latest_completed(CAL, ny(2026, 9, 15, 16, 1)) == date(2026, 9, 15)
 
 
+# ------------------------------------------------------------------ is_trading_day (DATA_ML_MILESTONES.md M3)
+def test_is_trading_day_true_for_a_real_session():
+    assert mc.is_trading_day(date(2026, 9, 18), sessions=CAL) is True
+
+
+def test_is_trading_day_false_for_a_weekend():
+    assert mc.is_trading_day(date(2026, 9, 20), sessions=CAL) is False               # Sunday, not in CAL
+
+
+def test_is_trading_day_false_for_a_holiday_between_two_sessions():
+    assert mc.is_trading_day(date(2026, 9, 21), sessions=CAL) is False               # the hypothetical holiday
+    assert mc.is_trading_day(date(2026, 9, 22), sessions=CAL) is True                # trades again the next day
+
+
+def test_is_trading_day_defaults_today_in_new_york(monkeypatch):
+    import market_calendar
+    monkeypatch.setattr(market_calendar, "get_sessions", lambda today: (CAL, "given"))
+    assert mc.is_trading_day(date(2026, 9, 18)) is True
+    assert mc.is_trading_day(date(2026, 9, 20)) is False
+
+
 # ------------------------------------------------------------------ the gate
 def test_runs_after_a_new_session_and_not_twice():
     now = utc(2026, 9, 16, 3, 0)                       # Wed 06:00 Jerusalem = Tue 23:00 New York: the 09-15 session is done

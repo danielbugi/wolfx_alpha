@@ -148,9 +148,9 @@ def main():
 
     try:
         tg = TelegramClient.from_env(args.to, dry_run=False)
-        tg.send_message(header)
+        tg.send_message(header, kind="alert_header")
         for a, card in zip(alerts, cards):
-            ids = tg.send_message(card)
+            ids = tg.send_message(card, kind="alert_card")
             p = a["plan"]
             db.execute_insert(
                 """INSERT INTO alerts (alert_date, symbol, source, channel, entry_ref, atr, stop, tp1, tp2, tp3, trail_pct, plan, flags, telegram_message_id)

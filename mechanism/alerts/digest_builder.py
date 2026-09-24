@@ -29,6 +29,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 from ml_training.features import price_features as pf  # noqa: E402
 from alerts.alert_builder import Skip  # noqa: E402
+from alerts.star import STAR_RANK, is_starred, starred_lists  # noqa: E402,F401
 
 CATEGORIES = ("breakout", "near_breakout", "breakdown", "near_breakdown")
 LONG_CATEGORIES = ("breakout", "near_breakout")
@@ -90,7 +91,7 @@ def analyze(px: pd.DataFrame) -> Dict:
 def build_digest(rows: List[Dict], top_n: int = 5, min_dv: float = DEFAULT_MIN_DV,
                  categories: Iterable[str] = LONG_CATEGORIES) -> Dict:
     """rows = analyze() results (each with a 'symbol'). Returns counts, the ranked lists and, per group, the symbols
-    that appear in 2+ lists ("multi", with the list names). Each listed row also gets 'list_ranks' ({list: rank})."""
+    that are in the top STAR_RANK of 2+ lists ("multi", with those list names). Each listed row also gets 'list_ranks' ({list: rank})."""
     counts, boards = {}, {}
     for cat in categories:
         members = [r for r in rows if r["cat"] == cat]
@@ -102,10 +103,12 @@ def build_digest(rows: List[Dict], top_n: int = 5, min_dv: float = DEFAULT_MIN_D
             "volume": sorted([r for r in pool if r["rvol"] is not None], key=lambda r: (-r["rvol"], r["symbol"]))[:top_n],
         }
         membership: Dict[str, List[str]] = {}
+        ranks_of: Dict[str, Dict[str, int]] = {}
         for name in LISTS:
             for rank, r in enumerate(lists[name], 1):
                 membership.setdefault(r["symbol"], []).append(name)
                 r.setdefault("list_ranks", {})[name] = rank
+                ranks_of[r["symbol"]] = r["list_ranks"]
         boards[cat] = {**lists, "eligible": len(pool), "membership": membership,
-                       "multi": {s: ls for s, ls in membership.items() if len(ls) >= 2}}
+                       "multi": {s: starred_lists(rk) for s, rk in ranks_of.items() if is_starred(rk)}}
     return {"counts": counts, "boards": boards, "min_dv": min_dv}

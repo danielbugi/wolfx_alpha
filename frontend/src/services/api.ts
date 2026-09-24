@@ -23,7 +23,7 @@ function resolveApiBaseUrl(): string {
 export const API_BASE_URL = resolveApiBaseUrl();
 
 // Create axios instance with default configuration
-const apiClient = axios.create({
+export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000, // 30 second timeout
   headers: {
@@ -31,9 +31,60 @@ const apiClient = axios.create({
   },
 });
 
-// Request interceptor for debugging
+// A second, interceptor-free client used only for the token refresh call itself — routing it through
+// `apiClient` would re-enter the 401 handler below on a failed refresh.
+const rawClient = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 30000,
+  headers: { 'Content-Type': 'application/json' },
+});
+
+// --- Auth token plumbing --------------------------------------------------
+// The access token lives in memory only (set by AuthContext after login/refresh, never persisted — a
+// reload always goes through a fresh silent refresh). The refresh token is handed in by AuthContext (it
+// owns the localStorage read/write); kept here too so a 401 can trigger a silent refresh-and-retry without
+// AuthContext needing to wrap every single API call in this file.
+let accessToken: string | null = null;
+let refreshToken: string | null = null;
+let onSessionExpired: (() => void) | null = null;
+
+export function setAccessToken(token: string | null): void {
+  accessToken = token;
+}
+
+/** For call sites that can't go through `apiClient` (e.g. DevQAPanel's raw `fetch()` + AbortController timeouts). */
+export function getAccessToken(): string | null {
+  return accessToken;
+}
+
+export function setRefreshToken(token: string | null): void {
+  refreshToken = token;
+}
+
+/** Registered by AuthProvider: called when a session cannot be recovered (no/expired refresh token). */
+export function setOnSessionExpired(handler: (() => void) | null): void {
+  onSessionExpired = handler;
+}
+
+/** Exchanges the current refresh token for a new access token. Returns null (never throws) on failure. */
+export async function refreshAccessToken(): Promise<string | null> {
+  if (!refreshToken) return null;
+  try {
+    const response = await rawClient.post<{ access_token: string }>('/api/auth/refresh', { refresh_token: refreshToken });
+    accessToken = response.data.access_token;
+    return accessToken;
+  } catch {
+    return null;
+  }
+}
+
+// Request interceptor: attaches the bearer token (when present) + debug logging
 apiClient.interceptors.request.use(
   (config) => {
+    if (accessToken) {
+      config.headers = config.headers ?? {};
+      config.headers.Authorization = `Bearer ${accessToken}`;
+    }
     console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`);
     return config;
   },
@@ -43,13 +94,27 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response interceptor for error handling
+// Response interceptor: on 401, try exactly one silent refresh-and-retry before giving up and signaling
+// AuthContext to sign the user out (never retries a request that was itself already retried once).
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => {
     console.log(`API Response: ${response.status} - ${response.config.url}`);
     return response;
   },
-  (error) => {
+  async (error) => {
+    const original = error.config as (typeof error.config & { _retried?: boolean }) | undefined;
+
+    if (error.response?.status === 401 && original && !original._retried) {
+      original._retried = true;
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        original.headers = original.headers ?? {};
+        original.headers.Authorization = `Bearer ${newToken}`;
+        return apiClient(original);
+      }
+      onSessionExpired?.();
+    }
+
     console.error('API Response Error:', error.response?.data || error.message);
 
     // Handle different error types
@@ -101,8 +166,8 @@ export interface HealthCheckResponse {
 
 export interface MarketSummary {
   total_symbols: number;
-  avg_volume_ratio: number;
-  active_signals: number;
+  // null when technical_indicators has no rows yet -- never a fabricated 1.0 "normal volume".
+  avg_volume_ratio: number | null;
   last_updated: string;
 }
 
@@ -111,23 +176,12 @@ export interface StockItem {
   current_price: number;
   price_change_pct: number;
   volume: number;
-  volume_ratio: number;
+  // null on the gainers/losers lists when no technical_indicators row exists for the
+  // symbol -- "not known", never a fabricated "normal volume" default (see CLAUDE.md's
+  // FM3.4 finding). The unusual-volume list only ever returns a real value.
+  volume_ratio: number | null;
   sector: string;
   market_cap: number | null;
-}
-
-export interface AIPickItem {
-  rank: number;
-  symbol: string;
-  current_price: number;
-  breakout_type: string;
-  ml_score: number | null;   // null = no validated ML score (never 0)
-  confidence: string | null;
-  urgency: string;
-  sector: string;
-  volume_ratio: number;
-  price_change_pct: number;
-  reasoning: string;
 }
 
 export interface MainPageData {
@@ -136,7 +190,6 @@ export interface MainPageData {
   top_gainers: StockItem[];
   top_losers: StockItem[];
   unusual_volume: StockItem[];
-  top_ai_picks: AIPickItem[];
 }
 
 export interface ScreenerFilterRequest {
@@ -510,6 +563,91 @@ export interface AlphaFinderParams {
   limit?: number;
 }
 
+// Momentum Board -- the dashboard's find-big-winners panel (see
+// backend/services/momentum_board_service.py). Reads the same confluence rule
+// (top ranks of 2+ of gainers/ATR-expansion/volume-surge = starred) already
+// validated and running for the Telegram channel; no ML, no alignment score.
+export interface MomentumBoardResult {
+  symbol: string;
+  category: 'breakout' | 'near_breakout';
+  close: number | null;
+  ret1_pct: number | null;
+  rvol: number | null;         // today's volume / median of the prior 50 sessions
+  range_atr: number | null;    // today's true range / prior-day ATR14
+  below_high_pct: number | null;
+  atr: number | null;
+  dv20: number | null;
+  list_ranks: Record<string, number>;
+  starred: boolean;
+  star_lists: string[];
+  sector: string | null;
+  quality_grade: string | null;
+  overall_quality_score: number | null;
+  market_cap: number | null;
+  // From earnings_calendar -- coverage is thin as of 2026-09-23 (a handful of symbols), so
+  // this is null for most rows today; it fills in as the updater's backfill progresses.
+  next_earnings_date: string | null;
+  days_to_earnings: number | null;
+}
+
+export interface MomentumBoardResponse {
+  session_date: string | null;
+  generated_at: string | null;
+  universe_n: number;
+  counts: Record<string, number>;
+  // Unfiltered count of today's confirmed (2+ list) names, independent of this call's own
+  // category/sector/grade filters -- the dashboard's Active Signals card uses this.
+  starred_total: number;
+  total: number;
+  results: MomentumBoardResult[];
+}
+
+export interface MomentumBoardParams {
+  category?: 'breakout' | 'near_breakout' | 'all';
+  sector?: string;
+  min_quality_grade?: string;
+  limit?: number;
+}
+
+// Momentum Leaders -- "who's still moving after making an earlier Momentum Board list" (see
+// backend/services/momentum_leaders_service.py, mechanism/alerts/board.py). Distinct from
+// Momentum Board, which ranks TODAY's own lists.
+export interface MomentumLeaderRow {
+  symbol: string;
+  close: number;
+  prev_close: number;
+  ret1_pct: number;
+  listed_sessions: number;     // how many of the last few sessions it was on a list
+  first_listed: string;
+  last_listed: string;
+  category: 'breakout' | 'near_breakout';
+  range_pos: number | null;    // (close - low) / (high - low) for today's bar
+  at_day_high: boolean;
+  above_20d_high: boolean;
+  rvol: number | null;
+}
+
+export interface MomentumLeadersBoard {
+  session: string;
+  window: string[];
+  n_sessions: number;
+  n_pool: number;
+  n_measured: number;
+  n_excluded: number;
+  higher: number;
+  lower: number;
+  flat: number;
+  at_day_high: number;
+  above_20d_high: number;
+  top: MomentumLeaderRow[];
+  more: MomentumLeaderRow[];
+}
+
+export interface MomentumLeadersResponse {
+  session_date: string | null;
+  board: MomentumLeadersBoard | null;
+}
+
 export interface StrategyRankResult {
   symbol: string;
   sector: string;
@@ -850,11 +988,6 @@ class ApiService {
     return response.data;
   }
 
-  async getTopAIPicks(limit: number = 10): Promise<AIPickItem[]> {
-    const response = await apiClient.get<AIPickItem[]>(`/api/dashboard/top-ai-picks?limit=${limit}`);
-    return response.data;
-  }
-
   // Screener endpoints
   async searchStocks(filters: ScreenerFilterRequest): Promise<ScreenerResponse> {
     const response = await apiClient.post<ScreenerResponse>('/api/screener/search', filters);
@@ -946,6 +1079,16 @@ class ApiService {
     return response.data;
   }
 
+  async getMomentumBoard(params: MomentumBoardParams = {}): Promise<MomentumBoardResponse> {
+    const response = await apiClient.get<MomentumBoardResponse>('/api/momentum-board', { params });
+    return response.data;
+  }
+
+  async getMomentumLeaders(): Promise<MomentumLeadersResponse> {
+    const response = await apiClient.get<MomentumLeadersResponse>('/api/momentum-leaders');
+    return response.data;
+  }
+
   // Trading strategy endpoint
   async getStrategyRank(params: StrategyRankParams = {}): Promise<StrategyRankResponse> {
     const response = await apiClient.get<StrategyRankResponse>('/api/strategy/rank', { params });
@@ -995,7 +1138,6 @@ export const dashboardApi = {
   getTopGainers: (limit?: number) => apiService.getTopGainers(limit),
   getTopLosers: (limit?: number) => apiService.getTopLosers(limit),
   getUnusualVolume: (limit?: number) => apiService.getUnusualVolume(limit),
-  getTopAIPicks: (limit?: number) => apiService.getTopAIPicks(limit),
 };
 
 export const screenerApi = {
@@ -1026,6 +1168,14 @@ export const stockApi = {
 
 export const alphaApi = {
   getFinder: (params?: AlphaFinderParams) => apiService.getAlphaFinder(params),
+};
+
+export const momentumBoardApi = {
+  getBoard: (params?: MomentumBoardParams) => apiService.getMomentumBoard(params),
+};
+
+export const momentumLeadersApi = {
+  getLeaders: () => apiService.getMomentumLeaders(),
 };
 
 export const strategyApi = {

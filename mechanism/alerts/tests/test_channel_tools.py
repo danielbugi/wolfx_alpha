@@ -137,22 +137,31 @@ def test_pin_and_chat_info():
 
 # ================================================================== the fixed channel posts
 def test_start_here_and_promo_caption_are_valid_telegram_html_within_limits():
-    assert tg_html.problems(cp.START_HERE) == [] and len(cp.START_HERE) < 4096
-    assert tg_html.problems(cp.PROMO_CAPTION, 1024) == [] and len(cp.PROMO_CAPTION) <= 1024
+    from alerts.telegram_client import text_length
+    assert tg_html.problems(cp.START_HERE) == [] and text_length(cp.START_HERE) <= 4000       # parsed length, with a margin under Telegram's 4096
+    assert tg_html.problems(cp.PROMO_CAPTION, 1024) == [] and text_length(cp.PROMO_CAPTION) <= 1024
 
 
-@pytest.mark.parametrize("text", [cp.START_HERE, cp.PROMO_CAPTION])
-def test_channel_copy_has_no_advice_words_no_claims_and_the_disclaimer(text):
+@pytest.mark.parametrize("text", [cp.START_HERE, cp.PROMO_CAPTION], ids=["start_here", "promo_caption"])
+def test_channel_copy_has_no_advice_words_no_claims_and_says_what_access_is(text):
     plain = re.sub(r"<[^>]+>", "", text)
-    assert BANNED.findall(plain) == [] and re.search(r"not investment advice", plain, re.I)
-    assert "beta" in plain.lower() and "invitation" in plain.lower()                   # says exactly what access is today
+    assert BANNED.findall(plain) == []
+    assert "on request" in plain.lower() and "seats limited" in plain.lower()          # says what access is: on request, limited
+    assert "beta" not in plain.lower() and not re.search(r"\$\s?(29|59)\b|free forever|sign ?up|subscribe", plain, re.I)      # no beta wording, no offer price before a paid tier exists
     assert not re.search(r"\d+\s?%\s+(gain|return|profit|win)", plain, re.I)           # no performance claims
+
+
+def test_the_pinned_post_holds_the_disclaimer_and_the_promo_caption_carries_none():
+    assert re.search(r"not investment advice", re.sub(r"<[^>]+>", "", cp.START_HERE), re.I)
+    assert not re.search(r"investment advice", cp.PROMO_CAPTION, re.I)                  # the disclaimers live in the pinned post only
 
 
 def test_start_here_explains_the_lists_the_row_symbols_and_the_assistant():
     plain = re.sub(r"<[^>]+>", "", cp.START_HERE)
-    for needle in ("Breakout", "Near breakout", "20 sessions", "3% below", "top gainers", "top ATR", "top volume", "★", "vol", "Private assistant"):
-        assert needle in plain, needle
+    for needle in ("Breakout", "Near breakout", "20 trading days", "3% below", "biggest gain", "ATR", "busiest trading", "★", "vol", "private assistant", "Request access",
+                   "momentum board", "weekly recap", "End of day", "Nothing is live"):
+        assert needle.lower() in plain.lower(), needle
+    assert "06:00" not in plain and "Israel time" not in plain                          # no clock time: the send time can change without a copy change
 
 
 def test_start_here_is_pinned_and_a_pin_failure_does_not_lose_the_post():
@@ -232,7 +241,8 @@ def _imports(source):
 
 
 @pytest.mark.parametrize("sender", ["send_daily_digest.py", "channel_posts.py", "send_daily_alerts.py", "digest_format.py", "market_card.py",
-                                    "channel_content.py", "channel_cards.py", "market_stats.py", "send_channel_posts.py", "backfill_snapshots.py", "channel_news.py"])
+                                    "channel_content.py", "channel_cards.py", "market_stats.py", "send_channel_posts.py", "backfill_snapshots.py", "channel_news.py",
+                                    "send_channel_notices.py", "board.py", "star.py", "channel_control.py", "message_ledger.py"])
 def test_channel_senders_do_not_use_the_assistants_screens_or_data(sender):
     """Structural guard: what a channel receives is built from public daily data only. Nothing of the assistant (its screens, the user's
     lists, the access flow, the tracker, the bot process) may be IMPORTED by a module that posts to a channel, and none of them may query the

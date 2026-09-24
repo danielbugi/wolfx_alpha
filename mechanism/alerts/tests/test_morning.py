@@ -54,6 +54,8 @@ def test_the_message_lists_only_changed_stocks_states_counts_and_how_to_turn_it_
     assert "MSTR ▲16.4% · moved from Near breakout to Breakout; in today's lists: gainers #3 · ATR #3; moved 2.3× its ATR" in plain
     assert "AAPL" not in plain                                                            # nothing changed for AAPL
     assert "2 of your 3 stocks changed" in plain and "/morning off" in plain and "Educational data, not advice" in plain
+    assert plain.splitlines()[0].startswith("2 of your 3 stocks changed")                 # the count leads: it is the notification preview
+    assert "Good morning" not in plain
     assert plain.index("COIN") < plain.index("MSTR")                                      # alphabetical, a stable order
 
 

@@ -61,6 +61,7 @@ class CardData:
     tiles: List[Tile]
     sectors: List[SectorBar]
     unclassified_n: int = 0
+    headline: Optional[str] = None          # the day's hook (digest_format.headline); shown under the title instead of the generic subtitle
 
 
 @lru_cache(maxsize=None)
@@ -211,7 +212,10 @@ def render_market_card(data: CardData) -> bytes:
     c = _Canvas()
     c.text(MARGIN, 82, "FIRST LIGHT", 26, INK2, bold=True)
     c.text(MARGIN, 148, f"US close · {data.session:%a %d %b}", 60, INK, bold=True)
-    c.text(MARGIN, 192, "Market performance · daily long-side scan · educational data", 24, MUTED)
+    if data.headline:
+        c.text(MARGIN, 196, data.headline, 30, INK2, bold=True)
+    else:
+        c.text(MARGIN, 192, "Market performance · daily long-side scan · educational data", 24, MUTED)
 
     tile_w, tile_h, gap = (W - 2 * MARGIN - 24) // 2, 140, 16
     ty = 232
@@ -221,5 +225,4 @@ def render_market_card(data: CardData) -> bytes:
 
     _breadth(c, 742, data.up_n, data.down_n, data.universe_n)
     _sectors(c, 936, data.sectors, data.unclassified_n)
-    c.text(MARGIN, H - 30, "Educational information from public price data. Not investment advice.", 22, MUTED)
     return c.png()

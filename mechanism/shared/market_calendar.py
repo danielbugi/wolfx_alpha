@@ -140,6 +140,19 @@ def latest_completed(sessions: Sessions, now: Optional[datetime] = None) -> Opti
     return max(ready) if ready else None
 
 
+def is_trading_day(day: Optional[date] = None, sessions: Optional[Sessions] = None) -> bool:
+    """Is `day` (New York date, default today) an actual US trading session -- a plain "was the market
+    open on this calendar date" check, distinct from check_new_session's "has a session COMPLETED that
+    a job has not processed yet". For same-day pre-market content (e.g. "who reports today") that must
+    stay silent on weekends/holidays regardless of any job's processed-state, not depend on whether a
+    PRIOR session has settled. Fails open (True) only via get_sessions()'s own weekday-fallback, exactly
+    like the rest of this module -- never silently skips a real trading day on a broken calendar."""
+    day = day or datetime.now(timezone.utc).astimezone(NY).date()
+    if sessions is None:
+        sessions, _ = get_sessions(day)
+    return day in sessions
+
+
 def _read_state() -> Dict[str, str]:
     try:
         return json.loads(STATE_PATH.read_text(encoding="utf-8"))
@@ -197,7 +210,15 @@ def _cli() -> int:
     m.add_argument("--key", required=True)
     m.add_argument("--session", required=True)
     sub.add_parser("status", help="show the calendar source, latest completed session and stored state")
+    td = sub.add_parser("trading-day", help="exit 0 = today (or --date) is a trading day, 3 = it is not")
+    td.add_argument("--date", help="check this date instead of today (YYYY-MM-DD)")
     args = ap.parse_args()
+
+    if args.cmd == "trading-day":
+        day = date.fromisoformat(args.date) if args.date else None
+        ok = is_trading_day(day)
+        print("trading day" if ok else "not a trading day")
+        return 0 if ok else EXIT_SKIP
 
     if args.cmd == "gate":
         d = check_new_session(args.key, force=args.force)

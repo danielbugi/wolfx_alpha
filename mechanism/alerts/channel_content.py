@@ -18,14 +18,15 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import pandas as pd
 
 from alerts import channel_cards as cc
+from alerts import board as bd
 from alerts import market_stats as ms
-from alerts.digest_format import INDENT, _arrow, _link
+from alerts.digest_format import INDENT, _arrow, _link, headline
 from alerts.market_card import SectorBar, Tile
 from alerts.message_format import fmt_price
-from alerts.texts import DEFINITIONS, DISCLAIMER_SHORT
+from alerts.texts import DEFINITIONS, DISCLAIMER_ONE_LINE
 
 CAPTION_LIMIT = 1024
-KINDS = ("health", "sector", "macro", "gaps", "near_highs", "aligned", "base_rate", "recap", "promo", "news", "scoreboard")
+KINDS = ("board", "health", "sector", "macro", "gaps", "near_highs", "aligned", "base_rate", "recap", "promo", "news", "scoreboard", "disclaimer", "assistant", "earnings_today")
 
 
 @dataclass
@@ -35,6 +36,9 @@ class Post:
     image: Optional[bytes] = None
     button: bool = False                         # attach the neutral "Private assistant" link button
     disable_preview: bool = True
+
+    def __post_init__(self):
+        self.text = self.text.rstrip()
 
 
 @dataclass
@@ -56,15 +60,14 @@ class Ctx:
     recap: Optional[Dict] = None
     news: Optional[Dict] = None
     scoreboard: Optional[Dict] = None
+    board: Optional[Dict] = None                                  # board.compute() result (the momentum board), None when there is nothing to show
     week_number: int = 0
+    notice_index: int = 0                                         # which variant of the rotating assistant post to show
+    earnings_today: Optional[List[Dict]] = None                   # today's reporters in the covered universe: symbol, close, sector (any may be None)
 
 
 def _sign_arrow(pct: float) -> str:
     return f"{'▲' if pct > 0 else '▼' if pct < 0 else '■'}{abs(pct):.1f}%"
-
-
-def _foot() -> str:
-    return f"<i>{DISCLAIMER_SHORT}</i>"
 
 
 def _rows_block(lines: List[str]) -> str:
@@ -72,19 +75,6 @@ def _rows_block(lines: List[str]) -> str:
 
 
 # ------------------------------------------------------------------ P1 market health
-def _index_vs_breadth(sp: Optional[float], up: int, down: int, universe_n: int) -> Optional[str]:
-    total = up + down
-    if sp is None or total <= 0 or universe_n <= 0:
-        return None
-    share = up / total * 100
-    head = f"S&amp;P 500 {_sign_arrow(sp)} · {share:.0f}% of {universe_n:,} liquid stocks rose"
-    if sp > 0 and share < 45:
-        return f"Index up, most stocks down: {head}."
-    if sp < 0 and share > 55:
-        return f"Index down, most stocks up: {head}."
-    return head + "."
-
-
 def health_card_data(ctx: Ctx) -> Optional[cc.HealthCard]:
     h = ctx.health
     if h is None or len(h.above50) < 2:
@@ -104,15 +94,14 @@ def post_health(ctx: Ctx) -> Optional[Post]:
     h = ctx.health
     a50, a200 = float(h.above50.iloc[-1]), float(h.above200.iloc[-1])
     b50, b200 = ms.value_ago(h.above50, h.ref_sessions), ms.value_ago(h.above200, h.ref_sessions)
-    lines = [f"<b>Market health</b> · {ctx.session:%a %d %b}"]
-    iv = _index_vs_breadth(ctx.sp500_pct, ctx.up_n, ctx.down_n, ctx.universe_n)
-    if iv:
-        lines.append(iv)
-    lines.append(f"Above their 50-day average: {a50:.0f}%" + (f" ({b50:.0f}% {h.ref_sessions} sessions ago)" if b50 is not None else "")
-                 + f" · above 200-day: {a200:.0f}%" + (f" ({b200:.0f}%)" if b200 is not None else "") + ".")
-    lines.append(f"New 52-week highs {h.new_highs:,} · lows {h.new_lows:,}.")
-    lines.append(f"Breakouts {ctx.counts.get('breakout', 0):,} · near breakouts {ctx.counts.get('near_breakout', 0):,}.")
-    lines += ["", _foot()]
+    hook = headline(ctx.sp500_pct, ctx.up_n, ctx.down_n, ctx.universe_n)
+    lines = [f"<b>{html.escape(hook, quote=False) if hook else 'Market health'}</b>"]
+    sp = f" · S&amp;P 500 {_sign_arrow(ctx.sp500_pct)}" if ctx.sp500_pct is not None else ""
+    lines.append(f"{ctx.session:%a %d %b}{sp}")
+    ago = f"{h.ref_sessions} sessions ago"
+    lines.append(f"Above 50-day average: {a50:.0f}%" + (f" ({ago}: {b50:.0f}%)" if b50 is not None else ""))
+    lines.append(f"Above 200-day average: {a200:.0f}%" + (f" ({ago}: {b200:.0f}%)" if b200 is not None else ""))
+    lines.append(f"52-week highs {h.new_highs:,} · lows {h.new_lows:,}")
     return Post("health", "\n".join(lines), cc.render_health_card(d))
 
 
@@ -123,45 +112,43 @@ def post_sector(ctx: Ctx) -> Optional[Post]:
     bars = ctx.sector_bars
     best, worst = bars[0], bars[-1]
     up_n = sum(1 for b in bars if b[1] > 0)
-    lines = [f"<b>Sector rotation</b> · {ctx.session:%a %d %b}",
-             f"Median {ctx.sector_sessions}-session change: strongest {html.escape(best[0])} {_sign_arrow(best[1])}, "
-             f"weakest {html.escape(worst[0])} {_sign_arrow(worst[1])}.",
-             ("No sector is higher than" if up_n == 0 else f"All {len(bars)} sectors are higher than" if up_n == len(bars)
-              else f"{up_n} of {len(bars)} sectors are higher than") + f" {ctx.sector_sessions} sessions ago.", "", _foot()]
+    n = ctx.sector_sessions
+    # the title and the two labels follow the facts: "rotation" only when money is not moving the same way everywhere
+    if up_n == 0:
+        title, hi, lo = f"Every sector is lower than {n} sessions ago.", "Smallest drop", "Largest drop"
+    elif up_n == len(bars):
+        title, hi, lo = f"Every sector is higher than {n} sessions ago.", "Largest gain", "Smallest gain"
+    else:
+        title, hi, lo = f"{up_n} of {len(bars)} sectors are higher than {n} sessions ago.", "Strongest", "Weakest"
+    lines = [f"<b>{title}</b>", f"{ctx.session:%a %d %b} · median change of each sector's stocks",
+             f"{hi}: {html.escape(best[0])} {_sign_arrow(best[1])}", f"{lo}: {html.escape(worst[0])} {_sign_arrow(worst[1])}"]
     png = cc.render_sector_card(ctx.session, ctx.sector_sessions, [SectorBar(n, v) for n, v, _ in bars], ctx.sector_unclassified, ctx.universe_n)
     return Post("sector", "\n".join(lines), png)
 
 
 # ------------------------------------------------------------------ P3 macro strip
 def post_macro(ctx: Ctx) -> Optional[Post]:
-    tiles = ctx.macro_tiles
-    if not tiles or all(t.value == "n/a" for t in tiles):
+    tiles = [t for t in (ctx.macro_tiles or []) if t.value != "n/a"]          # a market with no value today is left out, never shown as "n/a"
+    if not tiles:
         return None
-    parts = []
-    for t in tiles:
-        if t.value == "n/a":
-            parts.append(f"{t.label} n/a")
-        elif t.direction == 0:
-            parts.append(f"{t.label} unchanged")
-        else:
-            parts.append(f"{t.label} {'▲' if t.direction > 0 else '▼'}{t.delta}")
-    lines = [f"<b>Beyond stocks</b> · {ctx.session:%a %d %b}", " · ".join(parts) + ".", "", _foot()]
+    parts = [f"{t.label} unchanged" if t.direction == 0 else f"{t.label} {'▲' if t.direction > 0 else '▼'}{t.delta}" for t in tiles]
+    lines = [f"<b>Beyond stocks</b> · {ctx.session:%a %d %b}", " · ".join(parts)]
     return Post("macro", "\n".join(lines), cc.render_macro_card(ctx.session, tiles))
 
 
 # ------------------------------------------------------------------ P4 gaps and volume
 def _expiry_note(session: date) -> Optional[str]:
     if ms.is_quarterly_expiry(session):
-        return "Quarterly options-expiry day: volume runs above normal across the board, so every vol × figure today is inflated."
+        return "Quarterly options-expiry day: volume runs high everywhere."
     if ms.is_monthly_options_expiry(session):
-        return "Monthly options-expiry day: volume runs above normal across the board, so vol × figures are inflated today."
+        return "Monthly options-expiry day: volume runs high everywhere."
     return None
 
 
 def _gap_row(i: int, r: Dict) -> str:
     vol = f" · vol {r['rvol']:.1f}×" if r.get("rvol") is not None else ""
     return (f"{i}. <b>{_link(r['symbol'])}</b> {fmt_price(r['close'])} {_arrow(r['ret1_pct'])}\n"
-            f"{INDENT}opened {r['gap_pct']:+.1f}%{vol}")
+            f"{INDENT}opened {_sign_arrow(r['gap_pct'])}{vol}")
 
 
 def post_gaps(ctx: Ctx) -> Optional[Post]:
@@ -170,9 +157,8 @@ def post_gaps(ctx: Ctx) -> Optional[Post]:
     g = ms.gap_lists(ctx.table)
     if not g["n_pool"] or not (g["ups"] or g["downs"]):
         return None
-    lines = [f"<b>Gaps and volume</b> · {ctx.session:%a %d %b}",
-             f"Of {g['n_pool']:,} liquid stocks, {g['n_up']} opened {g['threshold']:.0f}%+ above the prior close and {g['n_down']} opened "
-             f"{g['threshold']:.0f}%+ below it."]
+    lines = [f"<b>{g['n_up']} gapped up {g['threshold']:.0f}%+. {g['n_down']} gapped down.</b>",
+             f"{ctx.session:%a %d %b} · of {g['n_pool']:,} liquid stocks"]
     if g["ups"]:
         lines += ["", "<b>Largest gap-ups</b>", _rows_block([_gap_row(i, r) for i, r in enumerate(g["ups"], 1)])]
     if g["downs"]:
@@ -180,7 +166,6 @@ def post_gaps(ctx: Ctx) -> Optional[Post]:
     note = _expiry_note(ctx.session)
     if note:
         lines += ["", f"<i>{note}</i>"]
-    lines += ["", "<i>Gap = the open against the prior close. " + html.escape(DEFINITIONS["vol"], quote=False) + "</i>", "", _foot()]
     return Post("gaps", "\n".join(lines))
 
 
@@ -195,13 +180,11 @@ def post_near_highs(ctx: Ctx) -> Optional[Post]:
     for i, r in enumerate(n["rows"], 1):
         below = f"{r['below_hi252_pct']:.1f}% below its 52-week high"
         body.append(f"{i}. <b>{_link(r['symbol'])}</b> {fmt_price(r['close'])} {_arrow(r['ret1_pct'])}\n{INDENT}{below} · vol {r['rvol']:.1f}×")
-    lines = [f"<b>Near 52-week highs, on heavy volume</b> · {ctx.session:%a %d %b}",
-             f"{n['n']} liquid stocks closed within {n['within_pct']:.0f}% of their 52-week high with volume at least {n['min_rvol']:.0f}× normal. "
-             "Top 5 by volume:", "", _rows_block(body)]
+    lines = [f"<b>{n['n']} within {n['within_pct']:.0f}% of a 52-week high, on {n['min_rvol']:.0f}×+ volume.</b>",
+             f"{ctx.session:%a %d %b} · top 5 by volume", "", _rows_block(body)]
     note = _expiry_note(ctx.session)
     if note:
         lines += ["", f"<i>{note}</i>"]
-    lines += ["", "<i>" + html.escape(DEFINITIONS["vol"], quote=False) + "</i>", "", _foot()]
     return Post("near_highs", "\n".join(lines))
 
 
@@ -212,14 +195,45 @@ def post_aligned(ctx: Ctx) -> Optional[Post]:
     a = ms.aligned_breakouts(ctx.table, ctx.breakout_symbols)
     if a["n_priced"] == 0:
         return None
-    lines = [f"<b>Breakouts on longer timeframes</b> · {ctx.session:%a %d %b}",
-             f"{a['n_breakouts']} stocks closed above their 20-day high today. Of them, {a['n_week']} also closed within {a['within_pct']:.0f}% of their "
-             f"20-week high and {a['n_year']} within {a['within_pct']:.0f}% of their 52-week high ({a['n_both']} both)."]
-    if a["n_short_week"] or a["n_short_year"]:
-        lines.append(f"Stocks without enough history for a measure are not counted in it ({a['n_short_week']} for 20 weeks, {a['n_short_year']} for 52 weeks).")
-    lines += ["", "Members of the private assistant (free beta, by invitation) can see which stocks they are.", "",
-              "<i>20-week high = highest high of the last 100 sessions; 52-week high = last 252 sessions.</i>", "", _foot()]
+    w = a["within_pct"]
+    lines = [f"<b>{a['n_breakouts']} broke out. {a['n_both']} are also near their 20-week and 52-week highs.</b>",
+             f"{ctx.session:%a %d %b} · {a['n_week']} within {w:.0f}% of the 20-week high · {a['n_year']} within {w:.0f}% of the 52-week high",
+             "", "The names are in the assistant."]
     return Post("aligned", "\n".join(lines), button=True)
+
+
+# ------------------------------------------------------------------ earnings-today (own 11:00 Israel schedule -- see DATA_ML_MILESTONES.md M3)
+def _earnings_row(i: int, r: Dict) -> str:
+    bits = []
+    if r.get("sector"):
+        bits.append(html.escape(r["sector"]))
+    if r.get("close") is not None:
+        bits.append(fmt_price(r["close"]))
+    if r.get("eps_estimate") is not None:
+        bits.append(f"EPS est. {r['eps_estimate']:.2f}")
+    detail = " · ".join(bits) if bits else "no additional facts on file"
+    return f"{i}. <b>{_link(r['symbol'])}</b>\n{INDENT}{detail}"
+
+
+def post_earnings_today(ctx: Ctx) -> Optional[Post]:
+    """Facts only: no before/after-market timing -- the stored calendar only has the report DATE (see
+    DATA_ML_MILESTONES.md M2's schema note), never a reason to trade. Silent (returns None) on a day
+    with no reporters in the covered universe -- the trading-day gate that keeps this from firing on a
+    weekend/holiday at all lives in the sender (send_earnings_today.py), not here; a real trading day
+    can still legitimately have zero reporters, and that is not itself worth a post."""
+    rows = ctx.earnings_today or []
+    if not rows:
+        return None
+    n = len(rows)
+    head = f"<b>{n} compan{'y' if n == 1 else 'ies'} in the covered universe report{'s' if n == 1 else ''} today.</b>"
+    lines = [head, f"{ctx.session:%a %d %b}", ""]
+    shown, rest = rows[:25], rows[25:]
+    lines.append(_rows_block([_earnings_row(i, r) for i, r in enumerate(shown, 1)]))
+    if rest:
+        more_rows = [f"{25 + i}. <b>{_link(r['symbol'])}</b>" for i, r in enumerate(rest, 1)]
+        lines += ["", f"<i>More: {26}–{n} · tap to expand</i>",
+                  "<blockquote expandable>" + "\n".join(more_rows) + "</blockquote>"]
+    return Post("earnings_today", "\n".join(lines))
 
 
 # ------------------------------------------------------------------ P9 base rates
@@ -228,16 +242,13 @@ def post_base_rate(ctx: Ctx) -> Optional[Post]:
     if not b or b.get("n", 0) < 1000:
         return None
     years = [y for y in b["by_year"] if y["n"] >= 1000]
-    lines = [f"<b>Base rates</b> · what happened after a 20-day-high breakout",
-             f"All long breakouts in liquid US stocks since {b['first_year']}: {b['n']:,} cases, followed for 20 sessions each.",
-             f"• In {b['stopped'] * 100:.0f}% price fell to a level 2× ATR below the breakout price at some point.",
-             f"• In {b['tp3'] * 100:.0f}% price rose to a level 6× ATR above it before that happened."]
+    lines = [f"<b>{b['n']:,} breakouts since {b['first_year']}.</b>",
+             f"{b['stopped'] * 100:.0f}% fell 2× ATR below the breakout price at some point.",
+             f"{b['tp3'] * 100:.0f}% rose 6× ATR above it before that."]
     if len(years) >= 2:
         lo, hi = min(years, key=lambda y: y["stopped"]), max(years, key=lambda y: y["stopped"])
-        lines.append(f"• By calendar year the first figure ranged from {lo['stopped'] * 100:.0f}% ({lo['year']}) to {hi['stopped'] * 100:.0f}% ({hi['year']}).")
-    lines += ["", "Most breakouts do not run far, a minority do, and how often changes with the market.", "",
-              "<i>ATR = average true range. Uses today's index members, so stocks that dropped out are missing (survivor bias). "
-              "Descriptive history, not a forecast.</i>", "", _foot()]
+        lines.append(f"By year, the first figure ran from {lo['stopped'] * 100:.0f}% ({lo['year']}) to {hi['stopped'] * 100:.0f}% ({hi['year']}).")
+    lines += ["", "The question is not what broke out. It is which ones, and why."]
     return Post("base_rate", "\n".join(lines))
 
 
@@ -249,24 +260,29 @@ def post_recap(ctx: Ctx) -> Optional[Post]:
     days = r["days"]
     first, last = days[0]["date"], days[-1]["date"]
     lines = [f"<b>Week in review</b> · {first:%d %b} – {last:%d %b}",
-             "Breakouts by day: " + " · ".join(f"{d['date']:%a} {d['breakout']}" for d in days),
+             "Breakouts: " + " · ".join(f"{d['date']:%a} {d['breakout']}" for d in days),
              "Near breakouts: " + " · ".join(f"{d['date']:%a} {d['near']}" for d in days)]
     if all(d.get("up_pct") is not None for d in days):
-        lines.append("Share of stocks that rose: " + " · ".join(f"{d['date']:%a} {d['up_pct']:.0f}%" for d in days))
+        lines.append("Stocks that rose: " + " · ".join(f"{d['date']:%a} {d['up_pct']:.0f}%" for d in days))
     if r.get("sectors"):
         best, worst = r["sectors"][0], r["sectors"][-1]
-        lines.append(f"Median {r['sector_sessions']}-session sector change: strongest {html.escape(best[0])} {_sign_arrow(best[1])}, "
-                     f"weakest {html.escape(worst[0])} {_sign_arrow(worst[1])}.")
+        lines.append(f"Sectors, {r['sector_sessions']} sessions: {html.escape(best[0])} {_sign_arrow(best[1])} led, "
+                     f"{html.escape(worst[0])} {_sign_arrow(worst[1])} trailed.")
     if r.get("persistent"):
-        names = ", ".join(f"<b>{_link(s)}</b>" for s in r["persistent"][:12])
-        more = f" and {len(r['persistent']) - 12} more" if len(r["persistent"]) > 12 else ""
-        lines.append(f"In the breakout group on {r['persist_min']}+ of {len(days)} sessions ({len(r['persistent'])}): {names}{more}")
-    lines += ["", _foot()]
+        names, seen = [], set()
+        for s in r["persistent"]:                        # one company can be stored under two tickers (BRK.B / BRK/B): show it once
+            key = s.replace("/", ".").replace("-", ".").upper()
+            if key not in seen:
+                seen.add(key)
+                names.append(s)
+        shown = ", ".join(f"<b>{_link(s)}</b>" for s in names[:10])
+        more = f" +{len(names) - 10}" if len(names) > 10 else ""
+        lines.append(f"Breakout list on {r['persist_min']}+ of {len(days)} days ({len(names)}): {shown}{more}")
     return Post("recap", "\n".join(lines))
 
 
 # ------------------------------------------------------------------ P10 education and promotion (rotating)
-PRIVATE = "Free during the beta, by invitation — tap <b>Private assistant</b> under the daily post to request access."
+PRIVATE = "Access on request · seats limited. Tap <b>Request access</b> under the daily post."
 PROMOS: List[Dict] = [
     {"key": "atr", "assistant": False, "text":
         "<b>What is ATR?</b>\nATR (average true range) is a stock's average daily price range over 14 days. Two stocks can both move $1 in a day, "
@@ -307,7 +323,6 @@ def post_promo(ctx: Ctx) -> Optional[Post]:
     lines = [p["text"]]
     if p["assistant"]:
         lines += ["", PRIVATE]
-    lines += ["", _foot()]
     return Post("promo", "\n".join(lines), button=p["assistant"])
 
 
@@ -321,8 +336,7 @@ def post_news(ctx: Ctx) -> Optional[Post]:
         return None
     lines = [f"<b>News on today's movers</b> · {ctx.session:%a %d %b}",
              "Headlines for stocks in today's lists, as published. We show the headline and its link only.", ""]
-    foot = ["", "<i>Headlines come from Alpaca's news feed and link to their publishers. We do not write or edit them; headlines that read as "
-            "ratings or price calls are left out.</i>", "", _foot()]
+    foot = ["", "<i>Headlines via Alpaca's news feed; each link goes to its publisher.</i>"]
     size = sum(len(x) + 1 for x in lines + foot)
     shown = 0
     for m in n["movers"]:
@@ -366,15 +380,71 @@ def post_scoreboard(ctx: Ctx) -> Optional[Post]:
             u = h["universe"]
             lines.append(f"• {k} session{'s' if k > 1 else ''} later: {h['up_share']:.0f}% higher, median {_signed(h['median'])}% ({h['n']:,} stock-days). "
                          f"All liquid stocks over the same sessions: {u['up_share']:.0f}% higher, median {_signed(u['median'])}%.")
-    lines += ["", "<i>Consecutive days of the same stock overlap, so these are descriptive counts, not independent tests. Lists that came earlier say "
-              "nothing about the next ones. Uses today's index members and today's adjusted prices.</i>", "", _foot()]
+    lines += ["", "<i>A stock-day is one stock on one session's lists.</i>"]
     return Post("scoreboard", "\n".join(lines))
 
 
+# ------------------------------------------------------------------ recurring notices (twice a day, sent by send_channel_notices.py)
+def post_disclaimer(ctx: Ctx) -> Optional[Post]:
+    """The general disclaimer notice. The full plain-language version lives in the pinned "Start here" post; this is the short reminder that points to it."""
+    lines = ["<b>Educational data. Not investment advice.</b>",
+             "It describes what already happened, not what happens next. Read the pinned message: how this channel works and what to keep in mind."]
+    return Post("disclaimer", "\n".join(lines))
+
+
+ASSISTANT_ACCESS = "Access on request · seats limited."
+ASSISTANT_POSTS: List[str] = [
+    "<b>The channel shows what moved. The assistant shows what moved for you.</b>\nYour stocks, followed from the day you add them.",
+    "<b>Find any stock that fits your rules.</b>\nOne line: <code>/screen breakout vol&gt;3</code>. Every stock in the daily scan, filtered.",
+    "<b>One message when the scan is ready.</b>\nThe stocks you follow, what changed, nothing else.",
+    "<b>Type a ticker. Get the card.</b>\nThe facts, the lists it is in, headlines and a chart, in one tap.",
+]
+
+
+def post_assistant(ctx: Ctx) -> Optional[Post]:
+    """The commercial post for the private assistant (four rotating variants, chosen by ctx.notice_index). Says exactly what access is today."""
+    body = ASSISTANT_POSTS[ctx.notice_index % len(ASSISTANT_POSTS)]
+    return Post("assistant", "\n".join([body, "", ASSISTANT_ACCESS]), button=True)
+
+
+# ------------------------------------------------------------------ momentum board (daily)
+PLACE_WORD = {1: "1st", 2: "2nd", 3: "3rd"}
+
+
+def _board_detail(r: Dict, n_sessions: int) -> str:
+    bits = []
+    if r.get("at_day_high"):
+        bits.append("closed at the top of its range")
+    elif r.get("above_20d_high"):
+        bits.append("closed above its prior 20-day high")
+    bits.append(f"in the lists {r['listed_sessions']} of {n_sessions} sessions")
+    return " · ".join(bits)
+
+
+def post_board(ctx: Ctx) -> Optional[Post]:
+    b = ctx.board
+    if not b or not b.get("top"):
+        return None
+    n = b["n_sessions"]
+    flat = max(0, b["n_measured"] - b["higher"] - b["lower"])          # the three numbers always add up to the group
+    lines = [f"<b>Momentum board</b> · {b['session']:%a %d %b}",
+             f"The {b['n_measured']:,} stocks the lists carried in the last {n} sessions: {b['higher']:,} up, {b['lower']:,} down"
+             + (f", {flat:,} flat" if flat else "") + f" today; {b['at_day_high']:,} closed at the top of their day's range.", ""]
+    for place, r in enumerate(b["top"], 1):
+        lines.append(f"{PLACE_WORD[place]} <b>{_link(r['symbol'])}</b> {fmt_price(r['close'])} {_arrow(r['ret1_pct'])}")
+        lines.append(f"{INDENT}{_board_detail(r, n)}")
+    if b.get("more"):
+        first = len(b["top"]) + 1
+        rows = [f"{first + i}. <b>{_link(r['symbol'])}</b> {fmt_price(r['close'])} {_arrow(r['ret1_pct'])}" for i, r in enumerate(b["more"])]
+        lines += ["", f"<i>More: ranks {first}–{first + len(rows) - 1} · tap to expand</i>", "<blockquote expandable>" + "\n".join(rows) + "</blockquote>"]
+    lines += ["", "<i>Ranked by today's % change among the stocks that closed higher.</i>"]
+    return Post("board", "\n".join(lines), cc.render_board_card(b))
+
+
 # ------------------------------------------------------------------ registry
-BUILDERS = {"health": post_health, "sector": post_sector, "macro": post_macro, "gaps": post_gaps, "near_highs": post_near_highs,
+BUILDERS = {"disclaimer": post_disclaimer, "assistant": post_assistant, "board": post_board, "health": post_health, "sector": post_sector, "macro": post_macro, "gaps": post_gaps, "near_highs": post_near_highs,
             "aligned": post_aligned, "base_rate": post_base_rate, "recap": post_recap, "promo": post_promo, "news": post_news,
-            "scoreboard": post_scoreboard}
+            "scoreboard": post_scoreboard, "earnings_today": post_earnings_today}
 
 
 def build_post(kind: str, ctx: Ctx) -> Optional[Post]:

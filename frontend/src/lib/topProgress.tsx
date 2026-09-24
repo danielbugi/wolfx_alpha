@@ -52,6 +52,13 @@ function TopProgressBar({ active }: { active: boolean }) {
   return (
     <div
       aria-hidden={!active}
+      // `contain: layout` (FRONTEND_FIX_MILESTONES.md FM-N15): the fill's sweep animation transforms it to
+      // translateX(350%), and Chromium factors a transformed descendant's post-transform box into the page's
+      // OWN scrollable overflow even though `overflow-hidden` clips it visually — confirmed by measuring
+      // document.documentElement.scrollWidth (905px on every route, always this element) and by re-measuring
+      // with `contain: layout` added, which stops it (containment makes this element the descendant's
+      // containing block for overflow purposes, so the transform can no longer escape upward).
+      style={{ contain: 'layout' }}
       className={`fixed top-0 left-0 right-0 z-50 h-[2px] overflow-hidden pointer-events-none transition-opacity duration-200 ${
         active ? 'opacity-100' : 'opacity-0'
       }`}

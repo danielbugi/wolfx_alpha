@@ -5,6 +5,8 @@ Real market-index/macro data API router — distinct from /api/screener's
 """
 
 from fastapi import APIRouter, HTTPException, Query, Depends
+
+from auth.dependencies import require_authenticated_user
 import logging
 
 from services.market_data_service import MarketDataService
@@ -15,6 +17,7 @@ market_router = APIRouter(
     prefix="/api/market",
     tags=["market"],
     responses={404: {"description": "Not found"}},
+    dependencies=[Depends(require_authenticated_user)],
 )
 
 

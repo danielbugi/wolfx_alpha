@@ -5,7 +5,9 @@ risk-adjusted strategy score (momentum + fundamentals + alignment, weighted
 against volatility-based risk).
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from auth.dependencies import require_authenticated_user
 from typing import Optional
 import logging
 
@@ -19,6 +21,7 @@ strategy_router = APIRouter(
     prefix="/api/strategy",
     tags=["strategy"],
     responses={404: {"description": "Not found"}},
+    dependencies=[Depends(require_authenticated_user)],
 )
 
 DIRECTION_TO_SIGNAL_TYPE = {

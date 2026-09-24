@@ -9,6 +9,8 @@ services/system_health_service.py for why all four matter together.
 """
 
 from fastapi import APIRouter, Depends
+
+from auth.dependencies import require_authenticated_user
 import logging
 
 from services.system_health_service import SystemHealthService
@@ -19,6 +21,7 @@ system_health_router = APIRouter(
     prefix="/api/system-health",
     tags=["system-health"],
     responses={404: {"description": "Not found"}},
+    dependencies=[Depends(require_authenticated_user)],
 )
 
 

@@ -2,10 +2,11 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { NextUIProvider } from '@nextui-org/react';
-import TopNav from '@/components/layout/TopNav';
 import DevQAPanel from '@/components/dev/DevQAPanel';
 import RoutePerfCollector from '@/components/perf/RoutePerfCollector';
 import { TopProgressProvider } from '@/lib/topProgress';
+import { AuthProvider } from '@/contexts/AuthContext';
+import AuthGate from '@/components/auth/AuthGate';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -25,8 +26,9 @@ export default function RootLayout({
       <body className={inter.className}>
         <NextUIProvider>
           <TopProgressProvider>
-            <TopNav />
-            {children}
+            <AuthProvider>
+              <AuthGate>{children}</AuthGate>
+            </AuthProvider>
             <DevQAPanel />
             <RoutePerfCollector />
           </TopProgressProvider>

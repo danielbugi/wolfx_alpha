@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   Card,
   CardBody,
@@ -16,32 +15,17 @@ import {
   Chip,
   Divider,
 } from '@nextui-org/react';
-import {
-  ResponsiveContainer,
-  Treemap,
-  ScatterChart,
-  Scatter,
-  XAxis,
-  YAxis,
-  ZAxis,
-  CartesianGrid,
-  Tooltip,
-} from 'recharts';
-import { API_BASE_URL, screenerApi, alphaApi, marketApi, MainPageData, MarketOverview, AlphaFinderResult, MarketIndexEntry, SectorHistoryEntry } from '@/services/api';
+import { ResponsiveContainer, Treemap } from 'recharts';
+import { apiClient, screenerApi, momentumBoardApi, momentumLeadersApi, marketApi, MainPageData, MarketOverview, MomentumBoardResult, MomentumLeadersBoard, MarketIndexEntry, SectorHistoryEntry } from '@/services/api';
 import SymbolHoverLink from '@/components/dashboard/SymbolHoverLink';
-import { confidenceColor } from '@/lib/uiColors';
 import { usePagePerf } from '@/hooks/usePagePerf';
 import { useTopProgress } from '@/lib/topProgress';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import ErrorAlert from '@/components/common/ErrorAlert';
 import MarketIndicesStrip from '@/components/dashboard/MarketIndicesStrip';
 import SectorTrendChart from '@/components/dashboard/SectorTrendChart';
-
-/** What recharts 3 passes to a <Scatter onClick>: the plotted datum spread with pixel
- * geometry, plus the untouched original datum under `payload`. */
-interface ScatterClickPoint {
-  payload: AlphaFinderResult;
-}
+import MomentumBoard, { BoardCategory } from '@/components/dashboard/MomentumBoard';
+import MomentumLeaders from '@/components/dashboard/MomentumLeaders';
 
 function timeAgo(date: Date | null): string {
   if (!date) return '—';
@@ -53,14 +37,6 @@ function timeAgo(date: Date | null): string {
   const hours = Math.floor(minutes / 60);
   return `${hours}h ago`;
 }
-
-const SIGNAL_TYPE_FILTERS = [
-  { label: 'All Signals', value: undefined },
-  { label: 'Bullish Breakout', value: 'bullish_breakout' },
-  { label: 'Near Bullish', value: 'near_bullish' },
-  { label: 'Bearish Breakout', value: 'bearish_breakout' },
-  { label: 'Near Bearish', value: 'near_bearish' },
-];
 
 function sectorColor(perf: number): string {
   if (perf >= 1) return '#059669';
@@ -90,7 +66,6 @@ function fitSectorLabel(name: string, width: number, fontSize: number): string {
 }
 
 export default function DashboardPage() {
-  const router = useRouter();
   const { markLoaded } = usePagePerf('/');
   const { start: startProgress, done: doneProgress } = useTopProgress();
 
@@ -118,12 +93,27 @@ export default function DashboardPage() {
   const [sectorHistory, setSectorHistory] = useState<SectorHistoryEntry[]>([]);
 
   const [selectedSector, setSelectedSector] = useState<string | null>(null);
-  const [signalType, setSignalType] = useState<string | undefined>(undefined);
-  const [highConfidenceOnly, setHighConfidenceOnly] = useState(false);
-  const [alphaView, setAlphaView] = useState<'list' | 'chart'>('list');
-  const [alphaResults, setAlphaResults] = useState<AlphaFinderResult[]>([]);
-  const [alphaLoading, setAlphaLoading] = useState(true);
-  const [alphaError, setAlphaError] = useState(false);
+
+  // Momentum Board -- see CLAUDE.md's 2026-09-22 dashboard reframe. Defaults to
+  // Breakout only (long side, confirmed moves), per the same instinct that used to
+  // set Alpha Finder's filter chips: a "find winners" panel should not open on noise.
+  const [boardCategory, setBoardCategory] = useState<BoardCategory>('breakout');
+  const [boardMinQualityGrade, setBoardMinQualityGrade] = useState<string | undefined>(undefined);
+  const [boardResults, setBoardResults] = useState<MomentumBoardResult[]>([]);
+  const [boardSessionDate, setBoardSessionDate] = useState<string | null>(null);
+  const [boardUniverseN, setBoardUniverseN] = useState(0);
+  const [boardCounts, setBoardCounts] = useState<Record<string, number>>({});
+  const [boardStarredTotal, setBoardStarredTotal] = useState(0);
+  const [boardLoading, setBoardLoading] = useState(true);
+  const [boardError, setBoardError] = useState(false);
+
+  // Momentum Leaders -- "who's still moving after making an earlier list" (see
+  // CLAUDE.md's 2026-09-23 dashboard audit; distinct from Momentum Board above,
+  // which ranks today's own lists).
+  const [leadersBoard, setLeadersBoard] = useState<MomentumLeadersBoard | null>(null);
+  const [leadersSessionDate, setLeadersSessionDate] = useState<string | null>(null);
+  const [leadersLoading, setLeadersLoading] = useState(true);
+  const [leadersError, setLeadersError] = useState(false);
 
   const fetchData = useCallback(async () => {
     const isFirstLoad = !hasLoadedOnceRef.current;
@@ -134,10 +124,8 @@ export default function DashboardPage() {
         startProgress();
       }
       setError(null);
-      const response = await fetch(`${API_BASE_URL}/api/dashboard/main-page-data`);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const result: MainPageData = await response.json();
-      setData(result);
+      const response = await apiClient.get<MainPageData>('/api/dashboard/main-page-data');
+      setData(response.data);
       setLastUpdatedAt(new Date());
       hasLoadedOnceRef.current = true;
       markLoaded();
@@ -191,35 +179,56 @@ export default function DashboardPage() {
     }
   }, []);
 
-  const fetchAlpha = useCallback(async () => {
+  const fetchBoard = useCallback(async () => {
     try {
-      setAlphaLoading(true);
-      const resp = await alphaApi.getFinder({
-        signal_type: signalType,
-        min_confidence: highConfidenceOnly ? 'high' : undefined,
+      setBoardLoading(true);
+      const resp = await momentumBoardApi.getBoard({
+        category: boardCategory,
+        min_quality_grade: boardMinQualityGrade,
         sector: selectedSector || undefined,
-        limit: 25,
+        limit: 50,
       });
-      setAlphaResults(resp.results);
-      setAlphaError(false);
+      setBoardResults(resp.results);
+      setBoardSessionDate(resp.session_date);
+      setBoardUniverseN(resp.universe_n);
+      setBoardCounts(resp.counts);
+      setBoardStarredTotal(resp.starred_total);
+      setBoardError(false);
     } catch {
-      setAlphaResults([]);
-      setAlphaError(true);
+      setBoardResults([]);
+      setBoardError(true);
     } finally {
-      setAlphaLoading(false);
+      setBoardLoading(false);
     }
-  }, [signalType, highConfidenceOnly, selectedSector]);
+  }, [boardCategory, boardMinQualityGrade, selectedSector]);
+
+  const fetchLeaders = useCallback(async () => {
+    try {
+      setLeadersLoading(true);
+      const resp = await momentumLeadersApi.getLeaders();
+      setLeadersBoard(resp.board);
+      setLeadersSessionDate(resp.session_date);
+      setLeadersError(false);
+    } catch {
+      setLeadersBoard(null);
+      setLeadersError(true);
+    } finally {
+      setLeadersLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchData();
     fetchMarketOverview();
     fetchMarketIndices();
     fetchSectorHistory();
+    fetchLeaders();
     const interval = setInterval(() => {
       fetchData();
       fetchMarketOverview();
       fetchMarketIndices();
       fetchSectorHistory();
+      fetchLeaders();
     }, 5 * 60 * 1000);
     // Tick once a minute just to re-render the "updated Xm ago" label.
     const clock = setInterval(() => forceTick((t) => t + 1), 60 * 1000);
@@ -227,11 +236,11 @@ export default function DashboardPage() {
       clearInterval(interval);
       clearInterval(clock);
     };
-  }, [fetchData, fetchMarketOverview, fetchMarketIndices, fetchSectorHistory]);
+  }, [fetchData, fetchMarketOverview, fetchMarketIndices, fetchSectorHistory, fetchLeaders]);
 
   useEffect(() => {
-    fetchAlpha();
-  }, [fetchAlpha]);
+    fetchBoard();
+  }, [fetchBoard]);
 
   if (initialLoading) {
     return (
@@ -279,7 +288,7 @@ export default function DashboardPage() {
         <div className="flex justify-between items-center mb-6 p-4 bg-white rounded-lg shadow-sm border border-slate-200">
           <div>
             <h1 className="text-2xl font-bold text-slate-800">Trading Dashboard</h1>
-            <p className="text-slate-600 text-sm mt-1">Professional market analysis and AI signals</p>
+            <p className="text-slate-600 text-sm mt-1">Professional market analysis and confirmed momentum signals</p>
           </div>
           <div className="flex items-center gap-3">
             <div className="text-right">
@@ -314,6 +323,7 @@ export default function DashboardPage() {
                 <p className="text-xl font-bold text-slate-800">
                   {data.market_summary.total_symbols.toLocaleString()}
                 </p>
+                <p className="text-[10px] text-slate-400 mt-1">tracked, incl. illiquid</p>
               </CardBody>
             </Card>
 
@@ -321,17 +331,18 @@ export default function DashboardPage() {
               <CardBody className="text-center p-4">
                 <p className="text-xs text-slate-500 mb-2 uppercase tracking-wide">Volume Ratio</p>
                 <p className="text-xl font-bold text-slate-800">
-                  {data.market_summary.avg_volume_ratio.toFixed(2)}x
+                  {data.market_summary.avg_volume_ratio != null ? `${data.market_summary.avg_volume_ratio.toFixed(2)}x` : '—'}
                 </p>
               </CardBody>
             </Card>
 
             <Card className="shadow-sm border border-slate-200">
               <CardBody className="text-center p-4">
-                <p className="text-xs text-slate-500 mb-2 uppercase tracking-wide">Active Signals</p>
+                <p className="text-xs text-slate-500 mb-2 uppercase tracking-wide">Confirmed Today</p>
                 <p className="text-xl font-bold text-slate-800">
-                   {data.top_gainers?.length + data.top_losers?.length + data.unusual_volume?.length + data.top_ai_picks?.length || 0}
+                  {boardStarredTotal}
                 </p>
+                <p className="text-[10px] text-slate-400 mt-1">★ on 2+ Momentum Board lists</p>
               </CardBody>
             </Card>
 
@@ -419,8 +430,8 @@ export default function DashboardPage() {
               <div className="flex justify-between items-center mb-2">
                 <p className="text-xs text-slate-500 uppercase tracking-wide">
                   {sectorView === 'heatmap'
-                    ? 'Sector Performance — box size = # stocks, color = avg change. Click a sector to filter Alpha Finder below.'
-                    : 'Sector Performance — 90-day cumulative return. Click a sector below to isolate it and filter Alpha Finder.'}
+                    ? 'Sector Performance — box size = # stocks, color = avg change. Click a sector to filter the Momentum Board below.'
+                    : 'Sector Performance — 90-day cumulative return. Click a sector below to isolate it and filter the Momentum Board.'}
                 </p>
                 {selectedSector && (
                   <Chip
@@ -511,186 +522,37 @@ export default function DashboardPage() {
           </Card>
         )}
 
-        {/* Alpha Finder */}
-        <Card className="mb-6 shadow-sm border border-slate-200">
-          <CardHeader className="bg-slate-700 text-white p-4">
-            <div className="flex flex-wrap justify-between items-center gap-3 w-full">
-              <div>
-                <h3 className="text-base font-semibold">Alpha Finder</h3>
-                <p className="text-slate-300 text-xs mt-1">
-                  Ranked by combined confidence + alignment + quality score
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Chip size="sm" className="bg-cyan-100 text-cyan-800 text-xs">
-                  {alphaResults.length} results
-                </Chip>
-                <Button
-                  size="sm"
-                  variant={alphaView === 'list' ? 'solid' : 'ghost'}
-                  className={alphaView === 'list' ? 'bg-white text-slate-800 text-xs' : 'text-white border-white text-xs'}
-                  onClick={() => setAlphaView('list')}
-                >
-                  List
-                </Button>
-                <Button
-                  size="sm"
-                  variant={alphaView === 'chart' ? 'solid' : 'ghost'}
-                  className={alphaView === 'chart' ? 'bg-white text-slate-800 text-xs' : 'text-white border-white text-xs'}
-                  onClick={() => setAlphaView('chart')}
-                >
-                  Chart
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
+        {/* Momentum Board -- replaces the old ML/alignment-based Alpha Finder. See
+            CLAUDE.md's 2026-09-22 dashboard reframe entry for why. */}
+        <MomentumBoard
+          results={boardResults}
+          loading={boardLoading}
+          error={boardError}
+          sessionDate={boardSessionDate}
+          universeN={boardUniverseN}
+          counts={boardCounts}
+          category={boardCategory}
+          onCategoryChange={setBoardCategory}
+          minQualityGrade={boardMinQualityGrade}
+          onMinQualityGradeChange={setBoardMinQualityGrade}
+          onRetry={fetchBoard}
+        />
 
-          {/* Filter chips */}
-          <div className="flex flex-wrap gap-2 p-3 bg-slate-50 border-b border-slate-200">
-            {SIGNAL_TYPE_FILTERS.map((f) => (
-              <Button
-                key={f.label}
-                size="sm"
-                variant={signalType === f.value ? 'solid' : 'bordered'}
-                className={signalType === f.value ? 'bg-slate-700 text-white text-xs' : 'text-xs border-slate-300'}
-                onClick={() => setSignalType(f.value)}
-              >
-                {f.label}
-              </Button>
-            ))}
-            <Button
-              size="sm"
-              variant={highConfidenceOnly ? 'solid' : 'bordered'}
-              className={highConfidenceOnly ? 'bg-emerald-600 text-white text-xs' : 'text-xs border-slate-300'}
-              onClick={() => setHighConfidenceOnly(!highConfidenceOnly)}
-            >
-              High Confidence Only
-            </Button>
-          </div>
+        <MomentumLeaders
+          board={leadersBoard}
+          sessionDate={leadersSessionDate}
+          loading={leadersLoading}
+          error={leadersError}
+          onRetry={fetchLeaders}
+        />
 
-          <CardBody className="p-0">
-            {alphaLoading ? (
-              <div className="flex justify-center py-10">
-                <LoadingSpinner size="medium" />
-              </div>
-            ) : alphaError ? (
-              <ErrorAlert
-                title="Alpha Finder unavailable"
-                message="Couldn't load ranked signals for these filters."
-                onRetry={fetchAlpha}
-                className="m-4"
-              />
-            ) : alphaResults.length === 0 ? (
-              <p className="text-center text-slate-400 text-sm py-10">No signals match these filters.</p>
-            ) : alphaView === 'chart' ? (
-              <div className="p-3">
-                <p className="text-xs text-slate-500 mb-2">
-                  Confidence vs. alignment — bubble size = quality score. Click a point to open the stock.
-                </p>
-                <ResponsiveContainer width="100%" height={320}>
-                  <ScatterChart margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis
-                      type="number"
-                      dataKey="alignment_score"
-                      name="Alignment Score"
-                      domain={[0, 100]}
-                      tick={{ fontSize: 10 }}
-                      label={{ value: 'Alignment Score', position: 'insideBottom', offset: -5, fontSize: 10 }}
-                    />
-                    <YAxis
-                      type="number"
-                      dataKey="ml_momentum_probability"
-                      name="ML Confidence %"
-                      domain={[0, 100]}
-                      tick={{ fontSize: 10 }}
-                      label={{ value: 'ML Score %', angle: -90, position: 'insideLeft', fontSize: 10 }}
-                    />
-                    <ZAxis type="number" dataKey="overall_quality_score" range={[40, 400]} name="Quality" />
-                    <Tooltip
-                      cursor={{ strokeDasharray: '3 3' }}
-                      contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                      formatter={(value, name) => [typeof value === 'number' ? value.toFixed(1) : value, name]}
-                      labelFormatter={() => ''}
-                    />
-                    <Scatter
-                      data={alphaResults.filter((r) => r.signal_type.includes('bullish'))}
-                      fill="#10b981"
-                      fillOpacity={0.7}
-                      name="Bullish"
-                      onClick={(point: ScatterClickPoint) => router.push(`/stock/${point.payload.symbol}`)}
-                      cursor="pointer"
-                    />
-                    <Scatter
-                      data={alphaResults.filter((r) => r.signal_type.includes('bearish'))}
-                      fill="#ef4444"
-                      fillOpacity={0.7}
-                      name="Bearish"
-                      onClick={(point: ScatterClickPoint) => router.push(`/stock/${point.payload.symbol}`)}
-                      cursor="pointer"
-                    />
-                  </ScatterChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <Table
-                removeWrapper
-                className="text-xs"
-                classNames={{
-                  th: "bg-slate-50 text-slate-600 font-medium text-xs h-8",
-                  td: "text-xs py-2"
-                }}
-              >
-                <TableHeader>
-                  <TableColumn>SYMBOL</TableColumn>
-                  <TableColumn align="end">PRICE</TableColumn>
-                  <TableColumn align="end">CHANGE</TableColumn>
-                  <TableColumn align="end">SCORE</TableColumn>
-                  <TableColumn>CONFIDENCE</TableColumn>
-                  <TableColumn>TYPE</TableColumn>
-                  <TableColumn>SECTOR</TableColumn>
-                  <TableColumn align="end">TARGET</TableColumn>
-                </TableHeader>
-                <TableBody>
-                  {alphaResults.map((r) => (
-                    <TableRow key={r.symbol}>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5">
-                          <SymbolHoverLink symbol={r.symbol} />
-                          {r.is_new && (
-                            <Chip size="sm" className="bg-amber-100 text-amber-800 text-[10px] h-4 px-1">
-                              NEW
-                            </Chip>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right text-slate-700">${r.current_price?.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">
-                        <span className={`font-semibold ${r.price_change_pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {r.price_change_pct >= 0 ? '+' : ''}
-                          {r.price_change_pct?.toFixed(2)}%
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-slate-700">
-                        {r.combined_score != null ? r.combined_score.toFixed(0) : 'N/A'}
-                      </TableCell>
-                      <TableCell>
-                        <Chip size="sm" className={`text-xs ${confidenceColor(r.ml_confidence)}`}>
-                          {r.ml_confidence?.replace('_', ' ') || 'N/A'}
-                        </Chip>
-                      </TableCell>
-                      <TableCell className="text-slate-600">{r.signal_type.replace(/_/g, ' ')}</TableCell>
-                      <TableCell className="text-slate-500">{r.sector}</TableCell>
-                      <TableCell className="text-right text-slate-600">
-                        {r.target_price != null ? `$${r.target_price.toFixed(2)}` : 'N/A'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardBody>
-        </Card>
+        {/* Whole-Market Movers -- unlike Momentum Board above (breakout/near-breakout only,
+            confirmed by 2+ lists), these three rank every liquid stock regardless of Donchian
+            category: the widest-angle "what's moving" view on the page. */}
+        <div className="flex items-center gap-2 mb-3">
+          <h2 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Whole-Market Movers</h2>
+          <span className="text-xs text-slate-400">— any stock, not just breakout-confirmed names</span>
+        </div>
 
         {/* Market Data Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
@@ -861,10 +723,11 @@ export default function DashboardPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <span className={`font-semibold ${
+                          stock.volume_ratio == null ? 'text-slate-400' :
                           stock.volume_ratio >= 3 ? 'text-red-600' :
                           stock.volume_ratio >= 2 ? 'text-amber-600' : 'text-slate-600'
                         }`}>
-                          {stock.volume_ratio.toFixed(1)}x
+                          {stock.volume_ratio != null ? `${stock.volume_ratio.toFixed(1)}x` : '—'}
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
@@ -888,7 +751,7 @@ export default function DashboardPage() {
         {/* Footer */}
         <div className="text-center py-4">
           <p className="text-xs text-slate-500">
-            Data refreshes automatically every 5 minutes | Trading System v1.0
+            Data refreshes automatically every 5 minutes | Donchian Breakout Screening Platform
           </p>
         </div>
       </div>

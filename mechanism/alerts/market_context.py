@@ -23,6 +23,8 @@ def _tile(symbol: str, label: str, kind: str, series: pd.DataFrame, session) -> 
     s = series.sort_values("date")
     if len(s) < 2 or pd.Timestamp(s["date"].iloc[-1]).date() != pd.Timestamp(session).date():
         return Tile(label, "n/a")                                         # no bar for the session: say so, do not guess
+    if pd.isna(s["close"].iloc[-1]) or pd.isna(s["close"].iloc[-2]):
+        return Tile(label, "n/a")                                         # a bar exists but the vendor gap left it null
     last, prev = float(s["close"].iloc[-1]), float(s["close"].iloc[-2])
     spark = [float(v) for v in s["close"].tail(SPARK_SESSIONS)]
     direction = (last > prev) - (last < prev)

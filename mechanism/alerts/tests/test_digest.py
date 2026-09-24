@@ -134,14 +134,35 @@ def test_messages_use_plain_words_fit_telegram_and_escape_symbols():
     assert "A<B>" not in text and "A&lt;B&gt;" in text
     first = header.splitlines()[0]
     assert "First Light" in first and "3 breakouts" in first and "1 near breakouts" in first     # the push preview carries the data
-    for words in ("S&amp;P 500 +0.2%", "VIX (volatility index) 14.8", "Stocks up 1,042", "Not investment advice",
+    for words in ("S&amp;P 500 +0.2%", "VIX (volatility index) 14.8", "Stocks up 1,042", "New here? Read the pinned message.",
                   "<blockquote expandable>", "ATR (average true range)"):
         assert words in header
+    assert "investment advice" not in header.lower()                                        # the disclaimer lives in the pinned post
     for words in ("BREAKOUT", "Top gainers", "Top ATR", "Top volume"):
         assert words in groups[0]
     assert "NEAR BREAKOUT" in groups[1] and "below high" in groups[1]
     assert not any(ch in text for ch in "🚀🎯🕳🧗🔊⚡🫀🪤🆕📈")                              # no unexplained emojis
     assert "TRAPDOOR" not in text and "Breakdown" not in text                               # long side only
+
+
+def test_the_new_tag_is_left_off_a_list_where_every_row_carries_it():
+    d = db_.build_digest(_rows(), top_n=5, min_dv=0)
+    near = d["boards"]["near_breakout"]
+    listed = near["gainers"][:5]
+    assert listed, "the fixture must have near-breakout rows"
+    for r in near["gainers"]:
+        r["new"] = True
+    assert " · NEW" not in fmt._list_block("near_breakout", "gainers", near, 5, None)         # all NEW: the tag says nothing
+    near["gainers"][0]["new"] = False
+    if len(near["gainers"]) > 1:
+        assert " · NEW" in fmt._list_block("near_breakout", "gainers", near, 5, None)        # a mix: the tag tells the rows apart
+
+
+def test_the_group_message_has_no_list_subtitles_and_states_the_count_in_its_title():
+    d = db_.build_digest(_rows(), top_n=5, min_dv=0)
+    group = fmt.format_group("breakout", d)
+    assert group.startswith(f"<b>BREAKOUT · {d['counts']['breakout']}</b>")
+    assert "biggest % gain today" not in group and "today's range vs its 14-day average" not in group and "Ranked: the " in group
 
 
 def test_each_list_is_a_quote_block_and_the_market_block_is_optional():
@@ -152,10 +173,16 @@ def test_each_list_is_a_quote_block_and_the_market_block_is_optional():
     with_market, without = fmt.format_header(*args), fmt.format_header(*args, with_market=False)
     assert "Stocks up 1,042" in with_market and "S&amp;P 500" in with_market
     assert "Stocks up" not in without and "S&amp;P" not in without and "<b>Groups</b>" in without      # the image carries it
-    assert "★ = the stock is in more than one list" in with_market
+    assert "★ = in the top 5 of more than one list" in with_market
     caption = fmt.format_caption(datetime(2026, 9, 18).date(), d)
-    assert len(caption) <= 1024 and caption.splitlines()[0].startswith("<b>First Light</b> · Fri 18 Sep · 3 breakouts")
-    assert "not investment advice" in caption.lower()
+    assert len(caption) <= 1024 and caption.splitlines()[0].startswith("<b>First Light</b> · Fri 18 Sep · 3 breakouts")     # no hook: the plain counts line
+    assert "investment advice" not in caption.lower()                                       # the data, no disclaimer (it is pinned)
+    hooked = fmt.format_caption(datetime(2026, 9, 18).date(), d, "Index up. 65% of stocks down.", ["a data note"])
+    lines = hooked.splitlines()
+    assert lines[0] == "<b>Index up. 65% of stocks down.</b>"                               # the notification line is the day's hook
+    assert lines[1].startswith("Fri 18 Sep · 3 broke out · ") and "within 3% of it" in lines[1]
+    assert lines[-1] == "Note: a data note" and "Sent " not in hooked and "Jerusalem" not in hooked    # no send-time stamp
+    assert "Sent " not in with_market and "Jerusalem" not in with_market
 
 
 def test_rows_are_two_short_lines_for_a_phone():

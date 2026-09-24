@@ -5,6 +5,11 @@ place: EDUCATIONAL information from public price data, never advice. test_digest
 in the rendered messages for advice-style words (buy / sell / target / stop / entry / recommend / signal / ...).
 """
 
+# The channel's per-post disclaimer: ONE line at the foot of every channel post and image. The full, plain-language disclaimer lives in the pinned
+# "Start here" post (channel_posts.START_HERE) and in the twice-daily notice (channel_content.post_disclaimer). The private assistant keeps the
+# longer wording below (it is shown once, behind an acknowledgement button).
+DISCLAIMER_ONE_LINE = "* Not investment advice."
+
 DISCLAIMER_SHORT = ("Educational information from public price data, ranked by the stated formulas. Not investment advice "
                     "and not a suggestion to trade any security. Everyone makes their own decisions.")
 
@@ -20,7 +25,7 @@ ACK_HINT = "Tap the button below to continue. If the button does not respond, se
 
 # Access (PRIVATE_ASSISTANT_PLAN.md section 3). The bot is invite-only; a person who is not let in gets exactly one of these and
 # nothing is stored about them. {uid} is their OWN Telegram id, which they can pass to the owner.
-NOT_INVITED = ("This is the First Light private assistant. It is free during the beta and access is by invitation.\n\n"
+NOT_INVITED = ("This is the First Light private assistant. Access is on request, and seats are limited.\n\n"
                "Tap <b>Request access</b> and the owner will review it. If you already have an invitation link, open it again.\n\n"
                "Your Telegram id: <code>{uid}</code>")
 NOT_INVITED_CLOSED = ("This is the First Light private assistant. Access is closed for now.\n\n"
@@ -32,7 +37,7 @@ WHAT_IS_THIS = (
     "<b>The First Light private assistant</b>\n"
     "It reads the same end-of-day scan as the First Light channel and lets you follow your own watchlist and portfolio since the day "
     "you add a stock, with news and a chart for each stock.\n\n"
-    "It is free during the beta and access is by invitation. If you request access, your Telegram id and the time are stored until the "
+    "Access is on request, and the owner approves each one. If you request access, your Telegram id and the time are stored until the "
     "owner decides (at most 14 days). Nothing is stored if you do not tap the button.\n\n"
     "Educational data from public price sources, not investment advice.")
 REQUEST_SENT = "Thanks - your request was sent to the owner. You will hear back here."

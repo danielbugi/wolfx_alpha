@@ -11,6 +11,7 @@ Safety properties
 """
 from __future__ import annotations
 
+import html
 import json
 import os
 import re
@@ -21,6 +22,7 @@ from typing import List, Optional
 import requests
 
 MAX_LEN = 4000  # Telegram hard limit is 4096; keep a margin
+TEXT_MAX = 4096  # Telegram's limit for a text message (what an EDIT is checked against; sends keep the MAX_LEN margin)
 CAPTION_MAX = 1024  # Telegram's limit for a photo caption
 API = "https://api.telegram.org"
 PLACEHOLDER_RE = re.compile(r"^\s*$|your[_-]?token|changeme|xxxx", re.I)
@@ -49,9 +51,24 @@ def prod_sending_enabled() -> bool:
     return os.getenv(PROD_SWITCH, "").strip() == "1"
 
 
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def plain_text(html_text: str) -> str:
+    """The text as Telegram parses it: tags removed, &amp; etc. unescaped."""
+    return html.unescape(_TAG_RE.sub("", html_text or ""))
+
+
+def text_length(html_text: str) -> int:
+    """Length Telegram checks against its 4096 limit: the text AFTER entities parsing (tags removed, &amp; etc. unescaped). A link's URL
+    lives in the tag, so it does not count; raw `len()` over-counts a row with a ticker link by about 65 characters."""
+    return len(plain_text(html_text))
+
+
 def split_message(text: str, limit: int = MAX_LEN) -> List[str]:
-    """Split on line boundaries so an HTML tag is never cut in half (cards are line-oriented)."""
-    if len(text) <= limit:
+    """Split on line boundaries so an HTML tag is never cut in half (cards are line-oriented). A message whose PARSED length fits is never split:
+    a cut inside a <blockquote> would leave an unclosed tag, which Telegram rejects."""
+    if text_length(text) <= limit:
         return [text]
     parts, cur = [], ""
     for line in text.split("\n"):
@@ -72,6 +89,8 @@ class TelegramClient:
     def __init__(self, token: Optional[str], chat_id: Optional[str], dry_run: bool = True,
                  session: Optional[requests.Session] = None, sleep=time.sleep):
         self.token, self.chat_id, self.dry_run = token, chat_id, dry_run
+        self.target: Optional[str] = None      # 'dev' | 'prod' | 'owner', set by from_env
+        self.recorder = None                   # message_ledger.LedgerRecorder for channel targets (never raises); None = nothing is recorded
         self._http = session or requests.Session()
         self._sleep = sleep
         if not dry_run:
@@ -91,7 +110,14 @@ class TelegramClient:
         # "owner" = the owner's PRIVATE chat with the bot (BOT_OWNER_ID): where every assistant screen belongs. Channels carry only the daily
         # data, promotion, news and information; assistant screens are never posted to a channel.
         key = {"dev": "TELEGRAM_DEV_CHAT_ID", "prod": "TELEGRAM_CHAT_ID", "owner": "BOT_OWNER_ID"}[target]
-        return cls(os.getenv("TELEGRAM_BOT_TOKEN"), os.getenv(key), dry_run=dry_run)
+        client = cls(os.getenv("TELEGRAM_BOT_TOKEN"), os.getenv(key), dry_run=dry_run)
+        client.target = target
+        if target in ("dev", "prod") and not dry_run:
+            # Every message sent to a CHANNEL is written to the ledger the Telegram Control Center reads (a bot cannot read a channel's history, so
+            # this is the only record). The private 'owner' chat and previews are never recorded. Lazy: no database is touched until the first send.
+            from alerts.message_ledger import LedgerRecorder
+            client.recorder = LedgerRecorder(target)
+        return client
 
     # ------------------------------------------------------------------
     def _redact(self, text: str) -> str:
@@ -146,10 +172,12 @@ class TelegramClient:
             return "dry-run"
         try:
             self._post("deleteMessage", {"chat_id": self.chat_id, "message_id": message_id})
+            self._record("deleted", message_id=message_id)
             return "deleted"
         except TelegramError as e:
             text = str(e).lower()
             if "message to delete not found" in text:                  # NOT just "not found": "chat not found" must fail loudly
+                self._record("deleted", message_id=message_id)          # it is gone either way
                 return "missing"
             if "can't be deleted" in text or "cannot be deleted" in text or "message can't" in text:
                 return "refused"
@@ -160,7 +188,85 @@ class TelegramClient:
         if self.dry_run:
             return False
         self._post("pinChatMessage", {"chat_id": self.chat_id, "message_id": message_id, "disable_notification": silent})
+        self._record("pinned", message_id=message_id)
         return True
+
+    def unpin_message(self, message_id: int) -> str:
+        """Unpin a message: 'unpinned' | 'missing' (not pinned / no such message - Telegram answers the same "message to unpin not found" for
+        both) | 'dry-run'. Any other failure raises TelegramError."""
+        if self.dry_run:
+            return "dry-run"
+        try:
+            self._post("unpinChatMessage", {"chat_id": self.chat_id, "message_id": message_id})
+        except TelegramError as e:
+            if "message to unpin not found" in str(e).lower():
+                self._record("unpinned", message_id=message_id)              # already not pinned either way
+                return "missing"
+            raise
+        self._record("unpinned", message_id=message_id)
+        return "unpinned"
+
+    def edit_message(self, message_id: int, text: str, *, caption: bool = False, reply_markup: Optional[dict] = None,
+                     disable_preview: bool = True) -> str:
+        """Replace the text (or, for a photo, the caption) of a message this bot sent: 'edited' | 'unchanged' (Telegram: "message is not
+        modified") | 'missing' (no such message) | 'dry-run'. Any other failure raises TelegramError. Telegram REMOVES an inline keyboard that an edit
+        does not send again, so pass the message's `reply_markup` to keep its buttons."""
+        limit = CAPTION_MAX if caption else TEXT_MAX
+        if text_length(text) > limit:
+            raise TelegramError(f"the {'caption' if caption else 'text'} is {text_length(text)} chars; Telegram allows {limit}")
+        if not text.strip():
+            raise TelegramError("an empty message cannot be saved")
+        if self.dry_run:
+            return "dry-run"
+        payload = {"chat_id": self.chat_id, "message_id": message_id, "parse_mode": "HTML"}
+        if caption:
+            payload["caption"] = text
+        else:
+            payload["text"] = text
+            payload["disable_web_page_preview"] = disable_preview
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
+        try:
+            self._post("editMessageCaption" if caption else "editMessageText", payload)
+        except TelegramError as e:
+            answer = str(e).lower()
+            if "message is not modified" in answer:
+                return "unchanged"
+            if "message to edit not found" in answer:                 # NOT just "not found": "chat not found" must fail loudly
+                return "missing"
+            raise
+        self._record("edited", message_id=message_id, text=text)
+        return "edited"
+
+    def replace_photo(self, message_id: int, png: bytes, caption: str, *, reply_markup: Optional[dict] = None) -> str:
+        """Swap the image of a message this bot sent, with a new caption in the same call (Telegram's editMessageMedia requires the whole
+        media object, not just the file - there is no "keep the old caption" shortcut, so the caller always sends the caption it wants shown).
+        'edited' | 'unchanged' (Telegram: not modified - the same image+caption already showed) | 'missing' (no such message) | 'dry-run'. Any
+        other failure raises TelegramError. Like edit_message, an inline keyboard the caller does not resend is REMOVED by Telegram."""
+        if text_length(caption) > CAPTION_MAX:
+            raise TelegramError(f"the caption is {text_length(caption)} chars; Telegram allows {CAPTION_MAX}")
+        if self.dry_run:
+            return "dry-run"
+        media = {"type": "photo", "media": "attach://photo", "caption": caption, "parse_mode": "HTML"}
+        payload = {"chat_id": self.chat_id, "message_id": message_id, "media": json.dumps(media)}
+        if reply_markup:
+            payload["reply_markup"] = json.dumps(reply_markup)
+        try:
+            self._post("editMessageMedia", payload, files={"photo": ("first_light.png", png, "image/png")})
+        except TelegramError as e:
+            answer = str(e).lower()
+            if "message is not modified" in answer:
+                return "unchanged"
+            if "message to edit not found" in answer:
+                return "missing"
+            raise
+        self._record("edited", message_id=message_id, text=caption)
+        return "edited"
+
+    def _record(self, event: str, **kw) -> None:
+        """Report to the ledger (channels only). The recorder never raises, so a ledger problem cannot break or repeat a send."""
+        if self.recorder is not None and not self.dry_run:
+            getattr(self.recorder, event)(chat_id=self.chat_id, **kw)
 
     def chat_info(self) -> dict:
         """getChat for the target chat: {'type', 'title', ...}. Refused in dry-run."""
@@ -168,10 +274,12 @@ class TelegramClient:
             raise TelegramError("chat_info is not available in dry-run")
         return self._post("getChat", {"chat_id": self.chat_id})["result"]
 
-    def send_photo(self, png: bytes, caption: str = "", silent: bool = False, reply_markup: Optional[dict] = None) -> Optional[int]:
-        """Send a PNG with an HTML caption (Telegram limit 1024 chars). Returns the message id (None in dry-run)."""
-        if len(caption) > CAPTION_MAX:
-            raise TelegramError(f"caption is {len(caption)} chars; Telegram allows {CAPTION_MAX}")
+    def send_photo(self, png: bytes, caption: str = "", silent: bool = False, reply_markup: Optional[dict] = None,
+                   kind: Optional[str] = None) -> Optional[int]:
+        """Send a PNG with an HTML caption (Telegram limit 1024 chars). Returns the message id (None in dry-run). `kind` labels the post in the
+        message ledger (e.g. 'digest_card'); unknown = 'other'."""
+        if text_length(caption) > CAPTION_MAX:
+            raise TelegramError(f"caption is {text_length(caption)} chars; Telegram allows {CAPTION_MAX}")
         if self.dry_run:
             return None
         payload = {"chat_id": self.chat_id, "caption": caption, "parse_mode": "HTML",
@@ -179,13 +287,16 @@ class TelegramClient:
         if reply_markup:
             payload["reply_markup"] = json.dumps(reply_markup)     # multipart fields are strings, so the keyboard is JSON text
         data = self._post("sendPhoto", payload, files={"photo": ("first_light.png", png, "image/png")})
+        message_id = data["result"]["message_id"]
+        self._record("sent", message_id=message_id, kind=kind, content_type="photo", text=caption, reply_markup=reply_markup, silent=silent)
         self._sleep(1.1)
-        return data["result"]["message_id"]
+        return message_id
 
     def send_message(self, text: str, disable_preview: bool = True, silent: bool = False,
-                     reply_markup: Optional[dict] = None) -> List[Optional[int]]:
+                     reply_markup: Optional[dict] = None, kind: Optional[str] = None) -> List[Optional[int]]:
         """Send HTML text; returns the Telegram message ids (None entries in dry-run). `silent` = no notification sound;
-        `reply_markup` (an inline keyboard) is attached to the last part when the text has to be split."""
+        `reply_markup` (an inline keyboard) is attached to the last part when the text has to be split. `kind` labels the post in the message
+        ledger (e.g. 'digest_list'); unknown = 'other'."""
         ids: List[Optional[int]] = []
         parts = split_message(text)
         for k, part in enumerate(parts):
@@ -194,9 +305,12 @@ class TelegramClient:
                 continue
             payload = {"chat_id": self.chat_id, "text": part, "parse_mode": "HTML",
                        "disable_web_page_preview": disable_preview, "disable_notification": silent}
-            if reply_markup and k == len(parts) - 1:
-                payload["reply_markup"] = reply_markup
+            markup = reply_markup if reply_markup and k == len(parts) - 1 else None
+            if markup:
+                payload["reply_markup"] = markup
             data = self._post("sendMessage", payload)
             ids.append(data["result"]["message_id"])
+            self._record("sent", message_id=ids[-1], kind=kind, content_type="text", text=part, reply_markup=markup, silent=silent,
+                         disable_preview=disable_preview)
             self._sleep(1.1)   # stay under ~1 msg/sec per chat
         return ids

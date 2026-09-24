@@ -4,7 +4,9 @@ Alpha Finder API Router - A single ranked, filterable view of today's best
 ML-enhanced signals, combining confidence + alignment + quality into one list.
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from auth.dependencies import require_authenticated_user
 from typing import List, Dict, Any, Optional
 import glob
 import os
@@ -20,6 +22,7 @@ alpha_router = APIRouter(
     prefix="/api/alpha",
     tags=["alpha"],
     responses={404: {"description": "Not found"}},
+    dependencies=[Depends(require_authenticated_user)],
 )
 
 CONFIDENCE_RANK = {"very_high": 4, "high": 3, "medium": 2, "low": 1, "very_low": 0}

@@ -9,6 +9,8 @@ entities" and the user simply gets no reply. Rules (https://core.telegram.org/bo
 """
 from __future__ import annotations
 
+import re
+from html import unescape
 from html.parser import HTMLParser
 from typing import List
 
@@ -70,6 +72,7 @@ def problems(text: str, limit: int = 4096) -> List[str]:
     out = list(c.problems)
     if c.stack:
         out.append(f"unclosed tags: {c.stack}")
-    if len(text) > limit:
-        out.append(f"{len(text)} chars > {limit}")
+    parsed = len(unescape(re.sub(r"<[^>]+>", "", text)))         # Telegram's limits count the text AFTER entities parsing (a link's URL is not text)
+    if parsed > limit:
+        out.append(f"{parsed} chars > {limit}")
     return out

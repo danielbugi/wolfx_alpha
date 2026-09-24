@@ -60,17 +60,17 @@ def test_text_and_marks_meet_wcag_contrast(fg, bg, label):
     assert pa.contrast(fg, bg) >= 4.5, (label, round(pa.contrast(fg, bg), 2))
 
 
-def test_the_copy_has_no_advice_words_or_performance_claims_and_carries_the_disclaimer():
+def test_the_copy_has_no_advice_words_or_performance_claims_and_labels_the_screens_as_examples():
     joined = " ".join(pa.PROMO_COPY.values())
     assert BANNED.findall(joined) == [], BANNED.findall(joined)
-    assert "not investment advice" in pa.PROMO_COPY["footer"] and "Example" in pa.PROMO_COPY["footer"]
+    assert "Example" in pa.PROMO_COPY["footer"] and "investment advice" not in joined      # the disclaimer lives in the pinned post
     assert "%" not in joined and "$" not in joined                                      # no numbers in the copy itself (screens are labelled examples)
 
 
 def test_the_cta_tells_the_truth_about_access():
-    """The bot is invitation-only and free during the beta: the image must say exactly that, not 'sign up' or a price."""
+    """Access is on request and limited: the image must say exactly that, not 'sign up', 'beta', 'free' or a price."""
     cta = pa.PROMO_COPY["cta"].lower()
-    assert "beta" in cta and "invitation" in cta and not re.search(r"\b(sign ?up|join now|instant|open to all|subscribe)\b", cta)
+    assert "on request" in cta and "seats limited" in cta and not re.search(r"\b(sign ?up|join now|instant|open to all|subscribe|beta|free)\b|\$\d", cta)
 
 
 def test_rendering_is_deterministic():

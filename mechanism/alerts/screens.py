@@ -26,6 +26,7 @@ from alerts import performance as perf
 from alerts import texts
 from alerts.bot_service import GROUP_LABEL, LIST_LABEL, STALE_AFTER_DAYS
 from alerts.performance import D, PositionView, Totals
+from alerts.star import is_starred
 from alerts.tracker import CAP_HOLD, CAP_WATCH, AddResult
 
 TODAY_PAGE_SIZE = 15                                       # both of today's tabs (~10 and ~13 stocks) fit one screen; <= 8 keyboard rows
@@ -135,10 +136,10 @@ def onboarding_done() -> Screen:
 
 # ------------------------------------------------------------------ today's lists
 def order_rows(rows: Sequence[Dict]) -> List[Dict]:
-    """Stocks in more lists first, then the best rank, then the symbol - a stable, explainable order."""
+    """Starred stocks (top 5 of 2+ lists) first, then stocks in more lists, then the best rank, then the symbol - a stable, explainable order."""
     def key(r):
         ranks = r.get("list_ranks") or {}
-        return (-len(ranks), min(ranks.values()) if ranks else 99, r["symbol"])
+        return (not is_starred(ranks), -len(ranks), min(ranks.values()) if ranks else 99, r["symbol"])
     return sorted(rows, key=key)
 
 
@@ -164,10 +165,10 @@ def today(session: Optional[Dict], rows: Sequence[Dict], tab: str, page: int, tr
         lines.append("No stock in this group today.")
     for r in chosen:
         ranks = r.get("list_ranks") or {}
-        marks = (" ★" if len(ranks) >= 2 else "") + (" ✓" if r["symbol"] in tracked else "")
+        marks = (" ★" if is_starred(ranks) else "") + (" ✓" if r["symbol"] in tracked else "")
         lines.append(f"<b>{esc(r['symbol'])}</b>{marks}  {arrow_pct(r['ret1_pct'])}  {perf.fmt_price(D(r['close']))}")
         lines.append(f"{INDENT}{rank_text(ranks)}")
-    lines += ["", "★ in 2+ lists · ✓ on your lists · tap a stock for its card"]
+    lines += ["", "★ top 5 of 2+ lists · ✓ on your lists · tap a stock for its card"]
     ctx = f"t{tab}{page}"
     buttons = [Btn(("✓ " if r["symbol"] in tracked else "") + r["symbol"], f"sc:{r['symbol']}:{ctx}") for r in chosen]
     kb = chunk(buttons)

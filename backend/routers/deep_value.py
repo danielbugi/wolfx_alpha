@@ -4,6 +4,8 @@ Deep Value / Earnings-Turnaround Alerts API Router
 """
 
 from fastapi import APIRouter, HTTPException, Query, Depends
+
+from auth.dependencies import require_authenticated_user
 import logging
 
 from services.deep_value_service import DeepValueService
@@ -14,6 +16,7 @@ deep_value_router = APIRouter(
     prefix="/api/deep-value",
     tags=["deep-value"],
     responses={404: {"description": "Not found"}},
+    dependencies=[Depends(require_authenticated_user)],
 )
 
 

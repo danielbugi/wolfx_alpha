@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useCallback, useState } from 'react';
-import { API_BASE_URL } from '@/services/api';
+import { API_BASE_URL, getAccessToken } from '@/services/api';
 
 /**
  * Dev-only endpoint health panel. Pings every API endpoint the frontend
@@ -52,11 +52,11 @@ const ENDPOINTS: EndpointCheck[] = [
   { name: 'Top gainers', path: '/api/dashboard/top-gainers?limit=5' },
   { name: 'Top losers', path: '/api/dashboard/top-losers?limit=5' },
   { name: 'Unusual volume', path: '/api/dashboard/unusual-volume?limit=5' },
-  { name: 'Top AI picks', path: '/api/dashboard/top-ai-picks?limit=5' },
+  { name: 'Momentum board', path: '/api/momentum-board?category=breakout' },
+  { name: 'Momentum leaders', path: '/api/momentum-leaders' },
   { name: 'Screener filters', path: '/api/screener/filters' },
   { name: 'Screener presets', path: '/api/screener/presets' },
   { name: 'Market overview', path: '/api/screener/market-overview' },
-  { name: 'Alpha finder', path: '/api/alpha/finder?limit=5' },
   { name: 'Strategy rank', path: '/api/strategy/rank?limit=5' },
   { name: 'Deep value scan', path: '/api/deep-value/scan' },
   {
@@ -82,7 +82,11 @@ async function runCheck(check: EndpointCheck): Promise<CheckResult> {
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
-    const res = await fetch(`${API_BASE_URL}${check.path}`, { signal: controller.signal });
+    const token = getAccessToken();
+    const res = await fetch(`${API_BASE_URL}${check.path}`, {
+      signal: controller.signal,
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
     const latencyMs = Math.round(performance.now() - started);
     clearTimeout(timeout);
 

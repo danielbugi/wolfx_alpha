@@ -55,13 +55,13 @@ def build_message(session: Dict, tracked: Sequence[Dict], rows: Dict[str, Dict],
                 changed.append((row, why))
     if not changed:
         return None
-    lines = [f"<b>Good morning</b> · your lists after the US close {session['session_date']:%a %d %b}"]
+    # the count leads: the first line is what the phone's notification shows
+    lines = [f"<b>{len(changed)} of your {len(tracked)} stocks changed</b> · US close {session['session_date']:%a %d %b}"]
     for row, why in changed[:MAX_LINES]:
         lines.append(f"<b>{html.escape(row['symbol'], quote=False)}</b> {arrow_pct(row['ret1_pct'])} · {'; '.join(why)}")
     if len(changed) > MAX_LINES:
         lines.append(f"... and {len(changed) - MAX_LINES} more (open /watchlist or /portfolio)")
-    lines += ["", f"{len(changed)} of your {len(tracked)} stocks changed. Turn this off with /morning off.",
-              "<i>Educational data, not advice.</i>"]
+    lines += ["", "Turn this off with /morning off.", "<i>Educational data, not advice.</i>"]
     return "\n".join(lines)
 
 

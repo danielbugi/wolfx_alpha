@@ -172,4 +172,4 @@ def test_card_text_is_free_of_advice_style_words():
         re.findall(r'"([^"\n]{6,})"', src.split("def render_market_card")[1])
     hits = [(m.group(0), s) for s in strings for m in banned.finditer(s)]
     assert not hits, hits
-    assert "not investment advice" in src.lower() and texts.DISCLAIMER_SHORT
+    assert "investment advice" not in src.lower() and texts.DISCLAIMER_SHORT                # the picture carries no disclaimer; the pinned post does

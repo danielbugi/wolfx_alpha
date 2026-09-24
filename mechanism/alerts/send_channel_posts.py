@@ -39,6 +39,7 @@ import pandas as pd  # noqa: E402
 from shared import db, market_calendar  # noqa: E402
 from alerts import channel_content as cx  # noqa: E402
 from alerts import deeplink  # noqa: E402
+from alerts import board as bd  # noqa: E402
 from alerts import channel_news  # noqa: E402
 from alerts import digest_builder as dbld  # noqa: E402
 from alerts import market_context as mc  # noqa: E402
@@ -47,7 +48,7 @@ from alerts import scoreboard  # noqa: E402
 from alerts.digest_format import PRIVATE_ASSISTANT_BUTTON  # noqa: E402
 from alerts.send_daily_alerts import resolve_session  # noqa: E402
 from alerts.send_daily_digest import analyse_universe, load_universe_history  # noqa: E402
-from alerts.telegram_client import TelegramClient, TelegramError  # noqa: E402
+from alerts.telegram_client import TelegramClient, TelegramError, text_length  # noqa: E402
 
 PREVIEW_DIR = MECH.parent / "reports" / "first_light" / "posts"
 RECAP_SESSIONS = 5
@@ -104,6 +105,15 @@ def load_scoreboard(w: ms.Wide, session) -> dict:
     return scoreboard.compute(pd.DataFrame(listed, columns=["session_date", "symbol", "category"]), universe, w.close)
 
 
+def load_board(session, w: ms.Wide):
+    """The momentum board: stocks that were in the channel's lists in the previous BOARD_SESSIONS stored sessions, measured on `session`."""
+    listed = db.execute_dict_query(
+        "SELECT session_date, symbol, category FROM digest_stocks WHERE list_ranks IS NOT NULL AND category IN ('breakout', 'near_breakout') "
+        "AND session_date IN (SELECT session_date FROM digest_runs WHERE session_date < %s ORDER BY session_date DESC LIMIT %s)",
+        (session, bd.BOARD_SESSIONS))
+    return bd.compute(pd.DataFrame(listed, columns=["session_date", "symbol", "category"]), w, session)
+
+
 def pick_movers(rows, digest, limit: int = 8) -> list:
     """Stocks worth a headline check: the multi-list (star) stocks first, then each group's top gainers. [{symbol, ret1_pct, group}]"""
     by_sym = {r["symbol"]: r for r in rows}
@@ -143,7 +153,8 @@ def load_context(session, top_n: int = 5, with_news: bool = False, with_scoreboa
         health=ms.health(w), sp500_pct=sp500_change(session), table=ms.last_session_table(w),
         breakout_symbols=[r["symbol"] for r in rows if r["cat"] == "breakout"], sector_bars=bars20, sector_unclassified=unclassified,
         macro_tiles=mc.load_macro_tiles(db, session), base=load_base_rates(), recap=load_recap(session, w, sector_of),
-        news=news, scoreboard=load_scoreboard(w, session) if with_scoreboard else None, week_number=int(ts.isocalendar().week))
+        news=news, scoreboard=load_scoreboard(w, session) if with_scoreboard else None, board=load_board(session, w),
+        week_number=int(ts.isocalendar().week))
 
 
 # ------------------------------------------------------------------ sending
@@ -154,11 +165,11 @@ def button(username: str) -> dict:
 def send_post(tg: TelegramClient, post: cx.Post, username) -> None:
     kb = button(username) if post.button and username else None
     if post.image:
-        if len(post.text) > cx.CAPTION_LIMIT:
-            raise SystemExit(f"ABORT: the '{post.kind}' caption is {len(post.text)} chars (limit {cx.CAPTION_LIMIT}); nothing sent.")
-        tg.send_photo(post.image, post.text, silent=True, reply_markup=kb)
+        if text_length(post.text) > cx.CAPTION_LIMIT:
+            raise SystemExit(f"ABORT: the '{post.kind}' caption is {text_length(post.text)} chars (limit {cx.CAPTION_LIMIT}); nothing sent.")
+        tg.send_photo(post.image, post.text, silent=True, reply_markup=kb, kind=post.kind)
     else:
-        tg.send_message(post.text, disable_preview=post.disable_preview, silent=True, reply_markup=kb)
+        tg.send_message(post.text, disable_preview=post.disable_preview, silent=True, reply_markup=kb, kind=post.kind)
 
 
 def save_preview(post: cx.Post, session) -> None:
@@ -210,6 +221,13 @@ def main() -> int:
     ctx = load_context(session, with_news='news' in kinds, with_scoreboard='scoreboard' in kinds)
 
     built = []
+    auto = not (args.all or args.kind != "auto")
+    if auto and kinds != ["recap"] and os.getenv("CHANNEL_BOARD_ENABLED", "1").strip() != "0":
+        post = cx.build_post("board", ctx)                       # the daily momentum board comes first; the rotating post follows it
+        if post:
+            built.append(post)
+        else:
+            print("  (board: nothing honest to post today - no listed stock closed higher, or no stored lists yet)")
     for kind in kinds:
         post = cx.build_post(kind, ctx)
         if post:

@@ -9,6 +9,7 @@ from psycopg2.extensions import connection as _PGConnection
 import os
 import time
 import threading
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 from typing import List, Dict, Any, Optional
@@ -18,9 +19,23 @@ import logging
 from utils import find_latest_ml_enhanced_file, load_ml_enhanced_data, load_ml_enhanced_data_cached
 from contextlib import asynccontextmanager
 from services.performance_service import tracker as performance_tracker
+from auth.dependencies import require_authenticated_user
 
-# Load environment variables
-load_dotenv()
+# Load environment variables. Explicit path, not a bare load_dotenv(): python-dotenv's default upward
+# search stops at the FIRST `.env` it finds starting from this file's directory, and a stale, untracked
+# `backend/.env` (DB config only, missing everything added since) used to shadow the real repo-root `.env`
+# whenever the backend was started with `cd backend && uvicorn main:app` — exactly the command this
+# project's own docs tell you to run. That silently disabled TELEGRAM_CONTROL_TOKEN and would have done the
+# same to the newer auth config (JWT_SECRET, SMTP_*). Found and fixed 2026-09-22; see PLATFORM_ARCHITECTURE.md.
+#
+# override=True, not the library default (False): without it, a variable already present in the process's
+# inherited environment — even an empty string, e.g. left over from an earlier terminal/parent-shell session
+# in the same window lineage — silently wins over whatever `.env` says, forever, no matter how many times
+# `.env` is edited and the server restarted from that same shell. This is exactly what happened 2026-09-22
+# while wiring up SMTP for the 2FA email: SMTP_HOST was correct on disk, verified working in isolation, and
+# still came back empty inside the running server — traced to this. `.env` is meant to be the single source
+# of truth for this app's config (CLAUDE.md §6); it should always win.
+load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -177,10 +192,29 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Reads the comma-separated ALLOWED_ORIGINS env var (already present in .env and
+# docker/.env.example, previously unused -- see CURRENT_ARCHITECTURE.md §7). Falls back to the
+# existing hardcoded localhost list only when the var is entirely unset, so today's local dev
+# behavior is unchanged for anyone whose .env predates this. Fails closed on a literal "*": this
+# API uses allow_credentials=True, and a wildcard origin combined with credentials is rejected by
+# browsers anyway and is a real security footgun if it were ever silently accepted.
+def _parse_allowed_origins() -> list[str]:
+    raw = os.getenv("ALLOWED_ORIGINS")
+    if raw:
+        origins = [o.strip() for o in raw.split(",") if o.strip()]
+        if "*" in origins:
+            raise RuntimeError(
+                "ALLOWED_ORIGINS must not contain '*' -- this API uses allow_credentials=True; "
+                "a wildcard origin with credentials is invalid per the CORS spec and a real risk."
+            )
+        return origins
+    return ["http://localhost:3000", "http://localhost:5173", "http://localhost:8080", "http://localhost:3001"]
+
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://localhost:8080", "http://localhost:3001"],  # Common frontend ports
+    allow_origins=_parse_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -243,6 +277,20 @@ def set_cached_data(cache_key: str, data: Any):
 # ============================================================================
 # INCLUDE ROUTERS
 # ============================================================================
+
+# Import and include the auth router (login/2FA/refresh/logout/me + Owner-only
+# user & session management — see routers/auth.py). Included first and
+# unprotected at the router level: its own routes decide per-endpoint whether
+# a caller must already be signed in (e.g. /me) or not (e.g. /login).
+try:
+    from routers.auth import auth_router
+
+    app.include_router(auth_router)
+    logger.info("✅ Auth router included successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  Auth router not available: {e}")
+except Exception as e:
+    logger.error(f"❌ Error including auth router: {e}")
 
 # Import and include screener router
 try:
@@ -348,6 +396,57 @@ except ImportError as e:
 except Exception as e:
     logger.error(f"❌ Error including market data router: {e}")
 
+# Import and include the Momentum Board router (dashboard's find-big-winners panel,
+# replacing the old ML/alignment-based Alpha Finder — see
+# services/momentum_board_service.py)
+try:
+    from routers.momentum_board import momentum_board_router
+
+    app.include_router(momentum_board_router)
+    logger.info("✅ Momentum board router included successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  Momentum board router not available: {e}")
+except Exception as e:
+    logger.error(f"❌ Error including momentum board router: {e}")
+
+# Import and include the Momentum Leaders router (who's still moving after making an
+# earlier Momentum Board list — see services/momentum_leaders_service.py)
+try:
+    from routers.momentum_leaders import momentum_leaders_router
+
+    app.include_router(momentum_leaders_router)
+    logger.info("✅ Momentum leaders router included successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  Momentum leaders router not available: {e}")
+except Exception as e:
+    logger.error(f"❌ Error including momentum leaders router: {e}")
+
+# Import and include the Telegram Control Center router (what was posted to the
+# channels + edit/delete behind TELEGRAM_CONTROL_TOKEN — see
+# routers/telegram_control.py and mechanism/alerts/channel_control.py)
+try:
+    from routers.telegram_control import telegram_control_router
+
+    app.include_router(telegram_control_router)
+    logger.info("✅ Telegram control router included successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  Telegram control router not available: {e}")
+except Exception as e:
+    logger.error(f"❌ Error including Telegram control router: {e}")
+
+# Import and include the Bot Access Control router (who may use the private
+# assistant — approve/decline requests, revoke, invite links — Owner-only;
+# see routers/bot_access.py and mechanism/alerts/access.py)
+try:
+    from routers.bot_access import bot_access_router
+
+    app.include_router(bot_access_router)
+    logger.info("✅ Bot access router included successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  Bot access router not available: {e}")
+except Exception as e:
+    logger.error(f"❌ Error including bot access router: {e}")
+
 
 # ============================================================================
 # HEALTH AND STATUS ENDPOINTS
@@ -369,7 +468,6 @@ async def root():
             "/api/dashboard/top-gainers",
             "/api/dashboard/top-losers",
             "/api/dashboard/unusual-volume",
-            "/api/dashboard/top-ai-picks",
             "/api/screener/search",
             "/api/screener/filters",
             "/api/screener/market-overview",
@@ -471,20 +569,26 @@ def _build_main_page_data():
     """Fetch every dashboard component and populate the cache. Used both by
     the route handler (on a cache miss) and by the background pre-warm loop
     below (so a user request essentially never pays this cost -- see
-    _main_page_prewarm_loop). The four sub-fetches are independent blocking
+    _main_page_prewarm_loop). The three sub-fetches are independent blocking
     DB calls; running them concurrently instead of sequentially means a
     cold-cache build takes as long as the slowest one, not the sum of all
-    four."""
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    three.
+
+    No longer fetches "top AI picks" here (removed 2026-09-23, see CLAUDE.md's
+    dashboard reframe entries): that endpoint read alignment-only scores from
+    a screener era when ML was expected to contribute, mislabeled "AI" with no
+    model currently served (see the ML audit) -- and nothing on the dashboard
+    has rendered its list since AIPicksWidget.tsx was deleted. The Active
+    Signals summary card now gets its number from Momentum Board's
+    `starred_total` instead (frontend-side), not from this endpoint."""
+    with ThreadPoolExecutor(max_workers=3) as executor:
         f_gainers = executor.submit(get_top_gainers_internal, 5)
         f_losers = executor.submit(get_top_losers_internal, 5)
         f_volume = executor.submit(get_unusual_volume_internal, 5)
-        f_picks = executor.submit(get_top_ai_picks_internal, 5)
 
         top_gainers = f_gainers.result()
         top_losers = f_losers.result()
         unusual_volume = f_volume.result()
-        top_ai_picks = f_picks.result()
 
     # Market summary - use latest available data
     conn = get_database_connection()
@@ -512,16 +616,16 @@ def _build_main_page_data():
         "timestamp": datetime.now().isoformat(),
         "market_summary": {
             "total_symbols": summary_stats['total_symbols'] if summary_stats else 0,
+            # null (not a fabricated 1.0 "normal volume") when the table has no rows yet --
+            # same fix as the top-gainers/top-losers volume_ratio fabricated-default fix.
             "avg_volume_ratio": float(summary_stats['avg_volume_ratio']) if summary_stats and summary_stats[
-                'avg_volume_ratio'] else 1.0,
-            "active_signals": len(top_ai_picks) if top_ai_picks else 0,
+                'avg_volume_ratio'] is not None else None,
             "last_updated": summary_stats['latest_date'].strftime("%Y-%m-%d") if summary_stats and summary_stats[
                 'latest_date'] else "Unknown"
         },
         "top_gainers": top_gainers,
         "top_losers": top_losers,
         "unusual_volume": unusual_volume,
-        "top_ai_picks": top_ai_picks
     }
 
     set_cached_data("main_page_data", main_page_data)
@@ -547,7 +651,7 @@ def _main_page_prewarm_loop():
             break
 
 
-@app.get("/api/dashboard/main-page-data")
+@app.get("/api/dashboard/main-page-data", dependencies=[Depends(require_authenticated_user)])
 def get_main_page_data():
     """Get all main page data in a single request"""
     cached_data = get_cached_data("main_page_data", 900)  # 15 minute cache
@@ -570,7 +674,7 @@ def get_main_page_data():
 # INDIVIDUAL DASHBOARD COMPONENT ENDPOINTS
 # ============================================================================
 
-@app.get("/api/dashboard/top-gainers")
+@app.get("/api/dashboard/top-gainers", dependencies=[Depends(require_authenticated_user)])
 def get_top_gainers(limit: int = Query(10, ge=5, le=50)):
     """Get top gaining stocks"""
     return get_top_gainers_internal(limit)
@@ -624,6 +728,26 @@ def get_top_gainers_internal(limit: int = 10):
                     LIMIT 1
                 ) prev ON true
             ),
+            liquidity AS (
+                -- Prior-20-session average dollar volume, same definition and $1M floor as
+                -- ml_training/features/price_features.py's MIN_DOLLAR_VOLUME_20 (the guard
+                -- the digest/screener breakout lists already enforce -- see CLAUDE.md's
+                -- 2026-09-22 M7 fix). Without this, raw share-volume filtering here let
+                -- illiquid low-dollar-volume names show up as "top gainers".
+                SELECT
+                    ld.symbol,
+                    dv.dv20
+                FROM latest_data ld
+                LEFT JOIN LATERAL (
+                    SELECT AVG(sp.close * sp.volume) AS dv20
+                    FROM (
+                        SELECT close, volume FROM stock_prices sp
+                        WHERE sp.symbol = ld.symbol AND sp.date < ld.date
+                        ORDER BY sp.date DESC
+                        LIMIT 20
+                    ) sp
+                ) dv ON true
+            ),
             price_changes AS (
                 SELECT
                     ld.symbol,
@@ -637,8 +761,9 @@ def get_top_gainers_internal(limit: int = 10):
                     END as price_change_pct
                 FROM latest_data ld
                 LEFT JOIN previous_data pd ON ld.symbol = pd.symbol
+                JOIN liquidity liq ON liq.symbol = ld.symbol
                 WHERE ld.close >= 1.0  -- Filter penny stocks
-                AND ld.volume >= 100000  -- Minimum volume
+                AND liq.dv20 >= 1000000  -- $1M/day 20-session dollar-volume floor
                 AND pd.prev_close IS NOT NULL
             )
             SELECT
@@ -646,7 +771,7 @@ def get_top_gainers_internal(limit: int = 10):
                 pc.current_price,
                 pc.price_change_pct,
                 pc.volume,
-                COALESCE(ti.volume_ratio, 1.0) as volume_ratio,
+                ti.volume_ratio,
                 COALESCE(df.sector, 'Unknown') as sector,
                 df.market_cap
             FROM price_changes pc
@@ -671,7 +796,9 @@ def get_top_gainers_internal(limit: int = 10):
                 "current_price": float(gainer['current_price']),
                 "price_change_pct": round(float(gainer['price_change_pct']), 2),
                 "volume": int(gainer['volume']) if gainer['volume'] else 0,
-                "volume_ratio": round(float(gainer['volume_ratio']), 2) if gainer['volume_ratio'] else 1.0,
+                # No fabricated 1.0 default -- null means "not known", not "normal volume"
+                # (see CLAUDE.md's FM3.4 finding on fabricated defaults).
+                "volume_ratio": round(float(gainer['volume_ratio']), 2) if gainer['volume_ratio'] is not None else None,
                 "sector": gainer['sector'] or "Unknown",
                 "market_cap": int(gainer['market_cap']) if gainer['market_cap'] else None
             })
@@ -687,7 +814,7 @@ def get_top_gainers_internal(limit: int = 10):
         raise HTTPException(status_code=500, detail=f"Error retrieving top gainers: {str(e)}")
 
 
-@app.get("/api/dashboard/top-losers")
+@app.get("/api/dashboard/top-losers", dependencies=[Depends(require_authenticated_user)])
 def get_top_losers(limit: int = Query(10, ge=5, le=50)):
     """Get top losing stocks"""
     return get_top_losers_internal(limit)
@@ -736,6 +863,23 @@ def get_top_losers_internal(limit: int = 10):
                     LIMIT 1
                 ) prev ON true
             ),
+            liquidity AS (
+                -- Same $1M/day 20-session dollar-volume floor as get_top_gainers_internal --
+                -- see its comment for why the old raw share-volume filter wasn't enough.
+                SELECT
+                    ld.symbol,
+                    dv.dv20
+                FROM latest_data ld
+                LEFT JOIN LATERAL (
+                    SELECT AVG(sp.close * sp.volume) AS dv20
+                    FROM (
+                        SELECT close, volume FROM stock_prices sp
+                        WHERE sp.symbol = ld.symbol AND sp.date < ld.date
+                        ORDER BY sp.date DESC
+                        LIMIT 20
+                    ) sp
+                ) dv ON true
+            ),
             price_changes AS (
                 SELECT
                     ld.symbol,
@@ -749,8 +893,9 @@ def get_top_losers_internal(limit: int = 10):
                     END as price_change_pct
                 FROM latest_data ld
                 LEFT JOIN previous_data pd ON ld.symbol = pd.symbol
+                JOIN liquidity liq ON liq.symbol = ld.symbol
                 WHERE ld.close >= 1.0  -- Filter penny stocks
-                AND ld.volume >= 100000  -- Minimum volume
+                AND liq.dv20 >= 1000000  -- $1M/day 20-session dollar-volume floor
                 AND pd.prev_close IS NOT NULL
             )
             SELECT
@@ -758,7 +903,7 @@ def get_top_losers_internal(limit: int = 10):
                 pc.current_price,
                 pc.price_change_pct,
                 pc.volume,
-                COALESCE(ti.volume_ratio, 1.0) as volume_ratio,
+                ti.volume_ratio,
                 COALESCE(df.sector, 'Unknown') as sector,
                 df.market_cap
             FROM price_changes pc
@@ -783,7 +928,7 @@ def get_top_losers_internal(limit: int = 10):
                 "current_price": float(loser['current_price']),
                 "price_change_pct": round(float(loser['price_change_pct']), 2),
                 "volume": int(loser['volume']) if loser['volume'] else 0,
-                "volume_ratio": round(float(loser['volume_ratio']), 2) if loser['volume_ratio'] else 1.0,
+                "volume_ratio": round(float(loser['volume_ratio']), 2) if loser['volume_ratio'] is not None else None,
                 "sector": loser['sector'] or "Unknown",
                 "market_cap": int(loser['market_cap']) if loser['market_cap'] else None
             })
@@ -799,7 +944,7 @@ def get_top_losers_internal(limit: int = 10):
         raise HTTPException(status_code=500, detail=f"Error retrieving top losers: {str(e)}")
 
 
-@app.get("/api/dashboard/unusual-volume")
+@app.get("/api/dashboard/unusual-volume", dependencies=[Depends(require_authenticated_user)])
 def get_unusual_volume(limit: int = Query(10, ge=5, le=50)):
     """Get stocks with unusual volume activity"""
     return get_unusual_volume_internal(limit)
@@ -910,57 +1055,9 @@ def get_unusual_volume_internal(limit: int = 10):
         raise HTTPException(status_code=500, detail=f"Error retrieving unusual volume: {str(e)}")
 
 
-@app.get("/api/dashboard/top-ai-picks")
-def get_top_ai_picks(limit: int = Query(10, ge=5, le=20)):
-    """Get top AI-selected stock picks"""
-    return get_top_ai_picks_internal(limit)
-
-
-def get_top_ai_picks_internal(limit: int = 10):
-    """Internal function to get top AI picks - FIXED VERSION"""
-    cache_key = f"top_ai_picks_{limit}"
-    cached_data = get_cached_data(cache_key, 3600)  # 1 hour cache for ML data
-
-    if cached_data:
-        return cached_data
-
-    try:
-        # Load ML enhanced data (shared cache -- see utils.load_ml_enhanced_data_cached)
-        ml_data = load_ml_enhanced_data_cached()
-        if not ml_data or 'ai_insights' not in ml_data:
-            return []
-
-        # Get top AI picks from ML data
-        ai_picks = ml_data['ai_insights'].get('top_ai_picks', [])
-
-        # Limit results and format
-        formatted_picks = []
-        for i, pick in enumerate(ai_picks[:limit]):
-            formatted_pick = {
-                "rank": i + 1,
-                "symbol": pick.get('symbol'),
-                "current_price": pick.get('current_price'),
-                "breakout_type": pick.get('signal_type', '').replace('_', ' ').title(),
-                "ml_score": pick.get('ml_momentum_probability'),  # null = no validated score, never 0
-                "confidence": pick.get('ml_confidence'),
-                "urgency": pick.get('urgency', 'medium'),
-                "sector": pick.get('sector', 'Unknown'),
-                "volume_ratio": pick.get('volume_ratio', 1.0),
-                "price_change_pct": pick.get('price_change_pct', 0),
-                "reasoning": pick.get('summary_text', 'High probability breakout signal')
-            }
-            formatted_picks.append(formatted_pick)
-
-        set_cached_data(cache_key, formatted_picks)
-        return formatted_picks
-
-    except Exception as e:
-        import traceback
-        error_details = traceback.format_exc()
-        logger.error(f"Error getting top AI picks: {e}")
-        logger.error(f"Full traceback: {error_details}")
-        raise HTTPException(status_code=500, detail=f"Error retrieving top AI picks: {str(e)}")
-
+# /api/dashboard/top-ai-picks removed 2026-09-23 (see CLAUDE.md's dashboard reframe entries):
+# it read alignment-only scores mislabeled "AI" with no ML model currently served, and nothing
+# has rendered its list since AIPicksWidget.tsx was deleted the day before.
 
 # ============================================================================
 # MAIN APPLICATION

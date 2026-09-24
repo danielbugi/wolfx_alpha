@@ -4,6 +4,8 @@ Screener API Router - Advanced stock screening endpoints
 """
 
 from fastapi import APIRouter, HTTPException, Depends
+
+from auth.dependencies import require_authenticated_user
 from typing import List, Dict, Any
 import time
 import logging
@@ -24,6 +26,7 @@ screener_router = APIRouter(
     prefix="/api/screener",
     tags=["screener"],
     responses={404: {"description": "Not found"}},
+    dependencies=[Depends(require_authenticated_user)],
 )
 
 

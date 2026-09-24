@@ -43,7 +43,7 @@ def nothing_stored(store):
 def test_a_stranger_sees_the_request_screen_and_nothing_is_stored_by_looking():
     svc, calls = drive([msg(77, "/start"), msg(77, "/today", 2), msg(77, "hello", 3)], service(), enroll=False)
     first = sent(calls)[0]
-    assert first.text == texts.NOT_INVITED.format(uid=77) and "free during the beta" in first.text and "Request access" in first.text
+    assert first.text == texts.NOT_INVITED.format(uid=77) and "seats are limited" in first.text and "beta" not in first.text.lower() and "Request access" in first.text
     assert buttons(first) == [REQUEST, INFO]
     assert all(t == first.text for t in texts_sent(calls)) and nothing_stored(svc.store) and svc.store.events == {}
 

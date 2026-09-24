@@ -6,6 +6,8 @@ services/ml_stats_service.py for why this is split from system_health.
 """
 
 from fastapi import APIRouter, Depends
+
+from auth.dependencies import require_authenticated_user
 import logging
 
 from services.ml_stats_service import MLStatsService
@@ -16,6 +18,7 @@ ml_stats_router = APIRouter(
     prefix="/api/ml-stats",
     tags=["ml-stats"],
     responses={404: {"description": "Not found"}},
+    dependencies=[Depends(require_authenticated_user)],
 )
 
 
