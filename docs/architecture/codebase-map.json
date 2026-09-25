@@ -1,0 +1,113 @@
+{
+  "_meta": {
+    "purpose": "Machine-readable companion to CODEBASE_AUDIT.md. Structured relationships (entrypoint->timer, table->writer/reader, kind-string mismatches) that are tedious to grep for but cheap to query here. Not a replacement for the prose audit -- classifications, evidence, and reasoning live there.",
+    "generated": "2026-09-25",
+    "source_of_truth_note": "This is a snapshot, not a live sync. Re-verify against current code before trusting an entry for a change that matters.",
+    "companion_doc": "docs/architecture/CODEBASE_AUDIT.md"
+  },
+  "entrypoints": [
+    {"id": "backend_api", "file": "backend/main.py", "invoked_by": "backend/Dockerfile CMD (uvicorn main:app)", "status": "active"},
+    {"id": "full_pipeline", "file": "automation_pipeline.sh", "invoked_by": "deploy/vps/donchian-pipeline.service -> run_pipeline.sh (NOT in repo)", "status": "active"},
+    {"id": "post_market_publish", "file": "mechanism/alerts/publish_post_market.py", "invoked_by": "automation_pipeline.sh (inline + step 13); donchian-postmarket-retry.service -> run_postmarket_retry.sh (NOT in repo)", "status": "active"},
+    {"id": "telegram_bot", "file": "mechanism/alerts/run_bot.py", "invoked_by": "deploy/vps/donchian-bot.service", "status": "active_but_disabled_unit", "note": "confirmed live 2026-09-25: systemctl is-active=active, is-enabled=disabled. Will not survive a VPS reboot."},
+    {"id": "earnings_today", "file": "mechanism/alerts/send_earnings_today.py", "invoked_by": "donchian-earnings-today.service -> run_channel_sender.sh (NOT in repo)", "status": "active"},
+    {"id": "channel_notices", "file": "mechanism/alerts/send_channel_notices.py", "invoked_by": "donchian-notice-midday.service, donchian-notice-evening.service -> run_channel_sender.sh (NOT in repo)", "status": "active"},
+    {"id": "nightly_backup", "file": "deploy/db/nightly_backup.sh", "invoked_by": "donchian-nightly-backup.service", "status": "active", "note": "unlike other units, this wrapper script IS tracked in the repo"},
+    {"id": "channel_posts_rotation", "file": "mechanism/alerts/send_channel_posts.py", "invoked_by": "automation_pipeline.sh's gate-skip Sunday branch ONLY", "status": "active_dev_dormant_on_weekdays", "note": "no systemd timer calls this on a trading day; weekday rotation kinds unreachable in production"},
+    {"id": "frontend", "file": "frontend/src/app/*", "invoked_by": "Vercel build (not this repo's CI/CD)", "status": "active"}
+  ],
+  "scheduling": [
+    {"timer": "donchian-pipeline.timer", "schedule_israel": "23:45,01:00", "service": "donchian-pipeline.service", "script": "run_pipeline.sh (not tracked)", "sends_telegram": true, "updates_data": true},
+    {"timer": "donchian-postmarket-retry.timer", "schedule_israel": "23:45 then ~every 20min through 06:00", "service": "donchian-postmarket-retry.service", "script": "run_postmarket_retry.sh (not tracked)", "sends_telegram": true, "updates_data": "index+price only", "persistent": false},
+    {"timer": "donchian-firstlight1-prices.timer", "schedule_israel": "05:00", "service": "donchian-firstlight1-prices.service", "script": "firstlight1_updateonly.sh (not tracked)", "sends_telegram": false, "updates_data": true},
+    {"timer": "donchian-earnings-today.timer", "schedule_israel": "10:00", "service": "donchian-earnings-today.service", "script": "run_channel_sender.sh send_earnings_today.py (not tracked)", "sends_telegram": true, "updates_data": false},
+    {"timer": "donchian-notice-midday.timer", "schedule_israel": "12:00", "service": "donchian-notice-midday.service", "script": "run_channel_sender.sh send_channel_notices.py --slot 1 (not tracked)", "sends_telegram": true, "updates_data": false},
+    {"timer": "donchian-notice-evening.timer", "schedule_israel": "20:00", "service": "donchian-notice-evening.service", "script": "run_channel_sender.sh send_channel_notices.py --slot 2 (not tracked)", "sends_telegram": true, "updates_data": false},
+    {"timer": "donchian-nightly-backup.timer", "schedule_israel": "~02:30 (hardcoded UTC 23:30, NOT Asia/Jerusalem-tagged)", "service": "donchian-nightly-backup.service", "script": "deploy/db/nightly_backup.sh", "sends_telegram": false, "updates_data": false, "known_issue": "duplicated verbatim in deploy/vps/ and deploy/db/; will drift 1h at next DST change"},
+    {"service_no_timer": "donchian-bot.service", "trigger": "continuous, WantedBy=multi-user.target", "script": "run_bot.py (via docker compose up -d bot)", "sends_telegram": "DMs only, never the channel", "status": "disabled_unit_active_process"}
+  ],
+  "post_market_kinds": [
+    {"delivery_key": "daily_digest", "internal_kind": "daily_digest", "match": true, "builder": "send_daily_digest.py (subprocess)", "tables": ["stock_prices", "market_index_prices", "daily_fundamentals", "digest_runs", "digest_stocks"]},
+    {"delivery_key": "momentum_board", "internal_kind": "board", "match": false, "builder": "channel_content.post_board -> board.compute", "tables": ["digest_stocks", "digest_runs", "stock_prices"], "hazard": "naming mismatch vs telegram_messages.kind and channel_control.KIND_LABELS, which also use 'board' not 'momentum_board'"},
+    {"delivery_key": "top_gainers", "internal_kind": "top_gainers", "match": true, "builder": "channel_content.post_top_gainers", "tables": ["reuses daily_digest's stock_prices load, no new query"]},
+    {"delivery_key": "market_health", "internal_kind": "health", "match": false, "builder": "channel_content.post_health -> market_stats.health", "tables": ["stock_prices"], "hazard": "naming mismatch vs telegram_messages.kind and channel_control.KIND_LABELS, which also use 'health' not 'market_health'"}
+  ],
+  "database_tables_of_note": [
+    {"table": "telegram_post_delivery", "writers": ["mechanism/alerts/post_delivery.py"], "readers": ["mechanism/alerts/post_delivery.py", "mechanism/alerts/tests/test_post_delivery.py"], "status": "clean single-writer, confirmed no other code path writes to it"},
+    {"table": "companies", "writers": [], "readers": [], "status": "orphaned schema cruft; only touched by a one-time SQLite migration script"},
+    {"table": "data_updates", "writers": [], "readers": [], "status": "orphaned; contradicts DATABASE.md's 'generic run log' description -- zero live reader or writer found"},
+    {"table": "api_requests", "writers": [], "readers": [], "status": "never CREATE'd anywhere, only a defensive DROP IF EXISTS in the base schema"},
+    {"table": "data_quality_checks", "writers": [], "readers": [], "status": "same as api_requests"},
+    {"table": "bot_watchlist", "writers": [], "readers": [], "status": "confirmed dead, superseded by bot_tracked per its own migration comment"},
+    {"table": "inactive_symbols", "writers": [], "readers": ["backend/services/system_health_service.py", "mechanism/data_updaters/earnings_calendar_updater.py", "mechanism/data_updaters/daily_data_updater.py", "mechanism/data_updaters/fundamentals_updater.py", "mechanism/data_updaters/quarterly_fundamentals_updater.py"], "status": "orphaned read with 5 live dependents -- almost certainly populated by manual psql, not any tracked automation"},
+    {"table": "ml_predictions", "writers": ["ml_training/evaluation/performance_tracker.py"], "readers": ["ml_training/evaluation/performance_tracker.py", "backend/services/ml_stats_service.py", "backend/services/system_health_service.py"], "status": "hazard: performance_tracker.py contains its OWN CREATE TABLE IF NOT EXISTS for this table, duplicating migration 17 -- silent drift risk"},
+    {"table": "ml_prediction_outcomes", "writers": ["ml_training/evaluation/performance_tracker.py"], "readers": ["same"], "status": "same duplicate-DDL hazard as ml_predictions; outcome-scoring functions are not scheduled anywhere"},
+    {"table": "ml_performance_metrics", "writers": ["ml_training/evaluation/performance_tracker.py"], "readers": ["same"], "status": "same duplicate-DDL hazard"},
+    {"table": "breakouts", "writers": ["mechanism/ml_generators/historical_breakouts_generator.py (dormant, unwired)"], "readers": [], "status": "stale-basis per DATABASE.md; writer exists but unreachable from any live schedule"}
+  ],
+  "confirmed_dead_files": [
+    "backend/routers/dashboard.py",
+    "backend/routers/market_data.py",
+    "backend/models/dashboard_models.py",
+    "backend/test_simple_queries.py",
+    "frontend/src/components/layout/MainLayout.tsx",
+    "mechanism/screeners/donchian_screener.py",
+    "mechanism/screeners/ml_donchian_screener.py",
+    "mechanism/screeners/multi_timeframe_screener_backup.py",
+    "mechanism/screeners/ml_donchian_screener_backup.py",
+    "mechanism/screeners/backups/donchian_screener.py.backup_20250712_231845",
+    "mechanism/screeners/backups/donchian_screener.py.backup_20250712_233220",
+    "mechanism/screeners/backups/donchian_screener_old.py",
+    "mechanism/data_updaters/backups/daily_data_updater.py.backup_20250712_230534",
+    "mechanism/data_updaters/backups/daily_data_updater_backup.py",
+    "mechanism/data_updaters/backups/daily_data_updater_old.py",
+    "mechanism/data_updaters/backups/fundamentals_updater_backup.py",
+    "mechanism/ml_enhancement/enhance_existing_json.py",
+    "mechanism/ml_enhancement/ml_signal_enhancer_backup.py",
+    "mechanism/atr_database_fixer.py",
+    "mechanism/quick_analyzer.py",
+    "mechanism/migrate_to_posresql.py",
+    "mechanism/work_day_automation.py",
+    "mechanism/diagnostic_tools/ml_readiness_checker.py",
+    "ml_training/data_preparation/feature_builder.py",
+    "ml_training/data_preparation/feature_builder_backup.py",
+    "ml_training/deployment/ml_integration.py",
+    "ml_training/deployment/model_registry.py",
+    "ml_training/training/",
+    "ml_training/setup_ml_environment.py"
+  ],
+  "confirmed_broken_not_just_unused": [
+    {"file": "mechanism/ml_enhancement/enhance_existing_json.py", "reason": "imports MLMomentumEnhancer class which no longer exists in ml_signal_enhancer.py"},
+    {"file": "mechanism/work_day_automation.py", "reason": "references 4 *_corrected.py script files that were never created anywhere in repo history"},
+    {"file": "mechanism/diagnostic_tools/ml_readiness_checker.py", "reason": "sys.path logic assumes a directory layout that doesn't exist"},
+    {"file": "ml_training/deployment/ml_integration.py", "reason": "calls MomentumBreakoutPredictor.load_model(), which doesn't exist on the current class; also has an invalid UTF-8 byte, CI-excluded"},
+    {"file": "mechanism/quick_analyzer.py", "reason": "invalid UTF-8 bytes, CI-excluded from py_compile"}
+  ],
+  "test_coverage_gaps_critical": [
+    {"module": "mechanism/screeners/multi_timeframe_screener.py", "note": "the live screener that produces the system's actual output -- zero dedicated tests"},
+    {"module": "mechanism/ml_enhancement/ml_signal_enhancer.py", "note": "the live ML serving path -- zero dedicated tests"},
+    {"module": "mechanism/data_updaters/*.py (8 of 9)", "note": "only earnings_calendar_updater.py has a test file"},
+    {"module": "backend/routers/* (13 of 15)", "note": "only auth security primitives and market_service filters have tests"},
+    {"module": "mechanism/alerts/run_bot.py", "note": "no structural test preventing it from posting to the public channel (asymmetric with the tested reverse isolation)"},
+    {"module": "frontend/src/*", "note": "zero unit/component/interaction tests exist; only tsc/lint/build"}
+  ],
+  "architectural_hazards": [
+    {"id": "ml_config_import_side_effect", "file": "ml_training/config/ml_config.py", "detail": "opens a real psycopg2.connect() on every plain import, not just __main__"},
+    {"id": "model_registry_import_side_effect", "file": "ml_training/deployment/model_registry.py", "detail": "creates 3 directories on disk as a module-scope import side effect; low impact since only reachable via already-dead ml_integration.py"},
+    {"id": "duplicate_board_send", "file": "mechanism/alerts/send_channel_posts.py", "detail": "has its own Momentum Board sender gated only by session_state.json, completely bypassing telegram_post_delivery; currently inert because nothing schedules this script on a trading day"},
+    {"id": "kind_naming_mismatch", "detail": "see post_market_kinds above -- momentum_board/board and market_health/health"},
+    {"id": "duplicate_ml_table_ddl", "detail": "see database_tables_of_note: ml_predictions/ml_prediction_outcomes/ml_performance_metrics"},
+    {"id": "config_cwd_dependence", "file": "mechanism/shared/config.py", "detail": "DATA_DIR/LOGS_DIR/REPORTS_DIR/FRONTEND_DATA_DIR default to bare relative strings with no __file__-anchoring"},
+    {"id": "bot_disabled_unit", "file": "deploy/vps/donchian-bot.service", "detail": "confirmed live 2026-09-25: running but systemd-disabled, won't survive a reboot"},
+    {"id": "duplicate_backup_unit_files", "detail": "deploy/vps/donchian-nightly-backup.{service,timer} byte-identical to deploy/db/ copies, confirmed via diff"},
+    {"id": "missing_wrapper_scripts", "detail": "run_pipeline.sh, run_postmarket_retry.sh, firstlight1_updateonly.sh, run_channel_sender.sh are referenced by 8 of 9 systemd units but do not exist anywhere in this repo"}
+  ],
+  "external_services": [
+    {"service": "yfinance", "used_by": "market_index_updater.py (always, regardless of DATA_PROVIDER), fallback path for daily/quarterly updaters", "auth": "none needed"},
+    {"service": "Alpaca Markets", "used_by": "mechanism/shared/alpaca_client.py (price data), mechanism/alerts/news_service.py (bot news, shared 6h cache), mechanism/alerts/channel_news.py (channel news, off by default)", "auth": "ALPACA_API_KEY/ALPACA_API_SECRET"},
+    {"service": "Tiingo", "used_by": "mechanism/shared/tiingo_client.py (price data, primary provider), quarterly_fundamentals_updater.py", "auth": "TIINGO_API_KEY"},
+    {"service": "Telegram Bot API", "used_by": "mechanism/alerts/telegram_client.py (sole gateway, structurally enforced by test_alerts.py)", "auth": "TELEGRAM_BOT_TOKEN"},
+    {"service": "SMTP", "used_by": "backend/auth/email_service.py (2FA codes)", "auth": "SMTP_HOST/USER/PASSWORD; dev-log fallback if unset"},
+    {"service": "GHCR (GitHub Container Registry)", "used_by": ".github/workflows/cd.yml (image push), deploy.sh (image pull)", "auth": "GitHub Actions token / VPS docker login"}
+  ]
+}

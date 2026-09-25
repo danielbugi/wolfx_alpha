@@ -40,6 +40,7 @@ Full picture, diagrams, and the 5 independent execution paths:
 | [docs/architecture/TELEGRAM_PUBLISHING.md](docs/architecture/TELEGRAM_PUBLISHING.md) | The post-market package flow, idempotency contract, and how it differs from earnings/notices/the bot. |
 | [docs/architecture/SCHEDULING.md](docs/architecture/SCHEDULING.md) | Every production systemd timer, verified against tracked unit files. |
 | [docs/architecture/CI_CD.md](docs/architecture/CI_CD.md) | Commit → CI → manual CD → running container, for backend/mechanism/frontend. |
+| [docs/architecture/CODEBASE_AUDIT.md](docs/architecture/CODEBASE_AUDIT.md) | Executable architecture map: entrypoints, module classification (ACTIVE/LEGACY/DEAD with evidence), DB ownership, test coverage gaps, AI-reachability findings, a ranked (unexecuted) cleanup plan. Read before assuming a file is dead or a feature is untested. |
 | [docs/operations/DEPLOYMENT.md](docs/operations/DEPLOYMENT.md) | Practical deploy steps for each subsystem + migrations. |
 | [docs/operations/BACKUPS.md](docs/operations/BACKUPS.md) | What's backed up automatically, what isn't yet (off-box redundancy — still open). |
 | [docs/operations/ROLLBACK.md](docs/operations/ROLLBACK.md) | Failure-scenario decision framework; why Windows isn't a safe fallback anymore. |

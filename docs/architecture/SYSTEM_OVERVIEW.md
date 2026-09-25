@@ -105,6 +105,7 @@ the full list and reasoning:
 
 ## 7. Where to go next
 
+- [CODEBASE_AUDIT.md](CODEBASE_AUDIT.md) — the executable architecture map: entrypoints, per-file classification (ACTIVE/LEGACY/DEAD, with evidence), test coverage gaps, AI-reachability findings, a ranked cleanup plan.
 - [DATABASE.md](DATABASE.md) — schema by functional domain, migration model, CI validation.
 - [TELEGRAM_PUBLISHING.md](TELEGRAM_PUBLISHING.md) — the full post-market flow, idempotency contract.
 - [SCHEDULING.md](SCHEDULING.md) — every production timer, verified against the tracked systemd files.
