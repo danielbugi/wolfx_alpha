@@ -1,6 +1,11 @@
+> **HISTORICAL DOCUMENT — NOT CURRENT PRODUCTION ARCHITECTURE.** Preserved for reference/history.
+> For current architecture, see [docs/architecture/](../architecture/), [docs/operations/](../operations/),
+> and [CLAUDE.md](../../CLAUDE.md). Moved here 2026-09-25 as part of the repository documentation
+> consolidation — content below is unmodified from before the move except for this banner.
+
 # PLATFORM_ARCHITECTURE.md — service map, auth/RBAC, hosting
 
-> Added 2026-09-22. Companion to [CLAUDE.md](CLAUDE.md) (the day-to-day source of truth for what each
+> Added 2026-09-22. Companion to [CLAUDE.md](../../CLAUDE.md) (the day-to-day source of truth for what each
 > subsystem does) — this file is the higher-altitude view: where the real service boundaries already are,
 > what was just built to close the "wide open to the internet" gap, and what a future microservices /
 > hosting move would look like. Update it whenever a service boundary or the auth model changes.

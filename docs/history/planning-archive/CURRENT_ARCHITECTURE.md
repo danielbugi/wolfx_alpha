@@ -1,3 +1,10 @@
+> **HISTORICAL DOCUMENT — NOT CURRENT PRODUCTION ARCHITECTURE.** A pre-execution planning document
+> from before the VPS migration/cutover was actually carried out. Preserved for reference/history only.
+> For current architecture, see [docs/architecture/](../../architecture/), [docs/operations/](../../operations/),
+> [CLAUDE.md](../../../CLAUDE.md), and [../../devops/CUTOVER_PLAN.md](../../devops/CUTOVER_PLAN.md) (the
+> one actively-maintained infrastructure doc, kept in place — not archived — while Gate 5 remains
+> outstanding). Moved here 2026-09-25; content below is unmodified except for this banner.
+
 # Current Architecture (As-Built)
 
 > Detailed companion to [ARCHITECTURE_AUDIT.md](ARCHITECTURE_AUDIT.md). Everything here was confirmed

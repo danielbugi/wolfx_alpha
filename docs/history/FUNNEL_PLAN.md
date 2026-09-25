@@ -1,3 +1,8 @@
+> **HISTORICAL DOCUMENT — NOT CURRENT PRODUCTION ARCHITECTURE.** Preserved for reference/history.
+> For current architecture, see [docs/architecture/](../architecture/), [docs/operations/](../operations/),
+> and [CLAUDE.md](../../CLAUDE.md). Moved here 2026-09-25 as part of the repository documentation
+> consolidation — content below is unmodified from before the move except for this banner.
+
 # FUNNEL_PLAN.md — from the First Light channel to a working user of the private assistant
 
 > **Working rules (user, 2026-09-21): (1) build and test everything on the DEV channel; when ready, promote on the production channel with daily promotion. (2) The assistant NEVER posts in a channel - the channel is data, advertisement, news and information (section 10); everything personal happens in the private chat.** Production is locked in code (`PROD_SENDING_ENABLED`, section 8) so it cannot be touched early.

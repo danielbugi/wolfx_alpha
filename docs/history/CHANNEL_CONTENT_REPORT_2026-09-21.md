@@ -1,3 +1,8 @@
+> **HISTORICAL DOCUMENT — NOT CURRENT PRODUCTION ARCHITECTURE.** Preserved for reference/history.
+> For current architecture, see [docs/architecture/](../architecture/), [docs/operations/](../operations/),
+> and [CLAUDE.md](../../CLAUDE.md). Moved here 2026-09-25 as part of the repository documentation
+> consolidation — content below is unmodified from before the move except for this banner.
+
 # CHANNEL_CONTENT_REPORT_2026-09-21.md — what we have, what is free, what is paid, what to post and build next
 
 > Every number below was read from the live database on 2026-09-21 (latest stored session **Fri 18 Sep**) unless marked *ad hoc*.

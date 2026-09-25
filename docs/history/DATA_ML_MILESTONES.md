@@ -1,3 +1,8 @@
+> **HISTORICAL DOCUMENT — NOT CURRENT PRODUCTION ARCHITECTURE.** Preserved for reference/history.
+> For current architecture, see [docs/architecture/](../architecture/), [docs/operations/](../operations/),
+> and [CLAUDE.md](../../CLAUDE.md). Moved here 2026-09-25 as part of the repository documentation
+> consolidation — content below is unmodified from before the move except for this banner.
+
 # DATA_ML_MILESTONES.md — execution tracker: scheduling, earnings, fundamentals, ML
 
 > Source of truth for *what* and *why*: the 2026-09-22 conversation (fundamentals-usage audit, ML feature audit,

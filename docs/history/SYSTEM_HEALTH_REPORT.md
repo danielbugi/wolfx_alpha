@@ -1,3 +1,8 @@
+> **HISTORICAL DOCUMENT — NOT CURRENT PRODUCTION ARCHITECTURE.** Preserved for reference/history.
+> For current architecture, see [docs/architecture/](../architecture/), [docs/operations/](../operations/),
+> and [CLAUDE.md](../../CLAUDE.md). Moved here 2026-09-25 as part of the repository documentation
+> consolidation — content below is unmodified from before the move except for this banner.
+
 # System Health Report — 2026-09-19
 
 > **Update, later same day:** added a `/api/performance/` tracking system per the

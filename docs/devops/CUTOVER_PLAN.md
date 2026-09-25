@@ -101,7 +101,7 @@ Window: any time that is not 23:00–02:00 Israel (pipeline) and not 11:00/12:00
 Built from the current Windows `.env`, transferred over SSH directly into `/opt/donchian/env/.env`
 (chmod 600, deploy-owned), never through git or chat. Changes from the Windows file: `DB_HOST=postgres`,
 a new `DB_PASSWORD`, new `JWT_SECRET` and `TELEGRAM_CONTROL_TOKEN` (rotation recommended in
-INFRASTRUCTURE_PLAN.md §6.6; rotating `JWT_SECRET` signs everyone out once),
+docs/history/planning-archive/INFRASTRUCTURE_PLAN.md §6.6; rotating `JWT_SECRET` signs everyone out once),
 `ALLOWED_ORIGINS=https://dashboard.first-light.finance`, `API_SITE_ADDRESS=:80` until GATE 2.
 Keys the production overlay needs are read from this file only — nothing falls back to
 `docker/.env.example` anymore.

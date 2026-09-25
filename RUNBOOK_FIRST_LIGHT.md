@@ -1,5 +1,11 @@
 # RUNBOOK_FIRST_LIGHT.md — run the bot, test it by hand, run the morning notification
 
+> **Scope note (added 2026-09-25):** this document describes running things **on the Windows
+> development machine** — still valid for local/dev-channel testing, but **not** how production
+> scheduling works today. Production runs on VPS systemd timers — see
+> [docs/architecture/SCHEDULING.md](docs/architecture/SCHEDULING.md). Do not follow this document as
+> production operating instructions.
+
 All commands are run from the repo root (`E:\מסמכים\pythonProjects\donchian_screener_0.1`) in **PowerShell** unless noted.
 Two independent things exist: **the bot** (`run_bot.py`, a process that must stay running) and **the morning notification**
 (`send_daily_digest.py`, a job that runs once a day and exits). They share the database but not the process.
@@ -38,7 +44,7 @@ Tick each line. Anything that differs from "expect" is a bug — write down what
 3. Tap **Help** → the command list (owner section with /invite … is visible to you only).
 
 ### B. Today's lists and the stock card
-4. Tap **Today's lists** → header `US close <last session>`, `N stocks from the channel's lists, each shown once`, two tabs (*Breakout · n*, *Near breakout · n*). Expect **~23 stocks**, no symbol twice, ★ on stocks in 2+ lists.
+4. Tap **Today's lists** → header `US close <last session>`, `N stocks from the channel's lists, each shown once`, two tabs (*Breakout · n*, *Near breakout · n*). Expect **up to ~45 stocks per tab** (the channel lists are now 15 deep; ~23 in a session stored before 22 Sep), no symbol twice, ★ only on stocks in the top 5 of 2+ lists.
 5. Tap the **Near breakout** tab → the same message changes (no new message). Tap **What do these mean?** → a popup.
 6. Tap a stock (e.g. the first) → its **card**: close, day %, volume ×, range × ATR, "In today's lists: gainers #1 · ATR #1 …". Buttons: *News · Chart · ATR levels*, *Add to watchlist · Add to portfolio*, *‹ Today's lists*.
 7. **News** → up to 5 headlines with time ago; tap one → opens the publisher. **‹ SYMBOL** goes back to the card.

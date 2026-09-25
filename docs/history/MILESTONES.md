@@ -1,13 +1,18 @@
+> **HISTORICAL DOCUMENT — NOT CURRENT PRODUCTION ARCHITECTURE.** Preserved for reference/history.
+> For current architecture, see [docs/architecture/](../architecture/), [docs/operations/](../operations/),
+> and [CLAUDE.md](../../CLAUDE.md). Moved here 2026-09-25 as part of the repository documentation
+> consolidation — content below is unmodified from before the move except for this banner.
+
 # MILESTONES.md — Donchian Breakout Platform Roadmap
 
 > Living tracker toward the standing goal: **check everything is fine → test
 > everything → deploy.** Update this file every session — check items off,
 > add new findings under the relevant milestone, don't let it drift from
-> reality. Architecture/mechanism detail lives in [CLAUDE.md](CLAUDE.md); this
+> reality. Architecture/mechanism detail lives in [CLAUDE.md](../../CLAUDE.md); this
 > file is the status/roadmap view on top of it.
 >
 > **Frontend + data-accuracy fixes** (audit of 2026-09-19) are tracked separately in
-> [FRONTEND_FIX_MILESTONES.md](FRONTEND_FIX_MILESTONES.md) (FM0–FM8) so this file
+> [FRONTEND_FIX_MILESTONES.md](../../FRONTEND_FIX_MILESTONES.md) (FM0–FM8) so this file
 > stays a roadmap, not a bug list. Its rules apply to all work on that plan.
 
 Status legend: ✅ done · 🔄 in progress · ⬜ not started · ⚠️ blocked/needs decision
@@ -18,7 +23,7 @@ Status legend: ✅ done · 🔄 in progress · ⬜ not started · ⚠️ blocked
 
 Examined `mechanism/`, `ml_training/`, `backend/`, `frontend/`/`frontend_1/`,
 `.env`, `.gitignore`, and all output/log directories. Full writeup in
-[CLAUDE.md](CLAUDE.md). Raw findings, for the record:
+[CLAUDE.md](../../CLAUDE.md). Raw findings, for the record:
 
 **Architecture confirmed:**
 - Pipeline: `yfinance` → Postgres (`stock_prices`, `technical_indicators`,
@@ -590,7 +595,7 @@ comes up again.
 
 Origin: a full ML/strategy audit (chat, 2026-09-20) found the "ML momentum probability" had no measurable
 edge — its reported AUC 0.70 came from a reversed train/test split plus labels corrupted by a price-basis
-mismatch. Details, numbers and rationale: [CLAUDE.md](CLAUDE.md) changelog entries dated 2026-09-20.
+mismatch. Details, numbers and rationale: [CLAUDE.md](../../CLAUDE.md) changelog entries dated 2026-09-20.
 
 **6A — ML audit fixes**
 - [x] **Fix 1 · data integrity** — one price-only module (`ml_training/features/price_features.py`); dataset
@@ -706,8 +711,8 @@ mismatch. Details, numbers and rationale: [CLAUDE.md](CLAUDE.md) changelog entri
 
 ## Milestone 7 — First Light channel + private assistant 🔄 BUILT AND TESTED ON DEV (2026-09-21); human QA, scheduling and launch pending
 
-Start here in a new session: **[HANDOFF.md](HANDOFF.md)**. Plan and rules: [PRIVATE_ASSISTANT_PLAN.md](PRIVATE_ASSISTANT_PLAN.md) (§0 binding rules).
-Product design: [BOT_DESIGN_REPORT.md](BOT_DESIGN_REPORT.md). Run/test steps: [RUNBOOK_FIRST_LIGHT.md](RUNBOOK_FIRST_LIGHT.md). Funnel and launch: [FUNNEL_PLAN.md](FUNNEL_PLAN.md).
+Start here in a new session: **[HANDOFF.md](HANDOFF.md)**. Plan and rules: [PRIVATE_ASSISTANT_PLAN.md](../../PRIVATE_ASSISTANT_PLAN.md) (§0 binding rules).
+Product design: [BOT_DESIGN_REPORT.md](BOT_DESIGN_REPORT.md). Run/test steps: [RUNBOOK_FIRST_LIGHT.md](../../RUNBOOK_FIRST_LIGHT.md). Funnel and launch: [FUNNEL_PLAN.md](FUNNEL_PLAN.md).
 Direction (user, 2026-09-21): the **channel** carries only data, promotion, news and information that catches traffic; the **private assistant**
 (invite-only) provides everything personal in its own chat and **never posts in a channel**. Everything is built and tested on the DEV channel;
 production ("Top Gainers - Daily") is locked (`PROD_SENDING_ENABLED=0`) until launch.
@@ -738,6 +743,7 @@ production ("Top Gainers - Daily") is locked (`PROD_SENDING_ENABLED=0`) until la
 
 ## Changelog
 
+- **2026-09-22** — Telegram Control Center built and tested on DEV: dashboard page `/telegram` (message ledger written by `TelegramClient`, edit / delete behind `TELEGRAM_CONTROL_TOKEN`, production view-only while locked), 1,625 tests, 23 mutants, live DEV round trip, real-browser run. Tracker: TELEGRAM_CONTROL_MILESTONES.md. Open: a real-phone check.
 - **2026-09-21 (end of day)** — Milestone 7 built and tested on DEV: assistant (tracker, news, chart, guide), request-access flow, production lock, new dev channel, promo assets, 1,364 tests + 39 mutation checks. Session handoff written (HANDOFF.md). Human QA, scheduling, hosting, legal review and launch are open.
 - **2026-09-21 (later)** — Milestone 7 phase 7.0 built: invite-only access layer, group replies and per-ticker channel buttons removed,
   992 tests + 9 mutation checks, live-validated on the dev chat. Owner steps pending (see 7.0). Next: 7.1 portfolio core.

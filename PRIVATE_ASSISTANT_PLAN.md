@@ -1,17 +1,24 @@
 # PRIVATE_ASSISTANT_PLAN.md — the private, per-user portfolio assistant
 
+> **Scope note (added 2026-09-25):** §0's binding rules are still active policy for the bot. The
+> build-status line below is a 2026-09-21 snapshot, superseded by later work (see
+> `docs/architecture/TELEGRAM_PUBLISHING.md` for the bot's current relationship to the rest of
+> Telegram publishing, and [CLAUDE.md](CLAUDE.md) for current production status generally).
+> `HANDOFF.md` below has itself moved to [docs/history/HANDOFF.md](docs/history/HANDOFF.md) — it is
+> a point-in-time snapshot, not a "start here" pointer anymore.
+
 > **STATUS (end of 2026-09-21): 7.0 (access), 7.1 (portfolio/watchlist tracker), 7.3 (news), the guide/menu/chart and the request-access flow are BUILT and tested on DEV
-> (1,364 tests, 39 mutation checks). Not built: 7.2 (morning DM), 7.4 (personal strategy profile/journal), 7.6 (hosting). Start a new session at [HANDOFF.md](HANDOFF.md).**
+> (1,364 tests, 39 mutation checks). Not built: 7.2 (morning DM), 7.4 (personal strategy profile/journal), 7.6 (hosting). Start a new session at [docs/history/HANDOFF.md](docs/history/HANDOFF.md) (historical).**
 >
 > **Rule added by the user 2026-09-21 (binding, §0-equivalent): the assistant NEVER posts in a channel.** A channel carries only data, promotion, news and information;
 > everything the assistant does happens in its private chat with the user. Build and test on the DEV channel; production stays locked until launch.
 >
 > Original 7.0 note: decided by the user at the end of the earlier 2026-09-21 session; D1 (invite-only) and D2 (one neutral
 > channel button) were implemented with their recommended defaults - say so if you want them changed. Living document: check items off and log decisions here, and mirror the status in
-> [MILESTONES.md](MILESTONES.md) (Milestone 7) and the architecture notes in [CLAUDE.md](CLAUDE.md).
+> [MILESTONES.md](docs/history/MILESTONES.md) (Milestone 7) and the architecture notes in [CLAUDE.md](CLAUDE.md).
 >
 > **Product design for 7.1–7.3 (2026-09-21, user's direction: the bot follows the channel's lists; watchlist + portfolio track performance
-> "since the day added"; onboarding; per-stock data + news + chart, each symbol once):** see **[BOT_DESIGN_REPORT.md](BOT_DESIGN_REPORT.md)**
+> "since the day added"; onboarding; per-stock data + news + chart, each symbol once):** see **[BOT_DESIGN_REPORT.md](docs/history/BOT_DESIGN_REPORT.md)**
 > (findings, screens, onboarding copy, data model, build order, decisions Q1–Q8). It refines 7.1–7.3 below; D4 is closed there (Alpaca
 > free news verified working).
 

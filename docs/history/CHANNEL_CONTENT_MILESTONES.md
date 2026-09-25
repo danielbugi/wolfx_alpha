@@ -1,3 +1,8 @@
+> **HISTORICAL DOCUMENT — NOT CURRENT PRODUCTION ARCHITECTURE.** Preserved for reference/history.
+> For current architecture, see [docs/architecture/](../architecture/), [docs/operations/](../operations/),
+> and [CLAUDE.md](../../CLAUDE.md). Moved here 2026-09-25 as part of the repository documentation
+> consolidation — content below is unmodified from before the move except for this banner.
+
 # CHANNEL_CONTENT_MILESTONES.md — execution tracker for the channel-content plan
 
 > Source of truth for *what* and *why*: [CHANNEL_CONTENT_REPORT_2026-09-21.md](CHANNEL_CONTENT_REPORT_2026-09-21.md) (item ids P1-P10, D1-D18, B1-B5, Q1-Q8 refer to it).
@@ -51,6 +56,24 @@
 - [x] M6.2 Docs: CLAUDE.md, HANDOFF.md, RUNBOOK, the report, this file, memory
 - [x] M6.3 Final commit (local, no push)
 
+## M7 — Momentum board + deeper lists (2026-09-21, owner request)
+- [x] M7.1 Lists 15 deep, 5 open + ranks 6-15 in an expandable quote; messages packed by Telegram's parsed length (real Telegram accepted raw 5,332 / 6,086 chars in the owner's private chat)
+- [x] M7.2 ★ = top 5 of 2+ lists (`alerts/star.py`), shared by channel and assistant so deeper lists do not dilute it
+- [x] M7.3 Momentum board (`board.py`): podium of the previous-5-session list stocks that closed higher, ranked by today's %, whole-pool counts beside it, split guard, leader's 10-session chart; kind `board`, sent daily before the rotating post (`CHANNEL_BOARD_ENABLED=0` = off). Accepted by real Telegram in the owner's private chat
+- [ ] M7.4 **Owner decisions:** keep 15-deep lists? board as a third daily message or replace the rotating post? pin-and-replace the latest board (edit-in-place)? intraday updates (needs an intraday feed + hosting)?
+- [ ] M7.5 Watch the first scheduled run (Tue 22 Sep 06:00): digest groups + board must arrive; check `logs/first_light_morning_<date>.log`. Restart the bot for the new star rule
+
+## M8 — Candles, one-line disclaimer, pinned info post, twice-daily notices (2026-09-21, owner request)
+- [x] M8.1 Momentum board chart = candlesticks (leader + mini candles for 2nd / 3rd); inconsistent / missing bars are gaps
+- [x] M8.2 One-line `* Not investment advice.` on every channel post and image; the full plain-language disclaimer moved to the pinned Start-here post (rewritten, less technical)
+- [x] M8.3 `send_channel_notices.py`: disclaimer notice + assistant commercial post (4 variants), twice a day; DEV tasks `FirstLight-3-Notices-Midday` 12:00 / `-4-Notices-Evening` 20:00; posted once to the dev channel for review
+- [ ] M8.4 **Owner decisions:** are 4 notice posts a day too many (a muted channel is the risk)? weekends too? delete-the-previous-notice so only the latest stays? Hebrew? Then remove the old pinned post by hand in the dev channel
+
+## M9 — Disclaimers moved to the pinned post (2026-09-21, owner request)
+- [x] M9.1 No per-post / per-image disclaimer or caveat text; the general disclaimer + one note per service live in the pinned Start-here post (`SERVICE_NOTES`, `NOTE_FOR_KIND`, coverage test)
+- [x] M9.2 Digest header keeps only a pointer to the pinned message; the twice-daily notice stays the one repeated disclaimer
+- [ ] M9.3 **Owner decision / legal:** is a post without any disclaimer of its own acceptable once the channel is public (screenshots and forwards lose the pinned message)? Review with the lawyer before launch
+
 ## Blocked — needs the user or something outside the repo
 | Item | Why it is blocked | What unblocks it |
 |---|---|---|
@@ -73,6 +96,7 @@
 
 ## Log
 (newest first; one line per finished item with the evidence)
+- 2026-09-21 M7 — momentum board + 15-deep collapsible lists + star rule. Real 18 Sep data: 81 stocks in the pool, 25 closed higher, 53 lower, 8 at the top of their day's range; podium PS ▲13.7%, COIN ▲11.7%, BNC ▲10.3%. 1,518 tests, 8/8 board mutants caught, 47 patterns present. Earlier snapshots hold 5-deep lists (the pool of the first days is smaller); the scoreboard (off) would mix depths.
 - 2026-09-21 M6 — tasks registered and triggered once (exit 0); extra post + Sunday recap wired into the morning script (structural test); bot restarted; all docs updated. 1,494 tests pass (alerts + ML), 39/39 mutation patterns present, all 16 tracker mutants caught after moving the split rule.
 - 2026-09-21 M5.3 — `/screen`: grammar rejects code-like input, an unknown value never matches; 6 tests.
 - 2026-09-21 M5.2 — `bot_user_settings` migration applied; real-Postgres round trip of the five `dm_*` queries (test user removed afterwards); 12 tests incl. blocked / revoked / transient failure / stale scan / isolation.

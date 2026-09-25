@@ -1,11 +1,17 @@
 # CHANNEL_VOICE_AND_COPY.md — the soul, the voice, the copy and the image system of First Light
 
+> **Scope note (added 2026-09-25):** the voice/wording rules and the advice-word guard described
+> here are still active, load-bearing policy — do not weaken them without a deliberate decision. The
+> operational status lines below (§4/§9-§12) predate the 2026-09-25 Telegram publishing redesign and
+> the VPS migration and have not been re-verified against current reality; for the current publishing
+> architecture see [docs/architecture/TELEGRAM_PUBLISHING.md](docs/architecture/TELEGRAM_PUBLISHING.md).
+
 > Status (2026-09-21, later): **§4 partly BUILT on DEV** (see §9 for exactly what) after the owner delegated the minor changes; §10-§12 record the owner's later decisions (send time 00:00 Israel,
 > VIP staging, "hold" content). Everything else here is still a proposal. Written after the audit of every automated post (dry runs of the real builders, Fri 18 Sep data).
 > Skills applied: `SKILLS/marketing-strategy-pmm` (positioning, messaging hierarchy), `SKILLS/marketing-cro` (one CTA, first-person action button, funnel
 > measurement), `SKILLS/telegram-bot-ui-design` (mobile-first, no dead ends, no emoji spam). There is no copywriting skill in the repo.
 > Binding rules that still apply: facts only, no advice wording, no fabricated number, dev first / prod locked, a channel never carries assistant screens
-> ([HANDOFF.md](HANDOFF.md) §1). The wording guard (`BANNED` in `mechanism/alerts/tests/test_channel_content.py`) rejects: buy, sell, target, stop, entry,
+> ([HANDOFF.md](docs/history/HANDOFF.md) §1). The wording guard (`BANNED` in `mechanism/alerts/tests/test_channel_content.py`) rejects: buy, sell, target, stop, entry,
 > recommend, signal, opportunity, pick, should, profit, **winner, guarantee, alpha, return, beat, outperform, earn, money**.
 
 ## 1. The offer (what the copy has to sell) — my reading, to confirm

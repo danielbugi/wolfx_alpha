@@ -1,9 +1,14 @@
+> **HISTORICAL DOCUMENT — NOT CURRENT PRODUCTION ARCHITECTURE.** Preserved for reference/history.
+> For current architecture, see [docs/architecture/](../architecture/), [docs/operations/](../operations/),
+> and [CLAUDE.md](../../CLAUDE.md). Moved here 2026-09-25 as part of the repository documentation
+> consolidation — content below is unmodified from before the move except for this banner.
+
 # BOT_DESIGN_REPORT.md — how to make the private assistant a real product
 
 > **STATUS (2026-09-21, later): BUILT and running** with the recommended answers to Q1–Q8 (the user asked to build without answering them). Steps 1-5 of §9 are done (tracker core, Today's lists + card, watchlist/portfolio, onboarding + menu, news, chart); step 6 (morning DM) is not. Deviations from the text below: news is fetched lazily per symbol (cached 6 h, shared) instead of by a batch job; Today's lists pages hold 15 stocks; the personal chart is rendered per request and only the plain chart is cached by file_id; the split guard also recognises common split factors (a 2-for-1 is a 0.5 ratio, which a plain >3x rule misses).
 >
 > Written 2026-09-21 after phase 7.0 (invite-only access). It is an **analysis + design**. It refines
-> phases 7.1–7.3 of [PRIVATE_ASSISTANT_PLAN.md](PRIVATE_ASSISTANT_PLAN.md) around your idea: *the bot follows the channel's lists, and
+> phases 7.1–7.3 of [PRIVATE_ASSISTANT_PLAN.md](../../PRIVATE_ASSISTANT_PLAN.md) around your idea: *the bot follows the channel's lists, and
 > each user tracks performance from the day they added a stock.* Facts marked **[checked]** were verified against the live system today.
 
 ## 1. What you asked for (as I understood it)

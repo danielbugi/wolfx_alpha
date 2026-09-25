@@ -1,3 +1,8 @@
+> **HISTORICAL DOCUMENT — NOT CURRENT PRODUCTION ARCHITECTURE.** Preserved for reference/history.
+> For current architecture, see [docs/architecture/](../architecture/), [docs/operations/](../operations/),
+> and [CLAUDE.md](../../CLAUDE.md). Moved here 2026-09-25 as part of the repository documentation
+> consolidation — content below is unmodified from before the move except for this banner.
+
 # TELEGRAM_CONTROL_MILESTONES.md — the Telegram Control Center (built 2026-09-22; phase 2 same day)
 
 > Tracker for the `/telegram` page of the dashboard: one place to **see, compose, edit, pin and delete** every message First Light posts to a channel, under the

@@ -1,10 +1,15 @@
 # FRONTEND_FIX_MILESTONES.md — App Fix Plan (frontend + the data it shows)
 
+> **Scope note (added 2026-09-25):** kept as a live tracker, not moved to history — but its items
+> were last verified before the Vercel deployment and the VPS migration; re-verify a given item
+> against current reality before assuming its status line still holds. For current frontend
+> architecture see [docs/architecture/SYSTEM_OVERVIEW.md](docs/architecture/SYSTEM_OVERVIEW.md).
+
 > **Living tracker.** Created 2026-09-19 from the frontend audit (tsc + `next lint` +
 > headless-Chrome renders of `/`, `/screener`, `/strategy`, `/alerts` + full code read).
 > We work through this file top to bottom until every item is closed. Update the status
 > of an item **in the same session you touch it**; never mark ✅ without the evidence
-> listed in its acceptance criteria. Broader project roadmap: [MILESTONES.md](MILESTONES.md).
+> listed in its acceptance criteria. Broader project roadmap: [MILESTONES.md](docs/history/MILESTONES.md).
 > Architecture/mechanism detail: [CLAUDE.md](CLAUDE.md).
 
 Status legend: ✅ done · 🔄 in progress · ⬜ not started · ⚠️ blocked / needs a decision · ❓ hypothesis, not yet proven
@@ -579,10 +584,16 @@ ugly. Each item below is a number a trader would act on.
 
 ## FM6 — Responsive & accessibility
 
-- [ ] **FM6.1 (M) Navigation doesn't fit narrow screens.** Rendered: at 820px the search box
-  is clipped; at 390px the nav is cut off after "Strategy". *Fix:* collapsing nav
-  (menu button) + search in the collapsed layout; 7 items already need grouping (System
-  Health / ML Stats / Performance → an "Ops" group).
+- [x] **FM6.1 (M) Navigation doesn't fit narrow screens. — FIXED 2026-09-22.** *Fix:* the single horizontal
+  `TopNav` bar was replaced with a persistent, collapsible left `Sidebar` (>= 1024px) and a `MobileNav` slim top
+  bar + slide-over drawer (below it), grouped exactly as anticipated here ("Markets": Dashboard/Screener/
+  Strategy/Alerts/Telegram; "Ops": System Health/ML Stats/Performance). One shared route list
+  (`lib/navigation.ts`) and one shared search implementation (`hooks/useSymbolSearch.ts`,
+  `components/layout/SearchBox.tsx`) back both. *Accept (real-Chrome, 27 checks):* zero horizontal overflow at
+  1440/820/390px on every route including `/telegram`; all 8 routes reachable and titled at every width, incl.
+  collapsed to an icon rail; active-route highlighting; collapse state survives navigation and reload; search
+  works in the sidebar and in the mobile drawer; the mobile drawer is a real top-layer dialog (focus trap,
+  Escape/backdrop close); zero console errors.
 - [ ] **FM6.2 (M) Tables & layout overflow.** `removeWrapper` removed NextUI's horizontal
   scroller: Strategy (8 cols + 180px plan bar), Screener, Alpha Finder overflow the page at
   390px (the screener filter card is cut off). *Fix:* scroll containers with sticky first
@@ -797,3 +808,20 @@ milestone item first.)*
   alignment-ranked (its ML column shows "—"). → rename/hide while ML is unavailable (decision pending with the user).
 - **FM-N14 · L · backend** — strategy scores are now on a higher scale while ML is absent (weights renormalised over the remaining
   components: e.g. 73 → 92 for the same signal). Comparable only among unscored signals; note it wherever the score is described.
+
+### Findings from the 2026-09-22 Telegram Control Center work (found, not fixed here — R6)
+
+- **FM-N15 · M · frontend — FIXED 2026-09-22.** *Root cause:* the top-progress bar's sweep animation (`@keyframes top-progress-sweep`, `translateX(350%)`)
+  overshoots its own `overflow: hidden` fixed ancestor; Chromium still counts the transformed descendant's post-transform box toward
+  `document.documentElement.scrollWidth` even though it is visually clipped. *Fix:* `style={{ contain: 'layout' }}` on the fixed wrapper
+  (`lib/topProgress.tsx`) makes it the containing block for overflow purposes, so the transform can no longer escape upward. *Evidence:*
+  `document.documentElement.scrollWidth` measured 905px on every route before the fix (identical regardless of page content, confirming it
+  was this one global element) and matches the viewport after it, at 390/820/1440px, across 8 routes.
+- **FM-N16 · M · frontend — FIXED 2026-09-22** by the FM6.1 sidebar/mobile-nav rewrite (a vertical list has no fixed-width budget to run out of).
+- **FM-N17 · H · dev-infra/backend** — `uvicorn main:app --reload` **hangs in "Waiting for application shutdown"** after a file change while a keep-alive connection is open:
+  the port keeps LISTENING, every request hangs, `CLOSE_WAIT` piles up (the wedge CLAUDE.md §8 describes; reproduced on 2026-09-22 right after editing `routers/telegram_control.py`).
+  Root cause not investigated (suspects: the lifespan shutdown or the `main-page-data` background rebuild thread). Workaround: `taskkill /PID <listener> /T /F`, restart; or run
+  without `--reload` while editing backend files.
+- **FM-N18 · M · frontend** — the app does not load NextUI's Tailwind plugin, so NextUI's `Modal` renders unstyled (no backdrop/positioning) and `Button` variants `bordered` / `flat` /
+  `isLoading` lose their border/fill (already known for `bg-content1`). The Telegram Control Center avoids them (`components/common/Dialog.tsx` on native `<dialog>`,
+  `components/telegram/ui.tsx`); pages that still use those variants (e.g. `/system-health` bordered buttons) show the defect. → **FM2**.
