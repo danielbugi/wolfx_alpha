@@ -26,7 +26,12 @@ from alerts.message_format import fmt_price
 from alerts.texts import DEFINITIONS, DISCLAIMER_ONE_LINE
 
 CAPTION_LIMIT = 1024
-KINDS = ("board", "health", "sector", "macro", "gaps", "near_highs", "aligned", "base_rate", "recap", "promo", "news", "scoreboard", "disclaimer", "assistant", "earnings_today")
+KINDS = ("board", "health", "top_gainers", "sector", "macro", "gaps", "near_highs", "aligned", "base_rate", "recap", "promo", "news", "scoreboard", "disclaimer", "assistant", "earnings_today")
+# "board", "health" and "top_gainers" are three of the four standard post-market posts (2026-09-25 redesign;
+# the fourth, "daily_digest", is built by send_daily_digest.py, a separate multi-message flow, not a single
+# Post here) -- mechanism/alerts/publish_post_market.py sends all four as a package every session, not through
+# the weekday rotation below. They stay in KINDS/BUILDERS so `--kind`/`--all` manual review still works, but
+# pick_kinds() (the rotation picker) must never choose "health" -- see the ROTATION comment and its test.
 
 
 @dataclass
@@ -64,6 +69,7 @@ class Ctx:
     week_number: int = 0
     notice_index: int = 0                                         # which variant of the rotating assistant post to show
     earnings_today: Optional[List[Dict]] = None                   # today's reporters in the covered universe: symbol, close, sector (any may be None)
+    top_gainers: Optional[List[Dict]] = None                      # top N of the full liquid universe by ret1_pct (send_channel_posts.load_context) -- reuses analyse_universe's rows, no extra calculation
 
 
 def _sign_arrow(pct: float) -> str:
@@ -103,6 +109,18 @@ def post_health(ctx: Ctx) -> Optional[Post]:
     lines.append(f"Above 200-day average: {a200:.0f}%" + (f" ({ago}: {b200:.0f}%)" if b200 is not None else ""))
     lines.append(f"52-week highs {h.new_highs:,} · lows {h.new_lows:,}")
     return Post("health", "\n".join(lines), cc.render_health_card(d))
+
+
+# ------------------------------------------------------------------ top gainers (daily, one of the four standard post-market posts)
+def post_top_gainers(ctx: Ctx) -> Optional[Post]:
+    """The day's biggest movers across the whole liquid universe (not scoped to breakout/near-breakout), reusing
+    rows already computed by analyse_universe -- no separate market-data calculation for this post."""
+    rows = ctx.top_gainers or []
+    if not rows:
+        return None
+    body = [f"{i}. <b>{_link(r['symbol'])}</b> {fmt_price(r['close'])} {_arrow(r['ret1_pct'])}" for i, r in enumerate(rows, 1)]
+    lines = ["<b>Today's top gainers</b>", f"{ctx.session:%a %d %b} · of {ctx.universe_n:,} liquid stocks", "", _rows_block(body)]
+    return Post("top_gainers", "\n".join(lines))
 
 
 # ------------------------------------------------------------------ P2 sector rotation
@@ -442,7 +460,8 @@ def post_board(ctx: Ctx) -> Optional[Post]:
 
 
 # ------------------------------------------------------------------ registry
-BUILDERS = {"disclaimer": post_disclaimer, "assistant": post_assistant, "board": post_board, "health": post_health, "sector": post_sector, "macro": post_macro, "gaps": post_gaps, "near_highs": post_near_highs,
+BUILDERS = {"disclaimer": post_disclaimer, "assistant": post_assistant, "board": post_board, "health": post_health, "top_gainers": post_top_gainers,
+            "sector": post_sector, "macro": post_macro, "gaps": post_gaps, "near_highs": post_near_highs,
             "aligned": post_aligned, "base_rate": post_base_rate, "recap": post_recap, "promo": post_promo, "news": post_news,
             "scoreboard": post_scoreboard, "earnings_today": post_earnings_today}
 
@@ -453,7 +472,12 @@ def build_post(kind: str, ctx: Ctx) -> Optional[Post]:
 
 
 # the weekday rotation (0 = Monday). Two options per day alternate by ISO week; the first is the default when the second is unavailable.
-ROTATION = {0: ("sector", "macro"), 1: ("gaps", "news"), 2: ("health", "health"), 3: ("near_highs", "aligned"), 4: ("promo", "promo")}
+# "health" is deliberately NOT in this table (2026-09-25): market_health is now one of the four standard daily
+# post-market posts (mechanism/alerts/publish_post_market.py), sent every session, not once a week -- putting it
+# back here (or in pick_kinds()'s fallback list below) would duplicate it. Wednesday's old ("health", "health")
+# slot is replaced with ("sector", "gaps") -- a judgment call, not a strict requirement; flag if you'd prefer
+# different variety for that day.
+ROTATION = {0: ("sector", "macro"), 1: ("gaps", "news"), 2: ("sector", "gaps"), 3: ("near_highs", "aligned"), 4: ("promo", "promo")}
 
 
 def pick_kinds(session: date, news_enabled: bool = False, scoreboard_enabled: bool = False) -> List[str]:
@@ -472,7 +496,7 @@ def pick_kinds(session: date, news_enabled: bool = False, scoreboard_enabled: bo
         order.append("base_rate")
     if first_of_month and d.weekday() == 4 and scoreboard_enabled:   # the first Friday: the list scoreboard (opt-in: its numbers may be unflattering)
         order.append("scoreboard")
-    order += [chosen, "health", "macro", "promo"]
+    order += [chosen, "macro", "promo"]           # "health" deliberately excluded -- see the ROTATION comment above
     seen, out = set(), []
     for k in order:
         if k not in seen:

@@ -40,6 +40,8 @@ SERVICE_NOTES: List[Tuple[str, str, str]] = [
     ("health", "Market health",
      "It describes how broad today's move was; it does not predict tomorrow. Each percentage counts only stocks with enough price history for that "
      "measure."),
+    ("top_gainers", "Top gainers",
+     "Ranked by today's price change alone. A stock need not be near a breakout to appear here."),
     ("sector", "Sector rotation",
      "Each bar is the middle stock of its sector, so one outlier cannot move it. Sector tags are today's; earlier sector membership is not "
      "reconstructed, so older periods are approximate."),
@@ -66,9 +68,9 @@ SERVICE_NOTES: List[Tuple[str, str, str]] = [
 
 # which note covers which kind of channel post (the digest's own lists = "lists"); promo and the notices are not data posts
 NOTE_FOR_KIND: Dict[str, str] = {
-    "digest": "lists", "board": "board", "health": "health", "sector": "sector", "macro": "macro", "gaps": "gaps", "near_highs": "gaps",
-    "aligned": "aligned", "base_rate": "base_rate", "recap": "recap", "scoreboard": "recap", "news": "news", "assistant": "assistant",
-    "earnings_today": "earnings_today",
+    "digest": "lists", "board": "board", "health": "health", "top_gainers": "top_gainers", "sector": "sector", "macro": "macro", "gaps": "gaps",
+    "near_highs": "gaps", "aligned": "aligned", "base_rate": "base_rate", "recap": "recap", "scoreboard": "recap", "news": "news",
+    "assistant": "assistant", "earnings_today": "earnings_today",
 }
 
 
@@ -81,8 +83,7 @@ START_HERE = (
     "<b>First Light</b> · first-light.finance\n"
     "The US market, right after the close, every trading day.\n\n"
     "<b>What you get</b>\n"
-    "After the US market closes we scan about 2,900 stocks and show what stood out: who pushed to a fresh short-term high, who is close "
-    "behind, and how the market and its sectors did.\n\n"
+    "After the US market closes we scan about 2,900 stocks for fresh highs, near-highs and how the market and its sectors did.\n\n"
     "<b>How fresh is it?</b>\n"
     "End of day, from the official US market close, posted after it. "
     "Nothing is live, prices may have moved since.\n\n"
@@ -90,8 +91,8 @@ START_HERE = (
     "• <b>The market card and two lists.</b> <b>Breakout</b> = closed above its highest price of the last 20 trading days. "
     "<b>Near breakout</b> = within 3% below that level. Each list is ranked by biggest gain, biggest swing (ATR: the day's range against the usual "
     "range) and busiest trading (volume).\n"
-    "• <b>The momentum board.</b> Of the stocks in recent lists, who moved the most today.\n"
-    "• <b>One extra post a day</b> (market health, sectors, gaps, yearly highs and more) and a <b>weekly recap</b> on Sundays.\n\n"
+    "• <b>Momentum board, top gainers and market health</b>, every session.\n"
+    "• <b>One extra post a day</b> (sectors, gaps, yearly highs and more) and a <b>weekly recap</b> on Sundays.\n\n"
     "<b>Reading a row</b>\n"
     "★ = near the top of more than one list · vol 3.1× = about three times the usual trading volume.\n\n"
     "<b>The private assistant</b>\n"

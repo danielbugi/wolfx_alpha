@@ -203,12 +203,13 @@ def _ctx(**kw):
                        "persistent": ["GEMI", "MSTR"], "persist_min": 3, "sectors": [("Tech", 1.0, 400), ("Energy", -1.0, 100)], "sector_sessions": 5},
                 week_number=38,
                 earnings_today=[{"symbol": "AAPL", "sector": "Technology", "close": 338.98, "eps_estimate": 1.98},
-                                {"symbol": "MSFT", "sector": "Technology", "close": 512.10, "eps_estimate": 4.72}])
+                                {"symbol": "MSFT", "sector": "Technology", "close": 512.10, "eps_estimate": 4.72}],
+                top_gainers=[{"symbol": "GEMI", "close": 41.20, "ret1_pct": 18.4}, {"symbol": "MSTR", "close": 210.55, "ret1_pct": 12.1}])
     base.update(kw)
     return cx.Ctx(**base)
 
 
-ALL = ["health", "sector", "macro", "gaps", "near_highs", "aligned", "base_rate", "recap", "promo", "disclaimer", "assistant", "earnings_today"]
+ALL = ["health", "top_gainers", "sector", "macro", "gaps", "near_highs", "aligned", "base_rate", "recap", "promo", "disclaimer", "assistant", "earnings_today"]
 
 
 @pytest.mark.parametrize("kind", ALL)
@@ -247,6 +248,7 @@ def test_posts_return_none_when_an_ingredient_is_missing_instead_of_inventing_on
     assert cx.post_base_rate(_ctx(base=None)) is None and cx.post_base_rate(_ctx(base={"n": 10, "by_year": []})) is None
     assert cx.post_recap(_ctx(recap={"days": [{"date": date(2026, 9, 18), "breakout": 1, "near": 1, "up_pct": 1}]})) is None   # fewer than 3 sessions
     assert cx.post_earnings_today(_ctx(earnings_today=[])) is None and cx.post_earnings_today(_ctx(earnings_today=None)) is None
+    assert cx.post_top_gainers(_ctx(top_gainers=[])) is None and cx.post_top_gainers(_ctx(top_gainers=None)) is None
 
 
 def test_earnings_today_post_states_the_count_and_facts_no_timing_claim():
@@ -342,12 +344,25 @@ def test_the_recap_shows_one_company_once_when_it_is_stored_under_two_tickers():
 # ================================================================== rotation
 def test_rotation_gives_each_weekday_its_kind_and_falls_back_safely():
     assert cx.pick_kinds(date(2026, 9, 14))[0] == "sector"                                      # Monday, ISO week 38 (even index -> first option)
-    assert cx.pick_kinds(date(2026, 9, 15))[0] == "gaps" and cx.pick_kinds(date(2026, 9, 16))[0] == "health"
+    assert cx.pick_kinds(date(2026, 9, 15))[0] == "gaps" and cx.pick_kinds(date(2026, 9, 16))[0] == "sector"
     assert cx.pick_kinds(date(2026, 9, 17))[0] == "near_highs" and cx.pick_kinds(date(2026, 9, 18))[0] == "promo"
     assert cx.pick_kinds(date(2026, 9, 21))[0] == "macro"                                       # the next Monday alternates
     for d in (date(2026, 9, 14), date(2026, 9, 18)):
         ks = cx.pick_kinds(d)
-        assert len(set(ks)) == len(ks) and "health" in ks and "promo" in ks                     # a chain that always contains something that can be said
+        assert len(set(ks)) == len(ks) and "macro" in ks and "promo" in ks                      # a chain that always contains something that can be said
+
+
+def test_market_health_is_never_chosen_by_the_rotation_or_its_fallback():
+    """2026-09-25: market_health is now one of the four standard post-market posts (sent every session by
+    publish_post_market.py), not a once-a-week rotation pick -- putting it back in ROTATION or the
+    pick_kinds() fallback chain would duplicate it on top of the standard package."""
+    assert all("health" not in pair for pair in cx.ROTATION.values())
+    from datetime import timedelta
+    for wd in range(7):
+        d = date(2026, 9, 14) + timedelta(days=wd)                                              # a full week, Mon-Sun
+        for news_enabled in (False, True):
+            for scoreboard_enabled in (False, True):
+                assert "health" not in cx.pick_kinds(d, news_enabled, scoreboard_enabled)
 
 
 def test_the_news_kind_is_only_tried_when_enabled():
