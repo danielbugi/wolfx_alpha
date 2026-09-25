@@ -59,6 +59,7 @@ services:
       - ./mechanism/add_piotroski_score.sql:/docker-entrypoint-initdb.d/15_add_piotroski_score.sql:ro
       - ./mechanism/widen_ml_models_version.sql:/docker-entrypoint-initdb.d/16_widen_ml_models_version.sql:ro
       - ./mechanism/add_ml_prediction_tracking_tables.sql:/docker-entrypoint-initdb.d/17_add_ml_prediction_tracking_tables.sql:ro
+      - ./mechanism/add_telegram_post_delivery_table.sql:/docker-entrypoint-initdb.d/18_add_telegram_post_delivery_table.sql:ro
     networks: [app_net]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-trading_user} -d ${DB_NAME:-donchian_docker_dev}"]
