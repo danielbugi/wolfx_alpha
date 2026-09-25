@@ -1,0 +1,75 @@
+# PROPOSED replacement for deploy/vps/donchian-bot.service -- Phase 4A item 6, 2026-09-25.
+# NOT INSTALLED ON THE VPS. Do not rename this to donchian-bot.service or deploy it without
+# separate, explicit approval -- see the cutover + rollback steps below.
+#
+# ---------------------------------------------------------------------------------------------
+# WHY: two independent sources of "which mechanism image is running" existed for the bot alone.
+# ---------------------------------------------------------------------------------------------
+# Every other mechanism-image consumer (donchian-pipeline, donchian-postmarket-retry,
+# donchian-earnings-today, both donchian-notice-* units) is a oneshot job: its wrapper script reads
+# /opt/donchian/CURRENT_MECHANISM_SHA fresh on every single invocation, so pinning a new SHA there
+# takes effect automatically at the unit's very next scheduled fire -- no separate deploy step, no
+# second file to remember.
+#
+# donchian-bot.service is different: it's a CONTINUOUS process (Type=oneshot RemainAfterExit=yes,
+# started once, not re-invoked per timer fire), so it can't "read the pin fresh" the way a
+# fire-and-exit job can -- the tag has to be resolved once, at start time. The current unit does
+# this via `EnvironmentFile=/opt/donchian/env/mechanism_image_tag.env`, a second file nothing keeps
+# in sync with CURRENT_MECHANISM_SHA. Confirmed live 2026-09-25 (Phase 4A item 2's pre-flight check):
+# CURRENT_MECHANISM_SHA said 56dd7f1fa63a, mechanism_image_tag.env's IMAGE_TAG also said
+# 56dd7f1fa63a, but the actually-running bot container was still on 0fa7f8b98f71 -- the pin files had
+# been updated without anyone restarting the bot to pick either one up. Harmless that day (no
+# bot-affecting code had changed), but a real, demonstrated drift class.
+#
+# ---------------------------------------------------------------------------------------------
+# THE FIX: give the bot the same wrapper-script pattern every other unit already uses.
+# ---------------------------------------------------------------------------------------------
+# deploy/vps/run_bot_service.sh (new, proposed alongside this file) reads CURRENT_MECHANISM_SHA
+# fresh, exactly like run_pipeline.sh/run_channel_sender.sh/etc. already do, and exports IMAGE_TAG
+# for the docker compose invocation. This unit's ExecStart/ExecStop become one-line calls into it.
+# mechanism_image_tag.env and its EnvironmentFile= line are retired -- CURRENT_MECHANISM_SHA becomes
+# the ONE source of truth for every mechanism-image-consuming service, bot included.
+#
+# This does NOT change which image the bot picks up automatically -- it is still only re-read at
+# the unit's own start time, same as today. What it fixes is that there is now exactly one place to
+# update the pin, and the *next* deliberate bot restart (for a real bot-code deploy, or this cutover
+# itself) will always pick up whatever CURRENT_MECHANISM_SHA currently says, with no possibility of a
+# second, forgotten file disagreeing with it.
+#
+# ---------------------------------------------------------------------------------------------
+# CUTOVER STEPS (for whoever applies this after approval -- NOT performed as part of Phase 4A):
+# ---------------------------------------------------------------------------------------------
+#   1. scp deploy/vps/run_bot_service.sh to /opt/donchian/scripts/run_bot_service.sh, chmod 755.
+#   2. scp this file to /etc/systemd/system/donchian-bot.service (replacing the current one).
+#   3. systemctl daemon-reload
+#   4. The running bot container is UNTOUCHED by steps 1-3 alone (daemon-reload does not restart a
+#      RemainAfterExit=yes unit). The new ExecStart only takes effect the next time the service is
+#      actually (re)started -- either the next real bot deploy, or a deliberate
+#      `systemctl restart donchian-bot.service` done specifically to complete this cutover.
+#   5. If doing step 4 as a deliberate restart specifically for this cutover: confirm
+#      CURRENT_MECHANISM_SHA is the SHA you actually want running first (it may still be an older
+#      pin if no mechanism deploy has happened recently -- restarting here would upgrade the bot to
+#      whatever that file currently says, which is a real behavior change to review, not assume).
+#   6. Verify exactly as deploy/vps/README.md's own verification pattern: enabled/active state,
+#      container image tag matches CURRENT_MECHANISM_SHA, exactly one run_bot.py process, DB is
+#      trading_production, recent log lines show real Telegram polling continuing.
+#
+# ROLLBACK: restore the original tracked deploy/vps/donchian-bot.service to
+# /etc/systemd/system/donchian-bot.service, daemon-reload, restart the service. The old
+# EnvironmentFile=/opt/donchian/env/mechanism_image_tag.env is untouched by this proposal (not
+# deleted), so a rollback needs no data recovery -- the file is still there with its last value.
+
+[Unit]
+Description=First Light: production Telegram bot (docker compose --profile bot up -d bot)
+After=docker.service donchian-screener-postgres-1.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/donchian/compose
+ExecStart=/opt/donchian/scripts/run_bot_service.sh up
+ExecStop=/opt/donchian/scripts/run_bot_service.sh stop
+
+[Install]
+WantedBy=multi-user.target
