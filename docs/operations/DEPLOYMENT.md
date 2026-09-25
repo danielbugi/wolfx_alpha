@@ -71,6 +71,16 @@ that day), but a concrete example of exactly the gap this section describes: pin
 restarting the bot are two separate steps, and it's easy to do the first without remembering the
 second.
 
+**PROPOSED, not yet applied (Phase 4A item 6, 2026-09-25)**: `deploy/vps/run_bot_service.sh` +
+`deploy/vps/donchian-bot.service.proposed` would give the bot the same wrapper-script pattern as
+`run_pipeline.sh`/`run_channel_sender.sh` — reading `CURRENT_MECHANISM_SHA` fresh at its own start
+time instead of a separately-maintained `EnvironmentFile=mechanism_image_tag.env`, retiring that
+second file as a pin source entirely. This does not remove the "bot needs an explicit restart to
+pick up a new pin" step above (that's inherent to it being a continuous process, not a per-invocation
+job) — it only removes the second file nothing keeps in sync with the first. See the proposal files'
+own headers for the exact cutover + rollback steps; installing it on the VPS is a separate, explicitly
+gated step, not yet done.
+
 ## 3. Frontend
 
 Deployed by **Vercel's own GitHub integration**, not `cd.yml` — a push to `main` that touches

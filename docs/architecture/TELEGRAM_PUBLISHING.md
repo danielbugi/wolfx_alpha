@@ -6,7 +6,8 @@
 > **Source of truth:** `mechanism/alerts/publish_post_market.py`, `mechanism/alerts/post_delivery.py`,
 > the `telegram_post_delivery` table (see [DATABASE.md](DATABASE.md) §4).
 > **Last verified:** 2026-09-25 — a real controlled production replay (one send, one no-op retry),
-> plus 17 automated tests including a real two-thread concurrency race.
+> plus automated tests including two independent real two-thread concurrency races (one within
+> `publish_post_market.py`, one across it and `send_channel_posts.py` — see §5b), full green in CI.
 
 ## 1. What this subsystem is, and is not
 
@@ -114,6 +115,41 @@ The single production-posting safety gate, read by `mechanism/alerts/telegram_cl
 regardless of what the rest of this pipeline decides is eligible. This is orthogonal to
 `telegram_post_delivery`: the lock decides *whether sending to prod is allowed at all*; the delivery
 table decides *what's already been sent, given that it is*.
+
+## 5b. `send_channel_posts.py` — the other caller of the same claim mechanism
+
+`mechanism/alerts/send_channel_posts.py` (an operator-facing manual/ad-hoc sender, traced in full for
+Phase 4A item 4) can also send `momentum_board`, `top_gainers`, and `market_health` — the three
+`channel_content.py`-built kinds, not `daily_digest`. Before 2026-09-25 it sent these directly via
+`TelegramClient` with no `post_delivery` claim at all, meaning a manual run of this script could
+double-send a kind `publish_post_market.py` had already delivered for the same session, or race a
+concurrent retry-timer invocation with no database-level guard between them.
+
+Fixed by routing every claimable kind through the same `post_delivery.claim()`/`mark_sent()`/
+`mark_failed()` contract as §4, via a new `send_claimable()` helper — **not** a second
+implementation of the claim pattern. The one behavior difference from `publish_post_market.py`:
+`send_channel_posts.py --to owner` (the debug/preview target) is intentionally exempted from
+claiming, since "owner" sends are never subject to production idempotency in the first place — only
+`--to dev`/`--to prod` go through the claim. This closes the invariant stated in
+[CLAUDE.md](../../CLAUDE.md) §8: **no sender may deliver any of the four standard posts without the
+same per-session/per-kind claim.** Verified by a real two-thread race between `post_delivery.claim()`
+and `send_channel_posts.send_claimable()` (`test_post_delivery.py`) — exactly one winner across both
+call sites, every time.
+
+## 5c. Canonical post-kind identifiers (unified 2026-09-25)
+
+Before this date, the same three posts were spelled two different ways depending on which module you
+were reading: `channel_content.Post.kind` used `"board"`/`"health"`, while `telegram_post_delivery`
+and `publish_post_market.py`'s claim table already used `"momentum_board"`/`"market_health"`. This
+made `POST_MARKET_KINDS` a real (non-identity) translation table and was a standing hazard for any
+new code that assumed the two vocabularies were interchangeable.
+
+Unified on the delivery-table's names (the harder one to rename, since it's real historical ledger
+data) — canonical kind strings, used everywhere now: `daily_digest`, `momentum_board`, `top_gainers`,
+`market_health`. `channel_control.py`'s `KIND_LABELS` keeps both the old (`"board"`, `"health"`) and
+new spellings mapped to the same human-readable label, so historical `telegram_messages`/audit rows
+written before the rename still render correctly in the Telegram Control Center — this is a
+deliberate, permanent backward-compat mapping, not a migration to later remove.
 
 ## 6. Relationship to `telegram_messages`
 

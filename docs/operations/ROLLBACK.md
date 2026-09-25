@@ -42,6 +42,13 @@ systemctl restart donchian-bot.service   # only if the bot itself needs to move 
 re-invoked fresh each time, not long-running). If the bad mechanism image broke a scheduled run
 mid-way, check `journalctl -u donchian-pipeline.service` (or the relevant unit) for what actually
 happened before assuming a simple re-pin fixes it — a partially-applied schema change or a
+
+**If `deploy/vps/donchian-bot.service.proposed` has since been installed** (PROPOSED as of
+2026-09-25, not yet applied — see [DEPLOYMENT.md](DEPLOYMENT.md) §2): the second `echo ... IMAGE_TAG
+... mechanism_image_tag.env` line above is retired, `CURRENT_MECHANISM_SHA` alone is what
+`systemctl restart donchian-bot.service` picks up. Rolling back the unit file itself (if the wrapper
+design is what's suspect, not just the image pin) is a plain file restore + `daemon-reload` — the
+proposal's own header has the exact steps.
 part-way-through data write needs its own investigation, not just an image swap.
 
 ## 3. Scheduler / Telegram-publishing failure
