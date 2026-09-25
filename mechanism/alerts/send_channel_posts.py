@@ -130,6 +130,13 @@ def pick_movers(rows, digest, limit: int = 8) -> list:
     return out
 
 
+def top_gainers_from(rows, limit: int = 10) -> list:
+    """Top `limit` of the full liquid universe by 1-day % gain (not scoped to breakout/near-breakout), reusing
+    rows analyse_universe already computed -- no extra market-data calculation for this post."""
+    pool = [r for r in rows if r["dv20"] >= dbld.DEFAULT_MIN_DV]
+    return sorted(pool, key=lambda r: (-r["ret1_pct"], r["symbol"]))[:limit]
+
+
 def load_context(session, top_n: int = 5, with_news: bool = False, with_scoreboard: bool = False) -> cx.Ctx:
     t0 = time.time()
     df = load_universe_history(session)
@@ -154,7 +161,7 @@ def load_context(session, top_n: int = 5, with_news: bool = False, with_scoreboa
         breakout_symbols=[r["symbol"] for r in rows if r["cat"] == "breakout"], sector_bars=bars20, sector_unclassified=unclassified,
         macro_tiles=mc.load_macro_tiles(db, session), base=load_base_rates(), recap=load_recap(session, w, sector_of),
         news=news, scoreboard=load_scoreboard(w, session) if with_scoreboard else None, board=load_board(session, w),
-        week_number=int(ts.isocalendar().week))
+        week_number=int(ts.isocalendar().week), top_gainers=top_gainers_from(rows))
 
 
 # ------------------------------------------------------------------ sending
