@@ -1,0 +1,9 @@
+[Unit]
+Description=First Light: midday channel notice, slot 1 (matches the disabled Windows FirstLight-3-Notices-Midday task)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/donchian/scripts/run_channel_sender.sh mechanism/alerts/send_channel_notices.py --slot 1 --to prod --send
+TimeoutStartSec=15m

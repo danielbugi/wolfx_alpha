@@ -1,0 +1,12 @@
+[Unit]
+Description=First Light: post-market package -- 23:45 Israel, then every ~20 min through 06:00 if data is still stale
+
+[Timer]
+OnCalendar=*-*-* 23:45:00 Asia/Jerusalem
+OnCalendar=*-*-* 0,1,2,3,4,5:0/20:00 Asia/Jerusalem
+OnCalendar=*-*-* 06:00:00 Asia/Jerusalem
+Persistent=false
+RandomizedDelaySec=30
+
+[Install]
+WantedBy=timers.target

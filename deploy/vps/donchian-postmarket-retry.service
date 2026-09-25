@@ -1,0 +1,9 @@
+[Unit]
+Description=First Light: bounded post-market freshness retry (Daily Digest, Momentum Board, Top Gainers, Market Health)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/donchian/scripts/run_postmarket_retry.sh
+TimeoutStartSec=30m

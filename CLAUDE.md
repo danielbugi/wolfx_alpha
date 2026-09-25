@@ -100,7 +100,7 @@ All timers use systemd's native per-timer `Asia/Jerusalem` calendar tag (DST-saf
 | `donchian-notice-midday` / `-evening` | 12:00 / 20:00 | Yes (disclaimer+promo, unrelated to market data) | No |
 | `donchian-nightly-backup` | ~02:30 | No | No (read-only dump) |
 
-**These unit files are NOT currently committed to the repo** — they exist only hand-installed on the VPS. Don't assume a fresh VPS provisioning would reproduce them; `docs/devops/CUTOVER_PLAN.md` has the prose description, not the files themselves. (Flagged for a future fix — see the cleanup plan in the latest audit report.)
+**Unit files are tracked in `deploy/vps/donchian-*.{service,timer}`** — verbatim, SHA-256-verified copies of what's installed at `/etc/systemd/system/` on the VPS (pulled 2026-09-25; see `deploy/vps/README.md`'s "Scheduling" section for the full table and the diff-before-editing workflow). They are a **snapshot, not a live sync** — editing the repo copy does nothing until someone manually re-installs it on the VPS.
 
 ## 8. Telegram publishing architecture
 
@@ -188,7 +188,7 @@ Backend: `deploy/vps/deploy.sh` (health-gated, auto-rollback to `PREVIOUS_GOOD_S
 
 ## 16. Known open risks / technical debt
 
-See the latest repository consolidation audit (published as an artifact / recorded in `docs/history/` once the restructuring in §11 of that audit happens) for the full ranked list. Top items: no required reviewer on the `production` GitHub Environment; off-box backups aren't yet at a genuinely independent third location; VPS systemd unit files aren't committed to the repo; ~14 `docs/devops/` planning documents describe a pre-execution state that's now been executed and aren't marked superseded; a confirmed-dead set of `*_backup.py` files and two empty backend router stubs are safe to remove whenever convenient.
+See the latest repository consolidation audit (published as an artifact / recorded in `docs/history/` once the restructuring in §11 of that audit happens) for the full ranked list. Top items: no required reviewer on the `production` GitHub Environment; off-box backups aren't yet at a genuinely independent third location; `donchian-nightly-backup.timer` still hardcodes a UTC offset instead of the `Asia/Jerusalem` tag every other timer uses, and will drift an hour at the next DST change; ~14 `docs/devops/` planning documents describe a pre-execution state that's now been executed and aren't marked superseded; a confirmed-dead set of `*_backup.py` files and two empty backend router stubs are safe to remove whenever convenient.
 
 ## 17. Things an agent MUST NOT assume
 
@@ -197,7 +197,7 @@ See the latest repository consolidation audit (published as an artifact / record
 - That `docker/.env.example` is a complete environment template — it's missing real variables.
 - That a `docker compose config` resolving real secrets from the repo root is automatically a leak — check which `-f` files were actually passed first (§11).
 - That Market Health is sent via the weekday rotation system — it isn't, as of 2026-09-25.
-- That the VPS systemd timers described in this file or in CUTOVER_PLAN.md exist as files anywhere in this repo — they currently don't.
+- That `deploy/vps/donchian-*.{service,timer}` reflects the VPS's current state without re-diffing it first — these are a point-in-time snapshot (2026-09-25), not a live sync; the VPS is still the sole source of truth.
 - That a router/service file having no test means its behavior is unverified in production — check for a live-verification report before assuming either way.
 - That any historical incident report's "fixed" claim still holds without checking current code — this project has a real history of documentation drifting from reality.
 

@@ -1,0 +1,9 @@
+[Unit]
+Description=First Light: 05:00 price safety-net + daily snapshot (matches the disabled Windows FirstLight-1-UpdatePrices task)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/donchian/scripts/firstlight1_updateonly.sh
+TimeoutStartSec=1h

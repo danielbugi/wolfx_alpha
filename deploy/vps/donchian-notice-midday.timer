@@ -1,0 +1,10 @@
+[Unit]
+Description=First Light: midday channel notice (12:00 Israel)
+
+[Timer]
+OnCalendar=*-*-* 12:00:00 Asia/Jerusalem
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

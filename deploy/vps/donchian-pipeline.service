@@ -1,0 +1,9 @@
+[Unit]
+Description=First Light: full daily pipeline (docker compose run --rm pipeline)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/donchian/scripts/run_pipeline.sh
+TimeoutStartSec=4h

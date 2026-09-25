@@ -1,0 +1,9 @@
+[Unit]
+Description=First Light: pre-market earnings-today post (matches the disabled Windows FirstLight-5-EarningsToday task)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/donchian/scripts/run_channel_sender.sh mechanism/alerts/send_earnings_today.py --to prod --send
+TimeoutStartSec=15m

@@ -1,0 +1,10 @@
+[Unit]
+Description=First Light: earnings-today post (10:00 Israel)
+
+[Timer]
+OnCalendar=*-*-* 10:00:00 Asia/Jerusalem
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

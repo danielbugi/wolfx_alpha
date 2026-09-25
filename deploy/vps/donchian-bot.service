@@ -1,0 +1,22 @@
+[Unit]
+Description=First Light: production Telegram bot (docker compose --profile bot up -d bot)
+After=docker.service donchian-screener-postgres-1.service
+Requires=docker.service
+# NOT enabled/started by Gate 4 Phase A -- installed only. Start explicitly in Phase D, after
+# PROD_SENDING_ENABLED=1 and a clean sending-path validation, and only once the Windows run_bot.py
+# process is confirmed stopped (two long-polling bots on one token fight for updates).
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/donchian/compose
+EnvironmentFile=/opt/donchian/env/mechanism_image_tag.env
+ExecStart=/usr/bin/docker compose --project-directory /opt/donchian/compose \
+  -f /opt/donchian/compose/docker-compose.yml -f /opt/donchian/compose/docker-compose.prod.yml \
+  --env-file /opt/donchian/env/.env --profile bot up -d bot
+ExecStop=/usr/bin/docker compose --project-directory /opt/donchian/compose \
+  -f /opt/donchian/compose/docker-compose.yml -f /opt/donchian/compose/docker-compose.prod.yml \
+  --env-file /opt/donchian/env/.env --profile bot stop bot
+
+[Install]
+WantedBy=multi-user.target
