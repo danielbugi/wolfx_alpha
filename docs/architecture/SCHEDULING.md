@@ -26,7 +26,7 @@ change; not yet fixed).
 | `donchian-notice-midday.timer` | 12:00 | `run_channel_sender.sh mechanism/alerts/send_channel_notices.py --slot 1` | Disclaimer + assistant-promo reminder, slot 1 | No | Yes (2 posts) |
 | `donchian-notice-evening.timer` | 20:00 | Same, `--slot 2` | Same, slot 2 | No | Yes |
 | `donchian-nightly-backup.timer` | 23:30 **UTC** (not Israel-tagged) | `nightly_backup.sh trading_production` | Production DB dump | No (read-only) | No |
-| `donchian-bot.service` (not a timer) | continuous | `docker compose --profile bot up -d bot` | Private assistant, long-polling | No | DMs only, never the channel |
+| `donchian-bot.service` (not a timer) | continuous, `enabled` (2026-09-25) | `docker compose --profile bot up -d bot` | Private assistant, long-polling | No | DMs only, never the channel |
 | `donchian-docker-firewall.service` (not a timer) | boot / `docker.service` restart | `donchian-docker-firewall.sh` | Re-applies the DOCKER-USER iptables filter | No | No |
 
 ## 2. Per-timer detail
@@ -94,7 +94,12 @@ do it, so it will silently drift by an hour whenever Israel's DST offset changes
 ### `donchian-bot.service` (continuous, not a timer)
 `Type=oneshot RemainAfterExit=yes`, `WantedBy=multi-user.target`. Starts (and, via `ExecStop`, stops)
 the `bot` Compose service — `run_bot.py`, long-polling. Docker's own `restart: unless-stopped`
-handles crash recovery once running; this unit is only the start/stop wiring, not a supervisor loop.
+handles crash recovery *while the container is already up*; this unit is what starts it in the first
+place and what makes that survive a full VPS reboot. **Confirmed `enabled` 2026-09-25** (Phase 4A) —
+until then it was running correctly but `disabled`, meaning a VPS reboot would have left the bot down
+until someone noticed and ran `systemctl start` by hand. Enabling is a purely declarative systemd
+operation (creates a symlink, never touches the running process) — verified live: the container's
+`StartedAt` timestamp, PID, and Telegram polling continued completely undisturbed across the change.
 
 ### `donchian-docker-firewall.service` (continuous, not a timer)
 Re-applies the DOCKER-USER iptables filter (internet → containers restricted to tcp/80, tcp/443)
