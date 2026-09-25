@@ -260,7 +260,7 @@ evidenced) · **UNCERTAIN**.
 | `deploy/vps/donchian-bot.service` | ACTIVE, **with a live caveat** | Running today but `disabled` — see §9 |
 | `deploy/vps/auth_smoke.sh` | ACTIVE-SUPPORTING | Manual, referenced by `verify_restore.sh` and docs |
 | `deploy/db/{nightly_backup.sh,pull_nightly_backup.ps1,verify_restore.sh}` | ACTIVE | Confirmed invoked |
-| `deploy/db/donchian-nightly-backup.{service,timer}` | **DUPLICATED** | Byte-identical to the copies in `deploy/vps/` (confirmed via diff) |
+| `deploy/db/donchian-nightly-backup.{service,timer}` | ~~**DUPLICATED**~~ **RESOLVED (Phase 4A)** | Was byte-identical to a copy in `deploy/vps/`; that copy was removed 2026-09-25 after re-confirming this one still matches the live VPS units via a fresh SHA-256 check. `deploy/db/` is now the single tracked location — see `deploy/db/README.md`. |
 | `deploy/db/backup_production.py` | LEGACY | Docstring describes the pre-migration topology (Windows-hosts-production); superseded in direction by `nightly_backup.sh` |
 | 4 root `.ps1` scripts | ACTIVE-DEV | Confirmed zero references from any production path (workflow/systemd/compose) |
 | `docker/Caddyfile`, `Caddyfile.prod`, `.env.example` | ACTIVE | All confirmed used in CI/CD |
@@ -471,7 +471,7 @@ lives in one `GATE` dict + one `.gate()` method in `momentum_predictor.py`.
 
 | Duplicate | Files | Note |
 |---|---|---|
-| Nightly backup systemd unit | `deploy/vps/donchian-nightly-backup.{service,timer}` = `deploy/db/donchian-nightly-backup.{service,timer}` (byte-identical, confirmed via diff) | Single-source-of-truth risk if one copy is edited without the other |
+| Nightly backup systemd unit | ~~`deploy/vps/donchian-nightly-backup.{service,timer}` = `deploy/db/donchian-nightly-backup.{service,timer}`~~ | **RESOLVED (Phase 4A)** — the `deploy/vps/` copy was removed 2026-09-25; `deploy/db/` is now the single tracked location, re-verified against the live VPS units before removal |
 | ML prediction-tracking table DDL | `mechanism/add_ml_prediction_tracking_tables.sql` (migration #17) vs. `performance_tracker.py`'s own `CREATE TABLE IF NOT EXISTS` for the same 3 tables | Silent-drift risk — see §6, §15 |
 | Screener implementations | `multi_timeframe_screener.py` (live) vs. `donchian_screener.py`/`ml_donchian_screener.py` (dead) + all their `_backup.py`/`backups/` copies | Already flagged in CLAUDE.md; re-confirmed with fresh evidence |
 | News fetching | `news_links.py` (legacy, yfinance) / `channel_news.py` (Alpaca, channel) / `news_service.py` (Alpaca, bot) | By design (documented isolation reason), not a bug — listed here for completeness |
@@ -519,39 +519,52 @@ CLAUDE.md's own prose — several additionally confirmed *broken*, not just unus
 
 **New this pass, not previously documented anywhere:**
 
-1. **`ml_training/config/ml_config.py` opens a real `psycopg2.connect()` on every plain import**
-   (module-scope `validate_config()` → `test_db_connection()`), not just when run as `__main__`.
-   Every `ml_training` script that imports it (`build_dataset.py`, `momentum_predictor.py`,
-   `momentum_labeler.py`, `feature_builder.py`, `data_cleaner.py`) pays this network/DB cost on
-   import — including for a trivial `--help` invocation.
+1. ~~**`ml_training/config/ml_config.py` opens a real `psycopg2.connect()` on every plain import**~~
+   **RESOLVED (Phase 4A)** — the auto-validation `else` branch was removed; every real consumer
+   already made its own explicit connection call when actually needed, confirmed by verifying
+   `--help` on both live ML scripts completes instantly against an unreachable `DB_HOST` and the full
+   `ml_training/tests` suite (incl. the one test that genuinely needs a real DB) still passes.
 2. **`ml_training/deployment/model_registry.py` creates 3 directories on disk as a module-scope
    import side effect** (`model_registry = ModelRegistry()` at line 130). Low real-world impact today
    since only the already-dead `ml_integration.py` reaches it, but the pattern itself is a hazard if
    ever revived.
-3. **`send_channel_posts.py`'s own Momentum Board sender completely bypasses
-   `telegram_post_delivery`** — it's gated only by the coarse `session_state.json` flag
-   (`CHANNEL_BOARD_ENABLED`, default **on**). Currently harmless only because nothing schedules this
-   script on a trading day (§11). The moment anyone wires a weekday timer to it without removing or
-   re-gating this block, it would send a **second, duplicate Momentum Board post** — the exact class
-   of bug the whole `telegram_post_delivery` redesign exists to prevent.
-4. **Naming mismatch between `telegram_post_delivery.post_kind` and `channel_content`'s internal
-   `Post.kind`/`telegram_messages.kind`** for 2 of the 4 post-market kinds: `"momentum_board"` vs
-   `"board"`, `"market_health"` vs `"health"` (`"top_gainers"` and `"daily_digest"` don't have this
-   split). A real, concrete reachability bug — see §12.
-5. **`performance_tracker.py` defines its own `CREATE TABLE IF NOT EXISTS` for 3 ML tables**, separate
-   from and potentially divergent from the tracked migration that also defines them — silent-drift
-   risk, `IF NOT EXISTS` gives no warning if the two definitions ever disagree.
+3. ~~**`send_channel_posts.py`'s own Momentum Board sender completely bypasses
+   `telegram_post_delivery`**~~ **RESOLVED (Phase 4A)** — all three claimable kinds
+   (`momentum_board`/`top_gainers`/`market_health`) now route through `post_delivery.claim()` via a
+   new `send_claimable()` helper, sharing the exact same claim primitive `publish_post_market.py`
+   uses rather than a second implementation. Verified with a real two-thread race between the two
+   call sites (`test_post_delivery.py`) — exactly one winner, every time.
+4. ~~**Naming mismatch between `telegram_post_delivery.post_kind` and `channel_content`'s internal
+   `Post.kind`/`telegram_messages.kind`**~~ **RESOLVED (Phase 4A)** — unified on
+   `momentum_board`/`market_health` everywhere; `channel_control.py`'s `KIND_LABELS` keeps the old
+   `"board"`/`"health"` spellings mapped to the same label so historical ledger rows still render
+   correctly. See §12 / [TELEGRAM_PUBLISHING.md](TELEGRAM_PUBLISHING.md) §5c.
+5. ~~**`performance_tracker.py` defines its own `CREATE TABLE IF NOT EXISTS` for 3 ML tables**~~
+   **RESOLVED (Phase 4A)** — confirmed one real divergence (`breakout_type` VARCHAR(10) vs the
+   migration's correct VARCHAR(20)) and that the runtime DDL was never reachable outside a manual
+   direct run of this file; replaced with a read-only existence check, migrations now unambiguously
+   own this schema. See §16 and `ml_training/tests/test_performance_tracker.py`.
 6. **`mechanism/shared/config.py`'s file-path defaults have no `__file__`-anchoring** — a real
    CWD-dependence hazard class, currently unexercised only because every entrypoint happens to be
    invoked from the repo root by convention, with no code-level guard enforcing that.
 7. **No structural test prevents the bot from posting to the public channel** — the reverse isolation
    direction is tested; this one isn't.
-8. **`donchian-bot.service` is `disabled`** — confirmed live; will not survive a VPS reboot.
-9. **`donchian-nightly-backup.{service,timer}` are tracked as byte-identical duplicates** in two
-   directories.
-10. **8 of 9 scheduled jobs' actual wrapper scripts (`run_pipeline.sh`, `run_postmarket_retry.sh`,
-    `firstlight1_updateonly.sh`, `run_channel_sender.sh`) are not in this repo** — the systemd units
-    that call them are tracked; their payloads are VPS-only.
+8. ~~**`donchian-bot.service` is `disabled`**~~ **RESOLVED (Phase 4A)** — `systemctl enable`d
+   2026-09-25 after a full pre-flight check (no competing Windows process, correct image/DB, healthy
+   polling); verified the running container's PID/`StartedAt`/log stream were completely undisturbed
+   by the change (`enable` alone never touches a running process).
+9. ~~`donchian-nightly-backup.{service,timer}` are tracked as byte-identical duplicates in two
+   directories.~~ **RESOLVED (Phase 4A)** — consolidated to `deploy/db/` only.
+10. ~~**8 of 9 scheduled jobs' actual wrapper scripts ... are not in this repo**~~ **RESOLVED (Phase
+    4A)** — all 4 retrieved verbatim from the VPS (SHA-256 verified byte-identical), inspected for
+    secrets (none found), and committed. A follow-on bug surfaced while adding a regression test for
+    this exact resolution (item 11): all 4, plus the new `run_bot_service.sh` (item 6), were
+    committed as git mode `100644` (not executable) — `core.filemode=false` on the Windows checkout
+    that committed them meant git never picked up the local exec bit. A fresh checkout on Linux would
+    have silently produced non-executable scripts. Fixed via `git update-index --chmod=+x`; now
+    covered by `mechanism/alerts/tests/test_deploy_wrapper_targets.py`, which checks git's tracked
+    mode rather than a local `stat()` (invisible to `stat()` on Windows/NTFS, which is exactly how
+    this slipped through the first time).
 
 **Already known, re-confirmed this pass:** `ml_training/models/` source-vs-generated-artifact
 shadowing (already fixed with a named volume) — no other directory reproduces this exact pattern,
@@ -622,10 +635,9 @@ layout issue — moving files would not fix it, and risks breaking the deliberat
    files were committed in the prior phase. This is the single highest-value structural change found
    — it closes a real reproducibility gap (§15) and would have let this audit fully verify §7's
    environment-sourcing claims from the repo alone.
-2. **Resolve the `deploy/vps/` vs `deploy/db/` nightly-backup duplication** — pick one directory as
-   the source of truth (deploy/db/ makes more sense given `verify_restore.sh` and
-   `backup_production.py` already live there) and have the other reference it, or accept the
-   duplication explicitly in `deploy/vps/README.md` with a "these two must be kept in sync" note.
+2. ~~**Resolve the `deploy/vps/` vs `deploy/db/` nightly-backup duplication**~~ **DONE (Phase 4A)** —
+   `deploy/db/` was chosen as the source of truth (co-located with `verify_restore.sh` and
+   `backup_production.py`), the `deploy/vps/` copy was removed, and `deploy/db/README.md` was added.
 3. **A single `mechanism/alerts/` internal naming pass** (not a file move — a rename of the
    `post_kind`/`Post.kind` constants to agree) would close the §15 reachability bug directly. Scoped
    narrowly, this is a P1/P2 code change, not a structural one.
@@ -644,17 +656,17 @@ Each item: evidence pointer (§ above), benefit, risk, blast radius, tests requi
 ### P0 — production correctness / security
 | # | Item | Evidence | Benefit | Risk | Blast radius | Tests needed |
 |---|---|---|---|---|---|---|
-| P0-1 | Enable `donchian-bot.service` (`systemctl enable`) so it survives a VPS reboot | §9, live-confirmed | Bot recovers automatically after any host restart | Very low — standard, reversible systemd op | Bot service only | `systemctl is-enabled` confirmation; no code test needed |
+| P0-1 | ~~Enable `donchian-bot.service`~~ **DONE (Phase 4A)** | §9, live-confirmed | Bot recovers automatically after any host restart | Very low — standard, reversible systemd op | Bot service only | `systemctl is-enabled`/`is-active` + container PID/`StartedAt` unchanged, confirmed live |
 | P0-2 | Add a required reviewer to the `production` GitHub Environment | §16, re-confirmed live via API | Closes the single largest open CI/CD gap | None (settings-only) | None | None |
 
 ### P1 — architecture / reliability
 | # | Item | Evidence | Benefit | Risk | Blast radius | Tests needed |
 |---|---|---|---|---|---|---|
 | P1-1 | Commit the 4 missing VPS wrapper scripts (`run_pipeline.sh`, `run_postmarket_retry.sh`, `firstlight1_updateonly.sh`, `run_channel_sender.sh`) | §15 | Closes the biggest reproducibility gap found this pass | Low (additive; must byte-match what's live, verified via SHA-256 the same way the unit files were) | Scheduling docs only if content differs from assumption | Diff against live VPS copies before committing |
-| P1-2 | Fix the `send_channel_posts.py` board-post bypass of `telegram_post_delivery` (either route it through a real claim, or remove the auto-send entirely) | §15 | Removes a latent duplicate-send bug before it can ever fire | Medium — touches live-adjacent Telegram send logic | `send_channel_posts.py`, its tests | Full `mechanism/alerts/tests` suite + a new test proving no duplicate claim is possible |
-| P1-3 | Unify the `telegram_post_delivery`/`channel_content`/`telegram_messages` kind-string naming | §15, §12 | Removes the single most concrete reachability bug found | Medium — a naming change touching 3+ files and possibly historical ledger rows | `mechanism/alerts/` publishing + Control Center dashboard | Full `mechanism/alerts/tests` + a manual Control Center check |
-| P1-4 | Give `donchian-bot.service` a wrapper-script pattern matching every other unit, eliminating `mechanism_image_tag.env` | §16 | Single source of truth for the mechanism image pin | Low-medium (VPS-side change + new tracked script) | Bot deploy process only | Confirm bot picks up a pin change without the separate file |
-| P1-5 | Resolve `deploy/vps/` vs `deploy/db/` nightly-backup duplication | §13, §17 | One less place to forget to update | Low | Docs + one directory's files | None (docs/file-location only) |
+| P1-2 | ~~Fix the `send_channel_posts.py` board-post bypass of `telegram_post_delivery`~~ **DONE (Phase 4A)** — routed through a real claim (`send_claimable()`) | §15 | Removes a latent duplicate-send bug before it can ever fire | Medium — touches live-adjacent Telegram send logic | `send_channel_posts.py`, its tests | Full `mechanism/alerts/tests` suite green + a new real two-thread race test proving no duplicate claim is possible across both call sites |
+| P1-3 | ~~Unify the `telegram_post_delivery`/`channel_content`/`telegram_messages` kind-string naming~~ **DONE (Phase 4A)** — canonicalized on `momentum_board`/`market_health`, old spellings kept only as a permanent label-mapping for historical rows | §15, §12 | Removes the single most concrete reachability bug found | Medium — a naming change touching 3+ files and possibly historical ledger rows | `mechanism/alerts/` publishing + Control Center dashboard | Full `mechanism/alerts/tests` green in CI + a new test asserting the Control Center labels both spellings identically |
+| P1-4 | ~~Give `donchian-bot.service` a wrapper-script pattern matching every other unit~~ **PROPOSED, not yet applied (Phase 4A)** — see `deploy/vps/run_bot_service.sh` + `deploy/vps/donchian-bot.service.proposed`; installing on the VPS is a separate, explicitly-gated step | §16 | Single source of truth for the mechanism image pin | Low-medium (VPS-side change + new tracked script) | Bot deploy process only | Confirm bot picks up a pin change without the separate file |
+| P1-5 | ~~Resolve `deploy/vps/` vs `deploy/db/` nightly-backup duplication~~ **DONE (Phase 4A)** | §13, §17 | One less place to forget to update | Low | Docs + one directory's files | None (docs/file-location only) |
 | P1-6 | Fix the `verify_restore.sh`/`nightly_backup.sh` inventory.json mismatch (carried from Phase 2) | §16 | Routine nightly backups become fully drillable | Medium (touches the production backup script) | `nightly_backup.sh` | A real restore drill against the new output shape |
 | P1-7 | Schedule `performance_tracker.evaluate_predictions()`/`calculate_performance_metrics()` (or explicitly document that this stays manual) | §10 | Closes the ML feedback-loop gap | Low (additive scheduling) or zero (docs-only if left manual by choice) | New timer, or a docs update | If scheduled: confirm it populates `ml_prediction_outcomes`/`ml_performance_metrics` correctly |
 | P1-8 (carried) | Off-box backup redundancy at a genuinely independent third location | Phase 0/2 | Real disaster-recovery improvement | Medium (new credential/destination) | Backup pipeline | A real restore drill |
