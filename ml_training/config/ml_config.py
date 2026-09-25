@@ -146,12 +146,12 @@ if __name__ == "__main__":
         print(f"Most likely fix - add to your .env file:")
         print(f"DB_USER=postgres")
         print(f"DB_PASSWORD=postgres")
-else:
-    # Quick validation when imported
-    if env_file_path:
-        validation, message = ml_config.validate_config()
-        if not validation['database_connection']:
-            print(f"WARNING: ML database connection failed: {message}")
-            print(f"Using .env file: {env_file_path}")
-    else:
-        print("WARNING: No .env file found for ML config")
+# NOTE: previously this module opened a real DB connection as a side effect of being imported
+# (an `else` branch here called validate_config() -> test_db_connection() -> psycopg2.connect()
+# on every plain `from ml_config import ml_config`, not just when run as __main__). Every real
+# consumer (build_dataset.py, momentum_predictor.py, data_cleaner.py, momentum_labeler.py) already
+# does its own explicit psycopg2.connect(**ml_config.db_config) or ml_config.test_db_connection()
+# call when it actually needs the database -- none of them relied on this import-time check, so it
+# was pure unwanted cost (and a real hazard for --help/import-only invocations). Removed 2026-09-25
+# per the Phase 3 codebase audit. If you want a quick "is my .env wired up" check, call
+# ml_config.validate_config() explicitly, or run this file directly (python ml_config.py).
