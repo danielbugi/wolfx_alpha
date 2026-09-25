@@ -1,18 +1,28 @@
 #!/bin/bash
 # automation_pipeline.sh - Daily Trading Data Pipeline
-# Order: index + price update -> freshness check -> CHANNEL POSTS (digest + card + buttons, momentum
-# board, the day's rotating post) -> weekly/monthly/fundamentals/screener/ML -> session mark -> a retry
-# of the channel posts (a no-op when they already went out). Sunday: only the weekly recap post.
+# Order: index + price update -> freshness check -> POST-MARKET PACKAGE (Daily Digest, Momentum Board,
+# Top Gainers, Market Health -- mechanism/alerts/publish_post_market.py, one delivery per market session
+# per post kind via the telegram_post_delivery table) -> weekly/monthly/fundamentals/sector/earnings/
+# quarterly/screener/ML -> session mark -> a retry of the post-market package (a no-op once every kind
+# is delivered). Sunday: only the weekly recap post (send_channel_posts.py).
 # Usage: ./automation_pipeline.sh   (--force or FORCE=1 to bypass the trading-day gate)
-# Scheduled (Task Scheduler "DonchianScreenerDailyPipeline", 2026-09-24) at 23:45 Israel time with a
-# 01:00 backup trigger. 23:45 relies on MARKET_SETTLE_MINUTES=30 in .env: the gate counts a session as
-# complete 30 min after the 16:00 ET close (22:30/23:30 Israel depending on the DST offset), so a trigger
-# before that sees "nothing new yet" and skips -- re-derive that math before moving it earlier. A vendor
-# bar that is not published yet fails the freshness check after step 2 (nothing posted, session unmarked)
-# and the 01:00 trigger retries; while a run is going, the 01:00 trigger is ignored (IgnoreNew).
-# FirstLight-1 (05:00, a lightweight price-only safety net) is unchanged. FirstLight-2 (the fixed
-# 06:00 digest send) is DISABLED -- this script sends the posts itself right after it confirms fresh
-# data, instead of racing a separate fixed clock time (which is what silently failed on 2026-09-23).
+# Scheduled on the VPS by donchian-pipeline.timer (systemd, native Asia/Jerusalem calendar tag -- see
+# CLAUDE.md §7 / deploy/vps/systemd/) at 23:45 Israel time with a 01:00 backup trigger. Both timers'
+# unit files live only on the VPS today, not in this repo (a known reproducibility gap, tracked as P1-1
+# in the 2026-09-25 audit). 23:45 relies on MARKET_SETTLE_MINUTES=30 in .env: the gate counts a session
+# as complete 30 min after the 16:00 ET close (22:30/23:30 Israel depending on the DST offset), so a
+# trigger before that sees "nothing new yet" and skips -- re-derive that math before moving it earlier.
+# A vendor bar that is not published yet fails the freshness check after step 2 (nothing posted, session
+# unmarked) and the 01:00 trigger retries; while a run is going, the 01:00 trigger is a no-op
+# (systemd MultipleInstances=IgnoreNew). donchian-postmarket-retry.timer (every ~20 min, 23:45-06:00
+# Israel, a separate lightweight publish_post_market.py invocation that never runs steps 3-12) covers
+# the post-market package specifically if this pipeline's own two attempts both miss the freshness
+# window -- see CLAUDE.md §6/§8.
+# donchian-firstlight1-prices.timer (05:00, a lightweight price-only safety net) is unchanged and
+# independent of this script. The old Windows-era "FirstLight-2" fixed-06:00-digest job no longer
+# exists as a systemd unit -- this script sends the post-market package itself right after it confirms
+# fresh data, instead of racing a separate fixed clock time (which is what silently failed once under
+# the old design, before the VPS migration).
 
 set -e  # Exit on any error
 set -o pipefail  # A failing python step must fail the pipeline even piped through tee
@@ -238,7 +248,7 @@ fi
 # (telegram_post_delivery) makes this safe to call unconditionally: any kind already delivered is
 # skipped, only a genuinely missing one is attempted.
 # Deliberately NOT run through run_step(): a post-market problem (e.g. a Telegram outage) should
-# not make Task Scheduler report the whole nightly data/ML pipeline as failed when steps 1-12 and
+# not make systemd report the whole nightly data/ML pipeline as failed when steps 1-12 and
 # the session mark above already succeeded -- so this warns and continues rather than exiting 1.
 publish_post_market "Step 13/${TOTAL_STEPS} (retry)"
 
