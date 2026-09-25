@@ -13,24 +13,32 @@ administrator (root SSH) — the GitHub Actions key cannot change them.
 
 ## Scheduling (systemd timers)
 
-The 15 `donchian-*.service`/`donchian-*.timer` files below are **verbatim copies of what is
-installed and running on the VPS**, pulled read-only via root SSH and confirmed byte-identical by
-SHA-256 (2026-09-25, as part of the repository consolidation audit's P1-1 cleanup item — before this,
-none of them existed in git at all; the only record of production's actual scheduling was
-`docs/devops/CUTOVER_PLAN.md`'s prose description). All of them live at `/etc/systemd/system/` on the
-VPS, owner root, mode 644, all under `WantedBy=timers.target` (the four continuous/boot-time services —
-`donchian-bot.service`, `donchian-docker-firewall.service` — are `WantedBy=multi-user.target` instead;
-they have no matching `.timer`).
+The `donchian-*.service`/`donchian-*.timer` files in this directory (13 files) plus
+`deploy/db/donchian-nightly-backup.{service,timer}` (2 more — see below) are **verbatim copies of
+what is installed and running on the VPS**, pulled read-only via root SSH and confirmed
+byte-identical by SHA-256 (2026-09-25, as part of the repository consolidation audit's P1-1 cleanup
+item — before this, none of them existed in git at all; the only record of production's actual
+scheduling was `docs/devops/CUTOVER_PLAN.md`'s prose description). All of them live at
+`/etc/systemd/system/` on the VPS, owner root, mode 644, all under `WantedBy=timers.target` (the
+two continuous/boot-time services — `donchian-bot.service`, `donchian-docker-firewall.service` —
+are `WantedBy=multi-user.target` instead; they have no matching `.timer`).
 
-| Timer | Schedule (Asia/Jerusalem unless noted) | Service it triggers |
-|---|---|---|
-| `donchian-pipeline.timer` | 23:45, 01:00 retry | Full 13-step pipeline (`run_pipeline.sh`) |
-| `donchian-postmarket-retry.timer` | 23:45, then every ~20 min through 06:00 | Post-market package only (`run_postmarket_retry.sh`) — `Persistent=false` deliberately, so a VPS outage never fires a stale retry for an old session on restart |
-| `donchian-firstlight1-prices.timer` | 05:00 | Price safety-net + snapshot (`firstlight1_updateonly.sh`) |
-| `donchian-earnings-today.timer` | 10:00 | Earnings-today post |
-| `donchian-notice-midday.timer` | 12:00 | Disclaimer + assistant-promo notice, slot 1 |
-| `donchian-notice-evening.timer` | 20:00 | Same, slot 2 |
-| `donchian-nightly-backup.timer` | 23:30 **UTC**, not Asia/Jerusalem | Production DB dump — the one timer that predates the Asia/Jerusalem-tag convention and will drift an hour at the next DST change; a known, low-priority inconsistency, not yet fixed |
+**`donchian-nightly-backup.{service,timer}` are tracked in `deploy/db/`, not here** — co-located
+with `nightly_backup.sh` (the script they run), `verify_restore.sh`, `pull_nightly_backup.ps1`, and
+`backup_production.py`, so the whole backup toolchain has one home instead of the unit files living
+apart from the script and tooling they belong to. (Until 2026-09-25 this directory *also* carried a
+byte-identical copy of both files — a real duplication risk, consolidated as part of Phase 4A; see
+`deploy/db/README.md`.)
+
+| Timer | Schedule (Asia/Jerusalem unless noted) | Service it triggers | Tracked in |
+|---|---|---|---|
+| `donchian-pipeline.timer` | 23:45, 01:00 retry | Full 13-step pipeline (`run_pipeline.sh`) | here |
+| `donchian-postmarket-retry.timer` | 23:45, then every ~20 min through 06:00 | Post-market package only (`run_postmarket_retry.sh`) — `Persistent=false` deliberately, so a VPS outage never fires a stale retry for an old session on restart | here |
+| `donchian-firstlight1-prices.timer` | 05:00 | Price safety-net + snapshot (`firstlight1_updateonly.sh`) | here |
+| `donchian-earnings-today.timer` | 10:00 | Earnings-today post | here |
+| `donchian-notice-midday.timer` | 12:00 | Disclaimer + assistant-promo notice, slot 1 | here |
+| `donchian-notice-evening.timer` | 20:00 | Same, slot 2 | here |
+| `donchian-nightly-backup.timer` | 23:30 **UTC**, not Asia/Jerusalem | Production DB dump — the one timer that predates the Asia/Jerusalem-tag convention and will drift an hour at the next DST change; a known, low-priority inconsistency, not yet fixed | `deploy/db/` |
 
 **These files are a snapshot, not a live sync** — editing them here does nothing to the VPS until
 someone deliberately re-installs them (`scp` + `systemctl daemon-reload` + `systemctl restart <unit>`,
@@ -40,10 +48,13 @@ this snapshot was taken would otherwise be silently overwritten) — never push 
 VPS blind.
 
 ```bash
-# Read-only comparison before touching anything (root SSH key required):
+# Read-only comparison before touching anything (root SSH key required). Covers every tracked unit
+# file across BOTH directories (deploy/vps/ + deploy/db/'s nightly-backup pair):
 ssh -i ~/.ssh/donchian_deploy root@<vps-host> "cd /etc/systemd/system && sha256sum donchian-*.service donchian-*.timer" \
   | sort > /tmp/remote.sha
-sha256sum deploy/vps/donchian-*.service deploy/vps/donchian-*.timer | sed 's#deploy/vps/##' | sort > /tmp/local.sha
+{ sha256sum deploy/vps/donchian-*.service deploy/vps/donchian-*.timer | sed 's#deploy/vps/##'; \
+  sha256sum deploy/db/donchian-*.service deploy/db/donchian-*.timer | sed 's#deploy/db/##'; } \
+  | sort > /tmp/local.sha
 diff /tmp/remote.sha /tmp/local.sha
 ```
 

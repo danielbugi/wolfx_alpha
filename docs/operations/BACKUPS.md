@@ -3,8 +3,10 @@
 > **Purpose:** a practical reference for how production is backed up, verified, and restored — and
 > an honest statement of what is and isn't covered yet.
 > **Source of truth:** `deploy/db/nightly_backup.sh`, `deploy/db/pull_nightly_backup.ps1`,
-> `deploy/db/verify_restore.sh`, `deploy/vps/donchian-nightly-backup.{service,timer}`.
-> **Last verified:** 2026-09-25.
+> `deploy/db/verify_restore.sh`, `deploy/db/donchian-nightly-backup.{service,timer}`.
+> **Last verified:** 2026-09-25 (Phase 4A: the unit files' duplicate copy under `deploy/vps/` was
+> removed this pass — `deploy/db/` is now the single tracked location, confirmed still byte-identical
+> to the live VPS units before the removal).
 
 ## 1. What runs automatically
 
