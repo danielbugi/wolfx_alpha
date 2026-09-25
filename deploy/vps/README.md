@@ -10,6 +10,16 @@ administrator (root SSH) — the GitHub Actions key cannot change them.
 | `rollback.sh` | `/opt/donchian/scripts/rollback.sh` | deploy, 755 | Redeploys `PREVIOUS_GOOD_SHA` (image + that commit's Compose config) |
 | `docker-user-firewall.sh` | `/usr/local/sbin/donchian-docker-firewall.sh` | root, 755 | DOCKER-USER filter: internet → containers allowed on tcp/80, tcp/443 only |
 | `donchian-docker-firewall.service` | `/etc/systemd/system/` | root, 644 | Re-applies the filter at boot and after every Docker restart |
+| `run_pipeline.sh` | `/opt/donchian/scripts/run_pipeline.sh` | root, 755 | `ExecStart` of `donchian-pipeline.service` — `docker compose run --rm pipeline` at `CURRENT_MECHANISM_SHA` |
+| `run_postmarket_retry.sh` | `/opt/donchian/scripts/run_postmarket_retry.sh` | root, 755 | `ExecStart` of `donchian-postmarket-retry.service` — the bounded post-market-only retry |
+| `run_channel_sender.sh` | `/opt/donchian/scripts/run_channel_sender.sh` | root, 755 | `ExecStart` of `donchian-earnings-today.service` and both `donchian-notice-*.service` units — a generic one-shot `channel-sender` runner, `<script.py> [args...]` |
+| `firstlight1_updateonly.sh` | `/opt/donchian/scripts/firstlight1_updateonly.sh` | root, 755 | `ExecStart` of `donchian-firstlight1-prices.service` — calls `run_channel_sender.sh` 3 times |
+
+**Added 2026-09-25 (Phase 4A)**: the four scripts above were retrieved read-only from the live VPS,
+inspected for secrets/credentials/staging references (none found), confirmed byte-identical via
+SHA-256, and committed verbatim — until this pass, every tracked systemd unit except
+`donchian-docker-firewall.service` pointed at a script that existed only on the VPS. Every tracked
+production systemd unit now resolves to a tracked wrapper/entrypoint in this repo.
 
 ## Scheduling (systemd timers)
 
