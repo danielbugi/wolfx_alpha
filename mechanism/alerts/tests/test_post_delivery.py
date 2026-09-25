@@ -14,8 +14,11 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")
 sys.path.insert(0, os.path.join(ROOT, "mechanism"))
 sys.path.insert(0, ROOT)
 
+from alerts import channel_content as cx  # noqa: E402
 from alerts import post_delivery as pd  # noqa: E402
 from alerts import publish_post_market as ppm  # noqa: E402
+from alerts import send_channel_posts as scp  # noqa: E402
+from alerts.telegram_client import TelegramError  # noqa: E402
 
 # Synthetic, clearly-in-the-future session dates -- no real delivery row can ever exist at these dates, so
 # tests that use target="dev" (main() only accepts dev/prod via argparse, never a test-only value) cannot
@@ -154,7 +157,7 @@ def _stub(monkeypatch, *, digest_ok=True, board_ok=True, gainers_ok=True, health
 
     def fake_single(kind, ctx, to, username):
         calls.append(kind)
-        ok = {"board": board_ok, "top_gainers": gainers_ok, "health": health_ok}[kind]
+        ok = {"momentum_board": board_ok, "top_gainers": gainers_ok, "market_health": health_ok}[kind]
         if not ok:
             raise FakeError(f"{kind} send failed")
         return 999
@@ -172,7 +175,7 @@ def test_fresh_session_makes_all_four_kinds_eligible_and_all_get_sent(monkeypatc
     calls = _stub(monkeypatch)
     rc = ppm.publish(SESSION, "dev", send=True, image=True, buttons=True, force=False)
     assert rc == 0
-    assert set(calls) == {"daily_digest", "board", "top_gainers", "health"}
+    assert set(calls) == {"daily_digest", "momentum_board", "top_gainers", "market_health"}
     for kind in ppm.POST_MARKET_KINDS:
         assert pd.already_sent(db, SESSION, kind, "dev")
 
@@ -235,10 +238,88 @@ def test_stale_data_means_zero_market_posts_and_main_exits_cleanly(monkeypatch, 
 def test_fresh_data_through_main_sends_the_full_package(monkeypatch, db):
     rc, calls = _run_main(monkeypatch, ["--send", "--to", "dev", "--skip-update"], fresh=True)
     assert rc == 0
-    assert set(calls) == {"daily_digest", "board", "top_gainers", "health"}
+    assert set(calls) == {"daily_digest", "momentum_board", "top_gainers", "market_health"}
 
 
 def test_retry_loop_is_a_safe_no_op_once_the_session_is_fully_delivered(monkeypatch, db):
     _run_main(monkeypatch, ["--send", "--to", "dev", "--skip-update"], fresh=True)       # first (successful) run
     rc, calls = _run_main(monkeypatch, ["--send", "--to", "dev", "--skip-update"], fresh=True)  # the "retry"
     assert rc == 0 and calls == []                                                        # nothing re-attempted
+
+
+# ================================================================== send_channel_posts.send_claimable()
+# Phase 4A finding: send_channel_posts.py had its own Momentum Board sender that bypassed
+# telegram_post_delivery entirely, gated only by the coarse session_state.json flag -- a latent
+# duplicate-send hazard, harmless only because nothing scheduled the weekday path that could trigger it.
+# send_claimable() is the fix: the SAME atomic claim publish_post_market.py uses, now shared by both
+# senders. These tests prove the two senders genuinely cannot both deliver the same post for the same
+# session -- not by inspecting code, by actually racing the two functions against the same real row.
+class _FakeTgSend:
+    """Minimal TelegramClient stand-in for send_claimable()'s own send_post() call -- never touches the
+    network. Failure is injected via `fail`."""
+    def __init__(self, fail: bool = False):
+        self.fail = fail
+        self.sent = []
+
+    def send_message(self, text, disable_preview=True, silent=True, reply_markup=None, kind=None):
+        if self.fail:
+            raise TelegramError("simulated send failure")
+        self.sent.append(kind)
+        return [123]
+
+    def send_photo(self, *a, **kw):
+        raise AssertionError("this test's posts never carry an image")
+
+
+def _plain_post(kind="momentum_board"):
+    return cx.Post(kind, "test body")
+
+
+def test_send_claimable_actually_sends_on_a_fresh_claim(db):
+    tg = _FakeTgSend()
+    sent = scp.send_claimable(tg, _plain_post(), "dev", SESSION, "some_bot")
+    assert sent is True and tg.sent == ["momentum_board"]
+    assert pd.already_sent(db, SESSION, "momentum_board", "dev")
+
+
+def test_send_claimable_skips_without_sending_when_already_delivered(db):
+    """This is the exact scenario the hazard was about: publish_post_market.py (or an earlier call) already
+    delivered momentum_board for this session -- send_claimable() must not send it again."""
+    pd.claim(db, SESSION, "momentum_board", "dev")
+    tg = _FakeTgSend()
+    sent = scp.send_claimable(tg, _plain_post(), "dev", SESSION, "some_bot")
+    assert sent is False and tg.sent == []                          # never touched the transport
+
+
+def test_publish_post_market_and_send_channel_posts_cannot_both_deliver_the_same_post(db):
+    """The two real senders, racing for the identical (session, kind, target) via two real pooled
+    connections -- proves the shared claim table, not a convention either script individually follows, is
+    what prevents the duplicate."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    results = []
+
+    def via_publish_post_market():
+        claim = pd.claim(db, SESSION, "momentum_board", "dev")
+        if claim is None:
+            return "skipped"
+        pd.mark_sent(db, claim, 1)
+        return "sent"
+
+    def via_send_channel_posts():
+        tg = _FakeTgSend()
+        return "sent" if scp.send_claimable(tg, _plain_post(), "dev", SESSION, "some_bot") else "skipped"
+
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        f1 = ex.submit(via_publish_post_market)
+        f2 = ex.submit(via_send_channel_posts)
+        results = [f1.result(), f2.result()]
+    assert results.count("sent") == 1 and results.count("skipped") == 1
+
+
+def test_send_claimable_marks_failed_not_sent_on_a_real_send_error(db):
+    tg = _FakeTgSend(fail=True)
+    with pytest.raises(TelegramError):
+        scp.send_claimable(tg, _plain_post(), "dev", SESSION, "some_bot")
+    assert not pd.already_sent(db, SESSION, "momentum_board", "dev")   # failed, not sent -- reclaimable
+    assert pd.claim(db, SESSION, "momentum_board", "dev") is not None  # confirms it: immediately reclaimable

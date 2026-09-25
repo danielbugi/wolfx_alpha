@@ -44,6 +44,7 @@ from alerts import channel_news  # noqa: E402
 from alerts import digest_builder as dbld  # noqa: E402
 from alerts import market_context as mc  # noqa: E402
 from alerts import market_stats as ms  # noqa: E402
+from alerts import post_delivery  # noqa: E402
 from alerts import scoreboard  # noqa: E402
 from alerts.digest_format import PRIVATE_ASSISTANT_BUTTON  # noqa: E402
 from alerts.send_daily_alerts import resolve_session  # noqa: E402
@@ -52,6 +53,15 @@ from alerts.telegram_client import TelegramClient, TelegramError, text_length  #
 
 PREVIEW_DIR = MECH.parent / "reports" / "first_light" / "posts"
 RECAP_SESSIONS = 5
+
+# These three are also standard post-market posts that mechanism/alerts/publish_post_market.py sends every
+# session under the exact same claim keys ("momentum_board", "market_health", "top_gainers" -- see
+# channel_content.KINDS's own comment for the 2026-09-25 naming unification). This script must never
+# deliver any of them to a real channel (dev/prod) without going through that identical
+# telegram_post_delivery claim -- see the sending loop in main() below. "daily_digest" is not buildable by
+# this script at all (send_daily_digest.py owns it) so it isn't listed here. --to owner (private review in
+# your own chat with the bot) is exempt: it was never part of the production delivery contract.
+CLAIMABLE_KINDS = frozenset({"momentum_board", "market_health", "top_gainers"})
 
 
 # ------------------------------------------------------------------ loading the facts
@@ -179,6 +189,25 @@ def send_post(tg: TelegramClient, post: cx.Post, username) -> None:
         tg.send_message(post.text, disable_preview=post.disable_preview, silent=True, reply_markup=kb, kind=post.kind)
 
 
+def send_claimable(tg: TelegramClient, post: cx.Post, to: str, claim_session, username) -> bool:
+    """Send `post` only after winning telegram_post_delivery's atomic claim for (claim_session, post.kind,
+    to) -- the exact same mechanism mechanism/alerts/post_delivery.py / publish_post_market.py use for the
+    standard post-market package. Returns True if this call actually sent it, False if another process (most
+    likely publish_post_market.py itself, earlier the same session) already delivered it -- never raises for
+    that case, since "already sent" is success, not an error. A real send failure marks the claim 'failed'
+    (reclaimable immediately on a later retry) and re-raises."""
+    claim = post_delivery.claim(db, claim_session, post.kind, to)
+    if claim is None:
+        return False
+    try:
+        send_post(tg, post, username)
+    except TelegramError as e:
+        post_delivery.mark_failed(db, claim, str(e))
+        raise
+    post_delivery.mark_sent(db, claim, None)
+    return True
+
+
 def save_preview(post: cx.Post, session) -> None:
     if post.image:
         PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
@@ -230,7 +259,7 @@ def main() -> int:
     built = []
     auto = not (args.all or args.kind != "auto")
     if auto and kinds != ["recap"] and os.getenv("CHANNEL_BOARD_ENABLED", "1").strip() != "0":
-        post = cx.build_post("board", ctx)                       # the daily momentum board comes first; the rotating post follows it
+        post = cx.build_post("momentum_board", ctx)               # the daily momentum board comes first; the rotating post follows it
         if post:
             built.append(post)
         else:
@@ -252,14 +281,40 @@ def main() -> int:
     if not args.send:
         print("\nDRY RUN - nothing was sent. Use --send (dev) or --send --to prod (locked until launch).")
         return 0
+
+    # market_health/momentum_board/top_gainers must never reach a real channel from here without the exact
+    # same telegram_post_delivery claim publish_post_market.py uses for the standard post-market package --
+    # see CLAIMABLE_KINDS above. The claim key is the CALENDAR session (market_calendar.latest_completed()),
+    # not resolve_session()'s data-driven `session` above -- the two agree in the normal case, but only the
+    # calendar value is guaranteed to match the row publish_post_market.py already claimed under for today.
+    claim_session = session
+    if args.to != "owner":
+        try:
+            calendar_sessions, _source = market_calendar.get_sessions()
+            claim_session = market_calendar.latest_completed(calendar_sessions) or session
+        except Exception as e:                                        # noqa: BLE001 - never let this block a send outright
+            print(f"  (could not resolve the calendar session for the delivery claim, falling back to {session}: {e})")
+
     try:
         tg = TelegramClient.from_env(args.to, dry_run=False)
         username = os.getenv("TELEGRAM_BOT_USERNAME") or tg.get_me()["username"]
+        sent, skipped = [], []
         for p in built:
+            if args.to != "owner" and p.kind in CLAIMABLE_KINDS:
+                if send_claimable(tg, p, args.to, claim_session, username):
+                    sent.append(p.kind)
+                else:
+                    skipped.append(p.kind)
+                    print(f"  ({p.kind}: already delivered for {claim_session} ({args.to}) -- skipping, not a duplicate send)")
+                continue
             send_post(tg, p, username)
+            sent.append(p.kind)
         if args.to != "owner":
             market_calendar.mark_processed(state_key, pd.Timestamp(session).date())
-        print(f"\nSENT {len(built)} post(s) [{', '.join(p.kind for p in built)}] to {args.to.upper()}.")
+        if sent:
+            print(f"\nSENT {len(sent)} post(s) [{', '.join(sent)}] to {args.to.upper()}.")
+        if skipped:
+            print(f"SKIPPED {len(skipped)} post(s) [{', '.join(skipped)}] -- already delivered by the post-market package.")
     except TelegramError as e:
         raise SystemExit(f"ABORT: {e}")
     return 0
