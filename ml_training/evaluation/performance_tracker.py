@@ -43,82 +43,40 @@ class MLPerformanceTracker:
             return None
     
     def setup_performance_tables(self):
-        """Create tables for tracking ML predictions and outcomes"""
-        print("Setting up performance tracking tables...")
-        
+        """Verify ml_predictions/ml_prediction_outcomes/ml_performance_metrics exist.
+
+        These tables are owned by mechanism/add_ml_prediction_tracking_tables.sql (migration #17)
+        -- not by this method. Until 2026-09-25 this method carried its own CREATE TABLE IF NOT
+        EXISTS DDL for the same three tables, which had silently diverged from the tracked
+        migration (breakout_type VARCHAR(10) here vs VARCHAR(20) in the migration -- the migration's
+        width is the one verified against real production data via a direct, documented inspection;
+        this method's was stale and would have been too narrow for a real value like
+        "bullish_breakout"). That DDL was never actually reachable outside a manual `python
+        performance_tracker.py` run (nothing in the live pipeline calls this method), so removing it
+        changes no current behavior -- it only removes a latent footgun and a second, driftable
+        source of truth for these tables' schema. Per the Phase 3/4A audit: migrations define
+        schema, application code consumes it.
+        """
         conn = self.get_db_connection()
         if not conn:
             return False
-            
+
         cursor = conn.cursor()
-        
         try:
-            # Table for ML predictions
-            create_predictions_table = """
-                CREATE TABLE IF NOT EXISTS ml_predictions (
-                    id SERIAL PRIMARY KEY,
-                    symbol VARCHAR(10),
-                    prediction_date DATE,
-                    breakout_type VARCHAR(10),
-                    entry_price NUMERIC(10,2),
-                    ml_probability NUMERIC(5,3),
-                    ml_confidence VARCHAR(20),
-                    ml_recommendation VARCHAR(20),
-                    ml_risk_score INTEGER,
-                    model_version VARCHAR(50),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(symbol, prediction_date)
-                );
-            """
-            
-            # Table for tracking outcomes
-            create_outcomes_table = """
-                CREATE TABLE IF NOT EXISTS ml_prediction_outcomes (
-                    id SERIAL PRIMARY KEY,
-                    prediction_id INTEGER REFERENCES ml_predictions(id),
-                    symbol VARCHAR(10),
-                    prediction_date DATE,
-                    evaluation_date DATE,
-                    days_elapsed INTEGER,
-                    actual_return_pct NUMERIC(8,2),
-                    max_gain_pct NUMERIC(8,2),
-                    max_loss_pct NUMERIC(8,2),
-                    momentum_achieved BOOLEAN,
-                    momentum_score INTEGER,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """
-            
-            # Table for performance metrics
-            create_metrics_table = """
-                CREATE TABLE IF NOT EXISTS ml_performance_metrics (
-                    id SERIAL PRIMARY KEY,
-                    metric_date DATE,
-                    model_version VARCHAR(50),
-                    total_predictions INTEGER,
-                    correct_predictions INTEGER,
-                    accuracy NUMERIC(5,3),
-                    precision_high_prob NUMERIC(5,3),
-                    recall_high_prob NUMERIC(5,3),
-                    avg_return_predicted_high NUMERIC(8,2),
-                    avg_return_predicted_low NUMERIC(8,2),
-                    sharpe_ratio NUMERIC(6,3),
-                    max_drawdown NUMERIC(8,2),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """
-            
-            cursor.execute(create_predictions_table)
-            cursor.execute(create_outcomes_table)
-            cursor.execute(create_metrics_table)
-            
-            conn.commit()
-            print("✅ Performance tracking tables created")
+            cursor.execute("""
+                SELECT count(*) FROM information_schema.tables
+                WHERE table_schema = 'public'
+                  AND table_name IN ('ml_predictions', 'ml_prediction_outcomes', 'ml_performance_metrics')
+            """)
+            found = cursor.fetchone()[0]
+            if found < 3:
+                print(f"❌ Only {found}/3 expected tables exist -- apply "
+                      f"mechanism/add_ml_prediction_tracking_tables.sql before using this tracker")
+                return False
+            print("✅ ml_predictions / ml_prediction_outcomes / ml_performance_metrics all present")
             return True
-            
         except Exception as e:
-            print(f"❌ Error creating performance tables: {e}")
-            conn.rollback()
+            print(f"❌ Error checking performance tables: {e}")
             return False
         finally:
             cursor.close()
