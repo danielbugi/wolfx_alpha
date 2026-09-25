@@ -389,7 +389,22 @@ jobs:
       - name: Install psql client
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
 
-      - name: Apply all 16 bootstrap/migration SQL files, in the same order docker-compose.yml uses
+      - name: Discover migration files from docker-compose.yml's init-mount list (single source of truth -- never hardcode a second list here; this is what caught the job silently drifting 2 files behind during the 2026-09-25 audit)
+        # sed, not grep -P: a PCRE lookaround extraction of this same pattern was verified locally to behave
+        # inconsistently across grep builds/locales (GNU grep 3.1 under Git-for-Windows' MSYS refused -P entirely
+        # here, "supports only unibyte and UTF-8 locales", despite LC_CTYPE already being C.UTF-8) -- sed's capture
+        # group needs no PCRE support at all, so it is the portable choice for a check that must never itself be
+        # the flaky part of CI.
+        run: |
+          sed -n 's#.*- \./\([^:]*\.sql\):/docker-entrypoint-initdb\.d/[0-9]*_.*#\1#p' docker-compose.yml > /tmp/migration_files.txt
+          n=$(wc -l < /tmp/migration_files.txt)
+          echo "Discovered $n migration files, in docker-compose.yml's own order:"
+          cat -n /tmp/migration_files.txt
+          # A floor, not a pin -- this must rise every time a new numbered init mount is added, so a future
+          # migration silently missing from docker-compose.yml itself (not just from this job) still gets caught.
+          test "$n" -ge 18 || { echo "Expected at least 18 migration files from docker-compose.yml, found $n -- its init-mount list format may have changed"; exit 1; }
+
+      - name: Apply every discovered migration file, in that exact order
         # This is the exact regression guard for both bugs found during Phase 2 local validation
         # (an invalid `GRANT ... ON ALL VIEWS IN SCHEMA` and two invalid `PRINT` statements in
         # mechanism/create_trading_schema.sql, both fixed with explicit approval at the time --
@@ -397,35 +412,75 @@ jobs:
         # job) the moment any file errors, exactly like Postgres's own docker-entrypoint-initdb.d
         # behavior that originally surfaced these bugs.
         run: |
-          for f in \
-            mechanism/create_trading_schema.sql \
-            mechanism/add_multi_timeframe_tables.sql \
-            mechanism/add_market_data_tables.sql \
-            mechanism/add_ml_dataset_tables.sql \
-            mechanism/add_alerts_tables.sql \
-            mechanism/add_digest_tables.sql \
-            mechanism/add_tracker_tables.sql \
-            mechanism/add_assistant_tables.sql \
-            mechanism/add_access_flow_tables.sql \
-            mechanism/add_telegram_control_tables.sql \
-            mechanism/add_telegram_control_phase2.sql \
-            mechanism/add_dashboard_auth_tables.sql \
-            mechanism/add_earnings_calendar_table.sql \
-            mechanism/add_morning_dm_tables.sql \
-            mechanism/add_piotroski_score.sql \
-            mechanism/widen_ml_models_version.sql \
-            mechanism/add_ml_prediction_tracking_tables.sql \
-          ; do
+          while IFS= read -r f; do
             echo "::group::Applying $f"
             psql -v ON_ERROR_STOP=1 -f "$f"
             echo "::endgroup::"
-          done
+          done < /tmp/migration_files.txt
 
-      - name: Verify expected tables exist (40, matching Phase 4A.6's verified count -- 36 original + 4 captured drifted tables)
+      - name: Verify expected tables exist (41, matching Phase 4A.6's verified count -- 36 original + 4 captured drifted + telegram_post_delivery)
         run: |
           count=$(psql -tAc "SELECT count(*) FROM pg_tables WHERE schemaname='public'")
           echo "Tables found: $count"
-          test "$count" -ge 40 || { echo "Expected at least 40 tables, found $count"; exit 1; }
+          test "$count" -ge 41 || { echo "Expected at least 41 tables, found $count"; exit 1; }
+
+      - name: Verify telegram_post_delivery's structure and concurrency-guard constraint (2026-09-25 audit P1-5 -- this table's own migration was previously applied on the VPS but never validated by CI)
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "
+            DO \$\$
+            BEGIN
+              IF (SELECT conname FROM pg_constraint WHERE conname = 'telegram_post_delivery_pkey') IS NULL THEN
+                RAISE EXCEPTION 'telegram_post_delivery_pkey missing';
+              END IF;
+              -- The UNIQUE constraint IS the concurrency guard post_delivery.claim() relies on (INSERT..ON CONFLICT
+              -- (market_session, post_kind, target)) -- its absence would silently turn claim() into a plain INSERT
+              -- that could double-send a post under a real race, with no error until production hit it.
+              IF (SELECT conname FROM pg_constraint WHERE conname = 'telegram_post_delivery_market_session_post_kind_target_key') IS NULL THEN
+                RAISE EXCEPTION 'telegram_post_delivery UNIQUE(market_session, post_kind, target) constraint missing';
+              END IF;
+              IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_telegram_post_delivery_session') THEN
+                RAISE EXCEPTION 'idx_telegram_post_delivery_session index missing';
+              END IF;
+              IF NOT has_table_privilege('trading_user', 'telegram_post_delivery', 'INSERT') THEN
+                RAISE EXCEPTION 'trading_user lacks INSERT on telegram_post_delivery';
+              END IF;
+            END
+            \$\$;
+            -- A real claim/reclaim round trip, mirroring post_delivery.py's CLAIM_SQL exactly: the first claim on a
+            -- fresh (session, kind, target) must succeed; an immediate second claim of the identical key must be
+            -- rejected while the first is still 'reserved' (this is what stops two racing publishers from both
+            -- sending the same post) -- a synthetic 2099 session so this can never collide with real delivery rows.
+            -- Pure SQL on purpose (see the ml_prediction_outcomes round-trip check above): psql -c cannot mix SQL
+            -- with psql meta-commands like \\gset, so both claims and both assertions live in one DO block.
+            DO \$\$
+            DECLARE first_id bigint; second_id bigint;
+            BEGIN
+              INSERT INTO telegram_post_delivery (market_session, post_kind, target, status)
+                VALUES ('2099-01-15', 'ci_test_kind', 'dev', 'reserved')
+                ON CONFLICT (market_session, post_kind, target)
+                DO UPDATE SET claimed_at = NOW()
+                WHERE telegram_post_delivery.status = 'failed'
+                   OR (telegram_post_delivery.status = 'reserved' AND telegram_post_delivery.claimed_at < NOW() - INTERVAL '10 minutes')
+                RETURNING id INTO first_id;
+              IF first_id IS NULL THEN
+                RAISE EXCEPTION 'first claim on a fresh key unexpectedly failed to reserve a row';
+              END IF;
+
+              INSERT INTO telegram_post_delivery (market_session, post_kind, target, status)
+                VALUES ('2099-01-15', 'ci_test_kind', 'dev', 'reserved')
+                ON CONFLICT (market_session, post_kind, target)
+                DO UPDATE SET claimed_at = NOW()
+                WHERE telegram_post_delivery.status = 'failed'
+                   OR (telegram_post_delivery.status = 'reserved' AND telegram_post_delivery.claimed_at < NOW() - INTERVAL '10 minutes')
+                RETURNING id INTO second_id;
+              IF second_id IS NOT NULL THEN
+                RAISE EXCEPTION 'a fresh reservation was re-claimed -- the concurrency guard is broken';
+              END IF;
+            END
+            \$\$;
+            DELETE FROM telegram_post_delivery WHERE market_session = '2099-01-15' AND post_kind = 'ci_test_kind';
+          "
+          echo "telegram_post_delivery structure and claim/reclaim guard verified."
 
       - name: Verify expected views exist (3, matching Phase 2's verified count)
         run: |
