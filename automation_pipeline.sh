@@ -148,30 +148,25 @@ if [ -n "$SESSION_DATE" ]; then
     fi
 fi
 
-# Channel posts (2026-09-24): the FULL morning set -- digest with the market card + buttons, then the
-# momentum board + the day's rotating post (send_channel_posts.py) -- the same set run_first_light_morning.ps1
-# -Send sends (FirstLight-2, now disabled). Sent as soon as the prices are confirmed fresh: the posts read
-# stock_prices, market_index_prices (step 1), digest_stocks (written by the digest itself) and each stock's
-# latest known sector / market cap from daily_fundamentals (the previous day's refresh is fine for a sector
-# and a "< $2B" tag), NOT the weekly/monthly/fundamentals/screener/ML steps below -- those take ~2 h and no
-# post reads them. Warn-only: a Telegram problem must not fail the data/ML pipeline. Called again at the
-# end of the run as a retry; both senders dedupe per session (data/session_state.json digest:prod /
-# posts:prod), so a second call after a success posts nothing.
-send_channel_posts() {
+# Post-market package (2026-09-25 redesign, PRODUCTION_MIGRATION_RUNBOOK.md): Daily Digest, Momentum Board,
+# Top Gainers, Market Health -- published together as soon as prices are confirmed fresh (this step already
+# ran market_index_updater + daily_data_updater + the freshness check above), NOT the weekly/monthly/
+# fundamentals/screener/ML steps below -- those take ~2 h and none of the four posts read them. --skip-update
+# tells the publisher this step's own data refresh already happened, so it does not repeat it.
+# Idempotency is per (market session, post kind, destination) -- mechanism/alerts/post_delivery.py, table
+# telegram_post_delivery -- not the old coarse per-script session_state.json key, so a partial failure (e.g.
+# digest + board sent, top gainers failed) only resends what is actually missing on the retry below or at
+# step 13. Warn-only: a Telegram problem must not fail the data/ML pipeline.
+publish_post_market() {
     local label="$1"
-    log "${YELLOW}${label}: sending the channel digest (card + buttons)...${NC}"
-    if "$PYTHON" mechanism/alerts/send_daily_digest.py --image --buttons --send --to prod 2>&1 | tee -a "$LOG_FILE"; then
-        log_success "channel digest step finished"
-        if "$PYTHON" mechanism/alerts/send_channel_posts.py --send --to prod 2>&1 | tee -a "$LOG_FILE"; then
-            log_success "momentum board + daily post step finished"
-        else
-            log "${RED}WARNING: board / daily post failed. Send manually: python mechanism/alerts/send_channel_posts.py --send --to prod${NC}"
-        fi
+    log "${YELLOW}${label}: publishing the post-market package...${NC}"
+    if "$PYTHON" mechanism/alerts/publish_post_market.py --send --to prod --skip-update 2>&1 | tee -a "$LOG_FILE"; then
+        log_success "post-market package step finished"
     else
-        log "${RED}WARNING: channel digest send failed. Send manually: python mechanism/alerts/send_daily_digest.py --image --buttons --send --to prod${NC}"
+        log "${RED}WARNING: post-market package had a failed post. Retry: python mechanism/alerts/publish_post_market.py --send --to prod --skip-update${NC}"
     fi
 }
-send_channel_posts "Channel posts"
+publish_post_market "Post-market package"
 
 # Step 3: Weekly Data Update
 run_step 3 "weekly data updater" mechanism/data_updaters/weekly_data_updater.py
@@ -238,16 +233,14 @@ if [ -n "$SESSION_DATE" ]; then
     "$PYTHON" mechanism/shared/market_calendar.py mark --key pipeline --session "$SESSION_DATE" | tee -a "$LOG_FILE"
 fi
 
-# Step 13: Send the channel digest -- only reached once every data/ML step above has actually
-# succeeded (set -e) and the session above is marked processed, so the send is tied to confirmed
-# fresh data rather than a fixed clock time. send_daily_digest.py has its own dedup
-# (data/session_state.json's digest:<target> key) and staleness abort, so re-running this pipeline
-# the same day is safe -- it will not double-post.
-# Deliberately NOT run through run_step(): a digest-send problem (e.g. a Telegram outage) should
+# Step 13: retry the post-market package -- only reached once every data/ML step above has actually
+# succeeded (set -e) and the session above is marked processed. Per-kind idempotency
+# (telegram_post_delivery) makes this safe to call unconditionally: any kind already delivered is
+# skipped, only a genuinely missing one is attempted.
+# Deliberately NOT run through run_step(): a post-market problem (e.g. a Telegram outage) should
 # not make Task Scheduler report the whole nightly data/ML pipeline as failed when steps 1-12 and
 # the session mark above already succeeded -- so this warns and continues rather than exiting 1.
-# 2026-09-24: now a RETRY of the channel posts sent right after step 5 (posts nothing if those went out).
-send_channel_posts "Step 13/${TOTAL_STEPS} (retry)"
+publish_post_market "Step 13/${TOTAL_STEPS} (retry)"
 
 # Calculate total time
 END_TIME=$(date +%s)
