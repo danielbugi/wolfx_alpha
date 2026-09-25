@@ -183,7 +183,7 @@ def test_the_service_notes_are_in_a_collapsed_quote_and_are_clean():
 
 
 @pytest.mark.parametrize("key, phrase", [
-    ("lists", "not a forecast"), ("board", "Earlier lists say nothing about later ones"), ("health", "does not predict tomorrow"),
+    ("lists", "not a forecast"), ("momentum_board", "Earlier lists say nothing about later ones"), ("market_health", "does not predict tomorrow"),
     ("sector", "Sector tags are today's"), ("macro", "front-month futures"), ("gaps", "options-expiry"),
     ("aligned", "not counted"), ("base_rate", "survivor bias"), ("recap", "not independent tests"), ("news", "do not write or edit"),
     ("assistant", "educational reference")])

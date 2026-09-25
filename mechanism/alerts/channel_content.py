@@ -26,12 +26,21 @@ from alerts.message_format import fmt_price
 from alerts.texts import DEFINITIONS, DISCLAIMER_ONE_LINE
 
 CAPTION_LIMIT = 1024
-KINDS = ("board", "health", "top_gainers", "sector", "macro", "gaps", "near_highs", "aligned", "base_rate", "recap", "promo", "news", "scoreboard", "disclaimer", "assistant", "earnings_today")
-# "board", "health" and "top_gainers" are three of the four standard post-market posts (2026-09-25 redesign;
-# the fourth, "daily_digest", is built by send_daily_digest.py, a separate multi-message flow, not a single
-# Post here) -- mechanism/alerts/publish_post_market.py sends all four as a package every session, not through
-# the weekday rotation below. They stay in KINDS/BUILDERS so `--kind`/`--all` manual review still works, but
-# pick_kinds() (the rotation picker) must never choose "health" -- see the ROTATION comment and its test.
+KINDS = ("momentum_board", "market_health", "top_gainers", "sector", "macro", "gaps", "near_highs", "aligned", "base_rate", "recap", "promo", "news", "scoreboard", "disclaimer", "assistant", "earnings_today")
+# "momentum_board", "market_health" and "top_gainers" are three of the four standard post-market posts
+# (2026-09-25 redesign; the fourth, "daily_digest", is built by send_daily_digest.py, a separate
+# multi-message flow, not a single Post here) -- mechanism/alerts/publish_post_market.py sends all four
+# as a package every session, not through the weekday rotation below. They stay in KINDS/BUILDERS so
+# `--kind`/`--all` manual review still works, but pick_kinds() (the rotation picker) must never choose
+# "market_health" -- see the ROTATION comment and its test.
+#
+# These two Post.kind values were renamed from "board"/"health" on 2026-09-25 (Phase 4A) to match
+# telegram_post_delivery's claim-key strings exactly -- until then the delivery ledger's claim table
+# used "momentum_board"/"market_health" while this registry and telegram_messages/the Control Center
+# used "board"/"health" for the identical posts, a real reachability trap (see
+# docs/architecture/CODEBASE_AUDIT.md). Historical telegram_messages rows still say "board"/"health";
+# channel_control.KIND_LABELS keeps both old and new strings mapped to the same display label so those
+# rows remain understandable without any database rewrite.
 
 
 @dataclass
@@ -108,7 +117,7 @@ def post_health(ctx: Ctx) -> Optional[Post]:
     lines.append(f"Above 50-day average: {a50:.0f}%" + (f" ({ago}: {b50:.0f}%)" if b50 is not None else ""))
     lines.append(f"Above 200-day average: {a200:.0f}%" + (f" ({ago}: {b200:.0f}%)" if b200 is not None else ""))
     lines.append(f"52-week highs {h.new_highs:,} · lows {h.new_lows:,}")
-    return Post("health", "\n".join(lines), cc.render_health_card(d))
+    return Post("market_health", "\n".join(lines), cc.render_health_card(d))
 
 
 # ------------------------------------------------------------------ top gainers (daily, one of the four standard post-market posts)
@@ -456,12 +465,12 @@ def post_board(ctx: Ctx) -> Optional[Post]:
         rows = [f"{first + i}. <b>{_link(r['symbol'])}</b> {fmt_price(r['close'])} {_arrow(r['ret1_pct'])}" for i, r in enumerate(b["more"])]
         lines += ["", f"<i>More: ranks {first}–{first + len(rows) - 1} · tap to expand</i>", "<blockquote expandable>" + "\n".join(rows) + "</blockquote>"]
     lines += ["", "<i>Ranked by today's % change among the stocks that closed higher.</i>"]
-    return Post("board", "\n".join(lines), cc.render_board_card(b))
+    return Post("momentum_board", "\n".join(lines), cc.render_board_card(b))
 
 
 # ------------------------------------------------------------------ registry
-BUILDERS = {"disclaimer": post_disclaimer, "assistant": post_assistant, "board": post_board, "health": post_health, "top_gainers": post_top_gainers,
-            "sector": post_sector, "macro": post_macro, "gaps": post_gaps, "near_highs": post_near_highs,
+BUILDERS = {"disclaimer": post_disclaimer, "assistant": post_assistant, "momentum_board": post_board, "market_health": post_health,
+            "top_gainers": post_top_gainers, "sector": post_sector, "macro": post_macro, "gaps": post_gaps, "near_highs": post_near_highs,
             "aligned": post_aligned, "base_rate": post_base_rate, "recap": post_recap, "promo": post_promo, "news": post_news,
             "scoreboard": post_scoreboard, "earnings_today": post_earnings_today}
 
@@ -472,7 +481,7 @@ def build_post(kind: str, ctx: Ctx) -> Optional[Post]:
 
 
 # the weekday rotation (0 = Monday). Two options per day alternate by ISO week; the first is the default when the second is unavailable.
-# "health" is deliberately NOT in this table (2026-09-25): market_health is now one of the four standard daily
+# "market_health" is deliberately NOT in this table (2026-09-25): it is now one of the four standard daily
 # post-market posts (mechanism/alerts/publish_post_market.py), sent every session, not once a week -- putting it
 # back here (or in pick_kinds()'s fallback list below) would duplicate it. Wednesday's old ("health", "health")
 # slot is replaced with ("sector", "gaps") -- a judgment call, not a strict requirement; flag if you'd prefer
@@ -496,7 +505,7 @@ def pick_kinds(session: date, news_enabled: bool = False, scoreboard_enabled: bo
         order.append("base_rate")
     if first_of_month and d.weekday() == 4 and scoreboard_enabled:   # the first Friday: the list scoreboard (opt-in: its numbers may be unflattering)
         order.append("scoreboard")
-    order += [chosen, "macro", "promo"]           # "health" deliberately excluded -- see the ROTATION comment above
+    order += [chosen, "macro", "promo"]           # "market_health" deliberately excluded -- see the ROTATION comment above
     seen, out = set(), []
     for k in order:
         if k not in seen:

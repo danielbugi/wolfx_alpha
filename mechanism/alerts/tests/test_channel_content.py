@@ -209,7 +209,7 @@ def _ctx(**kw):
     return cx.Ctx(**base)
 
 
-ALL = ["health", "top_gainers", "sector", "macro", "gaps", "near_highs", "aligned", "base_rate", "recap", "promo", "disclaimer", "assistant", "earnings_today"]
+ALL = ["market_health", "top_gainers", "sector", "macro", "gaps", "near_highs", "aligned", "base_rate", "recap", "promo", "disclaimer", "assistant", "earnings_today"]
 
 
 @pytest.mark.parametrize("kind", ALL)
@@ -356,13 +356,13 @@ def test_market_health_is_never_chosen_by_the_rotation_or_its_fallback():
     """2026-09-25: market_health is now one of the four standard post-market posts (sent every session by
     publish_post_market.py), not a once-a-week rotation pick -- putting it back in ROTATION or the
     pick_kinds() fallback chain would duplicate it on top of the standard package."""
-    assert all("health" not in pair for pair in cx.ROTATION.values())
+    assert all("market_health" not in pair for pair in cx.ROTATION.values())
     from datetime import timedelta
     for wd in range(7):
         d = date(2026, 9, 14) + timedelta(days=wd)                                              # a full week, Mon-Sun
         for news_enabled in (False, True):
             for scoreboard_enabled in (False, True):
-                assert "health" not in cx.pick_kinds(d, news_enabled, scoreboard_enabled)
+                assert "market_health" not in cx.pick_kinds(d, news_enabled, scoreboard_enabled)
 
 
 def test_the_news_kind_is_only_tried_when_enabled():
@@ -424,7 +424,7 @@ class FakeTG:
 def test_extra_posts_are_silent_and_only_assistant_posts_carry_the_button():
     scp = _sender()
     tg = FakeTG()
-    scp.send_post(tg, cx.build_post("health", _ctx()), "some_bot")
+    scp.send_post(tg, cx.build_post("market_health", _ctx()), "some_bot")
     scp.send_post(tg, cx.build_post("gaps", _ctx()), "some_bot")
     scp.send_post(tg, cx.build_post("aligned", _ctx()), "some_bot")
     assert tg.photos == [(tg.photos[0][0], True, None)]                               # silent, no button
@@ -433,12 +433,12 @@ def test_extra_posts_are_silent_and_only_assistant_posts_carry_the_button():
     assert kb["url"].startswith("https://t.me/some_bot?start=ch") and kb["text"] == "Request access"
     scp.send_post(tg, cx.build_post("aligned", _ctx()), None)                          # unknown bot username: no button rather than a broken one
     assert tg.messages[2][2] is None
-    assert tg.kinds == ["health", "gaps", "aligned", "aligned"]                        # each post is labelled for the message ledger
+    assert tg.kinds == ["market_health", "gaps", "aligned", "aligned"]                        # each post is labelled for the message ledger
 
 
 def test_an_over_long_caption_aborts_instead_of_being_cut_by_telegram():
     scp = _sender()
-    post = cx.build_post("health", _ctx())
+    post = cx.build_post("market_health", _ctx())
     post.text = post.text + "x" * 1100
     with pytest.raises(SystemExit, match="caption"):
         scp.send_post(FakeTG(), post, "b")

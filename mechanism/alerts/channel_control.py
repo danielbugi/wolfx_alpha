@@ -40,7 +40,13 @@ MAX_UPLOAD_BYTES = 10_000_000          # Telegram's own limit for a photo a bot 
 TARGET_LABELS = {"dev": "Dev channel", "prod": "Production channel"}
 KIND_LABELS = {
     "digest_card": "Daily digest - market card", "digest_header": "Daily digest - header", "digest_list": "Daily digest - list",
-    "board": "Momentum board", "health": "Market health", "sector": "Sector rotation", "macro": "Beyond stocks", "gaps": "Gaps and volume",
+    # "board"/"health" were the Post.kind strings used everywhere (including telegram_messages.kind, written
+    # here) until 2026-09-25, when they were renamed to "momentum_board"/"market_health" to match
+    # telegram_post_delivery's claim keys (see channel_content.py's KINDS comment). Both old and new strings
+    # are kept mapped to the same label -- on purpose, no database rewrite -- so a historical ledger row from
+    # before the rename still displays correctly.
+    "board": "Momentum board", "health": "Market health", "momentum_board": "Momentum board", "market_health": "Market health",
+    "sector": "Sector rotation", "macro": "Beyond stocks", "gaps": "Gaps and volume",
     "near_highs": "Near highs", "aligned": "Longer-timeframe breakouts", "base_rate": "Base rates", "recap": "Weekly recap",
     "news": "News", "scoreboard": "List scoreboard", "promo": "Assistant promotion", "assistant": "Assistant notice",
     "disclaimer": "Disclaimer notice", "start_here": "Start here (pinned)", "alert_header": "Legacy alerts - header",

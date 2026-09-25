@@ -360,9 +360,10 @@ def make(env=None, fake=None, now=NOW, send_fake=None):
     return control, ledger, fake, built
 
 
-def seed(ledger, mid=1, *, target="dev", text="Hello <b>world</b>", ctype="text", age=timedelta(hours=1), chat=None, markup=KEYBOARD):
+def seed(ledger, mid=1, *, target="dev", text="Hello <b>world</b>", ctype="text", age=timedelta(hours=1), chat=None, markup=KEYBOARD,
+         kind="board"):
     chat = chat or ENV["TELEGRAM_DEV_CHAT_ID" if target == "dev" else "TELEGRAM_CHAT_ID"]
-    ledger.record_sent(target=target, chat_id=chat, message_id=mid, kind="board", content_type=ctype, text=text, reply_markup=markup,
+    ledger.record_sent(target=target, chat_id=chat, message_id=mid, kind=kind, content_type=ctype, text=text, reply_markup=markup,
                        silent=True, disable_preview=False, sent_at=NOW - age)
     return ledger.rows[-1]["id"]
 
@@ -562,7 +563,25 @@ def test_overview_counts_today_in_local_time_and_says_when_history_starts():
     assert (dev["target"], dev["sent_today"], dev["recorded"], dev["live"], dev["deleted"], dev["edited"]) == ("dev", 1, 2, 1, 1, 0)
     assert (prod["locked"], prod["recorded"]) == (True, 1) and dev["locked"] is False
     assert o["tracking_since"] == (NOW - timedelta(hours=6)).isoformat() and o["timezone"] == "Asia/Jerusalem"
+    # seed()'s default kind="board" is the pre-2026-09-25 Post.kind string -- this assertion is now also an
+    # implicit backward-compat regression check: a historical ledger row still aggregates/labels correctly
+    # without any database rewrite (channel_content.py's Post.kind values were renamed to "momentum_board"/
+    # "market_health" that day; KIND_LABELS deliberately keeps both old and new strings mapped to one label).
     assert {k["kind"]: k["count"] for k in o["kinds"]} == {"board": 3} and o["kinds"][0]["label"] == "Momentum board"
+
+
+def test_overview_labels_the_new_canonical_kind_string_the_same_as_the_historical_one():
+    """The 2026-09-25 rename's other half: a NEW row using "momentum_board" (what every sender writes going
+    forward) must aggregate/label identically to an old "board" row -- proven side by side in one ledger."""
+    control, ledger, *_ = make()
+    seed(ledger, 1, kind="board")
+    seed(ledger, 2, kind="momentum_board")
+    seed(ledger, 3, kind="market_health")
+    o = control.overview()
+    kinds = {k["kind"]: (k["count"], k["label"]) for k in o["kinds"]}
+    assert kinds["board"] == (1, "Momentum board")
+    assert kinds["momentum_board"] == (1, "Momentum board")
+    assert kinds["market_health"] == (1, "Market health")
 
 
 def test_overview_config_and_warnings_never_reveal_secrets():

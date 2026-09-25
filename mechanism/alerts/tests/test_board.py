@@ -142,8 +142,8 @@ def _ctx(board):
 
 
 def test_the_board_post_is_valid_html_within_the_caption_limit_and_free_of_advice_words():
-    post = cx.build_post("board", _ctx(_board()))
-    assert post.kind == "board" and post.image and post.button is False
+    post = cx.build_post("momentum_board", _ctx(_board()))
+    assert post.kind == "momentum_board" and post.image and post.button is False
     assert tg_html.problems(post.text, cx.CAPTION_LIMIT) == []
     assert text_length(post.text) <= cx.CAPTION_LIMIT
     plain = re.sub(r"<[^>]+>", "", post.text)
@@ -154,26 +154,26 @@ def test_the_board_post_is_valid_html_within_the_caption_limit_and_free_of_advic
 def test_the_board_counts_add_up_to_the_pool_by_naming_the_flat_stocks():
     b = _board()
     b["n_measured"] += 3                                                                       # three stocks closed unchanged
-    plain = re.sub(r"<[^>]+>", "", cx.build_post("board", _ctx(b)).text)
+    plain = re.sub(r"<[^>]+>", "", cx.build_post("momentum_board", _ctx(b)).text)
     assert "5 up, 1 down, 3 flat today" in plain
 
 
 def test_the_board_post_states_the_whole_pool_next_to_the_podium():
-    plain = re.sub(r"<[^>]+>", "", cx.build_post("board", _ctx(_board())).text)
+    plain = re.sub(r"<[^>]+>", "", cx.build_post("momentum_board", _ctx(_board())).text)
     assert "The 6 stocks the lists carried in the last 5 sessions: 5 up, 1 down today" in plain          # the counts add up to the group (no flat here)
     assert "Ranked by today's % change among the stocks that closed higher." in plain and "say nothing about later ones" not in plain
 
 
 def test_ranks_beyond_the_podium_sit_in_a_collapsed_quote_only_when_there_are_any():
-    text = cx.build_post("board", _ctx(_board())).text
+    text = cx.build_post("momentum_board", _ctx(_board())).text
     assert "<blockquote expandable>4. " in text and "More: ranks 4–5" in text
     few = bd.compute(listed("UP1", "UP2", "UP3", sessions=PRIOR), make_wide({"UP1": 3.0, "UP2": 2.0, "UP3": 1.0}), SESSION)
-    assert "expandable" not in cx.build_post("board", _ctx(few)).text
+    assert "expandable" not in cx.build_post("momentum_board", _ctx(few)).text
 
 
 def test_one_place_only_still_makes_a_valid_post_and_picture():
     one = bd.compute(listed("UP1", "DN", sessions=PRIOR), make_wide({"UP1": 3.0, "DN": -1.0}), SESSION)
-    post = cx.build_post("board", _ctx(one))
+    post = cx.build_post("momentum_board", _ctx(one))
     assert "1st" in post.text and "2nd" not in post.text and tg_html.problems(post.text, cx.CAPTION_LIMIT) == []
     assert Image.open(io.BytesIO(post.image)).size[0] == 1080
 
@@ -192,9 +192,9 @@ def test_the_board_picture_is_a_1080_wide_png_and_survives_a_flat_leader_chart()
 
 
 def test_board_is_a_known_kind_and_never_part_of_the_rotation():
-    assert "board" in cx.KINDS and "board" in cx.BUILDERS
+    assert "momentum_board" in cx.KINDS and "momentum_board" in cx.BUILDERS
     for d in pd.bdate_range("2026-09-01", periods=40):
-        assert "board" not in cx.pick_kinds(d.date())                                    # it is sent daily by the sender, in addition to the rotating post
+        assert "momentum_board" not in cx.pick_kinds(d.date())                                    # it is sent daily by the sender, in addition to the rotating post
 
 
 # ================================================================== deeper, collapsible digest lists

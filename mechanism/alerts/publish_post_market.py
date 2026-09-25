@@ -57,7 +57,11 @@ REPO_ROOT = MECH.parent
 
 # claim-kind name -> the channel_content.py builder kind it maps to (None for daily_digest, which is not a
 # single Post -- it is send_daily_digest.py's own photo+messages flow, invoked as a subprocess below).
-POST_MARKET_KINDS = {"daily_digest": None, "momentum_board": "board", "top_gainers": "top_gainers", "market_health": "health"}
+# The three non-None values are now a deliberate identity map (both sides renamed to match on 2026-09-25 --
+# see channel_content.py's KINDS comment) -- kept as an explicit dict rather than a set/tuple so the
+# None-marker for daily_digest's special case stays obvious, and so this table's own shape still documents
+# "these are the four claim kinds" without relying on a reader inferring it from a list.
+POST_MARKET_KINDS = {"daily_digest": None, "momentum_board": "momentum_board", "top_gainers": "top_gainers", "market_health": "market_health"}
 
 
 def run_step(script: str, *extra_args: str) -> None:

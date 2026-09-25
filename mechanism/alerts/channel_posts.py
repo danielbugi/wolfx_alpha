@@ -34,10 +34,10 @@ SERVICE_NOTES: List[Tuple[str, str, str]] = [
      "They describe what already happened at the close, ranked by a formula. A stock on a list is not a forecast and not a suggestion to trade it. "
      "A \"small cap\" tag means a market value under $2B: such stocks can move "
      "much more and be harder to trade."),
-    ("board", "Momentum board",
+    ("momentum_board", "Momentum board",
      "It shows only stocks from recent lists that closed higher today, so it is the best of a group, not a record of how the lists did. The counts "
      "on the picture cover the whole group. Earlier lists say nothing about later ones."),
-    ("health", "Market health",
+    ("market_health", "Market health",
      "It describes how broad today's move was; it does not predict tomorrow. Each percentage counts only stocks with enough price history for that "
      "measure."),
     ("top_gainers", "Top gainers",
@@ -68,9 +68,9 @@ SERVICE_NOTES: List[Tuple[str, str, str]] = [
 
 # which note covers which kind of channel post (the digest's own lists = "lists"); promo and the notices are not data posts
 NOTE_FOR_KIND: Dict[str, str] = {
-    "digest": "lists", "board": "board", "health": "health", "top_gainers": "top_gainers", "sector": "sector", "macro": "macro", "gaps": "gaps",
-    "near_highs": "gaps", "aligned": "aligned", "base_rate": "base_rate", "recap": "recap", "scoreboard": "recap", "news": "news",
-    "assistant": "assistant", "earnings_today": "earnings_today",
+    "digest": "lists", "momentum_board": "momentum_board", "market_health": "market_health", "top_gainers": "top_gainers", "sector": "sector",
+    "macro": "macro", "gaps": "gaps", "near_highs": "gaps", "aligned": "aligned", "base_rate": "base_rate", "recap": "recap", "scoreboard": "recap",
+    "news": "news", "assistant": "assistant", "earnings_today": "earnings_today",
 }
 
 
