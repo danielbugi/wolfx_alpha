@@ -1,53 +1,21 @@
-🚀 EXACT EXECUTION ORDER
-⚡ PHASE 1: UPDATE DAILY DATA (PRIORITY 1)
-bash# 1. Test with a few symbols first (2 minutes)
-python automation/daily_data_updater_corrected.py --test AAPL MSFT GOOGL
+mechanism/instructions.txt — see the authoritative docs instead of this file
+==============================================================================
 
-# 2. Update 50 symbols (10 minutes)
-python automation/daily_data_updater_corrected.py --limit 50
+This file described a manual, five-phase execution order using scripts that never existed under
+these names (`daily_data_updater_corrected.py`, `fundamentals_updater_corrected.py`,
+`historical_breakouts_corrected.py`, `donchian_screener_corrected.py` — confirmed by the 2026-09-25
+codebase audit: these `*_corrected.py` names are not found anywhere in repo history) and a runner
+(`master_automation_runner_updated.py`) not wired into the live pipeline. Replaced 2026-09-27 rather
+than kept in sync, since a second, drifting copy of this information is exactly what caused it to go
+stale in the first place.
 
-# 3. Update all symbols (30 minutes)
-python automation/daily_data_updater_corrected.py
-Expected Output:
-🚀 Starting daily update at 2025-07-11 10:30:00
-Processing AAPL (1/1005)
-✅ Successfully updated AAPL
-...
-🎉 Daily update completed in 0:28:45:
-✅ Successful updates: 980
-❌ Failed updates: 25
-📊 Total symbols: 1005
-📈 Success rate: 97.5%
-📊 PHASE 2: UPDATE FUNDAMENTALS (PRIORITY 2)
-bash# 1. Test fundamentals update (2 minutes)
-python automation/fundamentals_updater_corrected.py --test AAPL MSFT
+The real, current way to run the pipeline:
+    ./automation_pipeline.sh            # full 13-step pipeline; skips itself on non-trading days
+    ./automation_pipeline.sh --force    # run anyway
 
-# 2. Update 50 symbols (20 minutes - Yahoo rate limits)
-python automation/fundamentals_updater_corrected.py --limit 50
+See CLAUDE.md's "Commands quick reference" and docs/dev/LOCAL_SETUP.md for the full set of manual
+commands (individual updater/screener test runs, Telegram dry-runs, etc.), and
+docs/architecture/SCHEDULING.md for how this actually gets triggered in production (VPS systemd
+timers, not a manual phase-by-phase run).
 
-# 3. Update all symbols (2+ hours - run overnight)
-python automation/fundamentals_updater_corrected.py
-🧠 PHASE 3: GENERATE ML TRAINING DATA (PRIORITY 3)
-bash# 1. Test historical breakouts (5 minutes)
-python automation/historical_breakouts_corrected.py --test AAPL MSFT TSLA
-
-# 2. Generate for 100 symbols (30 minutes)
-python automation/historical_breakouts_corrected.py --limit 100
-
-# 3. Full historical generation (2+ hours)
-python automation/historical_breakouts_corrected.py
-🔍 PHASE 4: RUN CURRENT SCREENING (PRIORITY 4)
-bash# 1. Test screening (2 minutes)
-python automation/donchian_screener_corrected.py --test AAPL MSFT GOOGL
-
-# 2. Run full screening (15 minutes)
-python automation/donchian_screener_corrected.py
-✅ PHASE 5: VERIFY SUCCESS
-bash# Check system health
-python automation/master_automation_runner_updated.py health
-
-# Generate comprehensive report
-python automation/master_automation_runner_updated.py report
-
-# Check top breakouts
-python automation/master_automation_runner_updated.py breakouts
+The pre-2026-09-27 version of this file, if you need the historical detail, is in git history.

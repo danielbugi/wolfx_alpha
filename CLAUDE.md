@@ -47,8 +47,22 @@ Full picture, diagrams, and the 5 independent execution paths:
 | [docs/dev/LOCAL_SETUP.md](docs/dev/LOCAL_SETUP.md) | Running this locally — the Windows-vs-VPS boundary stated up front. |
 | [docs/dev/TESTING.md](docs/dev/TESTING.md) | What each test suite covers, and what's genuinely undertested. |
 | [docs/dev/ENVIRONMENT.md](docs/dev/ENVIRONMENT.md) | Every environment variable, classified, with real defaults. |
-| [docs/devops/CUTOVER_PLAN.md](docs/devops/CUTOVER_PLAN.md) | The one actively-maintained migration/cutover doc — current until Gate 5. |
+| [docs/devops/CUTOVER_PLAN.md](docs/devops/CUTOVER_PLAN.md) | The one actively-maintained migration/cutover doc — current until Gate 5. Still drifts between audits (3 stale claims found and corrected 2026-09-27); verify anything load-bearing directly rather than trusting it at face value. |
 | `docs/history/` | Point-in-time reports and superseded planning docs — banner-marked, not current architecture. Still useful for "why," never for "how it works today." |
+
+**Root-level docs (not under `docs/`) that still carry live, binding content** — read before writing
+channel copy, touching the private bot, or assuming a root `.md` file is dead weight:
+
+| Doc | Covers |
+|---|---|
+| [CHANNEL_VOICE_AND_COPY.md](CHANNEL_VOICE_AND_COPY.md) | The channel's voice/wording rules and the advice-word guard (`BANNED` list in `test_channel_content.py`) — **still active, load-bearing policy**, not just a proposal, per its own scope note. The build-status sections are a stale 2026-09-21 snapshot. |
+| [PRIVATE_ASSISTANT_PLAN.md](PRIVATE_ASSISTANT_PLAN.md) | §0's binding rules for the bot (private-by-default, no advice wording, never posts to a channel) are still active policy. The rest is a stale 2026-09-21 build-status snapshot — see [TELEGRAM_PUBLISHING.md](docs/architecture/TELEGRAM_PUBLISHING.md) for the bot's current relationship to Telegram publishing instead. |
+| [RUNBOOK_FIRST_LIGHT.md](RUNBOOK_FIRST_LIGHT.md) | Still-valid manual/local-dev-channel testing procedures (running the bot, hand-testing it, the `.ps1` wrapper scripts). **Not** production operating instructions — see [SCHEDULING.md](docs/architecture/SCHEDULING.md) for that. |
+| [FRONTEND_FIX_MILESTONES.md](FRONTEND_FIX_MILESTONES.md) | A live, open frontend punch-list (most items still `⬜ not started`) — deliberately kept at root, not history. Re-verify an item's status before trusting it; last touched before the Vercel deploy + VPS migration. |
+
+These four were reviewed for staleness in the 2026-09-27 documentation pass and are correctly left in
+place (not moved to `docs/history/`) — each mixes still-binding policy or still-open work with a
+dated status snapshot, unlike the purely historical documents already in `docs/history/`.
 
 ## Repository structure
 
@@ -113,12 +127,14 @@ Full reasoning and scenario-by-scenario detail: [docs/operations/ROLLBACK.md](do
 
 ## Known open technical debt
 
-Ranked list and full detail: the 2026-09-25 repository consolidation audit. Top items: no required
-reviewer on the `production` GitHub Environment (settings-only fix); off-box backups aren't yet at a
-genuinely independent third location; `donchian-nightly-backup.timer` hardcodes a UTC offset instead
-of the `Asia/Jerusalem` tag every other timer uses; `session_state.json` and `telegram_post_delivery`
-are two coexisting idempotency mechanisms (deliberate, not yet unified); a confirmed-dead set of
-`*_backup.py` files and two empty backend router stubs are safe to remove on approval.
+Ranked list and full detail: [docs/architecture/CODEBASE_AUDIT.md](docs/architecture/CODEBASE_AUDIT.md)
+(most items now annotated RESOLVED/REMOVED from the two 2026-09-25/26 remediation passes — read the
+annotations, not just the original findings). Still genuinely open: no required reviewer on the
+`production` GitHub Environment (settings-only fix); off-box backups aren't yet at a genuinely
+independent third location; `donchian-nightly-backup.timer` hardcodes a UTC offset instead of the
+`Asia/Jerusalem` tag every other timer uses; `session_state.json` and `telegram_post_delivery` are two
+coexisting idempotency mechanisms (deliberate, not yet unified); a proposed (not yet applied) fix for
+`donchian-bot.service`'s dual mechanism-image pin — see `deploy/vps/donchian-bot.service.proposed`.
 
 ## Things an agent must not assume
 
