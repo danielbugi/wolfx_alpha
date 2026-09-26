@@ -1,5 +1,22 @@
 # Production cutover plan (Windows PC → Hetzner VPS)
 
+> **Status correction (2026-09-27, Phase 4C doc audit):** this file is the one actively-maintained
+> infrastructure doc (per CLAUDE.md) and is supposed to track live state, but three claims below had
+> gone stale since 2026-09-24 and were never updated: **GATE 2 and GATE 3 are actually DONE** (verified
+> live 2026-09-27: both `https://api.first-light.finance/api/health` and
+> `https://dashboard.first-light.finance` return HTTP 200 right now) — not "not yet done" as the
+> section below still said; the earnings-today timer fires at **10:00 Israel**, not 11:00 (verified
+> live via `systemctl show -p TimersCalendar` on the VPS 2026-09-27; SCHEDULING.md already had this
+> right); and the "security finding, not yet remediated" about `docker compose config` leaking real
+> secrets even with `--env-file docker/.env.example` **does not reproduce today** — tested empirically
+> 2026-09-27 with the current `docker-compose.yml` (base file's `env_file:` points at the literal
+> path `docker/.env.example`, unrelated to the `--env-file` CLI flag, which only affects `${...}`
+> interpolation) and the real local `.env`: the base file alone correctly shows the placeholder value,
+> only adding `-f docker-compose.prod.yml` resolves the real secret, exactly as ENVIRONMENT.md already
+> documented. The narrative below is left as originally written (it's the record of what was true
+> during the migration); corrected status lines are added inline rather than silently changing the
+> history.
+
 ## Status 2026-09-24 (end of day): GATE 1 + GATE 4 DONE. The VPS is now the production environment.
 
 **The Hetzner VPS is now authoritative for production.** `trading_production` on the VPS holds the
@@ -12,8 +29,10 @@ it remains an exact snapshot as of the freeze; its own scheduled tasks and bot a
 writer against `trading_production` without first assessing divergence — the two databases have
 diverged by one real pipeline cycle already, and will diverge further with every VPS-side run.
 
-**Not yet done** (separate approvals, untouched by Gate 4): GATE 2 (DNS), GATE 3 (Vercel/public routing),
-GATE 5 (Windows retirement).
+**Not yet done:** GATE 5 (Windows retirement). ~~GATE 2 (DNS), GATE 3 (Vercel/public routing)~~ — **DONE**
+as of some point before 2026-09-27 (confirmed live that day; the exact completion date was not
+recorded when it happened, and this line was never updated at the time). See §"GATE 2" / §"GATE 3"
+below for the live verification.
 
 **Fixed during Gate 4 execution** (real, previously-undiscovered infra bugs, both committed at the repo
 level, not just patched on the VPS):
@@ -28,17 +47,17 @@ level, not just patched on the VPS):
   VPS env was first assembled, pre-dating Gate 4 — caused a `TelegramUnauthorizedError` crash loop on
   first bot start. Replaced with the correct value (transferred directly over SSH, never printed).
 
-**Security finding, not yet remediated** (recorded per the owner's explicit instruction — no broad
-rotation performed during this cutover since no confirmed exposure occurred and none was required to
-complete Gate 4): running `docker compose config` from the repo root resolves services' `env_file:`
-entries against the real repo-root `.env` **even when `--env-file docker/.env.example` is explicitly
-passed** — confirmed empirically (a key that exists only in the real `.env`, absent from
-`docker/.env.example` entirely, still resolved correctly in the rendered config). `docker/.env.example`
-itself is NOT compromised (verified: its own on-disk secret fields are genuinely blank) — the risk is
-local-only tooling behavior, not a committed leak, and does not affect the VPS (which correctly uses its
-own real `.env` deliberately via `env_file: !override`). Recommend: investigate the root Compose
-behavior and consider rotating the local dev-affected secrets (Telegram bot token, Telegram control
-token, JWT secret, Alpaca key/secret, Tiingo key, SMTP password) next time credentials are touched.
+**Security finding, recorded 2026-09-24 — does not reproduce as of 2026-09-27, see the correction
+banner at the top of this file:** the original claim was that running `docker compose config` from
+the repo root resolves services' `env_file:` entries against the real repo-root `.env` even when
+`--env-file docker/.env.example` is explicitly passed. Re-tested empirically 2026-09-27 with the
+current `docker-compose.yml`/`docker-compose.prod.yml` and the real local `.env`: the base compose
+file alone (with or without `--env-file docker/.env.example`) correctly resolves to the placeholder
+value; only adding `-f docker-compose.prod.yml` resolves the real secret, exactly as designed
+(`env_file: !override`). Whether this was a real bug at the time that got fixed incidentally during
+later work, or a testing mistake in the original finding, was not determined — either way, no
+rotation is needed on this basis today. See [../dev/ENVIRONMENT.md](../dev/ENVIRONMENT.md)'s "secret
+leak non-issue" section for the current, confirmed behavior.
 
 ## What is live today
 
@@ -50,9 +69,9 @@ token, JWT secret, Alpaca key/secret, Tiingo key, SMTP password) next time crede
 | `donchian-pipeline.timer` (`automation_pipeline.sh`, incl. channel posts) | VPS systemd | 23:45 + 01:00 Israel |
 | `donchian-firstlight1-prices.timer` | VPS systemd | 05:00 Israel |
 | `donchian-notice-midday.timer` / `-evening.timer` | VPS systemd | 12:00 / 20:00 Israel |
-| `donchian-earnings-today.timer` | VPS systemd | 11:00 Israel |
+| `donchian-earnings-today.timer` | VPS systemd | 10:00 Israel |
 | `donchian-nightly-backup.timer` | VPS systemd | 23:30 UTC (≈ 02:30 Israel) |
-| Dashboard frontend | local `next dev` (Vercel not yet activated — GATE 3) | on demand |
+| Dashboard frontend | Vercel, `dashboard.first-light.finance` (was local `next dev` at the time this table was written — GATE 3 is now done) | always on |
 | Windows `trading_production` | Windows PC, localhost:5432 | **frozen, read-only reference**, not written to |
 | Windows scheduled tasks (`DonchianScreenerDailyPipeline`, `FirstLight-1..5`) | Task Scheduler | **all Disabled**, kept for GATE 5 rollback only |
 | Windows `run_bot.py` | — | **stopped**, not running |
@@ -124,17 +143,22 @@ Nightly `pg_dump` of the VPS database + off-box copy is now built, tested, and r
 (`deploy/db/nightly_backup.sh`, `donchian-nightly-backup.timer`, `deploy/db/pull_nightly_backup.ps1`) —
 no longer an open item.
 
-## GATE 2 — DNS
+## GATE 2 — DNS — DONE (exact completion date not recorded; confirmed live 2026-09-27)
 
 `api.first-light.finance` A/AAAA → 116.203.220.219 (TTL 300 during the change). Then set
 `API_SITE_ADDRESS=api.first-light.finance` in the VPS `.env` and redeploy (Caddy obtains the certificate
 itself). Verify `https://api.first-light.finance/api/health`. Rollback: remove the record / set `:80`.
 
-## GATE 3 — Vercel
+**Verified live 2026-09-27:** `https://api.first-light.finance/api/health` returns HTTP 200.
+
+## GATE 3 — Vercel — DONE (exact completion date not recorded; confirmed live 2026-09-27)
 
 Import `frontend/` into Vercel, `NEXT_PUBLIC_API_BASE_URL=https://api.first-light.finance`, domain
 `dashboard.first-light.finance`. Requires GATE 2 first (HTTPS API, else mixed-content block). Verify login
 end to end from a browser. Rollback: remove the domain from the Vercel project.
+
+**Verified live 2026-09-27:** `https://dashboard.first-light.finance` returns HTTP 200. A full login
+round trip was not re-verified as part of this doc audit — only reachability.
 
 ## GATE 5 — retirement
 
@@ -148,14 +172,17 @@ credential, shredded after confirming nothing else referenced it); nightly `pg_d
 Rollback section above).
 
 Still open:
+- GATE 5 (Windows retirement) — never approved, do not act on this without explicit separate approval.
 - GitHub Environment `production` has no required reviewer (only a `main` branch policy); the design
-  assumed one. Add the owner as required reviewer in repo Settings → Environments.
+  assumed one. Add the owner as required reviewer in repo Settings → Environments. (Re-confirmed live
+  2026-09-25 via the GitHub API — see [../architecture/CI_CD.md](../architecture/CI_CD.md) §5.)
 - Hetzner Cloud Firewall (22/80/443) as an extra layer; the Docker-aware DOCKER-USER filter and UFW are in place.
 - The off-box nightly backup copy (`deploy/db/pull_nightly_backup.ps1`) currently lands on the same
   Windows machine as the old production DB, not a genuinely independent third location (e.g. S3/B2) —
   no cloud storage credential exists yet.
-- **Security remediation item** (found 2026-09-24, not yet fixed — see the status note at the top of this
-  file for detail): `docker compose config` run from the repo root resolves real secrets from the repo
-  root `.env` into rendered service config even when `--env-file docker/.env.example` is explicitly
-  passed. Local-dev-only; does not affect the VPS. Investigate the Compose env-resolution precedence and
-  consider rotating the locally-affected secrets next time credentials are touched.
+
+Resolved since this section was last written:
+- ~~GATE 2 (DNS), GATE 3 (Vercel)~~ — done, see the sections above.
+- ~~Security remediation item (`docker compose config` resolving real secrets even with
+  `--env-file docker/.env.example`)~~ — does not reproduce today; see the correction banner at the top
+  of this file. No rotation performed on this basis.
