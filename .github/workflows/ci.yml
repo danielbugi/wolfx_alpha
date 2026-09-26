@@ -212,19 +212,12 @@ jobs:
         run: pip install -r mechanism/requirements.txt -r ml_training/requirements.txt -r backend/requirements.txt pytest
 
       - name: Python syntax check (py_compile)
-        # Excludes two files with pre-existing invalid UTF-8 byte sequences (a genuine, existing
-        # bug -- confirmed during Phase 3 inspection, not introduced here). Both are already
-        # documented in CLAUDE.md as legacy/retired and not part of the active pipeline:
-        #   - mechanism/quick_analyzer.py (CLAUDE.md §3.2: "one-off debug/fixer script... not part
-        #     of the pipeline")
-        #   - ml_training/deployment/ml_integration.py (CLAUDE.md: "Retired, do not run to build
-        #     data... reads the stale-basis tables")
-        # Not fixed here per the Phase 3 instruction to stop and explain before touching existing
-        # application code -- flagged in docs/devops/CI_IMPLEMENTATION.md instead. If either file
-        # is ever needed again, its encoding will need fixing first.
+        # The two files this exclusion used to carry (mechanism/quick_analyzer.py,
+        # ml_training/deployment/ml_integration.py) had pre-existing invalid UTF-8 byte sequences --
+        # both were confirmed DEAD (zero reachability) by the Phase 3 audit and removed in Phase 4B,
+        # so the exclusion is gone with them, not because the encoding issue was fixed.
         run: |
-          FILES=$(git ls-files 'mechanism/*.py' 'mechanism/**/*.py' 'ml_training/*.py' 'ml_training/**/*.py' \
-            | grep -v -e 'mechanism/quick_analyzer.py' -e 'ml_training/deployment/ml_integration.py')
+          FILES=$(git ls-files 'mechanism/*.py' 'mechanism/**/*.py' 'ml_training/*.py' 'ml_training/**/*.py')
           python -m py_compile $FILES
 
       - name: pytest

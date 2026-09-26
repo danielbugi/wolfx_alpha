@@ -195,15 +195,15 @@ evidenced) · **UNCERTAIN**.
 | `main.py`, `routers/*` (14 mounted), `services/*` (14), `auth/*` | ACTIVE | All confirmed mounted/imported; see §3 |
 | `utils.py` | ACTIVE-SUPPORTING | Used by main.py, alpha.py, stock.py, strategy.py; reads ML JSON off disk (not DB — a real, load-bearing exception to the DB-driven pattern) |
 | `scripts/create_user.py` | ACTIVE-SUPPORTING | Intentional manual bootstrap/recovery tool |
-| `routers/dashboard.py`, `routers/market_data.py`, `models/dashboard_models.py` | **DEAD** | All 0 bytes; zero references repo-wide beyond CLAUDE.md's own prose |
-| `test_simple_queries.py` | **DEAD** | 0 bytes |
+| ~~`routers/dashboard.py`, `routers/market_data.py`, `models/dashboard_models.py`~~ | **REMOVED (Phase 4B)** | Were all 0 bytes; zero references repo-wide beyond CLAUDE.md's own prose |
+| ~~`test_simple_queries.py`~~ | **REMOVED (Phase 4B)** | Was 0 bytes |
 | `test_step1.py`, `test_step2.py`, `debug_database.py` | LEGACY | Real, runnable, manual-only; `test_step1.py` still expects the removed `/api/dashboard/top-ai-picks` endpoint |
 
 ### frontend/src/
 | Path | Class | Evidence |
 |---|---|---|
 | All 11 routes, `services/api.ts` (sole axios client, one documented exception in `DevQAPanel.tsx`) | ACTIVE | Traced per-route in the frontend agent's report |
-| `components/layout/MainLayout.tsx` | **DEAD** | Zero references; root cause found — `AuthGate.tsx` independently re-implements the identical Sidebar+MobileNav wrapper inline instead of importing it |
+| ~~`components/layout/MainLayout.tsx`~~ | **REMOVED (Phase 4B)** | Was zero references; root cause found — `AuthGate.tsx` independently re-implements the identical Sidebar+MobileNav wrapper inline instead of importing it |
 | `components/dev/DevQAPanel.tsx` | ACTIVE-DEV | Self-gates to inert in production builds |
 | Everything else in `components/`, `lib/`, `hooks/`, `contexts/` | ACTIVE / ACTIVE-SUPPORTING | Each confirmed referenced |
 
@@ -211,17 +211,17 @@ evidenced) · **UNCERTAIN**.
 | Path | Class | Evidence |
 |---|---|---|
 | `data_updaters/*.py` (9 live updaters) | ACTIVE | All wired into `automation_pipeline.sh` |
-| `data_updaters/backups/*` (4 files), `screeners/backups/*` (3 files) | **DEAD** | Tracked in git, zero references |
+| ~~`data_updaters/backups/*` (4 files), `screeners/backups/*` (3 files)~~ | **REMOVED (Phase 4B)** | Were tracked in git, zero references |
 | `screeners/multi_timeframe_screener.py` | ACTIVE | The one live screener |
-| `screeners/donchian_screener.py`, `ml_donchian_screener.py` + their `_backup.py` twins | **DEAD** | Only referenced in comments/docstrings elsewhere, never imported |
+| ~~`screeners/donchian_screener.py`, `ml_donchian_screener.py` + their `_backup.py` twins~~ | **REMOVED (Phase 4B)** | Only referenced in comments/docstrings elsewhere, never imported. Also removed alongside these: `screeners/multi_timeframe_screener_backup.py` — listed as confirmed-dead in `codebase-map.json` but omitted from this prose table; a fresh reachability re-check (zero code references, two doc-only mentions) resolved the discrepancy before deletion. |
 | `shared/*` | ACTIVE | All 7 files confirmed live |
 | `diagnostic_tools/check_database_schema.py`, `test_db_connection.py`, `progress_dashboard.py` | LEGACY | Stale table names / stale paths / single-session-dated tool |
-| `diagnostic_tools/ml_readiness_checker.py` | **DEAD** | Broken `sys.path` logic (assumes a directory layout that doesn't exist) |
+| ~~`diagnostic_tools/ml_readiness_checker.py`~~ | **REMOVED (Phase 4B)** | Had broken `sys.path` logic (assumed a directory layout that didn't exist) |
 | `orchestrators/master_automation_runner.py` | LEGACY | Not wired in, but likely still functional as a manual CLI |
 | `ml_generators/historical_breakouts_generator.py` | LEGACY | Writes to `breakouts`/`ml_training_data`, both stale-basis; dormant, code doesn't error |
 | `ml_enhancement/ml_signal_enhancer.py` | ACTIVE | The live inference/gate-check path |
-| `ml_enhancement/enhance_existing_json.py`, `ml_signal_enhancer_backup.py` | **DEAD** | Imports a `MLMomentumEnhancer` class that **no longer exists** — would `ImportError` if run |
-| `atr_database_fixer.py`, `quick_analyzer.py`, `migrate_to_posresql.py`, `work_day_automation.py` | **DEAD** | `quick_analyzer.py` CI-excluded for bad UTF-8; `work_day_automation.py` references 4 `*_corrected.py` files that don't exist anywhere in repo history |
+| ~~`ml_enhancement/enhance_existing_json.py`, `ml_signal_enhancer_backup.py`~~ | **REMOVED (Phase 4B)** | Imported a `MLMomentumEnhancer` class that no longer existed — would `ImportError` if run |
+| ~~`atr_database_fixer.py`, `quick_analyzer.py`, `migrate_to_posresql.py`, `work_day_automation.py`~~ | **REMOVED (Phase 4B)** | `quick_analyzer.py` was CI-excluded for bad UTF-8 (that exclusion is also removed — see `.github/workflows/ci.yml`); `work_day_automation.py` referenced 4 `*_corrected.py` files that never existed anywhere in repo history |
 | `symbol_scraper.py` | ACTIVE-SUPPORTING | Manual but genuinely reusable; feeds `stock_lists/` (44 tracked, real files) |
 | `reports/trading_system_report_20250711_*.md` | LEGACY cruft | Tracked despite `mechanism/reports/` being gitignored — a pre-rule leftover |
 
@@ -231,11 +231,11 @@ evidenced) · **UNCERTAIN**.
 | `features/price_features.py`, `data_preparation/build_dataset.py`, `models/momentum_predictor.py` | ACTIVE | The live chain |
 | `features/fundamentals_features.py` (+ test) | ACTIVE-DEV | Finished, unit-tested, deliberately not yet wired in (own docstring confirms) |
 | `data_preparation/momentum_labeler.py` | LEGACY | Kept alive only as a parity-test fixture (`test_price_features.py`) |
-| `data_preparation/feature_builder.py` + backup | **DEAD** | Zero real imports (only comment references) |
-| `deployment/ml_integration.py` | **DEAD** | CI-excluded (invalid UTF-8); calls `load_model()`, which doesn't exist on the current predictor class |
-| `deployment/model_registry.py` | **DEAD** | A parallel, unused file-based registry — `system_health_service.py` itself documents "exists but isn't used to gate production"; creates directories as an import side effect |
-| `training/` | **DEAD** | Empty placeholder package, `__init__.py` only, never populated |
-| `setup_ml_environment.py` | **DEAD** | One-time bootstrap generator, zero callers |
+| ~~`data_preparation/feature_builder.py` + backup~~ | **REMOVED (Phase 4B)** | Had zero real imports (only comment references) |
+| ~~`deployment/ml_integration.py`~~ | **REMOVED (Phase 4B)** | Was CI-excluded (invalid UTF-8); called `load_model()`, which didn't exist on the current predictor class |
+| ~~`deployment/model_registry.py`~~ | **REMOVED (Phase 4B)** | A parallel, unused file-based registry — `system_health_service.py` itself documented "exists but isn't used to gate production"; created directories as an import side effect |
+| ~~`training/`~~ | **REMOVED (Phase 4B)** | Was an empty placeholder package, `__init__.py` only, never populated |
+| ~~`setup_ml_environment.py`~~ | **REMOVED (Phase 4B)** | One-time bootstrap generator, zero callers |
 | `evaluation/performance_tracker.py` | ACTIVE (write half) / **GAP** (read half) | `record_predictions()` is live; `evaluate_predictions()`/`calculate_performance_metrics()` are only reachable via manual `__main__` invocation — see §15 |
 | `scripts/ml_pipeline_runner.py` | ACTIVE-SUPPORTING | Manual CLI wrapper, accurately documents the live chain |
 | `scripts/backup/*` (10 files) | Confirmed intentional archive | Matches CLAUDE.md |
@@ -384,8 +384,8 @@ See §4.4 for the traced chain. Summary of what's active vs. dormant vs. dead:
 | `ml_enhancement/ml_signal_enhancer.py` | ACTIVE — correctly has nothing to load, by design |
 | `evaluation/performance_tracker.py` — prediction logging | ACTIVE |
 | `evaluation/performance_tracker.py` — outcome scoring | **GAP** — `evaluate_predictions()`/`calculate_performance_metrics()` are never scheduled anywhere; `ml_prediction_outcomes`/`ml_performance_metrics` likely sit stale |
-| `deployment/ml_integration.py`, `deployment/model_registry.py` | DEAD — a whole parallel, disconnected "deployment" concept that was superseded by the DB-table + `_meta.json` mechanism actually in use, and never cleaned up |
-| `data_preparation/momentum_labeler.py`, `feature_builder.py` | LEGACY/DEAD — explicitly `# DEPRECATED` headers; the former is kept alive only as a test fixture |
+| ~~`deployment/ml_integration.py`, `deployment/model_registry.py`~~ | **REMOVED (Phase 4B)** — was a whole parallel, disconnected "deployment" concept superseded by the DB-table + `_meta.json` mechanism actually in use, never cleaned up until now |
+| `data_preparation/momentum_labeler.py` (kept — LEGACY, still a live parity-test fixture), ~~`feature_builder.py`~~ (**REMOVED (Phase 4B)**) | Both carried explicit `# DEPRECATED` headers |
 | `scripts/backup/` (10 files) | Confirmed intentional historical archive |
 | `notebooks/` | RESEARCH |
 | `training/` | DEAD — empty placeholder package, never populated |
@@ -524,10 +524,9 @@ CLAUDE.md's own prose — several additionally confirmed *broken*, not just unus
    already made its own explicit connection call when actually needed, confirmed by verifying
    `--help` on both live ML scripts completes instantly against an unreachable `DB_HOST` and the full
    `ml_training/tests` suite (incl. the one test that genuinely needs a real DB) still passes.
-2. **`ml_training/deployment/model_registry.py` creates 3 directories on disk as a module-scope
-   import side effect** (`model_registry = ModelRegistry()` at line 130). Low real-world impact today
-   since only the already-dead `ml_integration.py` reaches it, but the pattern itself is a hazard if
-   ever revived.
+2. ~~**`ml_training/deployment/model_registry.py` creates 3 directories on disk as a module-scope
+   import side effect**~~ **REMOVED (Phase 4B)** — both it and its only caller, `ml_integration.py`,
+   were confirmed dead and deleted; the hazard is moot, not fixed in place.
 3. ~~**`send_channel_posts.py`'s own Momentum Board sender completely bypasses
    `telegram_post_delivery`**~~ **RESOLVED (Phase 4A)** — all three claimable kinds
    (`momentum_board`/`top_gainers`/`market_health`) now route through `post_delivery.claim()` via a

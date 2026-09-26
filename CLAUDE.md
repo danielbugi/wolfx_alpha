@@ -62,14 +62,18 @@ Full picture, diagrams, and the 5 independent execution paths:
 | `deploy/db/` | Backup/restore tooling. |
 | `.github/workflows/` | `ci.yml` (auto) and `cd.yml` (manual only). |
 
-**Known legacy/dead paths — do not build on these**: `mechanism/screeners/donchian_screener.py` /
-`ml_donchian_screener.py` (superseded by `multi_timeframe_screener.py`, the only screener actually
-used); any `*_backup.py`/`*_old.py` file in `mechanism/`/`ml_training/`; `backend/routers/dashboard.py`
-and `market_data.py` (both 0 bytes, unimported); `ml_training/data_preparation/momentum_labeler.py`,
-`feature_builder.py`, `ml_training/deployment/ml_integration.py` (retired);
-`mechanism/orchestrators/master_automation_runner.py` (unwired); `mechanism/data/`, `frontend_data/`,
-`breakout_results/`, `reports/`, `logs/` under `mechanism/` (stale duplicates of the root-level dirs
-the pipeline actually writes to). `backups/` and `SKILLS/` at the repo root are inert — leave alone.
+**Known legacy paths — do not build on these**: `ml_training/data_preparation/momentum_labeler.py`
+(kept alive only as a parity-test fixture); `mechanism/orchestrators/master_automation_runner.py`
+(not wired into the live pipeline, but still a functional manual CLI — see the health-check command
+below); `mechanism/data/`, `frontend_data/`, `breakout_results/`, `reports/`, `logs/` under
+`mechanism/` (stale duplicates of the root-level dirs the pipeline actually writes to). `backups/`
+and `SKILLS/` at the repo root are inert — leave alone.
+
+**Phase 4B (2026-09-26)**: the 29 files/dirs the Phase 3 audit confirmed DEAD (zero reachability,
+evidenced — dead screener variants, `*_backup.py`/`*_old.py` copies, 0-byte backend stubs, the
+retired `ml_training/deployment/` chain, `feature_builder.py`, `MainLayout.tsx`, and others) were
+removed. See [CODEBASE_AUDIT.md](docs/architecture/CODEBASE_AUDIT.md) for the per-file evidence and
+`git log` for the removal commit if you need to recover one.
 
 ## Safety invariants — these hold regardless of the task
 
