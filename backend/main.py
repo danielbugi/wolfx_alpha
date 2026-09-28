@@ -447,6 +447,19 @@ except ImportError as e:
 except Exception as e:
     logger.error(f"❌ Error including bot access router: {e}")
 
+# Import and include the Track Record router (the live outcome ledger's
+# authenticated summary and signal list — see mechanism/add_signal_ledger_tables.sql
+# and services/track_record_service.py)
+try:
+    from routers.track_record import track_record_router
+
+    app.include_router(track_record_router)
+    logger.info("✅ Track record router included successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  Track record router not available: {e}")
+except Exception as e:
+    logger.error(f"❌ Error including track record router: {e}")
+
 
 # ============================================================================
 # HEALTH AND STATUS ENDPOINTS

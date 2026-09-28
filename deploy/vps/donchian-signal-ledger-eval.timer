@@ -1,0 +1,10 @@
+[Unit]
+Description=First Light: signal ledger outcome evaluator (23:50 Israel, after the daily pipeline)
+
+[Timer]
+OnCalendar=*-*-* 23:50:00 Asia/Jerusalem
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

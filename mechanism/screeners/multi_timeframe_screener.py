@@ -177,6 +177,19 @@ class MultiTimeframeMLScreener:
             # Save results
             self.save_results(results)
 
+            # Live outcome ledger (mechanism/add_signal_ledger_tables.sql): record today's real
+            # breakout signals so evaluate_signal_ledger.py can track them forward to a real
+            # result. This runs strictly AFTER save_results() above, so the existing JSON output
+            # is never affected, and is wrapped so a ledger-write failure can never fail this
+            # method or the pipeline steps that follow it (ML rebuild, session mark, post-market
+            # retry) -- see signal_ledger_writer.py's module docstring for the full reasoning.
+            try:
+                from screeners.signal_ledger_writer import write_todays_signals
+                session_date = all_signals[0]['screening_date'] if all_signals else datetime.now().date()
+                write_todays_signals(db, all_signals, session_date)
+            except Exception as e:
+                logger.error(f"signal_ledger_writer failed (non-fatal, screening result unaffected): {e}")
+
             duration = (datetime.now() - start_time).total_seconds()
             logger.info(f"Multi-timeframe ML screening completed in {duration:.1f}s")
 

@@ -917,6 +917,41 @@ export interface DatabasePerf {
   pooling_active: boolean;
 }
 
+// Track record types (mechanism/add_signal_ledger_tables.sql, backend/routers/track_record.py) --
+// the live outcome ledger every daily breakout signal is written to and walked forward. Authenticated
+// only for now; see TrackRecordPanel.tsx for the copy-discipline notes on how these numbers are shown.
+export interface TrackRecordSummary {
+  resolved_count: number;
+  open_count: number;
+  earliest_signal_date: string | null;
+  latest_signal_date: string | null;
+  by_status: Record<string, number>;
+  min_sample_size: number;
+  suppressed: boolean;
+  win_rate_pct?: number;
+  avg_outcome_r?: number;
+}
+
+export type SignalLedgerStatus = 'open' | 'stopped' | 'target1' | 'target2' | 'target3' | 'expired';
+
+export interface TrackRecordSignal {
+  symbol: string;
+  signal_date: string;
+  direction: 1 | -1;
+  entry_price: number;
+  stop_price: number;
+  target1_price: number;
+  target2_price: number;
+  target3_price: number;
+  sector: string | null;
+  quality_grade: string | null;
+  status: SignalLedgerStatus;
+  outcome_r: number | null;
+  mae_r: number | null;
+  resolved_date: string | null;
+  bars_held: number | null;
+}
+
 export interface PerformanceReport {
   generated_at: string;
   overall: HealthStatus;
@@ -1120,6 +1155,17 @@ class ApiService {
     return response.data;
   }
 
+  // Track record endpoints
+  async getTrackRecordSummary(): Promise<TrackRecordSummary> {
+    const response = await apiClient.get<TrackRecordSummary>('/api/track-record/summary');
+    return response.data;
+  }
+
+  async getTrackRecordSignals(params: { limit?: number; status?: SignalLedgerStatus } = {}): Promise<TrackRecordSignal[]> {
+    const response = await apiClient.get<TrackRecordSignal[]>('/api/track-record/signals', { params });
+    return response.data;
+  }
+
   async reportClientMetric(route: string, metric: string, durationMs: number): Promise<void> {
     // Fire-and-forget — a failed report should never affect the page it's reporting on.
     try {
@@ -1199,6 +1245,11 @@ export const performanceApi = {
   getReport: () => apiService.getPerformance(),
   reportClientMetric: (route: string, metric: string, durationMs: number) =>
     apiService.reportClientMetric(route, metric, durationMs),
+};
+
+export const trackRecordApi = {
+  getSummary: () => apiService.getTrackRecordSummary(),
+  getSignals: (params?: { limit?: number; status?: SignalLedgerStatus }) => apiService.getTrackRecordSignals(params),
 };
 
 // Utility functions

@@ -1,0 +1,9 @@
+[Unit]
+Description=First Light: signal ledger outcome evaluator (walks open signal_ledger rows forward)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/donchian/scripts/run_channel_sender.sh mechanism/screeners/evaluate_signal_ledger.py
+TimeoutStartSec=15m
