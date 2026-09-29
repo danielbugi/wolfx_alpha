@@ -460,6 +460,18 @@ except ImportError as e:
 except Exception as e:
     logger.error(f"❌ Error including track record router: {e}")
 
+# Import and include the Strategy Intelligence router (internal per-strategy summary, data health and
+# signal explorer over signal_ledger -- computed by mechanism/strategy_analytics)
+try:
+    from routers.strategy_intelligence import strategy_intelligence_router
+
+    app.include_router(strategy_intelligence_router)
+    logger.info("✅ Strategy intelligence router included successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  Strategy intelligence router not available: {e}")
+except Exception as e:
+    logger.error(f"❌ Error including strategy intelligence router: {e}")
+
 
 # ============================================================================
 # HEALTH AND STATUS ENDPOINTS

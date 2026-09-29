@@ -70,6 +70,7 @@ jobs:
               - 'backend/**'
               - 'mechanism/shared/**'
               - 'mechanism/alerts/**'
+              - 'mechanism/strategy_analytics/**'
               - 'ml_training/**'
             mechanism:
               - 'mechanism/**'
@@ -350,7 +351,7 @@ jobs:
   # ---------------------------------------------------------------------------------------------
   db-bootstrap-integration:
     needs: changes
-    if: needs.changes.outputs.mechanism == 'true' || needs.changes.outputs.infra == 'true'
+    if: needs.changes.outputs.mechanism == 'true' || needs.changes.outputs.infra == 'true' || needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -605,3 +606,29 @@ jobs:
             DELETE FROM ml_prediction_outcomes WHERE symbol = 'CITEST02';
             DELETE FROM ml_predictions WHERE symbol = 'CITEST02';
           "
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: |
+            backend/requirements.txt
+            mechanism/requirements.txt
+            ml_training/requirements.txt
+
+      - name: Install Python test dependencies
+        run: pip install -r backend/requirements.txt -r mechanism/requirements.txt -r ml_training/requirements.txt pytest
+
+      - name: Real-Postgres tests against this freshly migrated schema (signal ledger writer + evaluator, strategy analytics, Strategy Intelligence API)
+        # These suites self-skip when Postgres is unreachable, which is why mechanism-ci/backend-ci (no database)
+        # never actually exercised their SQL. Here a skip would mean the database wasn't reached, so it fails the job.
+        env:
+          DB_HOST: localhost
+          DB_PORT: '5432'
+          DB_NAME: donchian_ci_test
+          DB_USER: trading_user
+          DB_PASSWORD: ci_test_only_password
+        run: |
+          python -m pytest mechanism/screeners/tests mechanism/shared/tests mechanism/strategy_analytics/tests \
+            backend/tests/test_strategy_intelligence_api.py -q -rs -p no:cacheprovider | tee /tmp/db_tests.txt
+          if grep -qi "skipped" /tmp/db_tests.txt; then echo "::error::DB-backed tests skipped -- Postgres not reached"; exit 1; fi

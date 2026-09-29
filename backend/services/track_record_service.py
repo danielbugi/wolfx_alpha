@@ -11,12 +11,20 @@ as though it had already lost or won.
 
 Authenticated only for now (see backend/routers/track_record.py) -- a public summary is a deliberate,
 separate follow-up once the numbers and copy have been validated internally, not this pass.
+
+The summary's numbers come from mechanism/strategy_analytics (via StrategyIntelligenceService) -- the
+same canonical definitions the Strategy Intelligence API and the Telegram assistant use. This service
+only presents that result in the track record's own, stricter way: nothing below MIN_SAMPLE_SIZE is
+shown at all (Strategy Intelligence shows it as 'preliminary'). A win is a target reached before the
+stop; a positive-R expiry is not a win.
 """
 from typing import Any, Dict, List, Optional
 
 from psycopg2.extras import RealDictCursor
 
-MIN_SAMPLE_SIZE = 5  # fewer resolved signals than this and a win rate/avg R is noise, not a stat
+from services.strategy_intelligence_service import StrategyIntelligenceService, definitions
+
+MIN_SAMPLE_SIZE = definitions.MIN_SAMPLE_SIZE  # fewer resolved signals than this and a win rate/avg R is noise
 
 
 class TrackRecordService:
@@ -26,52 +34,24 @@ class TrackRecordService:
         self.get_db_connection = db_connection_func
 
     def get_summary(self) -> Dict[str, Any]:
-        """Aggregate stats over every resolved (non-'open') signal, plus the still-open count
-        reported separately. Returns suppressed=True with no stats when the resolved sample is
-        below MIN_SAMPLE_SIZE -- never a win rate computed off too few rows."""
-        conn = self.get_db_connection()
-        if not conn:
-            raise Exception("Database connection failed")
-        try:
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
-
-            cursor.execute("""
-                SELECT
-                    COUNT(*) FILTER (WHERE status != 'open') AS resolved_count,
-                    COUNT(*) FILTER (WHERE status = 'open') AS open_count,
-                    COUNT(*) FILTER (WHERE status != 'open' AND outcome_r > 0) AS resolved_positive,
-                    AVG(outcome_r) FILTER (WHERE status != 'open') AS avg_outcome_r,
-                    MIN(signal_date) AS earliest_signal_date,
-                    MAX(signal_date) AS latest_signal_date
-                FROM signal_ledger
-            """)
-            row = cursor.fetchone()
-
-            cursor.execute("""
-                SELECT status, COUNT(*) AS n
-                FROM signal_ledger
-                WHERE status != 'open'
-                GROUP BY status
-            """)
-            by_status = {r["status"]: r["n"] for r in cursor.fetchall()}
-            cursor.close()
-
-            resolved_count = row["resolved_count"] or 0
-            summary: Dict[str, Any] = {
-                "resolved_count": resolved_count,
-                "open_count": row["open_count"] or 0,
-                "earliest_signal_date": row["earliest_signal_date"],
-                "latest_signal_date": row["latest_signal_date"],
-                "by_status": by_status,
-                "min_sample_size": MIN_SAMPLE_SIZE,
-                "suppressed": resolved_count < MIN_SAMPLE_SIZE,
-            }
-            if not summary["suppressed"]:
-                summary["win_rate_pct"] = round(100.0 * row["resolved_positive"] / resolved_count, 1)
-                summary["avg_outcome_r"] = round(float(row["avg_outcome_r"]), 3)
-            return summary
-        finally:
-            conn.close()
+        """Every strategy's resolved signals, plus the still-open count reported separately. Returns
+        suppressed=True with no stats unless the canonical win rate is state 'ok' (>= MIN_SAMPLE_SIZE
+        resolved) -- never a win rate computed off too few rows."""
+        result = StrategyIntelligenceService(self.get_db_connection).overall_performance(None)
+        counts, perf = result["counts"], result["performance"]
+        summary: Dict[str, Any] = {
+            "resolved_count": counts["resolved"],
+            "open_count": counts["open_total"],
+            "earliest_signal_date": result["first_session"],
+            "latest_signal_date": result["latest_session"],
+            "by_status": result["by_status"],
+            "min_sample_size": MIN_SAMPLE_SIZE,
+            "suppressed": perf["win_rate"]["state"] != definitions.STATE_OK,
+        }
+        if not summary["suppressed"]:
+            summary["win_rate_pct"] = round(100.0 * perf["win_rate"]["value"], 1)
+            summary["avg_outcome_r"] = round(perf["average_r"]["value"], 3)
+        return summary
 
     def get_recent_signals(self, limit: int = 50, status: Optional[str] = None) -> List[Dict[str, Any]]:
         """Most recent signals, newest first. `status` filters to one status (including 'open');
