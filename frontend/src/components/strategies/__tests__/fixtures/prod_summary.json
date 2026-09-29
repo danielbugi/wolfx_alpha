@@ -1,0 +1,359 @@
+{
+ "strategy": {
+  "id": 1,
+  "key": "donchian_breakout",
+  "version": "v1",
+  "display_name": "Donchian Breakout",
+  "description": "The live multi-timeframe Donchian breakout screener, as shipped today.",
+  "registered_at": "2026-09-29T08:26:00.495374+00:00"
+ },
+ "definitions_version": "2026-09-29.2",
+ "reference_session": "2026-09-28",
+ "tracking": {
+  "tracking_status": "tracking",
+  "first_tracked_session": "2026-09-28",
+  "latest_tracked_session": "2026-09-28",
+  "total_signals": 490,
+  "open": 490,
+  "normally_open": 490,
+  "held": 0,
+  "resolved": 0,
+  "bullish": 56,
+  "bearish": 434,
+  "signals_this_week": 490,
+  "signals_this_month": 490
+ },
+ "performance": {
+  "resolved_n": 0,
+  "winners": 0,
+  "stopped": 0,
+  "expired": 0,
+  "expired_positive": 0,
+  "expired_negative": 0,
+  "ambiguous": 0,
+  "win_rate": {
+   "value": null,
+   "n": 0,
+   "state": "no_data"
+  },
+  "stop_rate": {
+   "value": null,
+   "n": 0,
+   "state": "no_data"
+  },
+  "expiry_rate": {
+   "value": null,
+   "n": 0,
+   "state": "no_data"
+  },
+  "average_r": {
+   "value": null,
+   "n": 0,
+   "state": "no_data"
+  },
+  "median_r": {
+   "value": null,
+   "n": 0,
+   "state": "no_data"
+  },
+  "average_holding_bars": {
+   "value": null,
+   "n": 0,
+   "state": "no_data"
+  },
+  "median_holding_bars": {
+   "value": null,
+   "n": 0,
+   "state": "no_data"
+  },
+  "average_mae_r": {
+   "value": null,
+   "n": 0,
+   "state": "no_data"
+  },
+  "average_mfe_r": {
+   "value": null,
+   "n": null,
+   "state": "not_available",
+   "reason": "maximum favourable excursion is not stored in Release A",
+   "release": "B"
+  }
+ },
+ "outcomes": {
+  "resolved_n": 0,
+  "terminal": {
+   "stopped": {
+    "count": 0,
+    "share": {
+     "value": null,
+     "n": 0,
+     "state": "no_data"
+    }
+   },
+   "target1": {
+    "count": 0,
+    "share": {
+     "value": null,
+     "n": 0,
+     "state": "no_data"
+    }
+   },
+   "target2": {
+    "count": 0,
+    "share": {
+     "value": null,
+     "n": 0,
+     "state": "no_data"
+    }
+   },
+   "target3": {
+    "count": 0,
+    "share": {
+     "value": null,
+     "n": 0,
+     "state": "no_data"
+    }
+   },
+   "expired": {
+    "count": 0,
+    "share": {
+     "value": null,
+     "n": 0,
+     "state": "no_data"
+    },
+    "average_r": {
+     "value": null,
+     "n": 0,
+     "state": "no_data"
+    },
+    "positive_count": 0,
+    "negative_count": 0,
+    "flat_count": 0,
+    "positive_share": {
+     "value": null,
+     "n": 0,
+     "state": "no_data"
+    }
+   }
+  },
+  "ambiguous": {
+   "count": 0,
+   "share_of_resolved": {
+    "value": null,
+    "n": 0,
+    "state": "no_data"
+   },
+   "share_of_stopped": {
+    "value": null,
+    "n": 0,
+    "state": "no_data"
+   }
+  },
+  "target_milestones": {
+   "reached_target1": {
+    "count": 0,
+    "rate": {
+     "value": null,
+     "n": 0,
+     "state": "no_data"
+    }
+   },
+   "reached_target2": {
+    "count": 0,
+    "rate": {
+     "value": null,
+     "n": 0,
+     "state": "no_data"
+    }
+   },
+   "reached_target3": {
+    "count": 0,
+    "rate": {
+     "value": null,
+     "n": 0,
+     "state": "no_data"
+    }
+   }
+  },
+  "milestone_semantics": "reached within the trade: exit is at the first target touched, so a target1 exit may have gone on to target2 unobserved (post-exit trajectory is Release B)"
+ },
+ "directions": {
+  "bullish": {
+   "signals": 56,
+   "open": 56,
+   "normally_open": 56,
+   "held": 0,
+   "resolved": 0,
+   "winners": 0,
+   "stopped": 0,
+   "expired": 0,
+   "ambiguous": 0,
+   "win_rate": {
+    "value": null,
+    "n": 0,
+    "state": "no_data"
+   },
+   "average_r": {
+    "value": null,
+    "n": 0,
+    "state": "no_data"
+   },
+   "median_r": {
+    "value": null,
+    "n": 0,
+    "state": "no_data"
+   },
+   "average_holding_bars": {
+    "value": null,
+    "n": 0,
+    "state": "no_data"
+   },
+   "median_holding_bars": {
+    "value": null,
+    "n": 0,
+    "state": "no_data"
+   },
+   "stop_rate": {
+    "value": null,
+    "n": 0,
+    "state": "no_data"
+   },
+   "expiry_rate": {
+    "value": null,
+    "n": 0,
+    "state": "no_data"
+   },
+   "target_rates": {
+    "target1": {
+     "value": null,
+     "n": 0,
+     "state": "no_data"
+    },
+    "target2": {
+     "value": null,
+     "n": 0,
+     "state": "no_data"
+    },
+    "target3": {
+     "value": null,
+     "n": 0,
+     "state": "no_data"
+    }
+   }
+  },
+  "bearish": {
+   "signals": 434,
+   "open": 434,
+   "normally_open": 434,
+   "held": 0,
+   "resolved": 0,
+   "winners": 0,
+   "stopped": 0,
+   "expired": 0,
+   "ambiguous": 0,
+   "win_rate": {
+    "value": null,
+    "n": 0,
+    "state": "no_data"
+   },
+   "average_r": {
+    "value": null,
+    "n": 0,
+    "state": "no_data"
+   },
+   "median_r": {
+    "value": null,
+    "n": 0,
+    "state": "no_data"
+   },
+   "average_holding_bars": {
+    "value": null,
+    "n": 0,
+    "state": "no_data"
+   },
+   "median_holding_bars": {
+    "value": null,
+    "n": 0,
+    "state": "no_data"
+   },
+   "stop_rate": {
+    "value": null,
+    "n": 0,
+    "state": "no_data"
+   },
+   "expiry_rate": {
+    "value": null,
+    "n": 0,
+    "state": "no_data"
+   },
+   "target_rates": {
+    "target1": {
+     "value": null,
+     "n": 0,
+     "state": "no_data"
+    },
+    "target2": {
+     "value": null,
+     "n": 0,
+     "state": "no_data"
+    },
+    "target3": {
+     "value": null,
+     "n": 0,
+     "state": "no_data"
+    }
+   }
+  }
+ },
+ "capabilities": {
+  "signal_ledger": {
+   "available": true,
+   "release": "A"
+  },
+  "outcome_evaluation": {
+   "available": true,
+   "release": "A"
+  },
+  "same_bar_ambiguity_flag": {
+   "available": true,
+   "release": "A"
+  },
+  "split_suspect_hold": {
+   "available": true,
+   "release": "A"
+  },
+  "max_adverse_excursion": {
+   "available": true,
+   "release": "A"
+  },
+  "max_favourable_excursion": {
+   "available": false,
+   "release": "B"
+  },
+  "post_exit_trajectory": {
+   "available": false,
+   "release": "B"
+  },
+  "forward_return_labels": {
+   "available": false,
+   "release": "B"
+  },
+  "candidate_observations": {
+   "available": false,
+   "release": "B"
+  },
+  "feature_snapshots": {
+   "available": false,
+   "release": "B"
+  },
+  "training_ready_observations": {
+   "available": false,
+   "release": "B"
+  },
+  "evaluator_run_history": {
+   "available": false,
+   "release": null,
+   "reason": "evaluator run results are only in the VPS wrapper log, not the database -- see data health"
+  }
+ }
+}

@@ -1,0 +1,216 @@
+{
+ "strategy": {
+  "id": 2,
+  "key": "zz_demo_states",
+  "version": "v1",
+  "display_name": "zz_demo_states",
+  "description": "LOCAL UI FIXTURE ONLY - synthetic states",
+  "registered_at": "2026-09-29T08:26:30.326961+00:00"
+ },
+ "definitions_version": "2026-09-29.2",
+ "status": "attention",
+ "issues": [
+  "held: 1",
+  "stale open signals: 1",
+  "invalid-price-blocked signals: 1",
+  "lagging open signals: 1"
+ ],
+ "ledger": {
+  "total_rows": 18,
+  "latest_signal_session": "2026-09-28",
+  "normally_open": 5,
+  "held": 1,
+  "held_by_flag": {
+   "split_suspect": 1
+  },
+  "resolved": 12,
+  "ambiguous_resolutions": 1
+ },
+ "market_data": {
+  "reference_session": "2026-09-28",
+  "stale_after_sessions": 3,
+  "session_window": 30,
+  "open_signals_by_price_data_state": {
+   "awaiting_first_session": 1,
+   "current": 2,
+   "lagging": 1,
+   "stale": 1,
+   "no_price_data": 0
+  },
+  "open_signals_without_forward_bar": 0
+ },
+ "evaluation": {
+  "open_signals_by_evaluation_state": {
+   "up_to_date": 2,
+   "pending": 2,
+   "invalid_price_blocked": 1
+  },
+  "latest_evaluated_session_open": "2026-09-28",
+  "evaluator_runs": {
+   "value": null,
+   "n": null,
+   "state": "not_available",
+   "reason": "run results are only written to /opt/donchian/logs/channel_sender_runs.log on the VPS, not the database; progress above is derived from signal_ledger itself"
+  }
+ },
+ "attention": {
+  "open_signals": [
+   {
+    "id": 505,
+    "symbol": "ZSTALE",
+    "signal_date": "2026-09-10",
+    "symbol_latest_bar": "2026-09-15",
+    "lag_sessions": 9,
+    "lag_capped": false,
+    "price_data_state": "stale",
+    "evaluation_state": "pending"
+   },
+   {
+    "id": 504,
+    "symbol": "ZLAG",
+    "signal_date": "2026-09-16",
+    "symbol_latest_bar": "2026-09-25",
+    "lag_sessions": 1,
+    "lag_capped": false,
+    "price_data_state": "lagging",
+    "evaluation_state": "pending"
+   },
+   {
+    "id": 506,
+    "symbol": "ZBAD",
+    "signal_date": "2026-09-18",
+    "symbol_latest_bar": "2026-09-28",
+    "lag_sessions": 0,
+    "lag_capped": false,
+    "price_data_state": "current",
+    "evaluation_state": "invalid_price_blocked"
+   }
+  ],
+  "open_signals_total": 3,
+  "held_signals": [
+   {
+    "id": 507,
+    "symbol": "ZSPLIT",
+    "signal_date": "2026-09-08",
+    "direction": 1,
+    "evaluation_flag": "split_suspect",
+    "held_since": "2026-09-11"
+   }
+  ]
+ },
+ "invariants": {
+  "duplicate_event_identities": 0,
+  "multiple_open_positions": 0,
+  "strategy_version_mismatch": 0,
+  "resolved_missing_outcome": 0,
+  "open_with_outcome": 0,
+  "resolution_flag_on_non_stop": 0,
+  "evaluation_flag_on_resolved": 0
+ },
+ "coverage": {
+  "strategy_version": {
+   "count": 18,
+   "total": 18,
+   "share": {
+    "value": 1.0,
+    "n": 18,
+    "state": "ok"
+   },
+   "collected": true
+  },
+  "model_version": {
+   "count": 0,
+   "total": 18,
+   "share": {
+    "value": 0.0,
+    "n": 18,
+    "state": "ok"
+   },
+   "collected": true
+  },
+  "feature_set_version": {
+   "count": 0,
+   "total": 18,
+   "share": {
+    "value": 0.0,
+    "n": 18,
+    "state": "ok"
+   },
+   "collected": false,
+   "release": "B"
+  },
+  "observation_id": {
+   "count": 0,
+   "total": 18,
+   "share": {
+    "value": 0.0,
+    "n": 18,
+    "state": "ok"
+   },
+   "collected": false,
+   "release": "B"
+  },
+  "feature_snapshot_id": {
+   "count": 0,
+   "total": 18,
+   "share": {
+    "value": 0.0,
+    "n": 18,
+    "state": "ok"
+   },
+   "collected": false,
+   "release": "B"
+  }
+ },
+ "capabilities": {
+  "signal_ledger": {
+   "available": true,
+   "release": "A"
+  },
+  "outcome_evaluation": {
+   "available": true,
+   "release": "A"
+  },
+  "same_bar_ambiguity_flag": {
+   "available": true,
+   "release": "A"
+  },
+  "split_suspect_hold": {
+   "available": true,
+   "release": "A"
+  },
+  "max_adverse_excursion": {
+   "available": true,
+   "release": "A"
+  },
+  "max_favourable_excursion": {
+   "available": false,
+   "release": "B"
+  },
+  "post_exit_trajectory": {
+   "available": false,
+   "release": "B"
+  },
+  "forward_return_labels": {
+   "available": false,
+   "release": "B"
+  },
+  "candidate_observations": {
+   "available": false,
+   "release": "B"
+  },
+  "feature_snapshots": {
+   "available": false,
+   "release": "B"
+  },
+  "training_ready_observations": {
+   "available": false,
+   "release": "B"
+  },
+  "evaluator_run_history": {
+   "available": false,
+   "release": null,
+   "reason": "evaluator run results are only in the VPS wrapper log, not the database -- see data health"
+  }
+ }
+}

@@ -8,6 +8,7 @@ import {
   FunnelIcon,
   HeartIcon,
   PaperAirplaneIcon,
+  PresentationChartLineIcon,
   Squares2X2Icon,
   UsersIcon,
 } from '@heroicons/react/24/outline';
@@ -35,7 +36,8 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { name: 'Dashboard', href: '/', icon: Squares2X2Icon, description: 'Overview & breakouts' },
       { name: 'Screener', href: '/screener', icon: FunnelIcon, description: 'Search & filter the universe' },
-      { name: 'Strategy', href: '/strategy', icon: ChartBarIcon, description: 'Ranked position plans' },
+      { name: 'Position Plans', href: '/strategy', icon: ChartBarIcon, description: 'Ranked position plans' },
+      { name: 'Strategies', href: '/strategies', icon: PresentationChartLineIcon, description: 'Strategy intelligence: outcomes, signals, data health' },
       { name: 'Alerts', href: '/alerts', icon: BellAlertIcon, description: 'Deep-value / turnaround watch' },
       { name: 'Telegram', href: '/telegram', icon: PaperAirplaneIcon, description: 'Channel post control center' },
     ],

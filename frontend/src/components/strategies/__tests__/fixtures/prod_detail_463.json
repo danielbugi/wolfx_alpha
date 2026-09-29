@@ -1,0 +1,60 @@
+{
+ "id": 463,
+ "strategy": {
+  "id": 1,
+  "key": "donchian_breakout",
+  "version": "v1",
+  "display_name": "Donchian Breakout",
+  "description": "The live multi-timeframe Donchian breakout screener, as shipped today.",
+  "registered_at": "2026-09-29T08:26:00.495374+00:00"
+ },
+ "identity": {
+  "symbol": "VLGEA",
+  "signal_date": "2026-09-28",
+  "direction": "bullish",
+  "strategy_version": "v1"
+ },
+ "trade_plan": {
+  "entry_price": 46.11,
+  "stop_price": 43.7924,
+  "target1_price": 48.4276,
+  "target2_price": 50.7452,
+  "target3_price": 53.0628,
+  "atr": 1.1588,
+  "risk_per_share": 2.3176,
+  "risk_pct_of_entry": 0.0503
+ },
+ "context": {
+  "quality_grade": "A",
+  "sector": "Consumer Defensive",
+  "model_version": null,
+  "feature_set_version": null
+ },
+ "lifecycle": {
+  "state": "open",
+  "status": "open",
+  "is_winner": null,
+  "outcome_r": null,
+  "resolved_date": null,
+  "bars_held": null,
+  "mae_r": null,
+  "last_evaluated_date": "2026-09-28",
+  "resolution_flag": null,
+  "evaluation_flag": null,
+  "reference_session": "2026-09-28",
+  "symbol_latest_bar": "2026-09-28",
+  "forward_bars_available": 0
+ },
+ "provenance": {
+  "ledger_created_at": "2026-09-28T23:22:08.585727+00:00",
+  "observation_id": null,
+  "feature_snapshot_id": null,
+  "release_b_lineage": false
+ },
+ "timeline": [
+  {
+   "date": "2026-09-28",
+   "event": "signal"
+  }
+ ]
+}

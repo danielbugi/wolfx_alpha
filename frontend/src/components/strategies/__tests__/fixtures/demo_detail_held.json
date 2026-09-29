@@ -1,0 +1,64 @@
+{
+ "id": 507,
+ "strategy": {
+  "id": 2,
+  "key": "zz_demo_states",
+  "version": "v1",
+  "display_name": "zz_demo_states",
+  "description": "LOCAL UI FIXTURE ONLY - synthetic states",
+  "registered_at": "2026-09-29T08:26:30.326961+00:00"
+ },
+ "identity": {
+  "symbol": "ZSPLIT",
+  "signal_date": "2026-09-08",
+  "direction": "bullish",
+  "strategy_version": "v1"
+ },
+ "trade_plan": {
+  "entry_price": 100.0,
+  "stop_price": 96.0,
+  "target1_price": 104.0,
+  "target2_price": 108.0,
+  "target3_price": 112.0,
+  "atr": 2.0,
+  "risk_per_share": 4.0,
+  "risk_pct_of_entry": 0.04
+ },
+ "context": {
+  "quality_grade": "B",
+  "sector": "Technology",
+  "model_version": null,
+  "feature_set_version": null
+ },
+ "lifecycle": {
+  "state": "held",
+  "status": "open",
+  "is_winner": null,
+  "outcome_r": null,
+  "resolved_date": null,
+  "bars_held": null,
+  "mae_r": 0.2,
+  "last_evaluated_date": "2026-09-11",
+  "resolution_flag": null,
+  "evaluation_flag": "split_suspect",
+  "reference_session": "2026-09-28",
+  "symbol_latest_bar": "2026-09-15",
+  "forward_bars_available": 5
+ },
+ "provenance": {
+  "ledger_created_at": "2026-09-29T08:26:30.554568+00:00",
+  "observation_id": null,
+  "feature_snapshot_id": null,
+  "release_b_lineage": false
+ },
+ "timeline": [
+  {
+   "date": "2026-09-08",
+   "event": "signal"
+  },
+  {
+   "date": "2026-09-11",
+   "event": "held:split_suspect"
+  }
+ ]
+}

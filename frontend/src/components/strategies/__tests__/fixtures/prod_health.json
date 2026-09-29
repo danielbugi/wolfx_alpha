@@ -1,0 +1,171 @@
+{
+ "strategy": {
+  "id": 1,
+  "key": "donchian_breakout",
+  "version": "v1",
+  "display_name": "Donchian Breakout",
+  "description": "The live multi-timeframe Donchian breakout screener, as shipped today.",
+  "registered_at": "2026-09-29T08:26:00.495374+00:00"
+ },
+ "definitions_version": "2026-09-29.2",
+ "status": "healthy",
+ "issues": [],
+ "ledger": {
+  "total_rows": 490,
+  "latest_signal_session": "2026-09-28",
+  "normally_open": 490,
+  "held": 0,
+  "held_by_flag": {
+   "split_suspect": 0
+  },
+  "resolved": 0,
+  "ambiguous_resolutions": 0
+ },
+ "market_data": {
+  "reference_session": "2026-09-28",
+  "stale_after_sessions": 3,
+  "session_window": 30,
+  "open_signals_by_price_data_state": {
+   "awaiting_first_session": 490,
+   "current": 0,
+   "lagging": 0,
+   "stale": 0,
+   "no_price_data": 0
+  },
+  "open_signals_without_forward_bar": 0
+ },
+ "evaluation": {
+  "open_signals_by_evaluation_state": {
+   "up_to_date": 490,
+   "pending": 0,
+   "invalid_price_blocked": 0
+  },
+  "latest_evaluated_session_open": "2026-09-28",
+  "evaluator_runs": {
+   "value": null,
+   "n": null,
+   "state": "not_available",
+   "reason": "run results are only written to /opt/donchian/logs/channel_sender_runs.log on the VPS, not the database; progress above is derived from signal_ledger itself"
+  }
+ },
+ "attention": {
+  "open_signals": [],
+  "open_signals_total": 0,
+  "held_signals": []
+ },
+ "invariants": {
+  "duplicate_event_identities": 0,
+  "multiple_open_positions": 0,
+  "strategy_version_mismatch": 0,
+  "resolved_missing_outcome": 0,
+  "open_with_outcome": 0,
+  "resolution_flag_on_non_stop": 0,
+  "evaluation_flag_on_resolved": 0
+ },
+ "coverage": {
+  "strategy_version": {
+   "count": 490,
+   "total": 490,
+   "share": {
+    "value": 1.0,
+    "n": 490,
+    "state": "ok"
+   },
+   "collected": true
+  },
+  "model_version": {
+   "count": 0,
+   "total": 490,
+   "share": {
+    "value": 0.0,
+    "n": 490,
+    "state": "ok"
+   },
+   "collected": true
+  },
+  "feature_set_version": {
+   "count": 0,
+   "total": 490,
+   "share": {
+    "value": 0.0,
+    "n": 490,
+    "state": "ok"
+   },
+   "collected": false,
+   "release": "B"
+  },
+  "observation_id": {
+   "count": 0,
+   "total": 490,
+   "share": {
+    "value": 0.0,
+    "n": 490,
+    "state": "ok"
+   },
+   "collected": false,
+   "release": "B"
+  },
+  "feature_snapshot_id": {
+   "count": 0,
+   "total": 490,
+   "share": {
+    "value": 0.0,
+    "n": 490,
+    "state": "ok"
+   },
+   "collected": false,
+   "release": "B"
+  }
+ },
+ "capabilities": {
+  "signal_ledger": {
+   "available": true,
+   "release": "A"
+  },
+  "outcome_evaluation": {
+   "available": true,
+   "release": "A"
+  },
+  "same_bar_ambiguity_flag": {
+   "available": true,
+   "release": "A"
+  },
+  "split_suspect_hold": {
+   "available": true,
+   "release": "A"
+  },
+  "max_adverse_excursion": {
+   "available": true,
+   "release": "A"
+  },
+  "max_favourable_excursion": {
+   "available": false,
+   "release": "B"
+  },
+  "post_exit_trajectory": {
+   "available": false,
+   "release": "B"
+  },
+  "forward_return_labels": {
+   "available": false,
+   "release": "B"
+  },
+  "candidate_observations": {
+   "available": false,
+   "release": "B"
+  },
+  "feature_snapshots": {
+   "available": false,
+   "release": "B"
+  },
+  "training_ready_observations": {
+   "available": false,
+   "release": "B"
+  },
+  "evaluator_run_history": {
+   "available": false,
+   "release": null,
+   "reason": "evaluator run results are only in the VPS wrapper log, not the database -- see data health"
+  }
+ }
+}

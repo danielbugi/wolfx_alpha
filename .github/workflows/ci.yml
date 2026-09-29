@@ -110,6 +110,9 @@ jobs:
         env:
           NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
 
+      - name: Unit / component tests (vitest, jsdom -- no backend; fixtures are real Strategy Intelligence API responses)
+        run: npm test
+
       - name: Production build
         # NEXT_DIST_DIR=.next-build matches this repo's own existing convention (CLAUDE.md §8) --
         # verified locally (Phase 3 inspection) that using any OTHER dist-dir name causes Next.js

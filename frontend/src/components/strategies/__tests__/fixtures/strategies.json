@@ -1,0 +1,36 @@
+{
+ "strategies": [
+  {
+   "id": 1,
+   "key": "donchian_breakout",
+   "version": "v1",
+   "display_name": "Donchian Breakout",
+   "description": "The live multi-timeframe Donchian breakout screener, as shipped today.",
+   "registered_at": "2026-09-29T08:26:00.495374+00:00",
+   "tracking": {
+    "total_signals": 490,
+    "open": 490,
+    "resolved": 0,
+    "first_tracked_session": "2026-09-28",
+    "latest_tracked_session": "2026-09-28",
+    "tracking_status": "tracking"
+   }
+  },
+  {
+   "id": 2,
+   "key": "zz_demo_states",
+   "version": "v1",
+   "display_name": "zz_demo_states",
+   "description": "LOCAL UI FIXTURE ONLY - synthetic states",
+   "registered_at": "2026-09-29T08:26:30.326961+00:00",
+   "tracking": {
+    "total_signals": 18,
+    "open": 6,
+    "resolved": 12,
+    "first_tracked_session": "2026-08-31",
+    "latest_tracked_session": "2026-09-28",
+    "tracking_status": "tracking"
+   }
+  }
+ ]
+}
