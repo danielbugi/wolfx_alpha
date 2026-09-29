@@ -54,6 +54,8 @@ from aiogram.types import (BotCommand, BotCommandScopeChat, BufferedInputFile, C
 
 from alerts import chart as chart_mod  # noqa: E402
 from alerts import deeplink, insights, morning, screens, texts  # noqa: E402
+from alerts import strategy_intel as si  # noqa: E402
+from alerts import strategy_screens as ss  # noqa: E402
 from alerts.access import INVITE_TTL_HOURS, MODES, OWNER, RETENTION_DAYS, Access, parse_user_id  # noqa: E402
 from alerts.bot_service import SYMBOL_RE, BotService, PgStore, RateLimiter  # noqa: E402
 from alerts.performance import D, fmt_price, pct_change  # noqa: E402
@@ -79,7 +81,13 @@ OWNER_COMMANDS = [BotCommand(command="invite", description="One-time invitation 
                   BotCommand(command="users", description="How many people have access"),
                   BotCommand(command="requests", description="Who is waiting for access"),
                   BotCommand(command="funnel", description="Channel opens, requests, approvals"),
-                  BotCommand(command="status", description="Snapshot age and access counts")]
+                  BotCommand(command="status", description="Snapshot age and access counts"),
+                  BotCommand(command="strategy", description="Strategy intelligence summary (read only)"),
+                  BotCommand(command="signals", description="Strategy ledger, e.g. /signals bullish open"),
+                  BotCommand(command="health", description="Strategy data health"),
+                  BotCommand(command="si", description="All strategy intelligence commands")]
+SI_CALLBACK = re.compile(r"^si:(z|[spvhb]:[0-9]{1,9}|l:[0-9]{1,9}:[UD-][ohra-][ABCDF-][t-][ng]:[0-9]{1,6}"
+                         r"|d:[0-9]{1,9}:[0-9]{1,15}:([UD-][ohra-][ABCDF-][t-][ng]|x):[0-9]{1,6})$")
 TOO_MANY = "Too many requests - please try again in a while."
 PENDING_TTL_S = 600
 NAV_RE = r"^(td|sc|nw|ch|lv|aw|ah|hc|rm|ry|pf|wl|dy|cx|ex|hp|fl|al|hs|noop)(:|$)"
@@ -124,7 +132,8 @@ def acquire_single_instance(port: int) -> socket.socket:
 def build_dispatcher(service: BotService, access: Access, msg_limit: RateLimiter, popup_limit: RateLimiter,
                      bot_username: str = "", group_limit: Optional[RateLimiter] = None, tracker: Optional[TrackerService] = None,
                      news=None, chart_fn: Optional[Callable] = None, heavy_limit: Optional[RateLimiter] = None,
-                     clock: Callable[[], float] = time.monotonic, today_fn: Callable[[], date] = date.today) -> Dispatcher:
+                     clock: Callable[[], float] = time.monotonic, today_fn: Callable[[], date] = date.today,
+                     strategy: Optional[si.StrategyIntel] = None) -> Dispatcher:
     router = Router()
     group_limit = group_limit or RateLimiter(5, 60)              # replies per minute per group: never let one group flood
     heavy_limit = heavy_limit or RateLimiter(30, 3600)           # news + chart requests per user per hour
@@ -832,6 +841,138 @@ def build_dispatcher(service: BotService, access: Access, msg_limit: RateLimiter
             m7, m30 = await db(access.funnel, 7), await db(access.funnel, 30)
             await send(message, screens.funnel_screen(m7, m30))
 
+    # ------------------------------------------------------------------ Strategy Intelligence (OWNER ONLY, READ ONLY -- strategy_intel.py)
+    # Same owner filter as the admin commands above: for anyone else these commands fall through to the catch-all and are never
+    # revealed. Every number comes from mechanism/strategy_analytics through a read-only transaction.
+    def si_home(view: str, sid: Optional[int] = None, key: Optional[str] = None, version: Optional[str] = None) -> screens.Screen:
+        chosen, all_ = strategy.resolve(sid, key, version)
+        if view == "z" or not all_:
+            return ss.strategies_screen(all_)
+        if chosen is None:
+            return ss.choose_strategy(all_)
+        if view == "h":
+            return ss.health_screen(strategy.health(chosen))
+        if view == "b":
+            return ss.best_screen(chosen)
+        sm = strategy.summary(chosen)
+        return {"p": ss.performance_screen, "v": ss.directions_screen}.get(view, lambda s: ss.summary_screen(s, len(all_) > 1))(sm)
+
+    def si_list(sid: Optional[int], spec: si.ListSpec, offset: int) -> screens.Screen:
+        chosen, all_ = strategy.resolve(sid)
+        if chosen is None:
+            return ss.choose_strategy(all_)
+        page, ref = strategy.signals(chosen, spec, offset)
+        return ss.list_screen(chosen, page, spec, ref)
+
+    def si_detail(sid: int, ledger_id: int, tok: str, offset: int) -> screens.Screen:
+        chosen, _ = strategy.resolve(sid)
+        d = strategy.signal(chosen, ledger_id) if chosen else None
+        if d is None:
+            return screens.Screen("That signal is not available.")
+        history = []
+        if tok == "x":                                          # opened from a symbol's history: offer its other signals again
+            page, _ = strategy.symbol(chosen, d["identity"]["symbol"])
+            history = page["items"]
+        return ss.detail_screen(d, tok, offset, history)
+
+    def si_symbol(sym: str) -> screens.Screen:
+        chosen, all_ = strategy.resolve()
+        if chosen is None:
+            return ss.choose_strategy(all_)
+        page, d = strategy.symbol(chosen, sym)
+        return ss.detail_screen(d, "x", 0, page["items"]) if d else ss.not_found(sym)
+
+    def si_intent(intent: si.Intent) -> screens.Screen:
+        if intent.kind == "definition":
+            return ss.definition_screen(intent.term) or screens.Screen(ss.SI_HELP)
+        if intent.kind == "list":
+            return si_list(None, intent.spec, 0)
+        if intent.kind == "symbol":
+            return si_symbol(intent.symbol)
+        return si_home({"summary": "s", "performance": "p", "directions": "v", "health": "h", "strategies": "z", "best": "b"}[intent.kind])
+
+    async def si_screen(fn, *args) -> screens.Screen:
+        """Run one Strategy Intelligence query off the event loop. A failure is logged and answered with an honest 'unavailable' --
+        never a fallback number."""
+        if strategy is None:
+            return screens.Screen(si.UNAVAILABLE)
+        try:
+            return await db(fn, *args)
+        except Exception:                                      # noqa: BLE001 - database down / unexpected: say so, show nothing
+            log.exception("strategy intelligence query failed")
+            return screens.Screen(si.UNAVAILABLE)
+
+    async def si_gate(message: Message) -> bool:
+        return await rate_ok(message.from_user.id, message.answer, msg_limit)
+
+    @router.message(Command("si"), PRIVATE, OWNER_ONLY)
+    async def on_si(message: Message):
+        if await si_gate(message):
+            await send(message, screens.Screen(ss.SI_HELP))
+
+    @router.message(Command("strategies"), PRIVATE, OWNER_ONLY)
+    async def on_strategies(message: Message):
+        if await si_gate(message):
+            await send(message, await si_screen(si_home, "z"))
+
+    @router.message(Command("strategy", "performance", "directions", "health"), PRIVATE, OWNER_ONLY)
+    async def on_strategy_view(message: Message, command: CommandObject):
+        if not await si_gate(message):
+            return
+        view = {"strategy": "s", "performance": "p", "directions": "v", "health": "h"}[command.command.lower()]
+        toks = (command.args or "").split()
+        if len(toks) > 2 or (toks and not re.fullmatch(r"[a-z0-9_]{1,60}", toks[0])):
+            await send(message, ss.usage(toks[0] if toks else None))
+            return
+        await send(message, await si_screen(si_home, view, None, toks[0] if toks else None, toks[1] if len(toks) > 1 else None))
+
+    @router.message(Command("signals", "open", "resolved"), PRIVATE, OWNER_ONLY)
+    async def on_signals(message: Message, command: CommandObject):
+        if not await si_gate(message):
+            return
+        base = {"signals": si.ListSpec(), "open": si.ListSpec(lifecycle="a"), "resolved": si.ListSpec(lifecycle="r")}[command.command.lower()]
+        spec, bad = si.parse_list_args(command.args, base)
+        if spec is None:
+            await send(message, ss.usage(bad))
+            return
+        await send(message, await si_screen(si_list, None, spec, 0))
+
+    @router.message(Command("signal"), PRIVATE, OWNER_ONLY)
+    async def on_signal(message: Message, command: CommandObject):
+        if not await si_gate(message):
+            return
+        toks = (command.args or "").split()
+        sym = si.clean_symbol(toks[0]) if len(toks) == 1 else None
+        if not sym:
+            await message.answer("Send one symbol, for example <code>/signal VLGEA</code>.")
+            return
+        await send(message, await si_screen(si_symbol, sym))
+
+    @router.callback_query(F.data.startswith("si:"), OWNER_ONLY)
+    async def on_si_tap(cb: CallbackQuery):
+        if not await rate_ok(cb.from_user.id, lambda t: safe_answer(cb, t, show_alert=True), popup_limit):
+            return
+        data = cb.data or ""
+        if not SI_CALLBACK.match(data) or not isinstance(cb.message, Message):
+            await safe_answer(cb, "Unknown item.", show_alert=True)
+            return
+        await safe_answer(cb)
+        p = data.split(":")
+        if p[1] == "z":
+            screen = await si_screen(si_home, "z")
+        elif p[1] == "l":
+            screen = await si_screen(si_list, int(p[2]), si.ListSpec.from_token(p[3]), int(p[4]))
+        elif p[1] == "d":
+            screen = await si_screen(si_detail, int(p[2]), int(p[3]), p[4], int(p[5]))
+        else:
+            screen = await si_screen(si_home, p[1], int(p[2]))
+        await show(cb, screen)
+
+    @router.callback_query(F.data.startswith("si:"))                  # anyone else: reveal nothing about what the button was
+    async def on_si_tap_denied(cb: CallbackQuery):
+        if await rate_ok(cb.from_user.id, lambda t: safe_answer(cb, t, show_alert=True), popup_limit):
+            await safe_answer(cb, "Unknown item.", show_alert=True)
+
     # ------------------------------------------------------------------ private chat: typed text (menu buttons, price replies, tickers)
     async def take_pending(uid: int) -> Optional[Dict]:
         p = pending.get(uid)
@@ -884,6 +1025,11 @@ def build_dispatcher(service: BotService, access: Access, msg_limit: RateLimiter
         if len(toks) == 1 and SYMBOL_TOKEN.match(toks[0]):     # a bare ticker opens its card
             await open_card(message, toks[0].replace("$", "").upper().rstrip(".-"))
             return
+        if role == OWNER:                                      # typed questions -> a deterministic canonical query (strategy_intel)
+            intent = si.parse_intent(text)
+            if intent is not None:                             # already rate-limited by admit() above
+                await send(message, await si_screen(si_intent, intent))
+                return
         await message.answer("Type a ticker such as AAPL, or use the menu below.")
 
     # ------------------------------------------------------------------ group / supergroup: never data, only a pointer
@@ -998,7 +1144,8 @@ async def main() -> None:
                           RateLimiter(int(os.getenv("BOT_MSG_LIMIT", "120")), 3600),
                           RateLimiter(int(os.getenv("BOT_POPUP_LIMIT", "300")), 3600),
                           me.username, RateLimiter(int(os.getenv("BOT_GROUP_LIMIT", "5")), 60), tracker=tracker,
-                          news=NewsService(store), heavy_limit=RateLimiter(int(os.getenv("BOT_HEAVY_LIMIT", "30")), 3600))
+                          news=NewsService(store), heavy_limit=RateLimiter(int(os.getenv("BOT_HEAVY_LIMIT", "30")), 3600),
+                          strategy=si.StrategyIntel(si.readonly_fetch(database)))
     if owner_id is None:
         log.warning("BOT_OWNER_ID is not set: nobody new can be let in (fail closed). Send /start to @%s to see your Telegram id, "
                     "put it in .env as BOT_OWNER_ID and restart.", me.username)

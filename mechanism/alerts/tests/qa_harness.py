@@ -411,7 +411,8 @@ def _sender_ids(update):
 
 def drive(updates, svc=None, msg_limit=None, popup_limit=None, group_limit=None, stale_callbacks=False,
           bot_username=BOT_USERNAME, check_html=True, owner_id=OWNER_ID, enroll=True, heavy_limit=None, refuse_edits=None,
-          with_news=True, chart_fn=None, today=TODAY, clock=None, access_mode="approve", max_members=25, max_pending=100):
+          with_news=True, chart_fn=None, today=TODAY, clock=None, access_mode="approve", max_members=25, max_pending=100,
+          strategy=None):
     """Push raw updates through the real dispatcher. Returns (service, recorded Telegram calls).
 
     `enroll=True` (default) first admits every sender as an active member AND marks them as having accepted the notice, so the
@@ -440,7 +441,7 @@ def drive(updates, svc=None, msg_limit=None, popup_limit=None, group_limit=None,
                               bot_username=bot_username, group_limit=group_limit or bs.RateLimiter(100, 60),
                               tracker=TrackerService(svc.store, today=lambda: today), news=news, chart_fn=chart_fn or fake_chart,
                               heavy_limit=heavy_limit or bs.RateLimiter(500, 3600), today_fn=lambda: today,
-                              **({"clock": clock} if clock else {}))
+                              **({"clock": clock} if clock else {}), strategy=strategy)
         for u in updates:
             await dp.feed_raw_update(bot, u)
         return sess.calls
