@@ -395,7 +395,7 @@ jobs:
           cat -n /tmp/migration_files.txt
           # A floor, not a pin -- this must rise every time a new numbered init mount is added, so a future
           # migration silently missing from docker-compose.yml itself (not just from this job) still gets caught.
-          test "$n" -ge 18 || { echo "Expected at least 18 migration files from docker-compose.yml, found $n -- its init-mount list format may have changed"; exit 1; }
+          test "$n" -ge 21 || { echo "Expected at least 21 migration files from docker-compose.yml, found $n -- its init-mount list format may have changed"; exit 1; }
 
       - name: Apply every discovered migration file, in that exact order
         # This is the exact regression guard for both bugs found during Phase 2 local validation
@@ -474,6 +474,30 @@ jobs:
             DELETE FROM telegram_post_delivery WHERE market_session = '2099-01-15' AND post_kind = 'ci_test_kind';
           "
           echo "telegram_post_delivery structure and claim/reclaim guard verified."
+
+      - name: Verify signal_ledger's evaluator flag columns and their value constraints (migration 21)
+        # The evaluator's hold/ambiguity semantics depend on these existing exactly: two separate nullable
+        # columns (a resolution's caveat vs. a hold on an unresolved row), each with a fixed vocabulary.
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "
+            DO \$\$
+            BEGIN
+              IF (SELECT count(*) FROM information_schema.columns WHERE table_name = 'signal_ledger'
+                    AND column_name IN ('resolution_flag', 'evaluation_flag') AND is_nullable = 'YES') <> 2 THEN
+                RAISE EXCEPTION 'signal_ledger.resolution_flag / evaluation_flag missing or not nullable';
+              END IF;
+              IF COALESCE((SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'signal_ledger_resolution_flag_check'), '')
+                   NOT LIKE '%same_bar_stop_and_target%' THEN
+                RAISE EXCEPTION 'signal_ledger_resolution_flag_check missing';
+              END IF;
+              IF COALESCE((SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'signal_ledger_evaluation_flag_check'), '')
+                   NOT LIKE '%split_suspect%' THEN
+                RAISE EXCEPTION 'signal_ledger_evaluation_flag_check missing';
+              END IF;
+            END
+            \$\$;
+          "
+          echo "signal_ledger evaluator flags verified."
 
       - name: Verify expected views exist (3, matching Phase 2's verified count)
         run: |

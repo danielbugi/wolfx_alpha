@@ -1,8 +1,12 @@
 [Unit]
-Description=First Light: signal ledger outcome evaluator (23:50 Israel, after the daily pipeline)
+Description=First Light: signal ledger outcome evaluator (03:30 Israel, after the daily pipeline and its 01:00 retry)
 
+# 03:30, not right after the 23:45 pipeline: when that run fails its freshness gate, the 01:00 retry
+# is the one that lands the session (a full run takes ~87 min, so it finishes ~02:30). Evaluating
+# earlier only no-ops and delays resolution a day. An overlap with a very slow retry is still safe --
+# every evaluator write is guarded -- it just resolves that session a day later.
 [Timer]
-OnCalendar=*-*-* 23:50:00 Asia/Jerusalem
+OnCalendar=*-*-* 03:30:00 Asia/Jerusalem
 Persistent=true
 RandomizedDelaySec=60
 
