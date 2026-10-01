@@ -106,6 +106,12 @@ own deployment history (instant rollback to any previous build from the Vercel d
 5. Verify with a real query afterward (the new table/column exists, has the expected constraints) —
    never assume a clean `psql` exit alone proves correctness.
 
+Migration 22 (`add_research_observation_tables.sql`, the research layer) has its own gate:
+`python mechanism/check_research_migration_preflight.py` before applying (read-only: dependencies present, is this a
+first apply?) and `--verify` after (every table, key, CHECK and all eight immutability triggers present, and the row
+counts you expect). It only creates the tables -- capture stays off until `RESEARCH_CAPTURE_ENABLED=1` is set
+deliberately, in a separate step.
+
 **Never** apply a migration to production that hasn't first gone through CI's fresh-schema bootstrap
 — a migration that only works against an already-drifted local schema is exactly how silent schema
 drift happens.

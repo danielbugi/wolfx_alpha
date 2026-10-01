@@ -70,6 +70,7 @@ All [optional], `mechanism/shared/config.py`, sane hardcoded fallbacks:
 | `VOLUME_SPIKE_THRESHOLD` | `1.5` |
 | `ML_LOOKFORWARD_DAYS` | `10` — **note the real name**: a bare `LOOKFORWARD_DAYS` is not read by any code; that exact mismatch was a real bug in `docker/.env.example` until the 2026-09-25 audit fixed it |
 | `ML_MIN_DATA_POINTS` | `50` |
+| `RESEARCH_CAPTURE_ENABLED` | unset = **off**. `1`/`true`/`yes`/`on` makes the screener record every candidate into the research tables (`mechanism/research/observer.py`). Requires migration 22 on the target database; never set it before that is applied and verified. A capture failure is logged and never affects the screening result or the ledger write |
 
 ## Trading-day / freshness gate
 

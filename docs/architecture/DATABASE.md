@@ -74,6 +74,23 @@ is why `ml_predictions` uses an `INTEGER` PK instead of every other table's `BIG
 a known, accepted inconsistency, not a bug to "fix" casually). `inactive_symbols` (delisted/removed
 from the universe).
 
+### Research layer (Release B -- migration 22, **written and CI-tested, NOT applied to production**)
+`feature_set_registry` (one row per feature-set version: the manifest, its hash, the implementation ref) ·
+`feature_snapshot` (direction- and strategy-neutral market state for `(symbol, session_date, feature_set_version)`,
+built only from `stock_prices` -- NaN/inf and unavailable inputs are JSON null plus a `missing_features` entry, never 0) ·
+`candidate_observation` (one row per strategy decision `(strategy_id, symbol, session_date, direction)` for EVERY
+candidate the strategy produced, near-breakouts and guard-rejected ones included, with the guard verdict and
+named reasons, rank, ML status, and whether the ledger would track it) · `candidate_capture_run` (one row per
+capture attempt with funnel counters -- the only mutable table) · `research_maintenance_log` /
+`research_maintenance_audit` (the audited human-only escape hatch for the immutable tables).
+The first four are written by `mechanism/research/observer.py` (default off, `RESEARCH_CAPTURE_ENABLED`) **after**
+the screener's own output is saved and before the ledger write; first valid write wins (`ON CONFLICT DO NOTHING`),
+and a different re-run is counted as `hash_drift`, never applied. `signal_ledger` rows carry the lineage
+(`observation_id`, `feature_snapshot_id`, `feature_set_version`) when capture ran; NULL otherwise. Application code
+cannot reach the maintenance hatch (pinned by `mechanism/research/tests/test_import_separation.py`).
+Applying it: `python mechanism/check_research_migration_preflight.py` before, `--verify` after -- see
+[../operations/DEPLOYMENT.md](../operations/DEPLOYMENT.md) §4.
+
 ### Digest / channel content
 `digest_runs` (one row per US session actually sent) · `digest_stocks` (**every** liquid stock's
 facts for that session — close, 1-day %, volume ×, range × ATR, distance below the 20-day high,
