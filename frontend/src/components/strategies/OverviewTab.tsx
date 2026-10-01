@@ -1,14 +1,18 @@
 // File: frontend/src/components/strategies/OverviewTab.tsx
 import React from 'react';
-import type { DataHealth, StrategySummary } from '@/services/strategyApi';
+import type { DataHealth, ResearchSummary, StrategySummary } from '@/services/strategyApi';
 import { formatCount, formatSession } from '@/lib/strategyFormat';
 import { Btn } from '@/components/telegram/ui';
 import { DistributionBar, HealthBadge, MetricCard, Section, StatTile } from '@/components/strategies/ui';
+import ResearchFunnel from '@/components/strategies/ResearchFunnel';
+import { ResearchLoadFailed } from '@/components/strategies/ResearchUi';
 
-export default function OverviewTab({ summary, health, onOpenTab }: {
+export default function OverviewTab({ summary, health, research = null, researchError = null, onOpenTab }: {
   summary: StrategySummary;
   health: DataHealth | null;
-  onOpenTab: (tab: 'performance' | 'health' | 'signals') => void;
+  research?: ResearchSummary | null;
+  researchError?: string | null;
+  onOpenTab: (tab: 'performance' | 'health' | 'signals' | 'candidates' | 'research') => void;
 }) {
   const t = summary.tracking;
   const p = summary.performance;
@@ -20,6 +24,9 @@ export default function OverviewTab({ summary, health, onOpenTab }: {
         <StatTile emphasis label="Resolved" value={formatCount(t.resolved)} hint="stop, target or time exit reached" />
         <StatTile emphasis label="Held" value={formatCount(t.held)} hint="paused for review (split suspect)" />
       </div>
+
+      {research && <ResearchFunnel research={research} onOpenTab={onOpenTab} />}
+      {!research && researchError && <ResearchLoadFailed message={researchError} />}
 
       <Section title="Direction" description="Signal counts by breakout direction. A count imbalance describes what the screener found, not how either side performs.">
         <DistributionBar

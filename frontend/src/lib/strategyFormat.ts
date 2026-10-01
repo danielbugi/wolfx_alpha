@@ -2,7 +2,9 @@
 // Presentation only for /strategies. No statistic is derived here: every value, sample size and state comes from the
 // Strategy Intelligence API (mechanism/strategy_analytics owns the definitions). These helpers turn a backend Metric
 // into text without ever turning "nothing measured" into a 0, and translate machine states into readable labels.
-import type { EvaluationState, Lifecycle, Metric, PriceDataState, SignalStatus } from '@/services/strategyApi';
+import type {
+  CaptureStatus, CountMetric, EvaluationState, GuardStatus, Lifecycle, Metric, PriceDataState, SignalStatus,
+} from '@/services/strategyApi';
 
 /** 'r' is a signed result (+1.00R / −1.00R); 'magnitude_r' is an unsigned size in R (e.g. MAE, never read as profit). */
 export type MetricKind = 'rate' | 'r' | 'magnitude_r' | 'sessions';
@@ -127,4 +129,72 @@ export const CAPABILITY_LABEL: Record<string, string> = {
 
 export function humanize(key: string): string {
   return key.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+}
+
+// ---------------------------------------------------------------- Release B research layer (presentation only)
+export const NOT_COLLECTED_NOTE = 'Not collected — Release B';
+
+export interface CountDisplay {
+  text: string;
+  note: string;
+  tone: 'ok' | 'empty' | 'unavailable';
+}
+
+/** A research count by its state: only a measured ('ok') value is a number; everything else is "—" with the reason.
+ * `reasonFirst`: once research IS collected, a stage the screener does not record says so in its own words rather than
+ * "Not collected — Release B". */
+export function describeCount(c: CountMetric | undefined | null, opts: { reasonFirst?: boolean } = {}): CountDisplay {
+  if (!c || c.state === 'not_available') {
+    if (opts.reasonFirst && c?.reason) return { text: '—', note: c.reason, tone: 'unavailable' };
+    return { text: '—', note: c?.release ? `Not collected — Release ${c.release}` : NOT_COLLECTED_NOTE, tone: 'unavailable' };
+  }
+  if (c.state === 'no_data' || c.value === null) return { text: '—', note: c.reason ?? 'No data yet', tone: 'empty' };
+  return { text: formatCount(c.value), note: '', tone: 'ok' };
+}
+
+export const CAPTURE_STATUS_META: Record<CaptureStatus, { label: string; chip: string; dot: string; text: string; panel: string }> = {
+  complete: { label: 'COMPLETE', chip: 'bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500', text: 'text-emerald-700', panel: 'border-emerald-200 bg-emerald-50' },
+  partial: { label: 'PARTIAL', chip: 'bg-amber-100 text-amber-900', dot: 'bg-amber-500', text: 'text-amber-800', panel: 'border-amber-300 bg-amber-50' },
+  failed: { label: 'FAILED', chip: 'bg-red-100 text-red-700', dot: 'bg-red-500', text: 'text-red-700', panel: 'border-red-200 bg-red-50' },
+  running: { label: 'RUNNING', chip: 'bg-sky-50 text-sky-700', dot: 'bg-sky-500', text: 'text-sky-700', panel: 'border-sky-200 bg-sky-50' },
+  disabled: { label: 'DISABLED', chip: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400', text: 'text-slate-600', panel: 'border-slate-200 bg-slate-50' },
+  not_available: { label: 'NOT COLLECTED', chip: 'bg-slate-100 text-slate-500', dot: 'bg-slate-300', text: 'text-slate-500', panel: 'border-slate-200 bg-slate-50' },
+};
+
+export const GUARD_LABEL: Record<GuardStatus, string> = { passed: 'Passed', rejected: 'Rejected', not_evaluated: 'Not evaluated' };
+
+export const GUARD_REASON_LABEL: Record<string, string> = {
+  illiquid_dollar_volume: 'Illiquid (dollar volume)',
+  insufficient_history: 'Insufficient history',
+  price_discontinuity: 'Price discontinuity',
+};
+
+/** Seconds as '2m 02s' / '48.4s'. */
+export function formatRuntime(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined) return '—';
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const m = Math.floor(seconds / 60);
+  return `${m}m ${String(Math.round(seconds - m * 60)).padStart(2, '0')}s`;
+}
+
+export function formatNumber(v: number | null | undefined, digits = 2): string {
+  return v === null || v === undefined ? '—' : v.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+/** A stored T0 feature value by the unit its manifest declares. null is "Missing" (never 0, never blank). */
+export function formatFeatureValue(value: number | string | boolean | null, unit: string | null): string {
+  if (value === null || value === undefined) return 'Missing';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'string') return unit === 'date' ? formatSession(value) : value;
+  switch (unit) {
+    case 'price': return formatPrice(value);
+    case 'usd': return `$${Math.round(value).toLocaleString('en-US')}`;
+    case 'percent': return `${formatNumber(value, 2)}%`;
+    case 'fraction': return formatNumber(value, 3);
+    case 'percentile': return `${formatNumber(value, 1)}`;
+    case 'shares':
+    case 'count': return Math.round(value).toLocaleString('en-US');
+    case 'ratio': return `${formatNumber(value, 2)}×`;
+    default: return formatNumber(value, 2);
+  }
 }

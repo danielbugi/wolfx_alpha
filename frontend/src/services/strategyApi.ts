@@ -295,13 +295,225 @@ export interface SignalQuery {
   offset: number;
 }
 
+// ---------------------------------------------------------------- Release B research layer
+// GET /api/strategies/{key}/{version}/research/*  (mechanism/strategy_analytics/research.py). Before migration 22 every
+// list answers 200 with availability.state === 'not_available' and no numbers; a count is never 0 unless it was measured.
+export type AvailabilityState = 'ok' | 'no_data' | 'not_available';
+
+export interface Availability {
+  state: AvailabilityState;
+  release: string;
+  reason: string | null;
+  capture_runs: number | null;
+  schema: Record<string, boolean>;
+}
+
+/** A count that may be unmeasured: `value` is null unless state is 'ok'. */
+export interface CountMetric {
+  value: number | null;
+  state: MetricState;
+  reason?: string;
+  release?: string;
+  /** ledger stage only: rows carrying this session's observation ids */
+  linked?: number;
+}
+
+export interface FunnelStage extends CountMetric {
+  key: 'evaluated' | 'candidates' | 'guard_passed' | 'ranked' | 'selected' | 'ledger_signals';
+  label: string;
+}
+
+export type CaptureStatus = 'complete' | 'partial' | 'failed' | 'running' | 'disabled' | 'not_available';
+
+export interface FeatureSetInfo {
+  version: string;
+  description: string | null;
+  extends: string | null;
+  manifest_hash: string;
+  feature_count: number | null;
+  registered_at: string;
+}
+
+export interface ResearchSummary {
+  strategy: StrategyRef;
+  availability: Availability;
+  definitions: Record<string, string>;
+  forward_outcomes: Metric;
+  latest_session: { session_date: string; run_id: number; capture_status: CaptureStatus; finished_at: string | null } | null;
+  feature_set: { current: string | null; registered: FeatureSetInfo[] };
+  funnel: { session_date: string | null; stages: FunnelStage[] };
+  cards: Record<'observations' | 'snapshots' | 'sessions_captured' | 'bullish' | 'bearish' | 'guard_passed'
+    | 'guard_rejected' | 'guard_not_evaluated' | 'selected', CountMetric>;
+  rates: Record<'guard_pass_rate' | 'selected_rate' | 'missing_feature_rate' | 'snapshot_coverage' | 'capture_coverage', Metric>;
+}
+
+export interface RunCounters {
+  candidates: number | null;
+  captured: number | null;
+  already_captured: number | null;
+  stale_skipped: number | null;
+  snapshot_skipped: number | null;
+  invalid_skipped: number | null;
+  guard_rejected: number | null;
+  guard_not_evaluated: number | null;
+  hash_drift: number | null;
+  snapshot_drift: number | null;
+  defaulted_flagged: number | null;
+}
+
+export interface MissingStats {
+  snapshots: number;
+  partial_snapshots: number;
+  missing_slots: number;
+  total_slots: number;
+  rate: Metric;
+}
+
+export interface CaptureRun {
+  id: number | null;
+  session_date: string;
+  stored_status: string | null;
+  health: { status: CaptureStatus; reasons: string[]; notes: string[] };
+  feature_set_version: string | null;
+  run_attempts: number;
+  started_at: string | null;
+  finished_at: string | null;
+  runtime_seconds: number | null;
+  universe_size: number | null;
+  counters: RunCounters;
+  accounted: number | null;
+  unaccounted: number | null;
+  skipped_symbol_count: number;
+  error: string | null;
+  code_ref: string | null;
+  missing_features?: MissingStats | null;
+  ledger_signals?: number;
+  skipped_symbols?: Record<string, string>;
+}
+
+export interface CaptureRunsResponse {
+  strategy: StrategyRef;
+  availability: Availability;
+  stuck_after_minutes: number;
+  definitions: Record<string, string>;
+  overall: { status: CaptureStatus; session_date: string | null; reason: string | null };
+  latest: CaptureRun | null;
+  history: CaptureRun[];
+}
+
+export type GuardStatus = 'passed' | 'rejected' | 'not_evaluated';
+
+export interface CandidateItem {
+  id: number;
+  symbol: string;
+  session_date: string;
+  direction: Direction;
+  candidate_class: string;
+  triggered: boolean;
+  entry_close: number | null;
+  breakout_dist_atr: number | null;
+  distance_to_channel_pct: number | null;
+  passed_guard: boolean | null;
+  guard_status: GuardStatus;
+  guard_reasons: string[];
+  alignment_score: number | null;
+  quality_grade: string | null;
+  combined_score: number | null;
+  session_rank: number | null;
+  ml_status: string | null;
+  ml_score: number | null;
+  selected: boolean;
+  snapshot_id: number;
+  snapshot_status: 'complete' | 'partial';
+  missing_count: number | null;
+  ledger_signal_id: number | null;
+}
+
+export type CandidateSort = 'rank' | 'combined_desc' | 'alignment_desc' | 'breakout_desc' | 'symbol' | 'grade';
+
+export interface CandidatePage {
+  strategy: StrategyRef;
+  availability: Availability;
+  items: CandidateItem[];
+  /** null when research data is unavailable -- never 0 */
+  total: number | null;
+  limit: number;
+  offset: number;
+  sort: CandidateSort;
+  has_more: boolean;
+  session_date: string | null;
+  facets: { classes: { value: string; count: number }[]; grades: { value: string; count: number }[] };
+}
+
+export interface CandidateQuery {
+  session_date?: string;
+  direction?: Direction;
+  guard?: GuardStatus;
+  selected?: boolean;
+  symbol?: string;
+  candidate_class?: string;
+  grade?: string;
+  sort?: CandidateSort;
+  limit: number;
+  offset: number;
+}
+
+export interface CandidateDetail {
+  id: number;
+  strategy: StrategyRef;
+  identity: { symbol: string; session_date: string; bar_date: string; direction: Direction; strategy_version: string };
+  strategy_context: {
+    candidate_class: string;
+    triggered: boolean;
+    levels: { entry_close: number | null; channel_high_prev: number | null; channel_low_prev: number | null };
+    breakout_dist_atr: number | null;
+    distance_to_channel_pct: number | null;
+    guard: { status: GuardStatus; reasons: string[] };
+    alignment_score: number | null;
+    quality_grade: string | null;
+    combined_score: number | null;
+    session_rank: number | null;
+    selected: boolean;
+    screener_defaults: string[];
+    model: { status: string | null; score: number | null; confidence: string | null; version: string | null };
+    extension: Record<string, unknown>;
+  };
+  capture: { run_id: number; run_status: string; captured_at: string; run_finished_at: string | null; code_ref: string | null };
+  snapshot: { id: number; feature_set_version: string; snapshot_status: 'complete' | 'partial'; missing_count: number | null };
+  lineage: {
+    observation_id: number;
+    snapshot_id: number;
+    signal: { id: number; signal_date: string; status: SignalStatus; lifecycle: Lifecycle; outcome_r: number | null } | null;
+  };
+}
+
+export interface SnapshotFeature {
+  name: string;
+  value: number | string | boolean | null;
+  unit: string | null;
+  definition: string | null;
+  missing: boolean;
+}
+
+export interface SnapshotDetail {
+  id: number;
+  strategy: StrategyRef;
+  identity: { symbol: string; session_date: string; bar_date: string; feature_set_version: string };
+  snapshot_status: 'complete' | 'partial';
+  missing_features: string[];
+  groups: { key: string; label: string; items: SnapshotFeature[] }[];
+  feature_set: { version: string; manifest_hash: string; description: string | null };
+  provenance: { content_hash: string; code_ref: string | null; captured_at: string };
+  observations: { id: number; direction: Direction; candidate_class: string; session_date: string }[];
+}
+
 export type ApiError = ControlErrorInfo;
 
 /** Maps any failure (network, 401 after the client's own refresh-and-retry, 404, 422) to {code, message}. */
 export const toApiError = (err: unknown): ApiError => toControlError(err);
 
-function cleanQuery(q: SignalQuery): Record<string, string | number> {
-  const out: Record<string, string | number> = {};
+function cleanQuery(q: SignalQuery | CandidateQuery): Record<string, string | number | boolean> {
+  const out: Record<string, string | number | boolean> = {};
   for (const [k, v] of Object.entries(q)) {
     if (v === undefined || v === null || v === '') continue;
     out[k] = typeof v === 'string' ? v.trim() : v;
@@ -322,4 +534,14 @@ export const strategyApi = {
     (await apiClient.get<SignalPage>(`${base(key, version)}/signals`, { params: cleanQuery(query) })).data,
   signal: async (key: string, version: string, id: number): Promise<SignalDetail> =>
     (await apiClient.get<SignalDetail>(`${base(key, version)}/signals/${id}`)).data,
+  researchSummary: async (key: string, version: string): Promise<ResearchSummary> =>
+    (await apiClient.get<ResearchSummary>(`${base(key, version)}/research/summary`)).data,
+  captureRuns: async (key: string, version: string, limit = 30): Promise<CaptureRunsResponse> =>
+    (await apiClient.get<CaptureRunsResponse>(`${base(key, version)}/research/capture-runs`, { params: { limit } })).data,
+  candidates: async (key: string, version: string, query: CandidateQuery): Promise<CandidatePage> =>
+    (await apiClient.get<CandidatePage>(`${base(key, version)}/research/candidates`, { params: cleanQuery(query) })).data,
+  candidate: async (key: string, version: string, id: number): Promise<CandidateDetail> =>
+    (await apiClient.get<CandidateDetail>(`${base(key, version)}/research/candidates/${id}`)).data,
+  snapshot: async (key: string, version: string, id: number): Promise<SnapshotDetail> =>
+    (await apiClient.get<SnapshotDetail>(`${base(key, version)}/research/snapshots/${id}`)).data,
 };
