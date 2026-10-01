@@ -65,7 +65,7 @@ def _schema_env(migrations):
     finally:
         try:
             admin.rollback()
-            admin.cursor().execute(f'DROP SCHEMA "{schema}" CASCADE')
+            admin.cursor().execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
             admin.commit()
         finally:
             admin.close()
@@ -146,8 +146,10 @@ class Seed:
         run_id = run_id or self.run(session)
         row = dict(strategy_id=self.strategy_id(), strategy_version="v1", symbol=symbol, session_date=session,
                    direction=direction, bar_date=session, session_source="explicit",
-                   signal_type="bullish_breakout", triggered=True, entry_close=10.5, channel_high_prev=10,
-                   channel_low_prev=8, distance_to_channel_pct=1.5, passed_guard=True, guard_reasons=None,
+                   signal_type="bullish_breakout" if direction == 1 else "bearish_breakout", triggered=True,
+                   entry_close=10.5, channel_high_prev=10,
+                   channel_low_prev=8, distance_to_channel_pct=1.5, atr_source="measured", passed_guard=True,
+                   guard_reasons=None,
                    ml_status="not_processed", tracked_intent=True, snapshot_id=snapshot_id,
                    capture_run_id=run_id, capture_hash="c" * 64)
         row.update(kw)
@@ -156,16 +158,123 @@ class Seed:
             f"INSERT INTO candidate_observation ({cols}) VALUES ({', '.join('%(' + k + ')s' for k in row)}) RETURNING id",
             row).fetchone()[0]
 
-    def ticket(self, approved=True, closed=False, age_minutes=0, table="candidate_observation"):
+    def ticket(self, approved=True, closed=False, expired=False, table="candidate_observation"):
+        """A ticket row inserted directly (superuser / owner connection) -- for CHECK-constraint and read-layer
+        tests. It does NOT authorise anything: only research_maintenance_begin() inside the transaction does
+        (see test_maintenance_hatch.py)."""
         cur = self.execute(
             "INSERT INTO research_maintenance_log (opened_by, reason, target_table, opened_at, approved_by, "
-            "approved_at, closed_at) VALUES ('tester', 'unit test', %s, NOW() - make_interval(mins => %s), "
-            "%s, %s, %s) RETURNING id",
-            (table, age_minutes, "owner" if approved else None,
-             "2099-01-01" if approved else None, "2099-01-01" if closed else None))
+            "approved_at, expires_at, closed_at) VALUES ('tester', 'unit test ticket', %s, NOW() - INTERVAL '3 hours', "
+            "%s, %s, %s, %s) RETURNING id",
+            (table, "owner" if approved else None,
+             (None if not approved else "2099-01-01 00:00+00" if not expired else "2000-01-01 00:00+00"),
+             (None if not approved else "2099-01-01 01:00+00" if not expired else "2000-01-01 01:00+00"),
+             "2099-01-01 00:30+00" if closed else None))
         return cur.fetchone()[0]
 
 
 @pytest.fixture
 def seed(conn):
     return Seed(conn)
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Role-model fixtures. They need a SUPERUSER connection (CREATE ROLE, ALTER ... OWNER, SET SESSION AUTHORIZATION).
+# The CI database user is a superuser, so these must run there (a skip is a CI failure). Locally the default dev
+# role is not a superuser: point DB_* at a disposable cluster to run them.
+# ---------------------------------------------------------------------------------------------------------------
+ROLES_SQL = os.path.join(ROOT, "deploy", "db", "research_roles.sql")
+ROLES_VERIFY_SQL = os.path.join(ROOT, "deploy", "db", "research_roles_verify.sql")
+ROLES_ROLLBACK_SQL = os.path.join(ROOT, "deploy", "db", "research_roles_rollback.sql")
+
+
+def read_sql(path, names=None):
+    """The script text with the fixed role names replaced by throwaway ones (`names`: fixed -> throwaway)."""
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
+    for fixed in sorted(names or {}, key=len, reverse=True):
+        text = text.replace(fixed, names[fixed])
+    return text
+
+
+def strip_psql_meta(text):
+    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("\\"))
+
+
+class RoleEnv:
+    def __init__(self, schema, connect, prefix, admin):
+        self.schema, self.connect, self.admin = schema, connect, admin
+        self.names = {"donchian_owner": f"{prefix}_owner", "donchian_app": f"{prefix}_app",
+                      "donchian_research_admin": f"{prefix}_admin"}
+        self.owner, self.app, self.group = (self.names[k] for k in ("donchian_owner", "donchian_app",
+                                                                    "donchian_research_admin"))
+        self.alice, self.bob, self.carol = f"{prefix}_alice", f"{prefix}_bob", f"{prefix}_carol"
+        self.prefix = prefix
+
+    def sql(self, path):
+        return strip_psql_meta(read_sql(path, self.names))
+
+    def run_script(self, path, **gucs):
+        cur = self.admin.cursor()
+        cur.execute(f'SET search_path TO "{self.schema}"')
+        for k, v in gucs.items():
+            cur.execute("SELECT set_config(%s, %s, false)", (k.replace("__", "."), v))
+        self.admin.commit()  # session-level SETs must survive a ROLLBACK inside the script
+        cur.execute(self.sql(path))
+        self.admin.commit()
+
+    def as_user(self, conn, role):
+        """Switch the connection's session_user (superuser connections only). Commits first."""
+        conn.commit()
+        conn.autocommit = True
+        conn.cursor().execute(f'SET SESSION AUTHORIZATION "{role}"')
+        conn.autocommit = False
+
+    def back_to_super(self, conn):
+        conn.rollback()
+        conn.autocommit = True
+        conn.cursor().execute("RESET SESSION AUTHORIZATION")
+        conn.autocommit = False
+
+
+@pytest.fixture
+def role_env(schema_env):
+    import psycopg2
+    schema, connect = schema_env
+    admin = psycopg2.connect(**_connect_args())
+    cur = admin.cursor()
+    cur.execute("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
+    if not cur.fetchone()[0]:
+        admin.close()
+        pytest.skip("role-model tests need a superuser DB role (CI's trading_user is one; locally use a disposable "
+                    "cluster via DB_HOST/DB_PORT/DB_USER)")
+    prefix = "rbt_" + uuid.uuid4().hex[:8]
+    env = RoleEnv(schema, connect, prefix, admin)
+    try:
+        yield env
+    finally:
+        try:
+            admin.rollback()
+            cur = admin.cursor()
+            cur.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+            admin.commit()
+            for r in (env.alice, env.bob, env.carol, env.app, env.group, env.owner):
+                cur.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (r,))
+                if cur.fetchone():
+                    cur.execute(f'DROP OWNED BY "{r}" CASCADE')
+                    cur.execute(f'DROP ROLE "{r}"')
+            admin.commit()
+        finally:
+            admin.close()
+
+
+@pytest.fixture
+def roles(role_env):
+    """The role model applied to the throwaway schema, plus three maintenance people (alice, bob, carol), each with
+    their own login role that is a member of the research-admin group."""
+    role_env.run_script(ROLES_SQL)
+    cur = role_env.admin.cursor()
+    for person in (role_env.alice, role_env.bob, role_env.carol):
+        cur.execute(f'CREATE ROLE "{person}" LOGIN IN ROLE "{role_env.group}"')
+    role_env.admin.commit()
+    return role_env

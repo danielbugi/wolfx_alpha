@@ -23,30 +23,29 @@ def _fails(conn, sql, params=None, match=None):
     return exc.value
 
 
-def _ticket_setting(conn, ticket):
-    conn.cursor().execute("SELECT set_config('research.maintenance_ticket', %s, true)", (str(ticket),))
-
-
 def test_all_tables_exist_and_migration_is_reapplyable(conn):
     cur = conn.cursor()
     cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()")
     names = {r[0] for r in cur.fetchall()}
     assert {"feature_set_registry", "feature_snapshot", "candidate_observation", "candidate_capture_run",
-            "research_maintenance_log", "research_maintenance_audit"} <= names
+            "research_maintenance_log", "research_maintenance_audit", "research_maintenance_session",
+            "research_capture_activation"} <= names
     with open(MIGRATION, encoding="utf-8") as fh:
         sql = fh.read()
     cur.execute(sql)  # IF NOT EXISTS / existence-checked: a second apply is a no-op
     # Scoped to this schema: on the CI database the migration is also applied in `public`.
     cur.execute("SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid "
-                "JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = current_schema() "
-                "AND (t.tgname LIKE '%%immutable%%' OR t.tgname LIKE '%%append_only%%')")
-    assert cur.fetchone()[0] == 8  # 3 tables x (row + truncate) + audit x 2
+                "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                "JOIN pg_proc p ON p.oid = t.tgfoid AND left(p.proname, 9) = 'research_' "
+                "WHERE n.nspname = current_schema() AND NOT t.tgisinternal AND t.tgenabled = 'A'")
+    assert cur.fetchone()[0] == 14  # 7 tables x (row/update-delete + truncate)
 
 
 def test_migration_writes_no_rows(conn):
     cur = conn.cursor()
     for t in ("feature_set_registry", "feature_snapshot", "candidate_observation", "candidate_capture_run",
-              "research_maintenance_log", "research_maintenance_audit"):
+              "research_maintenance_log", "research_maintenance_audit", "research_maintenance_session",
+              "research_capture_activation"):
         cur.execute(f"SELECT count(*) FROM {t}")
         assert cur.fetchone()[0] == 0, t
 
@@ -170,89 +169,23 @@ def test_update_and_delete_are_rejected(conn, seed, table, col):
 
 def test_truncate_is_rejected(conn, seed):
     seed.observation(symbol="AAA")
-    _fails(conn, "TRUNCATE candidate_observation", match="immutable")
-    _fails(conn, "TRUNCATE feature_snapshot, candidate_observation, feature_set_registry")
+    # the immutable tables are FK-referenced (signal_ledger lineage), so name every referrer in the statement
+    _fails(conn, "TRUNCATE candidate_observation, signal_ledger", match="immutable")
+    _fails(conn, "TRUNCATE feature_snapshot, candidate_observation, feature_set_registry, signal_ledger")
     cur = conn.cursor()
     cur.execute("SELECT count(*) FROM candidate_observation")
     assert cur.fetchone()[0] == 1
 
 
-def test_capture_run_and_ticket_tables_stay_mutable(conn, seed):
+def test_capture_run_stays_mutable(conn, seed):
     run = seed.run()
-    ticket = seed.ticket()
     cur = conn.cursor()
-    cur.execute("UPDATE candidate_capture_run SET status = 'complete', captured = 3 WHERE id = %s", (run,))
-    cur.execute("UPDATE research_maintenance_log SET closed_at = NOW() WHERE id = %s", (ticket,))
+    cur.execute("UPDATE candidate_capture_run SET status = 'complete', run_finished_at = NOW(), candidates = 3, "
+                "captured = 3, already_captured = 0, stale_skipped = 0, snapshot_skipped = 0, invalid_skipped = 0, "
+                "guard_not_evaluated = 0 WHERE id = %s", (run,))
 
 
-def test_unapproved_ticket_does_not_open_the_hatch(conn, seed):
-    seed.observation(symbol="AAA")
-    _ticket_setting(conn, seed.ticket(approved=False))
-    _fails(conn, "UPDATE candidate_observation SET symbol = 'ZZZ'", match="immutable")
-
-
-@pytest.mark.parametrize("kw", [dict(closed=True), dict(age_minutes=61)])
-def test_closed_and_stale_tickets_do_not_open_the_hatch(conn, seed, kw):
-    seed.observation(symbol="AAA")
-    _ticket_setting(conn, seed.ticket(**kw))
-    _fails(conn, "DELETE FROM candidate_observation", match="immutable")
-
-
-@pytest.mark.parametrize("value", ["not-a-number", "999999", ""])
-def test_garbage_or_unknown_ticket_does_not_open_the_hatch(conn, seed, value):
-    seed.observation(symbol="AAA")
-    _ticket_setting(conn, value)
-    _fails(conn, "DELETE FROM candidate_observation", match="immutable")
-
-
-def test_approved_ticket_permits_an_audited_update(conn, seed):
-    obs = seed.observation(symbol="AAA")
-    ticket = seed.ticket()
-    _ticket_setting(conn, ticket)
-    cur = conn.cursor()
-    cur.execute("UPDATE candidate_observation SET symbol = 'FIXED' WHERE id = %s", (obs,))
-    cur.execute("SELECT table_name, operation, old_row->>'symbol', new_row->>'symbol', performed_by "
-                "FROM research_maintenance_audit WHERE ticket_id = %s", (ticket,))
-    row = cur.fetchone()
-    assert row[:4] == ("candidate_observation", "UPDATE", "AAA", "FIXED") and row[4]
-
-
-def test_approved_ticket_permits_an_audited_delete_and_truncate(conn, seed):
-    seed.observation(symbol="AAA")
-    ticket = seed.ticket()
-    _ticket_setting(conn, ticket)
-    cur = conn.cursor()
-    cur.execute("DELETE FROM candidate_observation")
-    cur.execute("SELECT old_row->>'symbol' FROM research_maintenance_audit WHERE operation = 'DELETE'")
-    assert cur.fetchone()[0] == "AAA"
-    seed.observation(symbol="BBB", snapshot_id=seed.snapshot("BBB"))
-    cur.execute("TRUNCATE candidate_observation")
-    cur.execute("SELECT (old_row->>'rows_removed')::int FROM research_maintenance_audit WHERE operation = 'TRUNCATE'")
-    assert cur.fetchone()[0] == 1
-
-
-def test_ticket_setting_is_transaction_local(conn, seed, connect):
-    seed.observation(symbol="AAA")
-    ticket = seed.ticket()
-    conn.commit()
-    _ticket_setting(conn, ticket)
-    conn.commit()  # the setting dies with the transaction
-    _fails(conn, "DELETE FROM candidate_observation", match="immutable")
-    with connect() as other:
-        c2 = other.cursor()
-        with pytest.raises(psycopg2.Error):
-            c2.execute("DELETE FROM candidate_observation")
-
-
-def test_audit_trail_is_append_only_even_with_a_ticket(conn, seed):
-    obs = seed.observation(symbol="AAA")
-    _ticket_setting(conn, seed.ticket())
-    conn.cursor().execute("UPDATE candidate_observation SET symbol = 'FIXED' WHERE id = %s", (obs,))
-    _fails(conn, "UPDATE research_maintenance_audit SET operation = 'x'", match="append-only")
-    _fails(conn, "DELETE FROM research_maintenance_audit", match="append-only")
-    _fails(conn, "TRUNCATE research_maintenance_audit", match="append-only")
-
-
-def test_ticket_approval_requires_a_timestamp(conn, seed):
-    _fails(conn, "INSERT INTO research_maintenance_log (opened_by, reason, target_table, approved_by) "
-                 "VALUES ('x', 'y', 'candidate_observation', 'owner')")
+def test_maintenance_log_cannot_be_updated_to_forge_an_approval(conn, seed):
+    ticket = seed.ticket(approved=False)
+    _fails(conn, "UPDATE research_maintenance_log SET approved_by = 'x', approved_at = NOW(), "
+                 "expires_at = NOW() + INTERVAL '1 hour', opened_by = 'x' WHERE id = %s", (ticket,), match="write-once")

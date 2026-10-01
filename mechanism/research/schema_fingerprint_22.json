@@ -1,0 +1,1254 @@
+{
+ "functions": {
+  "research_audit_append_only()": {
+   "body_sha256": "95f3eb1bd93f11f960aa0bd1bdc3b88e4af0dac9d1aa8e43fdad91c4774d8de9",
+   "comment": "release_b_migration_22",
+   "language": "plpgsql",
+   "pins_search_path": true,
+   "public_execute": true,
+   "returns": "trigger",
+   "security_definer": false
+  },
+  "research_capture_set_state(bigint,text,date,text)": {
+   "body_sha256": "0163a5cfaf546409c56063afcd6fdbe14038508c1d6690480122c6edf71061ee",
+   "comment": "release_b_migration_22",
+   "language": "plpgsql",
+   "pins_search_path": true,
+   "public_execute": false,
+   "returns": "bigint",
+   "security_definer": true
+  },
+  "research_guard_immutable()": {
+   "body_sha256": "01357c7f30ab16392d17354b3ab0559cf5d988008c0085bf190d6c7acc77415d",
+   "comment": "release_b_migration_22",
+   "language": "plpgsql",
+   "pins_search_path": true,
+   "public_execute": true,
+   "returns": "trigger",
+   "security_definer": true
+  },
+  "research_maintenance_approve(bigint)": {
+   "body_sha256": "cfdbed1c85b081897bfe0b7fbc604fe1836481565801088aef69e98ad48e8d90",
+   "comment": "release_b_migration_22",
+   "language": "plpgsql",
+   "pins_search_path": true,
+   "public_execute": false,
+   "returns": "void",
+   "security_definer": true
+  },
+  "research_maintenance_begin(bigint)": {
+   "body_sha256": "ea7fa23ed6a09fdc139aa9d7c6799a3576f666561e7e74c8fda0a338d38fecdf",
+   "comment": "release_b_migration_22",
+   "language": "plpgsql",
+   "pins_search_path": true,
+   "public_execute": false,
+   "returns": "void",
+   "security_definer": true
+  },
+  "research_maintenance_close(bigint)": {
+   "body_sha256": "75e5b653d92480a868c11882b864052df35c4c62d6e6a59a4e7593b576057125",
+   "comment": "release_b_migration_22",
+   "language": "plpgsql",
+   "pins_search_path": true,
+   "public_execute": false,
+   "returns": "void",
+   "security_definer": true
+  },
+  "research_maintenance_log_guard()": {
+   "body_sha256": "d9a8d678b82739717ff0bedd61b44cecc50e95b94e3ae3fcc282ac02101b1aad",
+   "comment": "release_b_migration_22",
+   "language": "plpgsql",
+   "pins_search_path": true,
+   "public_execute": true,
+   "returns": "trigger",
+   "security_definer": false
+  },
+  "research_maintenance_open(text,text,integer)": {
+   "body_sha256": "b0dff4cb92fddee2a1eccc25ed475bb7fb93bf1acac54ce9738b8a919d20954b",
+   "comment": "release_b_migration_22",
+   "language": "plpgsql",
+   "pins_search_path": true,
+   "public_execute": false,
+   "returns": "bigint",
+   "security_definer": true
+  }
+ },
+ "ledger_lineage": [
+  [
+   "signal_ledger_feature_set_fk",
+   "f",
+   "FOREIGN KEY (feature_set_version) REFERENCES feature_set_registry(feature_set_version)"
+  ],
+  [
+   "signal_ledger_lineage_all_or_none",
+   "c",
+   "CHECK ((((observation_id IS NULL) = (feature_snapshot_id IS NULL)) AND ((observation_id IS NULL) = (feature_set_version IS NULL))))"
+  ],
+  [
+   "signal_ledger_observation_fk",
+   "f",
+   "FOREIGN KEY (observation_id) REFERENCES candidate_observation(id)"
+  ],
+  [
+   "signal_ledger_snapshot_fk",
+   "f",
+   "FOREIGN KEY (feature_snapshot_id) REFERENCES feature_snapshot(id)"
+  ]
+ ],
+ "marker": "release_b_migration_22",
+ "stray_indexes": [],
+ "tables": {
+  "candidate_capture_run": {
+   "columns": [
+    [
+     "id",
+     "bigint",
+     true,
+     "nextval('candidate_capture_run_id_seq'::regclass)"
+    ],
+    [
+     "strategy_id",
+     "bigint",
+     true,
+     null
+    ],
+    [
+     "strategy_version",
+     "character varying(20)",
+     true,
+     null
+    ],
+    [
+     "session_date",
+     "date",
+     true,
+     null
+    ],
+    [
+     "feature_set_version",
+     "character varying(30)",
+     true,
+     null
+    ],
+    [
+     "session_source",
+     "character varying(20)",
+     true,
+     null
+    ],
+    [
+     "status",
+     "character varying(12)",
+     true,
+     "'running'::character varying"
+    ],
+    [
+     "run_started_at",
+     "timestamp with time zone",
+     true,
+     "now()"
+    ],
+    [
+     "run_finished_at",
+     "timestamp with time zone",
+     false,
+     null
+    ],
+    [
+     "universe_size",
+     "integer",
+     false,
+     null
+    ],
+    [
+     "candidates",
+     "integer",
+     false,
+     null
+    ],
+    [
+     "captured",
+     "integer",
+     false,
+     null
+    ],
+    [
+     "already_captured",
+     "integer",
+     false,
+     null
+    ],
+    [
+     "hash_drift",
+     "integer",
+     false,
+     null
+    ],
+    [
+     "guard_rejected",
+     "integer",
+     false,
+     null
+    ],
+    [
+     "guard_not_evaluated",
+     "integer",
+     false,
+     null
+    ],
+    [
+     "stale_skipped",
+     "integer",
+     false,
+     null
+    ],
+    [
+     "snapshot_skipped",
+     "integer",
+     false,
+     null
+    ],
+    [
+     "snapshot_drift",
+     "integer",
+     false,
+     null
+    ],
+    [
+     "invalid_skipped",
+     "integer",
+     false,
+     null
+    ],
+    [
+     "defaulted_flagged",
+     "integer",
+     false,
+     null
+    ],
+    [
+     "skipped_symbols",
+     "jsonb",
+     false,
+     null
+    ],
+    [
+     "error",
+     "text",
+     false,
+     null
+    ],
+    [
+     "code_ref",
+     "character varying(160)",
+     false,
+     null
+    ]
+   ],
+   "comment": "release_b_migration_22",
+   "constraints": [
+    [
+     "candidate_capture_run_complete_is_accounted",
+     "c",
+     "CHECK ((((status)::text <> 'complete'::text) OR ((error IS NULL) AND (candidates IS NOT NULL) AND (captured IS NOT NULL) AND (already_captured IS NOT NULL) AND (stale_skipped IS NOT NULL) AND (snapshot_skipped IS NOT NULL) AND (invalid_skipped IS NOT NULL) AND (guard_not_evaluated IS NOT NULL) AND (snapshot_skipped = 0) AND (invalid_skipped = 0) AND (guard_not_evaluated = 0) AND (candidates = ((captured + already_captured) + stale_skipped)))))"
+    ],
+    [
+     "candidate_capture_run_failed_has_error",
+     "c",
+     "CHECK ((((status)::text <> 'failed'::text) OR (error IS NOT NULL)))"
+    ],
+    [
+     "candidate_capture_run_feature_set_version_fkey",
+     "f",
+     "FOREIGN KEY (feature_set_version) REFERENCES feature_set_registry(feature_set_version)"
+    ],
+    [
+     "candidate_capture_run_finished_iff_not_running",
+     "c",
+     "CHECK ((((status)::text = 'running'::text) = (run_finished_at IS NULL)))"
+    ],
+    [
+     "candidate_capture_run_partial_is_counted",
+     "c",
+     "CHECK ((((status)::text <> 'partial'::text) OR ((error IS NULL) AND (candidates IS NOT NULL) AND (captured IS NOT NULL) AND (already_captured IS NOT NULL) AND (stale_skipped IS NOT NULL) AND (snapshot_skipped IS NOT NULL) AND (invalid_skipped IS NOT NULL) AND (guard_not_evaluated IS NOT NULL))))"
+    ],
+    [
+     "candidate_capture_run_pkey",
+     "p",
+     "PRIMARY KEY (id)"
+    ],
+    [
+     "candidate_capture_run_session_source_explicit",
+     "c",
+     "CHECK (((session_source)::text = 'explicit'::text))"
+    ],
+    [
+     "candidate_capture_run_status_values",
+     "c",
+     "CHECK (((status)::text = ANY ((ARRAY['running'::character varying, 'complete'::character varying, 'partial'::character varying, 'failed'::character varying])::text[])))"
+    ],
+    [
+     "candidate_capture_run_strategy_id_fkey",
+     "f",
+     "FOREIGN KEY (strategy_id) REFERENCES strategies(id)"
+    ]
+   ],
+   "indexes": [
+    [
+     "idx_candidate_capture_run_session",
+     "CREATE INDEX idx_candidate_capture_run_session ON candidate_capture_run USING btree (strategy_id, session_date, run_started_at DESC)"
+    ]
+   ],
+   "triggers": []
+  },
+  "candidate_observation": {
+   "columns": [
+    [
+     "id",
+     "bigint",
+     true,
+     "nextval('candidate_observation_id_seq'::regclass)"
+    ],
+    [
+     "strategy_id",
+     "bigint",
+     true,
+     null
+    ],
+    [
+     "strategy_version",
+     "character varying(20)",
+     true,
+     null
+    ],
+    [
+     "symbol",
+     "character varying(10)",
+     true,
+     null
+    ],
+    [
+     "session_date",
+     "date",
+     true,
+     null
+    ],
+    [
+     "direction",
+     "smallint",
+     true,
+     null
+    ],
+    [
+     "bar_date",
+     "date",
+     true,
+     null
+    ],
+    [
+     "session_source",
+     "character varying(20)",
+     true,
+     null
+    ],
+    [
+     "signal_type",
+     "character varying(30)",
+     true,
+     null
+    ],
+    [
+     "triggered",
+     "boolean",
+     true,
+     null
+    ],
+    [
+     "entry_close",
+     "numeric(14,4)",
+     true,
+     null
+    ],
+    [
+     "channel_high_prev",
+     "numeric(14,4)",
+     true,
+     null
+    ],
+    [
+     "channel_low_prev",
+     "numeric(14,4)",
+     true,
+     null
+    ],
+    [
+     "breakout_dist_atr",
+     "numeric(14,6)",
+     false,
+     null
+    ],
+    [
+     "atr_source",
+     "character varying(10)",
+     true,
+     null
+    ],
+    [
+     "distance_to_channel_pct",
+     "numeric(10,4)",
+     true,
+     null
+    ],
+    [
+     "passed_guard",
+     "boolean",
+     false,
+     null
+    ],
+    [
+     "guard_reasons",
+     "text[]",
+     false,
+     null
+    ],
+    [
+     "alignment_score",
+     "numeric(8,3)",
+     false,
+     null
+    ],
+    [
+     "quality_grade",
+     "character varying(4)",
+     false,
+     null
+    ],
+    [
+     "combined_score",
+     "numeric(8,3)",
+     false,
+     null
+    ],
+    [
+     "session_rank",
+     "integer",
+     false,
+     null
+    ],
+    [
+     "ml_status",
+     "character varying(20)",
+     true,
+     null
+    ],
+    [
+     "ml_score",
+     "numeric(10,6)",
+     false,
+     null
+    ],
+    [
+     "ml_confidence",
+     "character varying(20)",
+     false,
+     null
+    ],
+    [
+     "ml_model_version",
+     "character varying(80)",
+     false,
+     null
+    ],
+    [
+     "tracked_intent",
+     "boolean",
+     true,
+     null
+    ],
+    [
+     "screener_defaults",
+     "text[]",
+     true,
+     "'{}'::text[]"
+    ],
+    [
+     "strategy_context",
+     "jsonb",
+     false,
+     null
+    ],
+    [
+     "snapshot_id",
+     "bigint",
+     true,
+     null
+    ],
+    [
+     "capture_run_id",
+     "bigint",
+     true,
+     null
+    ],
+    [
+     "capture_hash",
+     "character(64)",
+     true,
+     null
+    ],
+    [
+     "code_ref",
+     "character varying(160)",
+     false,
+     null
+    ],
+    [
+     "captured_at",
+     "timestamp with time zone",
+     true,
+     "now()"
+    ]
+   ],
+   "comment": "release_b_migration_22",
+   "constraints": [
+    [
+     "candidate_observation_atr_source_values",
+     "c",
+     "CHECK (((atr_source)::text = ANY ((ARRAY['measured'::character varying, 'fallback'::character varying, 'missing'::character varying])::text[])))"
+    ],
+    [
+     "candidate_observation_bar_is_session",
+     "c",
+     "CHECK ((bar_date = session_date))"
+    ],
+    [
+     "candidate_observation_capture_run_id_fkey",
+     "f",
+     "FOREIGN KEY (capture_run_id) REFERENCES candidate_capture_run(id)"
+    ],
+    [
+     "candidate_observation_direction_check",
+     "c",
+     "CHECK ((direction = ANY (ARRAY[1, '-1'::integer])))"
+    ],
+    [
+     "candidate_observation_direction_matches_signal",
+     "c",
+     "CHECK (((((signal_type)::text = ANY ((ARRAY['bullish_breakout'::character varying, 'near_bullish'::character varying])::text[])) AND (direction = 1)) OR (((signal_type)::text = ANY ((ARRAY['bearish_breakout'::character varying, 'near_bearish'::character varying])::text[])) AND (direction = '-1'::integer))))"
+    ],
+    [
+     "candidate_observation_guard_reasons_only_on_reject",
+     "c",
+     "CHECK (((passed_guard IS FALSE) = ((guard_reasons IS NOT NULL) AND (cardinality(guard_reasons) > 0))))"
+    ],
+    [
+     "candidate_observation_identity_key",
+     "u",
+     "UNIQUE (strategy_id, symbol, session_date, direction)"
+    ],
+    [
+     "candidate_observation_ml_score_only_when_scored",
+     "c",
+     "CHECK ((((ml_status)::text = 'scored'::text) OR (ml_score IS NULL)))"
+    ],
+    [
+     "candidate_observation_ml_status_check",
+     "c",
+     "CHECK (((ml_status)::text = ANY ((ARRAY['scored'::character varying, 'not_processed'::character varying])::text[])))"
+    ],
+    [
+     "candidate_observation_pkey",
+     "p",
+     "PRIMARY KEY (id)"
+    ],
+    [
+     "candidate_observation_session_source_check",
+     "c",
+     "CHECK (((session_source)::text = 'explicit'::text))"
+    ],
+    [
+     "candidate_observation_signal_type_values",
+     "c",
+     "CHECK (((signal_type)::text = ANY ((ARRAY['bullish_breakout'::character varying, 'near_bullish'::character varying, 'bearish_breakout'::character varying, 'near_bearish'::character varying])::text[])))"
+    ],
+    [
+     "candidate_observation_snapshot_id_fkey",
+     "f",
+     "FOREIGN KEY (snapshot_id) REFERENCES feature_snapshot(id)"
+    ],
+    [
+     "candidate_observation_strategy_id_fkey",
+     "f",
+     "FOREIGN KEY (strategy_id) REFERENCES strategies(id)"
+    ],
+    [
+     "candidate_observation_triggered_matches_signal",
+     "c",
+     "CHECK ((triggered = ((signal_type)::text = ANY ((ARRAY['bullish_breakout'::character varying, 'bearish_breakout'::character varying])::text[]))))"
+    ]
+   ],
+   "indexes": [
+    [
+     "candidate_observation_identity_key",
+     "CREATE UNIQUE INDEX candidate_observation_identity_key ON candidate_observation USING btree (strategy_id, symbol, session_date, direction)"
+    ],
+    [
+     "idx_candidate_observation_session",
+     "CREATE INDEX idx_candidate_observation_session ON candidate_observation USING btree (session_date, strategy_id)"
+    ],
+    [
+     "idx_candidate_observation_snapshot",
+     "CREATE INDEX idx_candidate_observation_snapshot ON candidate_observation USING btree (snapshot_id)"
+    ],
+    [
+     "idx_candidate_observation_tracked",
+     "CREATE INDEX idx_candidate_observation_tracked ON candidate_observation USING btree (session_date) WHERE tracked_intent"
+    ]
+   ],
+   "triggers": [
+    [
+     "candidate_observation_immutable_row",
+     "CREATE TRIGGER candidate_observation_immutable_row BEFORE DELETE OR UPDATE ON candidate_observation FOR EACH ROW EXECUTE FUNCTION research_guard_immutable()",
+     "A"
+    ],
+    [
+     "candidate_observation_immutable_truncate",
+     "CREATE TRIGGER candidate_observation_immutable_truncate BEFORE TRUNCATE ON candidate_observation FOR EACH STATEMENT EXECUTE FUNCTION research_guard_immutable()",
+     "A"
+    ]
+   ]
+  },
+  "feature_set_registry": {
+   "columns": [
+    [
+     "feature_set_version",
+     "character varying(30)",
+     true,
+     null
+    ],
+    [
+     "manifest",
+     "jsonb",
+     true,
+     null
+    ],
+    [
+     "manifest_hash",
+     "character(64)",
+     true,
+     null
+    ],
+    [
+     "impl_ref",
+     "character varying(160)",
+     true,
+     null
+    ],
+    [
+     "extends",
+     "character varying(30)",
+     false,
+     null
+    ],
+    [
+     "description",
+     "text",
+     false,
+     null
+    ],
+    [
+     "created_at",
+     "timestamp with time zone",
+     true,
+     "now()"
+    ]
+   ],
+   "comment": "release_b_migration_22",
+   "constraints": [
+    [
+     "feature_set_registry_extends_fkey",
+     "f",
+     "FOREIGN KEY (extends) REFERENCES feature_set_registry(feature_set_version)"
+    ],
+    [
+     "feature_set_registry_pkey",
+     "p",
+     "PRIMARY KEY (feature_set_version)"
+    ]
+   ],
+   "indexes": [],
+   "triggers": [
+    [
+     "feature_set_registry_immutable_row",
+     "CREATE TRIGGER feature_set_registry_immutable_row BEFORE DELETE OR UPDATE ON feature_set_registry FOR EACH ROW EXECUTE FUNCTION research_guard_immutable()",
+     "A"
+    ],
+    [
+     "feature_set_registry_immutable_truncate",
+     "CREATE TRIGGER feature_set_registry_immutable_truncate BEFORE TRUNCATE ON feature_set_registry FOR EACH STATEMENT EXECUTE FUNCTION research_guard_immutable()",
+     "A"
+    ]
+   ]
+  },
+  "feature_snapshot": {
+   "columns": [
+    [
+     "id",
+     "bigint",
+     true,
+     "nextval('feature_snapshot_id_seq'::regclass)"
+    ],
+    [
+     "symbol",
+     "character varying(10)",
+     true,
+     null
+    ],
+    [
+     "session_date",
+     "date",
+     true,
+     null
+    ],
+    [
+     "feature_set_version",
+     "character varying(30)",
+     true,
+     null
+    ],
+    [
+     "bar_date",
+     "date",
+     true,
+     null
+    ],
+    [
+     "open",
+     "numeric(14,4)",
+     true,
+     null
+    ],
+    [
+     "high",
+     "numeric(14,4)",
+     true,
+     null
+    ],
+    [
+     "low",
+     "numeric(14,4)",
+     true,
+     null
+    ],
+    [
+     "close",
+     "numeric(14,4)",
+     true,
+     null
+    ],
+    [
+     "volume",
+     "bigint",
+     false,
+     null
+    ],
+    [
+     "prev_close",
+     "numeric(14,4)",
+     false,
+     null
+    ],
+    [
+     "bars_available",
+     "integer",
+     true,
+     null
+    ],
+    [
+     "snapshot_status",
+     "character varying(10)",
+     true,
+     null
+    ],
+    [
+     "features",
+     "jsonb",
+     true,
+     null
+    ],
+    [
+     "missing_features",
+     "text[]",
+     true,
+     "'{}'::text[]"
+    ],
+    [
+     "sector",
+     "character varying(60)",
+     false,
+     null
+    ],
+    [
+     "sector_source",
+     "character varying(40)",
+     false,
+     null
+    ],
+    [
+     "sector_asof",
+     "date",
+     false,
+     null
+    ],
+    [
+     "manifest_hash",
+     "character(64)",
+     true,
+     null
+    ],
+    [
+     "content_hash",
+     "character(64)",
+     true,
+     null
+    ],
+    [
+     "code_ref",
+     "character varying(160)",
+     false,
+     null
+    ],
+    [
+     "captured_at",
+     "timestamp with time zone",
+     true,
+     "now()"
+    ]
+   ],
+   "comment": "release_b_migration_22",
+   "constraints": [
+    [
+     "feature_snapshot_bar_is_session",
+     "c",
+     "CHECK ((bar_date = session_date))"
+    ],
+    [
+     "feature_snapshot_feature_set_version_fkey",
+     "f",
+     "FOREIGN KEY (feature_set_version) REFERENCES feature_set_registry(feature_set_version)"
+    ],
+    [
+     "feature_snapshot_identity_key",
+     "u",
+     "UNIQUE (symbol, session_date, feature_set_version)"
+    ],
+    [
+     "feature_snapshot_partial_names_missing",
+     "c",
+     "CHECK ((((snapshot_status)::text = 'complete'::text) = (cardinality(missing_features) = 0)))"
+    ],
+    [
+     "feature_snapshot_pkey",
+     "p",
+     "PRIMARY KEY (id)"
+    ],
+    [
+     "feature_snapshot_snapshot_status_check",
+     "c",
+     "CHECK (((snapshot_status)::text = ANY ((ARRAY['complete'::character varying, 'partial'::character varying])::text[])))"
+    ]
+   ],
+   "indexes": [
+    [
+     "feature_snapshot_identity_key",
+     "CREATE UNIQUE INDEX feature_snapshot_identity_key ON feature_snapshot USING btree (symbol, session_date, feature_set_version)"
+    ],
+    [
+     "idx_feature_snapshot_session",
+     "CREATE INDEX idx_feature_snapshot_session ON feature_snapshot USING btree (session_date, feature_set_version)"
+    ]
+   ],
+   "triggers": [
+    [
+     "feature_snapshot_immutable_row",
+     "CREATE TRIGGER feature_snapshot_immutable_row BEFORE DELETE OR UPDATE ON feature_snapshot FOR EACH ROW EXECUTE FUNCTION research_guard_immutable()",
+     "A"
+    ],
+    [
+     "feature_snapshot_immutable_truncate",
+     "CREATE TRIGGER feature_snapshot_immutable_truncate BEFORE TRUNCATE ON feature_snapshot FOR EACH STATEMENT EXECUTE FUNCTION research_guard_immutable()",
+     "A"
+    ]
+   ]
+  },
+  "research_capture_activation": {
+   "columns": [
+    [
+     "id",
+     "bigint",
+     true,
+     "nextval('research_capture_activation_id_seq'::regclass)"
+    ],
+    [
+     "strategy_id",
+     "bigint",
+     true,
+     null
+    ],
+    [
+     "state",
+     "character varying(10)",
+     true,
+     null
+    ],
+    [
+     "effective_from_session",
+     "date",
+     true,
+     null
+    ],
+    [
+     "set_by",
+     "character varying(80)",
+     true,
+     "SESSION_USER"
+    ],
+    [
+     "set_at",
+     "timestamp with time zone",
+     true,
+     "now()"
+    ],
+    [
+     "note",
+     "text",
+     true,
+     null
+    ]
+   ],
+   "comment": "release_b_migration_22",
+   "constraints": [
+    [
+     "research_capture_activation_effective_key",
+     "u",
+     "UNIQUE (strategy_id, effective_from_session)"
+    ],
+    [
+     "research_capture_activation_note_nonempty",
+     "c",
+     "CHECK ((char_length(btrim(note)) >= 5))"
+    ],
+    [
+     "research_capture_activation_pkey",
+     "p",
+     "PRIMARY KEY (id)"
+    ],
+    [
+     "research_capture_activation_state_values",
+     "c",
+     "CHECK (((state)::text = ANY ((ARRAY['enabled'::character varying, 'disabled'::character varying])::text[])))"
+    ],
+    [
+     "research_capture_activation_strategy_id_fkey",
+     "f",
+     "FOREIGN KEY (strategy_id) REFERENCES strategies(id)"
+    ]
+   ],
+   "indexes": [
+    [
+     "research_capture_activation_effective_key",
+     "CREATE UNIQUE INDEX research_capture_activation_effective_key ON research_capture_activation USING btree (strategy_id, effective_from_session)"
+    ]
+   ],
+   "triggers": [
+    [
+     "research_capture_activation_immutable_row",
+     "CREATE TRIGGER research_capture_activation_immutable_row BEFORE DELETE OR UPDATE ON research_capture_activation FOR EACH ROW EXECUTE FUNCTION research_guard_immutable()",
+     "A"
+    ],
+    [
+     "research_capture_activation_immutable_truncate",
+     "CREATE TRIGGER research_capture_activation_immutable_truncate BEFORE TRUNCATE ON research_capture_activation FOR EACH STATEMENT EXECUTE FUNCTION research_guard_immutable()",
+     "A"
+    ]
+   ]
+  },
+  "research_maintenance_audit": {
+   "columns": [
+    [
+     "id",
+     "bigint",
+     true,
+     "nextval('research_maintenance_audit_id_seq'::regclass)"
+    ],
+    [
+     "ticket_id",
+     "bigint",
+     true,
+     null
+    ],
+    [
+     "table_name",
+     "character varying(60)",
+     true,
+     null
+    ],
+    [
+     "operation",
+     "character varying(10)",
+     true,
+     null
+    ],
+    [
+     "old_row",
+     "jsonb",
+     false,
+     null
+    ],
+    [
+     "new_row",
+     "jsonb",
+     false,
+     null
+    ],
+    [
+     "performed_by",
+     "character varying(80)",
+     true,
+     "SESSION_USER"
+    ],
+    [
+     "performed_at",
+     "timestamp with time zone",
+     true,
+     "clock_timestamp()"
+    ]
+   ],
+   "comment": "release_b_migration_22",
+   "constraints": [
+    [
+     "research_maintenance_audit_operation_values",
+     "c",
+     "CHECK (((operation)::text = ANY ((ARRAY['UPDATE'::character varying, 'DELETE'::character varying, 'TRUNCATE'::character varying])::text[])))"
+    ],
+    [
+     "research_maintenance_audit_pkey",
+     "p",
+     "PRIMARY KEY (id)"
+    ],
+    [
+     "research_maintenance_audit_ticket_id_fkey",
+     "f",
+     "FOREIGN KEY (ticket_id) REFERENCES research_maintenance_log(id)"
+    ]
+   ],
+   "indexes": [],
+   "triggers": [
+    [
+     "research_maintenance_audit_append_only_row",
+     "CREATE TRIGGER research_maintenance_audit_append_only_row BEFORE DELETE OR UPDATE ON research_maintenance_audit FOR EACH ROW EXECUTE FUNCTION research_audit_append_only()",
+     "A"
+    ],
+    [
+     "research_maintenance_audit_append_only_truncate",
+     "CREATE TRIGGER research_maintenance_audit_append_only_truncate BEFORE TRUNCATE ON research_maintenance_audit FOR EACH STATEMENT EXECUTE FUNCTION research_audit_append_only()",
+     "A"
+    ]
+   ]
+  },
+  "research_maintenance_log": {
+   "columns": [
+    [
+     "id",
+     "bigint",
+     true,
+     "nextval('research_maintenance_log_id_seq'::regclass)"
+    ],
+    [
+     "opened_by",
+     "character varying(80)",
+     true,
+     null
+    ],
+    [
+     "reason",
+     "text",
+     true,
+     null
+    ],
+    [
+     "target_table",
+     "character varying(60)",
+     true,
+     null
+    ],
+    [
+     "valid_minutes",
+     "integer",
+     true,
+     "60"
+    ],
+    [
+     "opened_at",
+     "timestamp with time zone",
+     true,
+     "now()"
+    ],
+    [
+     "approved_by",
+     "character varying(80)",
+     false,
+     null
+    ],
+    [
+     "approved_at",
+     "timestamp with time zone",
+     false,
+     null
+    ],
+    [
+     "expires_at",
+     "timestamp with time zone",
+     false,
+     null
+    ],
+    [
+     "closed_at",
+     "timestamp with time zone",
+     false,
+     null
+    ]
+   ],
+   "comment": "release_b_migration_22",
+   "constraints": [
+    [
+     "research_maintenance_log_approval_complete",
+     "c",
+     "CHECK ((((approved_by IS NULL) = (approved_at IS NULL)) AND ((approved_by IS NULL) = (expires_at IS NULL))))"
+    ],
+    [
+     "research_maintenance_log_distinct_approver",
+     "c",
+     "CHECK (((approved_by IS NULL) OR ((approved_by)::text <> (opened_by)::text)))"
+    ],
+    [
+     "research_maintenance_log_expiry_after_approval",
+     "c",
+     "CHECK (((expires_at IS NULL) OR (expires_at > approved_at)))"
+    ],
+    [
+     "research_maintenance_log_pkey",
+     "p",
+     "PRIMARY KEY (id)"
+    ],
+    [
+     "research_maintenance_log_reason_nonempty",
+     "c",
+     "CHECK ((char_length(btrim(reason)) >= 10))"
+    ],
+    [
+     "research_maintenance_log_target_table_values",
+     "c",
+     "CHECK (((target_table)::text = ANY ((ARRAY['candidate_observation'::character varying, 'feature_snapshot'::character varying, 'feature_set_registry'::character varying, 'research_capture_activation'::character varying])::text[])))"
+    ],
+    [
+     "research_maintenance_log_valid_minutes_range",
+     "c",
+     "CHECK (((valid_minutes >= 1) AND (valid_minutes <= 240)))"
+    ]
+   ],
+   "indexes": [],
+   "triggers": [
+    [
+     "research_maintenance_log_guard_row",
+     "CREATE TRIGGER research_maintenance_log_guard_row BEFORE DELETE OR UPDATE ON research_maintenance_log FOR EACH ROW EXECUTE FUNCTION research_maintenance_log_guard()",
+     "A"
+    ],
+    [
+     "research_maintenance_log_guard_truncate",
+     "CREATE TRIGGER research_maintenance_log_guard_truncate BEFORE TRUNCATE ON research_maintenance_log FOR EACH STATEMENT EXECUTE FUNCTION research_maintenance_log_guard()",
+     "A"
+    ]
+   ]
+  },
+  "research_maintenance_session": {
+   "columns": [
+    [
+     "id",
+     "bigint",
+     true,
+     "nextval('research_maintenance_session_id_seq'::regclass)"
+    ],
+    [
+     "ticket_id",
+     "bigint",
+     true,
+     null
+    ],
+    [
+     "txid",
+     "bigint",
+     true,
+     null
+    ],
+    [
+     "backend_pid",
+     "integer",
+     true,
+     null
+    ],
+    [
+     "session_user_name",
+     "character varying(80)",
+     true,
+     "SESSION_USER"
+    ],
+    [
+     "begun_at",
+     "timestamp with time zone",
+     true,
+     "clock_timestamp()"
+    ]
+   ],
+   "comment": "release_b_migration_22",
+   "constraints": [
+    [
+     "research_maintenance_session_once_per_txn",
+     "u",
+     "UNIQUE (ticket_id, txid, backend_pid)"
+    ],
+    [
+     "research_maintenance_session_pkey",
+     "p",
+     "PRIMARY KEY (id)"
+    ],
+    [
+     "research_maintenance_session_ticket_id_fkey",
+     "f",
+     "FOREIGN KEY (ticket_id) REFERENCES research_maintenance_log(id)"
+    ]
+   ],
+   "indexes": [
+    [
+     "idx_research_maintenance_session_txid",
+     "CREATE INDEX idx_research_maintenance_session_txid ON research_maintenance_session USING btree (txid, backend_pid)"
+    ],
+    [
+     "research_maintenance_session_once_per_txn",
+     "CREATE UNIQUE INDEX research_maintenance_session_once_per_txn ON research_maintenance_session USING btree (ticket_id, txid, backend_pid)"
+    ]
+   ],
+   "triggers": [
+    [
+     "research_maintenance_session_append_only_row",
+     "CREATE TRIGGER research_maintenance_session_append_only_row BEFORE DELETE OR UPDATE ON research_maintenance_session FOR EACH ROW EXECUTE FUNCTION research_audit_append_only()",
+     "A"
+    ],
+    [
+     "research_maintenance_session_append_only_truncate",
+     "CREATE TRIGGER research_maintenance_session_append_only_truncate BEFORE TRUNCATE ON research_maintenance_session FOR EACH STATEMENT EXECUTE FUNCTION research_audit_append_only()",
+     "A"
+    ]
+   ]
+  }
+ }
+}

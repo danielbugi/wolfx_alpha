@@ -1,0 +1,70 @@
+-- deploy/db/research_roles_rollback.sql -- undo deploy/db/research_roles.sql (privileges and ownership only).
+--
+-- Run as a superuser, atomically, with the target schema first on the search_path:
+--     PGOPTIONS='-c search_path=public' psql -v ON_ERROR_STOP=1 -1 -f deploy/db/research_roles_rollback.sql
+--
+-- What it restores: the 8 research tables and 8 functions go back to the owner recorded BEFORE the role script ran
+-- (set it with a custom GUC; there is deliberately no default so a rollback cannot silently hand objects to the
+-- wrong role):
+--     PGOPTIONS='-c search_path=public -c research_roles.original_owner=trading_user' psql -v ON_ERROR_STOP=1 -1 -f ...
+-- Record the original owner BEFORE running research_roles.sql:
+--     SELECT DISTINCT pg_get_userbyid(relowner) FROM pg_class WHERE relname IN ('candidate_observation','feature_snapshot');
+--
+-- What it does NOT do: it does not drop the three roles (DROP ROLE fails while they hold privileges or own objects,
+-- and dropping a role that services still use is an outage); drop them by hand afterwards with
+--     DROP OWNED BY donchian_app; DROP ROLE donchian_app;   -- etc., once nothing connects as them.
+-- Services must be pointed back at their previous DB_USER FIRST; otherwise they lose access to every table.
+-- It does not touch migration 22 (see deploy/db/rollback22.sql).
+
+DO $rb$
+DECLARE
+    sch TEXT := current_schema();
+    orig TEXT := nullif(current_setting('research_roles.original_owner', true), '');
+    t TEXT;
+    f TEXT;
+    r RECORD;
+BEGIN
+    IF orig IS NULL THEN
+        RAISE EXCEPTION 'set -c research_roles.original_owner=<role> (the owner the research objects had before research_roles.sql)';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = orig) THEN
+        RAISE EXCEPTION 'original owner role % does not exist', orig;
+    END IF;
+    FOREACH t IN ARRAY ARRAY['feature_set_registry', 'candidate_capture_run', 'research_capture_activation',
+                             'research_maintenance_log', 'research_maintenance_session',
+                             'research_maintenance_audit', 'feature_snapshot', 'candidate_observation'] LOOP
+        EXECUTE format('ALTER TABLE %I OWNER TO %I', t, orig);
+    END LOOP;
+    FOREACH f IN ARRAY ARRAY['research_guard_immutable()', 'research_audit_append_only()',
+                             'research_maintenance_log_guard()', 'research_maintenance_open(text,text,integer)',
+                             'research_maintenance_approve(bigint)', 'research_maintenance_begin(bigint)',
+                             'research_maintenance_close(bigint)', 'research_capture_set_state(bigint,text,date,text)'] LOOP
+        EXECUTE format('ALTER FUNCTION %s OWNER TO %I', f, orig);
+    END LOOP;
+
+    -- strip every privilege the three roles hold on objects in this schema
+    FOR r IN SELECT c.relname, c.relkind FROM pg_class c
+             WHERE c.relnamespace = to_regnamespace(sch) AND c.relkind IN ('r', 'p', 'S') LOOP
+        IF r.relkind = 'S' THEN
+            EXECUTE format('REVOKE ALL ON SEQUENCE %I FROM donchian_app, donchian_research_admin, donchian_owner', r.relname);
+        ELSE
+            EXECUTE format('REVOKE ALL ON %I FROM donchian_app, donchian_research_admin, donchian_owner', r.relname);
+        END IF;
+    END LOOP;
+    FOREACH f IN ARRAY ARRAY['research_maintenance_open(text,text,integer)', 'research_maintenance_approve(bigint)',
+                             'research_maintenance_begin(bigint)', 'research_maintenance_close(bigint)',
+                             'research_capture_set_state(bigint,text,date,text)'] LOOP
+        EXECUTE format('REVOKE ALL ON FUNCTION %s FROM donchian_app, donchian_research_admin, donchian_owner', f);
+    END LOOP;
+    EXECUTE format('REVOKE ALL ON SCHEMA %I FROM donchian_app, donchian_research_admin, donchian_owner', sch);
+
+    -- the five definer functions stay un-executable by PUBLIC (that is part of migration 22), but the original
+    -- owner must still be able to run them
+    FOREACH f IN ARRAY ARRAY['research_maintenance_open(text,text,integer)', 'research_maintenance_approve(bigint)',
+                             'research_maintenance_begin(bigint)', 'research_maintenance_close(bigint)',
+                             'research_capture_set_state(bigint,text,date,text)'] LOOP
+        EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO %I', f, orig);
+    END LOOP;
+    RAISE NOTICE 'research roles rolled back: objects owned by %, privileges of the three roles revoked', orig;
+END;
+$rb$;

@@ -109,8 +109,12 @@ own deployment history (instant rollback to any previous build from the Vercel d
 Migration 22 (`add_research_observation_tables.sql`, the research layer) has its own gate:
 `python mechanism/check_research_migration_preflight.py` before applying (read-only: dependencies present, is this a
 first apply?) and `--verify` after (every table, key, CHECK and all eight immutability triggers present, and the row
-counts you expect). It only creates the tables -- capture stays off until `RESEARCH_CAPTURE_ENABLED=1` is set
-deliberately, in a separate step.
+counts you expect). Both compare the real catalog definitions with a committed golden fingerprint (ABSENT / EXACT /
+INCOMPATIBLE) -- `IF NOT EXISTS` never decides. Apply atomically with `psql -v ON_ERROR_STOP=1 -1`. It only creates the
+tables -- capture stays off until an activation boundary is set by a person (`research_capture_set_state`) AND
+`RESEARCH_CAPTURE_ENABLED=1`, in separate steps. Full procedure, rollback (`deploy/db/rollback22.sql`, safe only before
+meaningful Release B data exists) and the least-privilege role model:
+[RESEARCH_MIGRATION_22.md](RESEARCH_MIGRATION_22.md), [RESEARCH_DB_ROLES.md](RESEARCH_DB_ROLES.md).
 
 **Never** apply a migration to production that hasn't first gone through CI's fresh-schema bootstrap
 — a migration that only works against an already-drifted local schema is exactly how silent schema

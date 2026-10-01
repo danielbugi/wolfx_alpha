@@ -38,3 +38,79 @@ def test_the_screener_and_ledger_writer_do_not_reference_the_hatch():
         with open(os.path.join(ROOT, "mechanism", rel), encoding="utf-8") as fh:
             text = fh.read()
         assert "research_maintenance" not in text and "maintenance_ticket" not in text, rel
+
+
+# ---- repository-wide scan: no runtime Python can reach the hatch or the activation writer -------------------------
+SCAN_ROOTS = ("mechanism", "backend", "ml_training", "deploy")
+HATCH = re.compile(r"research_maintenance_(?:open|approve|begin|close|log|session|audit|log_guard)|maintenance_ticket"
+                   r"|research_capture_set_state|research_audit_append_only|research_guard_immutable", re.I)
+# Tooling that only READS the catalog to verify the migration/roles by name. Never imported by the screener,
+# the observer, the backend or the bot.
+CATALOG_TOOLS = {
+    os.path.join("mechanism", "check_research_migration_preflight.py"),
+    os.path.join("mechanism", "research", "schema_fingerprint.py"),
+}
+
+
+def runtime_python_files():
+    for top in SCAN_ROOTS:
+        for base, dirs, files in os.walk(os.path.join(ROOT, top)):
+            dirs[:] = [d for d in dirs if d not in ("tests", "__pycache__", "node_modules", ".venv", "venv", "migrations_tests")]
+            for f in files:
+                if f.endswith(".py") and not f.startswith("test_") and f != "conftest.py":
+                    path = os.path.join(base, f)
+                    yield os.path.relpath(path, ROOT), path
+
+
+def read(path):
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        return fh.read()
+
+
+def test_no_runtime_python_anywhere_references_the_hatch_or_the_activation_writer():
+    offenders = []
+    for rel, path in runtime_python_files():
+        if rel in CATALOG_TOOLS:
+            continue
+        found = sorted(set(m.group(0).lower() for m in HATCH.finditer(read(path))))
+        if found:
+            offenders.append((rel, found))
+    assert not offenders, f"runtime code reaches the maintenance hatch / activation writer: {offenders}"
+
+
+def test_catalog_tools_only_name_the_hatch_never_call_it():
+    call = re.compile(r"SELECT\s+research_(?:maintenance|capture_set_state)|CALL\s+research_|PERFORM\s+research_", re.I)
+    for rel in CATALOG_TOOLS:
+        assert not call.search(read(os.path.join(ROOT, rel))), rel
+
+
+def test_activation_table_is_only_read_by_runtime_code():
+    write = re.compile(r"\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM|TRUNCATE(?:\s+TABLE)?)\s+research_capture_activation\b", re.I)
+    readers = []
+    for rel, path in runtime_python_files():
+        text = read(path)
+        assert not write.search(text), f"{rel} writes research_capture_activation"
+        if "research_capture_activation" in text:
+            readers.append(rel.replace("\\", "/"))
+    assert set(readers) <= {"mechanism/research/repository.py", "mechanism/strategy_analytics/research.py",
+                            "mechanism/check_research_migration_preflight.py",
+                            "mechanism/research/schema_fingerprint.py"}
+
+
+def test_no_runtime_python_writes_any_research_table_except_through_the_capture_repository():
+    """The backend and strategy_analytics are read-only; only research/repository.py inserts observations/snapshots."""
+    write = re.compile(r"\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM|TRUNCATE(?:\s+TABLE)?)\s+"
+                       r"(candidate_observation|feature_snapshot|feature_set_registry|candidate_capture_run)\b", re.I)
+    allowed = {"mechanism/research/repository.py", "mechanism/research/registry.py"}
+    for rel, path in runtime_python_files():
+        if rel.replace("\\", "/") in allowed:
+            continue
+        assert not write.search(read(path)), f"{rel} writes a research table"
+
+
+def test_migration_and_role_sql_are_the_only_place_the_hatch_functions_are_defined():
+    for top in ("mechanism", "deploy"):
+        for base, _, files in os.walk(os.path.join(ROOT, top)):
+            for f in files:
+                if f.endswith(".sql") and "CREATE OR REPLACE FUNCTION research_maintenance" in read(os.path.join(base, f)):
+                    assert f == "add_research_observation_tables.sql", f
