@@ -230,7 +230,7 @@ jobs:
         # self-skip when Postgres is unreachable -- this job deliberately has no postgres service,
         # matching the codebase's own existing skip-if-unreachable convention. Schema/DB-level
         # correctness is covered separately by db-bootstrap-integration below.
-        run: python -m pytest mechanism/alerts/tests mechanism/data_updaters/tests ml_training/tests -q
+        run: python -m pytest mechanism/alerts/tests mechanism/data_updaters/tests mechanism/research/tests ml_training/tests -q
 
   # ---------------------------------------------------------------------------------------------
   docker-validate:
@@ -622,7 +622,7 @@ jobs:
       - name: Install Python test dependencies
         run: pip install -r backend/requirements.txt -r mechanism/requirements.txt -r ml_training/requirements.txt pytest
 
-      - name: Real-Postgres tests against this freshly migrated schema (signal ledger writer + evaluator, strategy analytics, Strategy Intelligence API + private assistant)
+      - name: Real-Postgres tests against this freshly migrated schema (signal ledger writer + evaluator, strategy analytics, research observation layer, Strategy Intelligence API + private assistant)
         # These suites self-skip when Postgres is unreachable, which is why mechanism-ci/backend-ci (no database)
         # never actually exercised their SQL. Here a skip would mean the database wasn't reached, so it fails the job.
         env:
@@ -633,6 +633,6 @@ jobs:
           DB_PASSWORD: ci_test_only_password
         run: |
           python -m pytest mechanism/screeners/tests mechanism/shared/tests mechanism/strategy_analytics/tests \
-            backend/tests/test_strategy_intelligence_api.py mechanism/alerts/tests/test_strategy_intel.py \
+            mechanism/research/tests backend/tests/test_strategy_intelligence_api.py mechanism/alerts/tests/test_strategy_intel.py \
             -q -rs -p no:cacheprovider | tee /tmp/db_tests.txt
           if grep -qi "skipped" /tmp/db_tests.txt; then echo "::error::DB-backed tests skipped -- Postgres not reached"; exit 1; fi
