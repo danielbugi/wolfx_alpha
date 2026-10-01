@@ -632,6 +632,9 @@ jobs:
           DB_USER: trading_user
           DB_PASSWORD: ci_test_only_password
         run: |
+          # Without pipefail the pipe to tee reports tee's exit status, so a pytest FAILURE was invisible here
+          # (only the skip grep below could fail the step).
+          set -o pipefail
           python -m pytest mechanism/screeners/tests mechanism/shared/tests mechanism/strategy_analytics/tests \
             mechanism/research/tests backend/tests/test_strategy_intelligence_api.py mechanism/alerts/tests/test_strategy_intel.py \
             -q -rs -p no:cacheprovider | tee /tmp/db_tests.txt

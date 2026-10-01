@@ -36,7 +36,10 @@ def test_all_tables_exist_and_migration_is_reapplyable(conn):
     with open(MIGRATION, encoding="utf-8") as fh:
         sql = fh.read()
     cur.execute(sql)  # IF NOT EXISTS / existence-checked: a second apply is a no-op
-    cur.execute("SELECT count(*) FROM pg_trigger WHERE tgname LIKE '%%immutable%%' OR tgname LIKE '%%append_only%%'")
+    # Scoped to this schema: on the CI database the migration is also applied in `public`.
+    cur.execute("SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid "
+                "JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = current_schema() "
+                "AND (t.tgname LIKE '%%immutable%%' OR t.tgname LIKE '%%append_only%%')")
     assert cur.fetchone()[0] == 8  # 3 tables x (row + truncate) + audit x 2
 
 
