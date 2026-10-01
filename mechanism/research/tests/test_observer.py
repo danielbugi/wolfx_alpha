@@ -31,6 +31,12 @@ class World:
             cur.execute("CREATE TABLE daily_fundamentals (symbol VARCHAR(10), date DATE, sector VARCHAR(60))")
             c.commit()
 
+    def activate(self, state="enabled", effective_from="2000-01-01", strategy_id=None):
+        with self.connect() as c:
+            c.cursor().execute("SELECT research_capture_set_state(%s, %s, %s, 'activation boundary for tests')",
+                               (strategy_id or self.strategy.id, state, effective_from))
+            c.commit()
+
     def add_prices(self, symbol, rows):
         self.rows[symbol] = rows
         with self.connect() as c:
@@ -70,6 +76,7 @@ def world(schema_env, seed):
     w = World(connect, seed.strategy_id())
     seed.conn.commit()
     w.create_tables()
+    w.activate()
     return w
 
 
@@ -165,6 +172,7 @@ def test_breakout_distance_uses_the_measured_atr_not_the_screeners_default(world
     res = run(world, [cand], finals=[final_of(cand)], decisions={"AAA": []})
     assert res.counters["defaulted_flagged"] == 1
     (row,) = table(world, "SELECT breakout_dist_atr, tracked_intent, screener_defaults FROM candidate_observation")
+    assert table(world, "SELECT atr_source FROM candidate_observation") == [("fallback",)]
     snap_atr = float(table(world, "SELECT features->>'atr_14' FROM feature_snapshot")[0][0])
     expected = (float(cand["current_price"]) - cand["prev_donchian_high"]) / snap_atr
     assert float(row[0]) == pytest.approx(expected, rel=1e-4)                  # not (price - high) / 0.0001
@@ -182,6 +190,7 @@ def test_two_strategies_share_one_snapshot(world):
         second = cur.fetchone()[0]
         c.commit()
     other = StrategyRef(second, "second", "v1")
+    world.activate(strategy_id=second)
     res = observer.capture_session(candidates=[cand], final_signals=[], guard_decisions={"AAA": []},
                                    guards_evaluated=True, session_date=world.rows["AAA"][-1]["date"],
                                    strategy=other, connect=world.connect)
@@ -311,7 +320,7 @@ def test_one_bad_candidate_does_not_stop_the_others(world, monkeypatch):
 
     monkeypatch.setattr(repository, "insert_observation", flaky)
     res = run(world, [a, b, c], decisions={"AAA": [], "BBB": [], "CCC": []})
-    assert res.status == "complete"
+    assert res.status == "partial"                       # a candidate was lost: the run says so, it is not "complete"
     assert res.counters["captured"] == 2 and res.counters["invalid_skipped"] == 1
     assert "boom" in res.skipped["BBB"]
     assert {r[0] for r in table(world, "SELECT symbol FROM candidate_observation")} == {"AAA", "CCC"}
@@ -322,7 +331,7 @@ def test_one_bad_candidate_does_not_stop_the_others(world, monkeypatch):
 def test_a_manifest_mismatch_refuses_capture_and_records_the_failed_run(world, monkeypatch):
     world.add_prices("AAA", make_rows(seed=3))
     cand = world.candidate("AAA")
-    assert run(world, [cand]).status == "complete"
+    assert run(world, [cand], decisions={"AAA": []}).status == "complete"
     feats = list(registry._FEATURES)
     feats[0] = ("atr_15",) + feats[0][1:]
     monkeypatch.setattr(registry, "_FEATURES", feats)
@@ -336,7 +345,7 @@ def test_a_manifest_mismatch_refuses_capture_and_records_the_failed_run(world, m
 def test_the_capture_run_counts_what_was_skipped(world):
     a, b, c = three_symbol_world(world)
     stale = world.candidate("BBB", "near_bearish", screening_date=a["screening_date"] - timedelta(days=1))
-    res = run(world, [a, stale], session=a["screening_date"])
+    res = run(world, [a, stale], decisions={"AAA": []}, session=a["screening_date"])
     (status, stale_n, skipped) = table(world, "SELECT status, stale_skipped, skipped_symbols FROM candidate_capture_run")[0]
     assert status == "complete" and stale_n == 1 and "BBB" in skipped
     assert_identity(res)

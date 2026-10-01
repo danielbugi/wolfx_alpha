@@ -5,7 +5,9 @@
 Called by the screener AFTER its own output is saved and BEFORE the ledger write (so ledger rows can carry the
 lineage). The contract with the pipeline is absolute:
 
-  * DEFAULT OFF. Nothing here runs unless RESEARCH_CAPTURE_ENABLED is truthy.
+  * DEFAULT OFF. Nothing here runs unless RESEARCH_CAPTURE_ENABLED is truthy (a kill switch) AND the database holds
+    an `enabled` activation boundary covering the session (set by an operator only at the production activation;
+    this module never writes it). A session with no covering boundary is "not active" / "disabled": no run row, nothing written.
   * NEVER RAISES into the caller. Any failure is logged and returned as a failed CaptureResult; the screener's
     JSON output and the ledger write proceed exactly as they would without this module.
   * The session is explicit and required -- it is never derived from the candidates or the clock. A candidate
@@ -13,10 +15,13 @@ lineage). The contract with the pipeline is absolute:
   * First valid write wins. A re-run for the same session never overwrites: an identical payload is an
     `already_captured`, a different one is also left alone and counted as `hash_drift`.
   * No fabricated values. Snapshot values come from stock_prices (snapshot_builder), never the screener's
-    defaults; a candidate whose inputs the screener filled in is flagged in `screener_defaults`.
+    defaults; a candidate whose inputs the screener filled in is flagged in `screener_defaults`, and the ATR
+    provenance is recorded explicitly in `atr_source`.
 
 Funnel stages are all recorded: the candidate (everything the strategy produced, near-breakouts included), the
 guard verdict WITH reasons, the rank and ML status of survivors, and whether the ledger writer would take it.
+
+Run end states (`final_status`): complete | partial | failed. `disabled` is a CaptureResult state only (no run row).
 """
 from __future__ import annotations
 
@@ -24,6 +29,7 @@ import hashlib
 import logging
 import math
 import os
+import time
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from datetime import date
@@ -41,6 +47,7 @@ _TRUTHY = {"1", "true", "yes", "on"}
 DIRECTION = {"bullish_breakout": 1, "near_bullish": 1, "bearish_breakout": -1, "near_bearish": -1}
 TRIGGERED = {"bullish_breakout": True, "bearish_breakout": True, "near_bullish": False, "near_bearish": False}
 PRICE_TOLERANCE = 1e-6
+CAPTURE_CHUNK = 250  # candidates (and their price history) held in memory / written in one transaction at a time
 
 
 def is_enabled(env: Optional[Mapping[str, str]] = None) -> bool:
@@ -50,16 +57,47 @@ def is_enabled(env: Optional[Mapping[str, str]] = None) -> bool:
 
 @dataclass
 class CaptureResult:
-    status: str                       # complete | failed | disabled
+    status: str                       # complete | partial | failed | disabled (disabled writes no run row)
     run_id: Optional[int] = None
     links: Dict[Tuple[str, int], ObservationLink] = field(default_factory=dict)
     counters: Dict[str, int] = field(default_factory=dict)
     skipped: Dict[str, str] = field(default_factory=dict)
     error: Optional[str] = None
+    reason: Optional[str] = None      # why a capture was disabled (not_active | disabled)
+    profile: Dict[str, Any] = field(default_factory=dict)
+
+
+def final_status(counters: Mapping[str, int], error: Optional[str] = None) -> str:
+    """The one place a run's end state is decided. Pure and deterministic.
+
+    failed   - a run-level error (manifest mismatch, unexpected exception). A run stuck in `running` is surfaced as
+               failed by the analytics layer without rewriting history.
+    partial  - the run finished but something is not fully captured: a snapshot/candidate was skipped as invalid,
+               a guard verdict could not be evaluated, or the counters do not reconcile.
+    complete - every candidate has exactly one outcome and none of the above happened. `stale_skipped` is an
+               expected, accounted outcome (the candidate's own bar was not the session) and does not degrade it.
+    """
+    if error:
+        return "failed"
+    c = counters
+    accounted = c["candidates"] == (c["captured"] + c["already_captured"] + c["stale_skipped"]
+                                    + c["snapshot_skipped"] + c["invalid_skipped"])
+    if c["snapshot_skipped"] or c["invalid_skipped"] or c["guard_not_evaluated"] or not accounted:
+        return "partial"
+    return "complete"
 
 
 def _num(x) -> Optional[float]:
     return sb._num(x)
+
+
+def atr_source(c: Mapping[str, Any]) -> str:
+    """Provenance of the signal's ATR: 'fallback' when the screener substituted a default, 'missing' when it carried
+    no usable value, else 'measured'. (The snapshot's own ATR, computed from stock_prices, is never a default.)"""
+    if "atr_14" in (c.get("screener_defaults") or ()):
+        return "fallback"
+    atr = _num(c.get("atr_14"))
+    return "missing" if atr is None or atr <= 0 else "measured"
 
 
 def _capture_hash(payload: Dict[str, Any]) -> str:
@@ -134,32 +172,68 @@ def build_observation(c: Mapping[str, Any], session_date: date, strategy: Strate
         "session_source": "explicit", "signal_type": signal_type, "triggered": TRIGGERED[signal_type],
         "entry_close": entry, "channel_high_prev": high_prev, "channel_low_prev": low_prev,
         "breakout_dist_atr": dist_atr, "distance_to_channel_pct": distance, **funnel,
-        "screener_defaults": defaults, "strategy_context": _strategy_context(c),
+        "atr_source": atr_source(c), "screener_defaults": defaults, "strategy_context": _strategy_context(c),
     }
     row["capture_hash"] = _capture_hash(row)
     row.update(snapshot_id=snapshot_id, capture_run_id=run_id, code_ref=registry.code_ref())
     return row, None
 
 
+@dataclass
+class _Outcome:
+    """What one candidate did. Applied to the counters only AFTER its chunk's transaction has committed."""
+    inc: Dict[str, int] = field(default_factory=dict)
+    skip: Optional[Tuple[str, str]] = None
+    link: Optional[Tuple[Tuple[str, int], ObservationLink]] = None
+
+
+class _Invalid(Exception):
+    pass
+
+
+def _apply(outcome: _Outcome, counters: Dict[str, int], skipped: Dict[str, str],
+           links: Dict[Tuple[str, int], ObservationLink]) -> None:
+    for k, v in outcome.inc.items():
+        counters[k] += v
+    if outcome.skip:
+        skipped[outcome.skip[0]] = outcome.skip[1]
+    if outcome.link:
+        links[outcome.link[0]] = outcome.link[1]
+
+
 def capture_session(*, candidates: List[Mapping[str, Any]], final_signals: List[Mapping[str, Any]],
                     guard_decisions: Mapping[str, List[str]], guards_evaluated: bool, session_date: Optional[date],
                     strategy: StrategyRef, connect: Callable[[], AbstractContextManager],
-                    universe_size: Optional[int] = None) -> CaptureResult:
+                    universe_size: Optional[int] = None, chunk_size: int = CAPTURE_CHUNK) -> CaptureResult:
     """`candidates`: every signal the strategy produced for the session, BEFORE the guards. `final_signals`: the
     post-guard, post-ML list in its final sorted order (rank = position in it). `connect`: a context-manager
-    factory yielding a psycopg2 connection."""
+    factory yielding a psycopg2 connection.
+
+    Candidates are processed in their original order in chunks of `chunk_size`: one price/sector fetch and ONE
+    transaction per chunk, a SAVEPOINT per candidate so a bad candidate rolls back alone. Counters and links are
+    applied only once the chunk has committed; if the chunk commit itself fails it is retried candidate by
+    candidate, so the accounting is identical to the unchunked path."""
     run_id: Optional[int] = None
     counters = {c: 0 for c in repository.COUNTER_COLUMNS}
     skipped: Dict[str, str] = {}
     links: Dict[Tuple[str, int], ObservationLink] = {}
+    profile: Dict[str, Any] = {"chunk_size": chunk_size, "chunks": 0, "commits": 0, "chunk_retries": 0}
+    t_start = time.perf_counter()
     try:
         if not isinstance(session_date, date):
             raise ValueError("an explicit session_date is required; it is never inferred")
+        if chunk_size < 1:
+            raise ValueError("chunk_size must be positive")
         counters["candidates"] = len(candidates)
         final_by_key = {(s["symbol"], s["signal_type"]): s for s in final_signals}
         rank_by_key = {(s["symbol"], s["signal_type"]): i + 1 for i, s in enumerate(final_signals)}
 
         with connect() as conn:
+            state = repository.activation_state(conn, strategy.id, session_date)
+            if state != "enabled":
+                reason = "not_active" if state is None else "disabled"
+                logger.warning(f"research capture {session_date}: no enabled activation boundary ({reason}); not captured")
+                return CaptureResult("disabled", reason=reason, counters=counters)
             try:
                 registry.ensure_registered(conn)
                 conn.commit()
@@ -186,25 +260,41 @@ def capture_session(*, candidates: List[Mapping[str, Any]], final_signals: List[
                     continue
                 usable.append(c)
 
-            symbols = [c["symbol"] for c in usable]
-            prices = repository.fetch_price_rows(conn, symbols, session_date)
-            sectors = repository.fetch_sectors(conn, symbols, session_date)
-
-            for c in usable:
-                symbol = c["symbol"]
+            for i in range(0, len(usable), chunk_size):
+                chunk = usable[i:i + chunk_size]
+                symbols = [c["symbol"] for c in chunk]
+                prices = repository.fetch_price_rows(conn, symbols, session_date)
+                sectors = repository.fetch_sectors(conn, symbols, session_date)
+                ctx = (session_date, strategy, run_id, prices, sectors, final_by_key, rank_by_key, guard_decisions,
+                       guards_evaluated)
+                outcomes = [_attempt(conn, c, ctx) for c in chunk]
                 try:
-                    _capture_one(conn, c, session_date, strategy, run_id, prices.get(symbol, []),
-                                 sectors.get(symbol), final_by_key, rank_by_key, guard_decisions, guards_evaluated,
-                                 counters, skipped, links)
-                except Exception as e:  # noqa: BLE001 -- one bad candidate must not stop the session
+                    conn.commit()
+                    profile["commits"] += 1
+                except Exception as e:  # noqa: BLE001 -- retry the chunk one candidate at a time
                     conn.rollback()
-                    counters["invalid_skipped"] += 1
-                    skipped[symbol] = f"error:{type(e).__name__}:{e}"[:200]
-                    logger.error(f"research capture: {symbol} failed: {e}")
+                    profile["chunk_retries"] += 1
+                    logger.error(f"research capture: chunk commit failed ({type(e).__name__}); retrying per candidate")
+                    outcomes = []
+                    for c in chunk:
+                        o = _attempt(conn, c, ctx)
+                        try:
+                            conn.commit()
+                            profile["commits"] += 1
+                        except Exception as e2:  # noqa: BLE001
+                            conn.rollback()
+                            o = _Outcome({"invalid_skipped": 1}, (c["symbol"], f"error:{type(e2).__name__}:{e2}"[:200]))
+                        outcomes.append(o)
+                for o in outcomes:
+                    _apply(o, counters, skipped, links)
+                profile["chunks"] += 1
+                del prices, sectors, outcomes
 
-            repository.finish_run(conn, run_id, "complete", counters, skipped, None)
-        logger.info(f"research capture {session_date}: {counters}")
-        return CaptureResult("complete", run_id, links, counters, skipped)
+            status = final_status(counters)
+            repository.finish_run(conn, run_id, status, counters, skipped, None)
+        profile["seconds"] = round(time.perf_counter() - t_start, 3)
+        logger.info(f"research capture {session_date}: {status} {counters}")
+        return CaptureResult(status, run_id, links, counters, skipped, profile=profile)
     except Exception as e:  # noqa: BLE001 -- the pipeline must never feel this
         logger.error(f"research capture failed (non-fatal): {type(e).__name__}: {e}")
         if run_id is not None:
@@ -213,47 +303,67 @@ def capture_session(*, candidates: List[Mapping[str, Any]], final_signals: List[
                     repository.finish_run(conn, run_id, "failed", counters, skipped, f"{type(e).__name__}: {e}"[:500])
             except Exception:  # noqa: BLE001
                 logger.error("research capture: could not even record the failed run")
-        return CaptureResult("failed", run_id, links, counters, skipped, f"{type(e).__name__}: {e}")
+        return CaptureResult("failed", run_id, links, counters, skipped, f"{type(e).__name__}: {e}", profile=profile)
 
 
-def _capture_one(conn, c, session_date, strategy, run_id, price_rows, sector_info, final_by_key, rank_by_key,
-                 decisions, guards_evaluated, counters, skipped, links) -> None:
+def _attempt(conn, c, ctx) -> _Outcome:
+    """One candidate inside its own SAVEPOINT. Never commits; never raises except on a dead connection."""
+    session_date, strategy, run_id, prices, sectors, final_by_key, rank_by_key, decisions, guards_evaluated = ctx
+    symbol = c["symbol"]
+    cur = conn.cursor()
+    cur.execute("SAVEPOINT research_candidate")
+    try:
+        out = _capture_one(cur, c, session_date, strategy, run_id, prices.get(symbol, []), sectors.get(symbol),
+                           final_by_key, rank_by_key, decisions, guards_evaluated)
+        cur.execute("RELEASE SAVEPOINT research_candidate")
+        return out
+    except _Invalid as e:
+        cur.execute("ROLLBACK TO SAVEPOINT research_candidate")
+        return _Outcome({"invalid_skipped": 1}, (symbol, str(e)))
+    except Exception as e:  # noqa: BLE001 -- one bad candidate must not stop the session
+        cur.execute("ROLLBACK TO SAVEPOINT research_candidate")
+        logger.error(f"research capture: {symbol} failed: {e}")
+        return _Outcome({"invalid_skipped": 1}, (symbol, f"error:{type(e).__name__}:{e}"[:200]))
+
+
+def _capture_one(cur, c, session_date, strategy, run_id, price_rows, sector_info, final_by_key, rank_by_key,
+                 decisions, guards_evaluated) -> _Outcome:
     symbol = c["symbol"]
     sector, sector_asof = sector_info if sector_info else (None, None)
     snap = sb.build_t0_v1(symbol, session_date, price_rows, sector=sector,
                           sector_source="daily_fundamentals" if sector else None,
                           sector_asof=sector_asof if sector else None)
     if isinstance(snap, sb.SnapshotSkip):
-        counters["stale_skipped" if snap.reason == "stale_bar" else "snapshot_skipped"] += 1
-        skipped[symbol] = f"{snap.reason}:{snap.detail}"[:200]
-        return
+        return _Outcome({"stale_skipped" if snap.reason == "stale_bar" else "snapshot_skipped": 1},
+                        (symbol, f"{snap.reason}:{snap.detail}"[:200]))
 
     key = (symbol, c.get("signal_type"))
     final = final_by_key.get(key)
-    cur = conn.cursor()
     snap_w = repository.insert_snapshot(cur, snap)
     row, why = build_observation(c, session_date, strategy, snap, snap_w.id, run_id, final, rank_by_key.get(key),
                                  decisions, guards_evaluated)
     if row is None:
-        conn.rollback()
-        counters["invalid_skipped"] += 1
-        skipped[symbol] = why
-        return
+        raise _Invalid(why)
     obs_w = repository.insert_observation(cur, row)
-    conn.commit()
+
+    inc: Dict[str, int] = {}
+
+    def bump(k):
+        inc[k] = inc.get(k, 0) + 1
 
     if snap_w.drifted(snap.content_hash):
-        counters["snapshot_drift"] += 1
+        bump("snapshot_drift")
     if obs_w.inserted:
-        counters["captured"] += 1
+        bump("captured")
         if row["screener_defaults"]:
-            counters["defaulted_flagged"] += 1
+            bump("defaulted_flagged")
     else:
-        counters["already_captured"] += 1
+        bump("already_captured")
         if obs_w.drifted(row["capture_hash"]):
-            counters["hash_drift"] += 1
+            bump("hash_drift")
     if row["passed_guard"] is False:
-        counters["guard_rejected"] += 1
+        bump("guard_rejected")
     elif row["passed_guard"] is None:
-        counters["guard_not_evaluated"] += 1
-    links[(symbol, row["direction"])] = ObservationLink(obs_w.id, snap_w.id, snap.feature_set_version)
+        bump("guard_not_evaluated")
+    return _Outcome(inc, None, ((symbol, row["direction"]),
+                                ObservationLink(obs_w.id, snap_w.id, snap.feature_set_version)))

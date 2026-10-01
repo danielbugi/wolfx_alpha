@@ -12,8 +12,14 @@ Availability is explicit, never inferred from a zero:
   ok            -- at least one capture run is recorded
 A count is a real 0 only when a capture run exists for the session; otherwise it is null with a state.
 
-Capture health is derived from the run counters, not from `candidate_capture_run.status` alone: the observer finishes a
-run as 'complete' even when some candidates could not be captured, and a partial capture must never look healthy.
+Capture health is derived from the run counters as well as `candidate_capture_run.status`: a run stored 'complete' whose
+counters do not add up is shown as partial, a run stuck in 'running' is shown as failed (the stored row is never
+rewritten), and a partial capture must never look healthy.
+
+Activation. `research_capture_activation` records, per strategy, the sessions from which capture is expected. It tells
+three situations apart that a bare "no run" cannot: capture NOT ACTIVE yet (sessions before the first enabled boundary:
+Release B did not exist for them, so they are never reported as missing or failed), capture intentionally DISABLED
+(an explicit 'disabled' boundary), and capture MISSING (an enabled session with signals in the ledger but no run).
 """
 from __future__ import annotations
 
@@ -26,7 +32,8 @@ from strategy_analytics.definitions import (
 )
 
 RELEASE = "B"
-RESEARCH_TABLES = ("feature_set_registry", "candidate_capture_run", "feature_snapshot", "candidate_observation")
+RESEARCH_TABLES = ("feature_set_registry", "candidate_capture_run", "feature_snapshot", "candidate_observation",
+                   "research_capture_activation")
 STUCK_RUN_MINUTES = 30
 HISTORY_DEFAULT = 30
 HISTORY_MAX = 120
@@ -59,9 +66,16 @@ DEFINITIONS: Dict[str, str] = {
                             "feature is stored as null and named in missing_features -- never as 0.",
     "capture_status": "COMPLETE = every candidate accounted for and captured. PARTIAL = the run finished but "
                       "candidates were lost (no usable snapshot, unreadable payload, guards not evaluated, a counter "
-                      "gap). FAILED = the run failed, or stayed 'running' past "
-                      f"{STUCK_RUN_MINUTES} minutes. DISABLED = no capture run exists for a session the ledger "
-                      "recorded after capture was first seen (capture was off, or the run never reached capture).",
+                      "gap). FAILED = the run recorded an error, or stayed 'running' past "
+                      f"{STUCK_RUN_MINUTES} minutes (derived; the stored row is never rewritten). RUNNING = in "
+                      "progress. Stale candidates (their own bar is not the session) are accounted for and never "
+                      "make a run partial. Sessions with no run: MISSING = capture was enabled for the session and "
+                      "the ledger recorded signals, but no run exists; DISABLED = capture was intentionally "
+                      "disabled for the session; NOT ACTIVE = before the first enabled activation boundary "
+                      "(never reported as missing or failed).",
+    "activation": "The sessions from which candidate capture is expected, set once at the production activation in "
+                  "research_capture_activation. Before the first enabled boundary capture is 'not active'; the "
+                  "latest boundary at or before a session decides whether capture is expected for it.",
     "drift": "A re-run produced a different payload for an already-captured identity. The stored row is never "
              "replaced (first valid write wins); the count is a warning, not a capture failure.",
 }
@@ -81,19 +95,54 @@ def schema_state(fetch: Fetch) -> Dict[str, bool]:
     return {t: bool(row[t]) for t in RESEARCH_TABLES}
 
 
+def _boundaries(fetch: Fetch, strategy_id: int) -> List[Dict[str, Any]]:
+    return fetch("SELECT state, effective_from_session, set_by, set_at, note FROM research_capture_activation "
+                 "WHERE strategy_id = %s ORDER BY effective_from_session", (strategy_id,))
+
+
+def state_on(boundaries: List[Dict[str, Any]], session: date) -> str:
+    """'enabled' | 'disabled' | 'not_active': the latest boundary at or before the session (pure; the same rule as
+    research_capture_activation's reader in research/repository.py). Before the first boundary -> 'not_active'."""
+    state = "not_active"
+    for b in boundaries:                      # ascending by effective_from_session
+        if b["effective_from_session"] <= session:
+            state = b["state"]
+    return state
+
+
+def activation_block(boundaries: List[Dict[str, Any]]) -> Dict[str, Any]:
+    first = next((b for b in boundaries if b["state"] == "enabled"), None)
+    cur = boundaries[-1] if boundaries else None
+    return {
+        "state": "not_active" if cur is None else cur["state"],
+        "active_from": first["effective_from_session"] if first else None,
+        "current": None if cur is None else {"state": cur["state"], "effective_from_session": cur["effective_from_session"],
+                                             "set_by": cur["set_by"], "set_at": cur["set_at"], "note": cur["note"]},
+        "boundaries": len(boundaries),
+    }
+
+
 def availability(fetch: Fetch, strategy: Dict[str, Any]) -> Dict[str, Any]:
     schema = schema_state(fetch)
     if not all(schema.values()):
         return {"state": STATE_NOT_AVAILABLE, "release": RELEASE, "schema": schema, "capture_runs": None,
+                "activation": None,
                 "reason": "Candidate observations and T0 feature snapshots are not collected yet "
                           "(research tables not installed: migration 22 / Release B)."}
+    activation = activation_block(_boundaries(fetch, strategy["id"]))
     runs = int(fetch("SELECT count(*) AS n FROM candidate_capture_run WHERE strategy_id = %s",
                      (strategy["id"],))[0]["n"])
     if runs == 0:
+        if activation["state"] == "not_active":
+            why = "Release B capture is not active for this strategy yet: no activation boundary is set."
+        elif activation["state"] == "disabled":
+            why = "Capture is intentionally disabled for this strategy and no capture run is recorded."
+        else:
+            why = (f"Capture is enabled from {activation['active_from']} but no capture run is recorded yet.")
         return {"state": STATE_NO_DATA, "release": RELEASE, "schema": schema, "capture_runs": 0,
-                "reason": "The research tables exist but no capture run is recorded for this strategy: "
-                          "capture has not been activated."}
-    return {"state": STATE_OK, "release": RELEASE, "schema": schema, "capture_runs": runs, "reason": None}
+                "activation": activation, "reason": why}
+    return {"state": STATE_OK, "release": RELEASE, "schema": schema, "capture_runs": runs,
+            "activation": activation, "reason": None}
 
 
 def _require_available(fetch: Fetch, strategy: Dict[str, Any]) -> Dict[str, Any]:
@@ -118,6 +167,8 @@ def classify_run(run: Dict[str, Any]) -> Dict[str, Any]:
     """The capture health of one run row. Pure. `run['stuck']` is computed in SQL (running past the threshold).
     Returns {status: complete|partial|failed|running, reasons: [why it is not healthy], notes: [worth knowing]}."""
     stored = run["status"]
+    if stored == "disabled":                  # never stored; tolerated so a caller cannot crash the page
+        return {"status": "disabled", "reasons": [], "notes": []}
     if stored == "failed":
         return {"status": "failed", "reasons": [run.get("error") or "The capture run failed."], "notes": []}
     if stored == "running":
@@ -150,6 +201,8 @@ def classify_run(run: Dict[str, Any]) -> Dict[str, Any]:
         notes.append(f"{_n(run, 'hash_drift')} re-run payload(s) differed from the stored observation (not applied).")
     if _n(run, "snapshot_drift"):
         notes.append(f"{_n(run, 'snapshot_drift')} recomputed snapshot(s) differed from the stored one (not applied).")
+    if stored == "partial" and not reasons:
+        reasons.append("The run is recorded as partial.")
     return {"status": "partial" if reasons else "complete", "reasons": reasons, "notes": notes}
 
 
@@ -176,11 +229,15 @@ def _run_out(r: Dict[str, Any], *, detail: bool = False) -> Dict[str, Any]:
     return out
 
 
-def _disabled_row(session: date, ledger_signals: int) -> Dict[str, Any]:
+def _derived_row(session: date, status: str, ledger_signals: int) -> Dict[str, Any]:
+    """A session with no capture run, classified from the activation boundary: 'missing' (capture was enabled and the
+    ledger recorded signals) or 'disabled' (intentionally off). Never stored; there is no row to rewrite."""
+    why = {"missing": f"Capture was enabled for this session and the ledger recorded {ledger_signals} signal(s), but "
+                      "no capture run exists: the run never started or never reached capture.",
+           "disabled": f"Capture was intentionally disabled for this session (the ledger recorded {ledger_signals} "
+                       "signal(s))."}[status]
     return {"id": None, "session_date": session, "stored_status": None, "run_attempts": 0,
-            "health": {"status": "disabled", "notes": [],
-                       "reasons": [f"No capture run is recorded for this session, but the ledger recorded "
-                                   f"{ledger_signals} signal(s). Capture was off or the run did not reach capture."]},
+            "health": {"status": status, "notes": [], "reasons": [why]},
             "feature_set_version": None, "started_at": None, "finished_at": None, "runtime_seconds": None,
             "universe_size": None, "counters": {k: None for k in RUN_COUNTERS}, "accounted": None,
             "unaccounted": None, "skipped_symbol_count": 0, "error": None, "code_ref": None,
@@ -213,20 +270,56 @@ def _missing_stats(fetch: Fetch, strategy_id: int, sessions: List[date]) -> Dict
     return out
 
 
+def _no_run_sessions(fetch: Fetch, strategy_id: int, boundaries: List[Dict[str, Any]],
+                     limit: int) -> Dict[str, Any]:
+    """Ledger sessions without a capture run: those from the first boundary on are classified (missing / disabled);
+    those before it are only counted -- Release B did not exist for them, so they are never reported as a problem."""
+    first = boundaries[0]["effective_from_session"] if boundaries else None
+    rows = fetch("""
+        SELECT sl.signal_date AS session_date, count(*) AS ledger_signals FROM signal_ledger sl
+        WHERE sl.strategy_id = %(sid)s
+          AND NOT EXISTS (SELECT 1 FROM candidate_capture_run r
+                          WHERE r.strategy_id = sl.strategy_id AND r.session_date = sl.signal_date)
+        GROUP BY sl.signal_date ORDER BY sl.signal_date DESC""", {"sid": strategy_id})
+    derived, pre = [], 0
+    for r in rows:
+        state = state_on(boundaries, r["session_date"])
+        if first is None or r["session_date"] < first or state == "not_active":
+            pre += 1
+        elif len(derived) < limit:
+            derived.append(_derived_row(r["session_date"], "missing" if state == "enabled" else "disabled",
+                                        int(r["ledger_signals"])))
+    return {"rows": derived, "pre_activation_sessions": pre}
+
+
 def capture_runs(fetch: Fetch, strategy: Dict[str, Any], limit: int = HISTORY_DEFAULT) -> Dict[str, Any]:
     """Capture health: the latest session's run in full, then a compact per-session history (latest run per session,
-    plus DISABLED rows for ledger sessions after capture was first seen that have no run)."""
+    plus MISSING / DISABLED rows for activated sessions with ledger signals but no run). Sessions before the activation
+    boundary are summarised in `activation.pre_activation_sessions`, never listed as a problem."""
     if not 1 <= limit <= HISTORY_MAX:
         raise ValueError(f"limit must be 1..{HISTORY_MAX}")
     avail = availability(fetch, strategy)
     base = {"strategy": strategy, "availability": avail, "stuck_after_minutes": STUCK_RUN_MINUTES,
-            "definitions": {k: DEFINITIONS[k] for k in ("capture_status", "drift")}}
-    if avail["state"] != STATE_OK:
-        overall = {"status": "not_available" if avail["state"] == STATE_NOT_AVAILABLE else "disabled",
-                   "session_date": None, "reason": avail["reason"]}
-        return {**base, "overall": overall, "latest": None, "history": []}
+            "definitions": {k: DEFINITIONS[k] for k in ("capture_status", "drift", "activation")}}
+    if avail["state"] == STATE_NOT_AVAILABLE:
+        overall = {"status": "not_available", "session_date": None, "reason": avail["reason"]}
+        return {**base, "activation": None, "overall": overall, "latest": None, "history": []}
 
     sid = strategy["id"]
+    boundaries = _boundaries(fetch, sid)
+    no_run = _no_run_sessions(fetch, sid, boundaries, limit)
+    activation = {**avail["activation"], "pre_activation_sessions": no_run["pre_activation_sessions"]}
+
+    if avail["state"] != STATE_OK:                 # tables exist, no run recorded
+        history = no_run["rows"]
+        if history:
+            overall = {"status": history[0]["health"]["status"], "session_date": history[0]["session_date"],
+                       "reason": history[0]["health"]["reasons"][0]}
+        else:
+            overall = {"status": "disabled" if activation["state"] == "disabled" else "not_active",
+                       "session_date": None, "reason": avail["reason"]}
+        return {**base, "activation": activation, "overall": overall, "latest": None, "history": history}
+
     runs = fetch("""
         WITH latest AS (
             SELECT DISTINCT ON (session_date) * FROM candidate_capture_run WHERE strategy_id = %(sid)s
@@ -240,16 +333,7 @@ def capture_runs(fetch: Fetch, strategy: Dict[str, Any], limit: int = HISTORY_DE
     history = [_run_out(r) for r in runs]
     for h in history:
         h["missing_features"] = missing.get(h["session_date"])
-
-    disabled = fetch("""
-        SELECT sl.signal_date AS session_date, count(*) AS ledger_signals FROM signal_ledger sl
-        WHERE sl.strategy_id = %(sid)s
-          AND sl.signal_date > (SELECT min(session_date) FROM candidate_capture_run WHERE strategy_id = %(sid)s)
-          AND NOT EXISTS (SELECT 1 FROM candidate_capture_run r
-                          WHERE r.strategy_id = sl.strategy_id AND r.session_date = sl.signal_date)
-        GROUP BY sl.signal_date ORDER BY sl.signal_date DESC LIMIT %(limit)s
-    """, {"sid": sid, "limit": limit})
-    history += [_disabled_row(d["session_date"], int(d["ledger_signals"])) for d in disabled]
+    history += no_run["rows"]
     history.sort(key=lambda h: h["session_date"], reverse=True)
     history = history[:limit]
 
@@ -260,7 +344,7 @@ def capture_runs(fetch: Fetch, strategy: Dict[str, Any], limit: int = HISTORY_DE
         latest = {**_run_out(full, detail=True), "missing_features": latest["missing_features"]}
     overall = {"status": top["health"]["status"], "session_date": top["session_date"],
                "reason": (top["health"]["reasons"] or [None])[0]}
-    return {**base, "overall": overall, "latest": latest, "history": history}
+    return {**base, "activation": activation, "overall": overall, "latest": latest, "history": history}
 
 
 # ============================================================================ summary / funnel

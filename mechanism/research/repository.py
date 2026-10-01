@@ -52,6 +52,17 @@ def start_run(conn, strategy_id: int, strategy_version: str, session_date: date,
     return run_id
 
 
+def activation_state(conn, strategy_id: int, session_date: date) -> Optional[str]:
+    """'enabled' | 'disabled' | None (no boundary covers the session: capture is not active for it): the latest
+    research_capture_activation row with effective_from_session <= session. Read-only."""
+    cur = conn.cursor()
+    cur.execute("SELECT state FROM research_capture_activation WHERE strategy_id = %s AND effective_from_session <= %s "
+                "ORDER BY effective_from_session DESC LIMIT 1", (strategy_id, session_date))
+    row = cur.fetchone()
+    conn.commit()
+    return row[0] if row else None
+
+
 COUNTER_COLUMNS = ("candidates", "captured", "already_captured", "hash_drift", "guard_rejected",
                    "guard_not_evaluated", "stale_skipped", "snapshot_skipped", "snapshot_drift", "invalid_skipped",
                    "defaulted_flagged")
@@ -132,7 +143,7 @@ OBSERVATION_COLUMNS = (
     "signal_type", "triggered", "entry_close", "channel_high_prev", "channel_low_prev", "breakout_dist_atr",
     "distance_to_channel_pct", "passed_guard", "guard_reasons", "alignment_score", "quality_grade",
     "combined_score", "session_rank", "ml_status", "ml_score", "ml_confidence", "ml_model_version",
-    "tracked_intent", "screener_defaults", "strategy_context", "snapshot_id", "capture_run_id", "capture_hash",
+    "tracked_intent", "atr_source", "screener_defaults", "strategy_context", "snapshot_id", "capture_run_id", "capture_hash",
     "code_ref")
 
 

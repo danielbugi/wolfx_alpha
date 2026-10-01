@@ -95,7 +95,8 @@ def test_tables_without_a_run_is_no_data_and_disabled(fetch, strategy, seed):
     assert [r["version"] for r in summ["feature_set"]["registered"]] == ["t0_v1"]
     assert summ["feature_set"]["current"] is None
     runs = research.capture_runs(fetch, strategy)
-    assert runs["overall"]["status"] == "disabled" and runs["history"] == []
+    assert runs["overall"]["status"] == "not_active" and runs["history"] == []
+    assert runs["activation"]["state"] == "not_active" and runs["activation"]["active_from"] is None
     cands = research.list_candidates(fetch, strategy)
     assert cands["items"] == [] and cands["total"] is None and cands["availability"]["state"] == "no_data"
 
@@ -179,7 +180,7 @@ def test_classify_zero_candidates_is_complete_with_a_note():
 def test_partial_run_is_partial_in_history_and_overall(fetch, strategy, seed):
     capture(seed, S1)
     run, _ = capture(seed, S2)
-    seed.execute("UPDATE candidate_capture_run SET candidates = 5, snapshot_skipped = 2, "
+    seed.execute("UPDATE candidate_capture_run SET status = 'partial', candidates = 5, snapshot_skipped = 2, "
                  "skipped_symbols = %s::jsonb WHERE id = %s", (json.dumps({"ZZZ": "no_bar", "YYY": "no_bar"}), run))
     out = research.capture_runs(fetch, strategy)
     assert out["overall"]["status"] == "partial" and out["overall"]["session_date"] == S2
@@ -211,18 +212,75 @@ def test_latest_attempt_per_session_wins_and_attempts_are_counted(fetch, strateg
     assert out["history"][0]["run_attempts"] == 2
 
 
-def test_ledger_session_after_first_capture_without_a_run_is_disabled(fetch, strategy, seed):
+def ledger_signal(seed, session, symbol=None):
+    symbol = symbol or f"L{session.day:02d}"      # one open position per (symbol, strategy, direction)
+    seed.execute("INSERT INTO signal_ledger (symbol, signal_date, direction, entry_price, atr, stop_price, "
+                 "target1_price, target2_price, target3_price, strategy_id, strategy_version) "
+                 "VALUES (%s, %s, 1, 10, 1, 8, 12, 14, 16, %s, 'v1')", (symbol, session, seed.strategy_id()))
+
+
+def boundary(seed, state, effective_from, note="activation boundary for the test"):
+    seed.execute("SELECT research_capture_set_state(%s, %s, %s, %s)",
+                 (seed.strategy_id(), state, effective_from, note))
+
+
+def test_stored_partial_status_is_partial_even_without_counter_reasons():
+    h = research.classify_run(run_with(status="partial"))
+    assert h["status"] == "partial" and h["reasons"] == ["The run is recorded as partial."]
+    h = research.classify_run(run_with(status="partial", captured=8, snapshot_skipped=2))
+    assert h["status"] == "partial" and any("no usable T0 snapshot" in r for r in h["reasons"])
+
+
+def test_sessions_before_the_activation_boundary_are_never_missing_or_failed(fetch, strategy, seed):
+    for session in (S1, S2):
+        ledger_signal(seed, session)                      # Release A era: signals, no capture, no boundary at all
+    out = research.capture_runs(fetch, strategy)
+    assert out["overall"]["status"] == "not_active" and out["history"] == []
+    assert out["activation"]["state"] == "not_active" and out["activation"]["pre_activation_sessions"] == 2
+    boundary(seed, "enabled", S3)                         # activation happens later: S1/S2 stay "before Release B"
+    out = research.capture_runs(fetch, strategy)
+    assert out["history"] == [] and out["activation"]["pre_activation_sessions"] == 2
+    assert out["overall"]["status"] == "not_active" and str(S3) in out["overall"]["reason"]
+
+
+def test_an_enabled_session_with_ledger_signals_and_no_run_is_missing(fetch, strategy, seed):
+    ledger_signal(seed, S1)
+    boundary(seed, "enabled", S2)
+    ledger_signal(seed, S2)
+    out = research.capture_runs(fetch, strategy)
+    assert out["overall"]["status"] == "missing" and out["overall"]["session_date"] == S2
+    assert [h["session_date"] for h in out["history"]] == [S2]       # S1 is pre-activation, not listed
+    assert out["history"][0]["id"] is None and out["history"][0]["ledger_signals"] == 1
+    assert out["activation"]["pre_activation_sessions"] == 1 and out["activation"]["active_from"] == S2
+
+
+def test_missing_after_a_captured_session_and_a_disabled_interval(fetch, strategy, seed):
+    boundary(seed, "enabled", S1)
     capture(seed, S1)
-    sid = seed.strategy_id()
-    for session in (S2,):
-        seed.execute("INSERT INTO signal_ledger (symbol, signal_date, direction, entry_price, atr, stop_price, "
-                     "target1_price, target2_price, target3_price, strategy_id, strategy_version) "
-                     "VALUES ('ZZZ', %s, 1, 10, 1, 8, 12, 14, 16, %s, 'v1')", (session, sid))
+    boundary(seed, "disabled", S2, "pause capture for a data incident")
+    ledger_signal(seed, S2)
     out = research.capture_runs(fetch, strategy)
     assert out["overall"]["status"] == "disabled" and out["overall"]["session_date"] == S2
-    disabled = out["history"][0]
-    assert disabled["health"]["status"] == "disabled" and disabled["id"] is None and disabled["ledger_signals"] == 1
-    assert out["history"][1]["health"]["status"] == "complete"
+    assert [h["health"]["status"] for h in out["history"]] == ["disabled", "complete"]
+    assert out["activation"]["state"] == "disabled" and out["activation"]["current"]["effective_from_session"] == S2
+    boundary(seed, "enabled", S3, "resume capture after the incident")
+    ledger_signal(seed, S3)
+    out = research.capture_runs(fetch, strategy)
+    assert [h["health"]["status"] for h in out["history"]] == ["missing", "disabled", "complete"]
+
+
+def test_state_on_is_the_latest_boundary_at_or_before_the_session():
+    b = [dict(state="enabled", effective_from_session=S2), dict(state="disabled", effective_from_session=S3)]
+    assert [research.state_on(b, d) for d in (S1, S2, S3)] == ["not_active", "enabled", "disabled"]
+    assert research.state_on([], S1) == "not_active"
+
+
+def test_a_session_with_a_run_is_never_missing(fetch, strategy, seed):
+    boundary(seed, "enabled", S1)
+    capture(seed, S1)
+    ledger_signal(seed, S1)
+    out = research.capture_runs(fetch, strategy)
+    assert [h["health"]["status"] for h in out["history"]] == ["complete"]
 
 
 def test_runtime_and_missing_feature_rate(fetch, strategy, seed):
@@ -295,7 +353,7 @@ def test_filters(fetch, strategy, seed):
     assert [i["symbol"] for i in lc(symbol="s03")["items"]] == ["S03"]
     assert lc(symbol="S0")["total"] == 7 and lc(symbol="ZZ")["total"] == 0
     assert lc(direction="bullish", guard="passed", selected=True)["total"] == 2
-    assert lc(candidate_class="bullish_breakout")["total"] == 7 and lc(candidate_class="near_bullish")["total"] == 0
+    assert lc(candidate_class="bullish_breakout")["total"] == 4 and lc(candidate_class="near_bullish")["total"] == 0
 
 
 def test_symbol_search_treats_like_wildcards_literally(fetch, strategy, seed):
@@ -310,7 +368,7 @@ def test_sorts_and_facets(fetch, strategy, seed):
     assert syms("symbol") == sorted(syms("symbol"))
     assert syms("alignment_desc")[0] == "S00" and syms("rank")[0] == "S00"
     out = research.list_candidates(fetch, strategy)
-    assert out["facets"]["classes"] == [{"value": "bullish_breakout", "count": 7}]
+    assert out["facets"]["classes"] == [{"value": "bullish_breakout", "count": 4}, {"value": "bearish_breakout", "count": 3}]
     assert out["facets"]["grades"] == [{"value": "A", "count": 4}, {"value": "B", "count": 3}]
 
 
@@ -435,7 +493,7 @@ def test_a_second_strategy_is_isolated_and_uses_the_same_read_model(fetch, strat
                         (sid2, S2)).fetchone()[0]
     snap = seed.snapshot("MMM", S2)
     obs2 = seed.observation(snapshot_id=snap, run_id=run2, symbol="MMM", session=S2, strategy_id=sid2,
-                            signal_type="oversold_bounce", strategy_context=json.dumps({"rsi_2": 4.0}))
+                            signal_type="near_bullish", triggered=False, strategy_context=json.dumps({"urgency": "watch"}))
     finish(seed, run2, candidates=1, captured=1)
     s2 = analytics.get_strategy(fetch, "mean_reversion", "v1")
 
@@ -447,7 +505,7 @@ def test_a_second_strategy_is_isolated_and_uses_the_same_read_model(fetch, strat
     assert research.summary(fetch, strategy)["cards"]["observations"]["value"] == 3
     assert research.capture_runs(fetch, s2)["history"][0]["session_date"] == S2
     d = research.get_candidate(fetch, s2, obs2)
-    assert d["strategy_context"]["candidate_class"] == "oversold_bounce" and d["strategy_context"]["extension"] == {"rsi_2": 4.0}
+    assert d["strategy_context"]["candidate_class"] == "near_bullish" and d["strategy_context"]["extension"] == {"urgency": "watch"}
     # a strategy cannot read another strategy's candidate or snapshot through its own namespace
     assert research.get_candidate(fetch, strategy, obs2) is None
     assert research.get_snapshot(fetch, strategy, snap) is None
@@ -459,4 +517,4 @@ def test_no_strategy_is_hardcoded_a_strategy_without_runs_is_no_data(fetch, seed
     second_strategy(seed)
     s2 = analytics.get_strategy(fetch, "mean_reversion", "v1")
     assert research.summary(fetch, s2)["availability"]["state"] == "no_data"
-    assert research.capture_runs(fetch, s2)["overall"]["status"] == "disabled"
+    assert research.capture_runs(fetch, s2)["overall"]["status"] == "not_active"

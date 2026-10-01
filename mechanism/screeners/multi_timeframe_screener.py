@@ -83,6 +83,8 @@ except ImportError as e:
 warnings.filterwarnings('ignore')
 logger = setup_logging("multi_timeframe_ml_screener")
 
+GUARD_CHUNK = 250  # symbols whose price history is held in memory at once while the universe guards are evaluated
+
 # Single source of truth for the liquidity + data-integrity guards, and for the digest's own
 # constants -- see MultiTimeframeMLScreener._apply_universe_guards. project_root was already added to
 # sys.path above (for ml_training.evaluation.performance_tracker); parent_dir (mechanism/) makes
@@ -175,16 +177,25 @@ class MultiTimeframeMLScreener:
             return signals
 
         symbols = sorted(set(s['symbol'] for s in signals))
-        rows = db.execute_dict_query(
-            "SELECT symbol, date, open, high, low, close, volume FROM stock_prices "
-            "WHERE symbol = ANY(%(symbols)s) AND date <= %(target)s ORDER BY symbol, date",
-            {"symbols": symbols, "target": self.target_session})
-        by_symbol: Dict[str, List[Dict]] = {}
-        for r in rows:
-            by_symbol.setdefault(r['symbol'], []).append(r)
-
-        # A symbol with no price rows at all is dropped (insufficient history), never passed.
-        self.guard_decisions = {sym: ug.reasons_for_rows(by_symbol.get(sym, [])) for sym in symbols}
+        # Decisions are per symbol and independent of every other symbol, so the price history is fetched and
+        # judged GUARD_CHUNK symbols at a time (peak memory = one chunk, not the whole candidate set). The result
+        # is identical to the single-query form, in the same sorted-symbol order.
+        decisions: Dict[str, List[str]] = {}
+        for i in range(0, len(symbols), GUARD_CHUNK):
+            chunk = symbols[i:i + GUARD_CHUNK]
+            rows = db.execute_dict_query(
+                "SELECT symbol, date, open, high, low, close, volume FROM stock_prices "
+                "WHERE symbol = ANY(%(symbols)s) AND date <= %(target)s ORDER BY symbol, date",
+                {"symbols": chunk, "target": self.target_session})
+            by_symbol: Dict[str, List[Dict]] = {}
+            for r in rows:
+                by_symbol.setdefault(r['symbol'], []).append(r)
+            del rows
+            # A symbol with no price rows at all is dropped (insufficient history), never passed.
+            for sym in chunk:
+                decisions[sym] = ug.reasons_for_rows(by_symbol.get(sym, []))
+            del by_symbol
+        self.guard_decisions = decisions
         self.guards_evaluated = True
         passed = {sym for sym, reasons in self.guard_decisions.items() if not reasons}
 
