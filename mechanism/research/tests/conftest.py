@@ -31,10 +31,7 @@ def _connect_args():
                 dbname=os.environ["DB_NAME"], user=os.environ["DB_USER"], password=os.environ["DB_PASSWORD"])
 
 
-@pytest.fixture
-def schema_env():
-    """(schema_name, connect) -- `connect()` is a context manager yielding a fresh connection whose
-    search_path is the throwaway schema only."""
+def _schema_env(migrations):
     import psycopg2
     try:
         args = _connect_args()
@@ -46,7 +43,7 @@ def schema_env():
         cur = admin.cursor()
         cur.execute(f'CREATE SCHEMA "{schema}"')
         cur.execute(f'SET search_path TO "{schema}"')
-        for name in MIGRATIONS:
+        for name in migrations:
             with open(os.path.join(ROOT, "mechanism", name), encoding="utf-8") as fh:
                 cur.execute(fh.read())
         admin.commit()
@@ -72,6 +69,19 @@ def schema_env():
             admin.commit()
         finally:
             admin.close()
+
+
+@pytest.fixture
+def schema_env():
+    """(schema_name, connect) -- `connect()` is a context manager yielding a fresh connection whose
+    search_path is the throwaway schema only."""
+    yield from _schema_env(MIGRATIONS)
+
+
+@pytest.fixture
+def pre22_env():
+    """The same, WITHOUT migration 22: the production state today (research tables absent)."""
+    yield from _schema_env(MIGRATIONS[:3])
 
 
 @pytest.fixture

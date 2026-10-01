@@ -21,6 +21,9 @@ if _MECHANISM not in sys.path:
 
 from strategy_analytics import analytics  # noqa: E402
 from strategy_analytics import definitions  # noqa: E402
+from strategy_analytics import research  # noqa: E402
+
+ResearchUnavailable = research.ResearchUnavailable
 
 
 class StrategyNotFound(LookupError):
@@ -87,6 +90,27 @@ class StrategyIntelligenceService:
     def signal(self, key: str, version: str, ledger_id: int) -> Optional[Dict[str, Any]]:
         with self._fetch() as fetch:
             return analytics.get_signal(fetch, self._strategy(fetch, key, version), ledger_id)
+
+    # --- Release B research layer (read-only; every research table may be absent before migration 22) ---
+    def research_summary(self, key: str, version: str) -> Dict[str, Any]:
+        with self._fetch() as fetch:
+            return research.summary(fetch, self._strategy(fetch, key, version))
+
+    def research_capture_runs(self, key: str, version: str, limit: int = research.HISTORY_DEFAULT) -> Dict[str, Any]:
+        with self._fetch() as fetch:
+            return research.capture_runs(fetch, self._strategy(fetch, key, version), limit)
+
+    def research_candidates(self, key: str, version: str, **filters: Any) -> Dict[str, Any]:
+        with self._fetch() as fetch:
+            return research.list_candidates(fetch, self._strategy(fetch, key, version), **filters)
+
+    def research_candidate(self, key: str, version: str, observation_id: int) -> Optional[Dict[str, Any]]:
+        with self._fetch() as fetch:
+            return research.get_candidate(fetch, self._strategy(fetch, key, version), observation_id)
+
+    def research_snapshot(self, key: str, version: str, snapshot_id: int) -> Optional[Dict[str, Any]]:
+        with self._fetch() as fetch:
+            return research.get_snapshot(fetch, self._strategy(fetch, key, version), snapshot_id)
 
     def overall_performance(self, strategy_id: Optional[int] = None) -> Dict[str, Any]:
         with self._fetch() as fetch:
