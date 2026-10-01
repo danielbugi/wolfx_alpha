@@ -3,11 +3,11 @@
 """
 Fail the pipeline when the daily price update did not actually land the session it was run for.
 
-Why: the pipeline now starts 45 minutes after the US close (23:45 Israel, MARKET_SETTLE_MINUTES=30). An
+Why: the pipeline starts 45 minutes after the US close (20:45 UTC, MARKET_SETTLE_MINUTES=30). An
 end-of-day vendor that has not published the day's bar yet returns the OLDER bars without an error, so
 daily_data_updater.py "succeeds" with nothing new, the session would be marked processed, and the digest
 would then (correctly) refuse to send on stale data - with no retry, since the session is already marked.
-Failing here instead leaves the session unmarked, so the backup trigger (01:00) re-runs it.
+Failing here instead leaves the session unmarked, so the next pipeline attempt re-runs it.
 
 Rule: rows for --session must cover at least --min-coverage (default 0.90) of the symbols that had a row on
 the previous stored date. Exit 0 = fresh, 1 = not fresh (prints why).

@@ -185,3 +185,59 @@ def test_stale_cache_is_used_when_the_refresh_fails(monkeypatch):
     monkeypatch.setattr(mc, "_fetch_alpaca", lambda s, e: (_ for _ in ()).throw(RuntimeError("offline")))
     sessions, source = mc.get_sessions(date(2026, 10, 1))             # cache is 10 days old -> refresh attempted -> fails
     assert source == "stale-cache" and date(2026, 9, 18) in sessions
+
+
+# ------------------------------------------------------------------ resolve_session (the one session identity)
+def rs(explicit, now, sessions=None):
+    return mc.resolve_session(explicit, now=now, sessions=CAL if sessions is None else sessions)
+
+
+def test_resolve_none_is_exactly_what_the_gate_chooses():
+    now = utc(2026, 9, 22, 22, 30)   # Tue 18:30 ET: closed + 2 h settle
+    session, how = rs(None, now)
+    assert session == date(2026, 9, 22) == mc.latest_completed(CAL, now)
+    assert how == "latest completed session"
+
+
+def test_resolve_explicit_completed_session_is_returned_unchanged():
+    assert rs(date(2026, 9, 22), utc(2026, 9, 23, 3, 0)) == (date(2026, 9, 22), "explicit")
+
+
+def test_resolve_monday_after_friday_is_monday_not_friday():
+    c = cal((2026, 9, 11), (2026, 9, 14))
+    assert rs(None, utc(2026, 9, 14, 23, 0), c)[0] == date(2026, 9, 14)
+    assert rs(None, utc(2026, 9, 13, 12, 0), c)[0] == date(2026, 9, 11)   # Sunday: still Friday's session
+
+
+def test_resolve_never_invents_a_weekend_session():
+    sat = utc(2026, 9, 19, 15, 0)
+    assert rs(None, sat)[0] == date(2026, 9, 18)
+    for weekend_day in (date(2026, 9, 19), date(2026, 9, 20)):
+        with pytest.raises(mc.SessionError, match="not a US trading session"):
+            rs(weekend_day, sat)
+
+
+def test_resolve_never_invents_a_holiday_session():
+    mon_holiday = utc(2026, 9, 21, 23, 0)
+    assert rs(None, mon_holiday)[0] == date(2026, 9, 18)                  # latest is the Friday before
+    with pytest.raises(mc.SessionError, match="not a US trading session"):
+        rs(date(2026, 9, 21), mon_holiday)
+
+
+def test_resolve_rejects_a_session_that_has_not_completed():
+    with pytest.raises(mc.SessionError, match="has not completed"):
+        rs(date(2026, 9, 23), utc(2026, 9, 22, 21, 0))
+    with pytest.raises(mc.SessionError, match="has not completed"):   # Tue itself, but still inside the settle window
+        rs(date(2026, 9, 22), utc(2026, 9, 22, 20, 30))
+
+
+def test_resolve_early_close_session_completes_early(monkeypatch):
+    monkeypatch.setenv("MARKET_SETTLE_MINUTES", "30")
+    c = cal((2026, 11, 25), (2026, 11, 27), early=[(2026, 11, 27)])
+    assert rs(date(2026, 11, 27), ny(2026, 11, 27, 13, 45), c)[0] == date(2026, 11, 27)
+    with pytest.raises(mc.SessionError):
+        rs(date(2026, 11, 27), ny(2026, 11, 27, 13, 15), c)
+
+
+def test_resolve_empty_calendar_returns_none_for_default():
+    assert rs(None, utc(2026, 9, 22, 22, 30), {})[0] is None

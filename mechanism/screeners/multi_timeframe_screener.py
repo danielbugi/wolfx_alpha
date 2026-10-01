@@ -8,7 +8,7 @@ FIXES: Correct breakout detection logic, proper data fetching, fundamental data 
 import json
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 import warnings
 
@@ -26,6 +26,8 @@ from shared import (
     timing_decorator, date_utils, data_validation,
     format_number, safe_divide
 )
+from shared import market_calendar
+from shared.session_integrity import partition_by_session, summarize_rejections
 
 # ML prediction logging — records every ML-enhanced signal to the
 # ml_predictions table so ml_training/evaluation/performance_tracker.py has
@@ -98,9 +100,15 @@ def safe_float(value):
 class MultiTimeframeMLScreener:
     """Enhanced multi-timeframe screener with ML integration - ALL BUGS FIXED"""
 
-    def __init__(self):
-        """Initialize the enhanced screener"""
+    def __init__(self, target_session: Optional[date] = None):
+        """target_session: the US market session this run screens (the pipeline gate's SESSION_DATE). None
+        resolves the latest completed session from the market calendar -- the same answer the gate gives --
+        and never the wall-clock date or the date of whichever bar happens to be newest in the DB."""
         self.batch_size = config.data_batch_size
+        if target_session is None:
+            target_session, _ = market_calendar.resolve_session(None)
+        self.target_session = target_session
+        self.stale_rejected = 0
 
         # Initialize ML enhancer if available
         self.failed = False  # set when a run aborts, so the CLI can exit non-zero (pipeline `set -e`)
@@ -135,6 +143,11 @@ class MultiTimeframeMLScreener:
 
             # Get all signals with timeframe analysis
             all_signals = self.get_multi_timeframe_signals()
+
+            if self.failed:
+                # A session-integrity failure (no symbol holds the target session's bar): do not save an
+                # empty/stale result over the last good output, and let the CLI exit non-zero.
+                return self._create_empty_result()
 
             if not all_signals:
                 logger.warning("No multi-timeframe signals found")
@@ -185,8 +198,8 @@ class MultiTimeframeMLScreener:
             # retry) -- see signal_ledger_writer.py's module docstring for the full reasoning.
             try:
                 from screeners.signal_ledger_writer import write_todays_signals
-                session_date = all_signals[0]['screening_date'] if all_signals else datetime.now().date()
-                write_todays_signals(db, all_signals, session_date)
+                # The explicit pipeline session -- never derived from the first signal's own date.
+                write_todays_signals(db, all_signals, self.target_session)
             except Exception as e:
                 logger.error(f"signal_ledger_writer failed (non-fatal, screening result unaffected): {e}")
 
@@ -486,7 +499,8 @@ class MultiTimeframeMLScreener:
                 AND sp.close IS NOT NULL
                 AND ti.donchian_high_20 > 0
                 AND ti.donchian_low_20 > 0
-                AND sp.date >= (CURRENT_DATE - INTERVAL '10 days')  -- Get recent data
+                AND sp.date <= %(target)s  -- never a bar from after the session being processed
+                AND sp.date >= (%(target)s::date - INTERVAL '10 days')  -- Get recent data
             ),
             current_data AS (
                 SELECT * FROM latest_data WHERE rn = 1  -- Latest data only
@@ -513,7 +527,8 @@ class MultiTimeframeMLScreener:
                     overall_quality_score,
                     ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY date DESC) as fund_rn
                 FROM daily_fundamentals
-                WHERE date >= (CURRENT_DATE - INTERVAL '30 days')  -- Get recent fundamental data
+                WHERE date <= %(target)s
+                AND date >= (%(target)s::date - INTERVAL '30 days')  -- Get recent fundamental data
             )
             SELECT 
                 cd.*,
@@ -542,12 +557,31 @@ class MultiTimeframeMLScreener:
             ORDER BY cd.symbol
             """
 
-            logger.info("Executing FIXED query for daily breakout signals...")
-            results = db.execute_dict_query(query)
+            if self.target_session is None:
+                logger.error("No target session (market calendar returned none) -- refusing to screen")
+                self.failed = True
+                return []
+
+            logger.info(f"Executing FIXED query for daily breakout signals (session {self.target_session})...")
+            results = db.execute_dict_query(query, {"target": self.target_session})
             logger.info(f"Query returned {len(results) if results else 0} rows")
 
             if not results:
                 logger.warning("No daily breakout data found")
+                return []
+
+            # Session integrity: each symbol's newest bar <= the target is its candidate. A symbol whose
+            # newest bar is OLDER than the target (vendor gap, missing indicators) is rejected with a
+            # reason -- it is never screened and never relabelled as a target-session signal.
+            results, rejected = partition_by_session(results, self.target_session, "screening_date")
+            self.stale_rejected = len(rejected)
+            if rejected:
+                logger.warning(f"Rejected {len(rejected)} symbols whose newest bar is not session "
+                               f"{self.target_session}: {summarize_rejections(rejected)}")
+            if not results:
+                logger.error(f"No symbol holds a {self.target_session} bar with indicators -- the session's "
+                             f"data is not in; refusing to screen older bars")
+                self.failed = True
                 return []
 
             signals = []
@@ -1193,10 +1227,19 @@ if __name__ == "__main__":
     parser.add_argument('--test', nargs='*', help='Test specific symbols')
     parser.add_argument('--debug', action='store_true', help='Run debug breakout detection')
     parser.add_argument('--config-test', action='store_true', help='Test configuration')
+    parser.add_argument('--session', help='US market session (YYYY-MM-DD) to screen; the pipeline passes its '
+                                          'gate session. Default: the latest completed session on the calendar.')
 
     args = parser.parse_args()
 
-    screener = MultiTimeframeMLScreener()
+    try:
+        _target, _how = market_calendar.resolve_session(date.fromisoformat(args.session) if args.session else None)
+    except (ValueError, market_calendar.SessionError) as e:
+        print(f"Cannot determine the session to screen: {e}", file=sys.stderr)
+        sys.exit(2)
+    print(f"Screening session: {_target} ({_how})")
+
+    screener = MultiTimeframeMLScreener(target_session=_target)
 
     if args.config_test:
         print("Configuration test passed")

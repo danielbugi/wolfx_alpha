@@ -158,16 +158,17 @@ def main() -> int:
     ap.add_argument("--force", action="store_true", help="bypass send_daily_digest.py's own trading-day gate (does not bypass the per-kind claim)")
     args = ap.parse_args()
 
-    if not args.skip_update:
-        run_step("mechanism/data_updaters/market_index_updater.py")
-        run_step("mechanism/data_updaters/daily_data_updater.py")
-
     sessions, source = market_calendar.get_sessions()
     target = market_calendar.latest_completed(sessions)
     if target is None:
         print("No completed US session on the calendar yet -- nothing to do.")
         return 0
     print(f"Target session: {target} (calendar source: {source})")
+
+    if not args.skip_update:
+        run_step("mechanism/data_updaters/market_index_updater.py")
+        # The updater is told the session explicitly; it must not infer one from the wall clock.
+        run_step("mechanism/data_updaters/daily_data_updater.py", "--session", target.isoformat())
 
     ok, msg = check_freshness(target, args.min_coverage)
     print(("FRESH: " if ok else "NOT FRESH: ") + msg)

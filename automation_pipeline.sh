@@ -141,20 +141,28 @@ run_step() {
 # fast (~10s once backfilled).
 run_step 1 "market index updater" mechanism/data_updaters/market_index_updater.py
 
+# The gate's SESSION_DATE is THE session identity for this run: the updater and the screener are told it
+# explicitly (--session) instead of each guessing "today" from the wall clock. (The updater used to skip
+# every symbol whose newest bar was <= 1 calendar day old, which at 20:45/22:00 UTC means "yesterday's bar
+# is current" -- so a new session was never fetched until after UTC midnight.) Empty only when the gate
+# failed open; the updater/screener then resolve the latest completed session from the same calendar.
+SESSION_ARGS=()
+if [ -n "$SESSION_DATE" ]; then SESSION_ARGS=(--session "$SESSION_DATE"); fi
+
 # Step 2: Daily Data Update
-run_step 2 "daily data updater" mechanism/data_updaters/daily_data_updater.py
+run_step 2 "daily data updater" mechanism/data_updaters/daily_data_updater.py "${SESSION_ARGS[@]}"
 
 # Freshness check (2026-09-24). The run starts 45 min after the US close (23:45 Israel,
 # MARKET_SETTLE_MINUTES=30). A vendor that has not published the day's bar yet returns the older bars
 # WITHOUT an error, so step 2 "succeeds" with nothing new. Stop here instead: nothing is posted on stale
-# data, the session stays unmarked, and the 01:00 backup trigger re-runs it. Skipped when there is no
+# data, the session stays unmarked, and the next attempt (the 22:00 UTC timer, or a manual rerun) re-runs it. Skipped when there is no
 # gate session (--force / a gate that failed open) because there is no session date to check against.
 if [ -n "$SESSION_DATE" ]; then
     log "${YELLOW}Checking that ${SESSION_DATE} prices actually landed...${NC}"
     if "$PYTHON" mechanism/data_updaters/check_price_freshness.py --session "$SESSION_DATE" 2>&1 | tee -a "$LOG_FILE"; then
         log_success "price data is fresh"
     else
-        handle_error "price freshness check (the ${SESSION_DATE} bar is not in yet - the 01:00 backup run will retry)"
+        handle_error "price freshness check (the ${SESSION_DATE} bar is not in yet - the session stays unmarked and the next pipeline attempt retries)"
     fi
 fi
 
@@ -225,7 +233,7 @@ run_step 7 "earnings calendar updater" mechanism/data_updaters/earnings_calendar
 run_step 8 "quarterly fundamentals updater" mechanism/data_updaters/quarterly_fundamentals_updater.py
 
 # Step 9: Multi-timeframe Screening
-run_step 9 "multi-timeframe screener" mechanism/screeners/multi_timeframe_screener.py
+run_step 9 "multi-timeframe screener" mechanism/screeners/multi_timeframe_screener.py "${SESSION_ARGS[@]}"
 
 # Steps 10-12: ML dataset rebuild + daily retrain (added 2026-09-22, per user decision -- see
 # DATA_ML_MILESTONES.md M1). Runs every night so any feature/label change is evaluated against the

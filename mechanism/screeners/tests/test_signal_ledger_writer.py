@@ -79,9 +79,9 @@ def test_second_signal_while_one_is_open_is_skipped_not_duplicated(db):
     NVDA/donchian_breakout/LONG signals on three different days must not become three open rows."""
     symbol = _symbol()
     day1, day2, day3 = SESSION, SESSION + timedelta(days=1), SESSION + timedelta(days=2)
-    written1 = write_todays_signals(db, [_signal(symbol)], day1)
-    written2 = write_todays_signals(db, [_signal(symbol, current_price=105.0)], day2)
-    written3 = write_todays_signals(db, [_signal(symbol, current_price=110.0)], day3)
+    written1 = write_todays_signals(db, [_signal(symbol, screening_date=day1)], day1)
+    written2 = write_todays_signals(db, [_signal(symbol, current_price=105.0, screening_date=day2)], day2)
+    written3 = write_todays_signals(db, [_signal(symbol, current_price=110.0, screening_date=day3)], day3)
     assert (written1, written2, written3) == (1, 0, 0)
 
     rows = db.execute_dict_query("SELECT * FROM signal_ledger WHERE symbol = %s", (symbol,))
@@ -92,10 +92,10 @@ def test_second_signal_while_one_is_open_is_skipped_not_duplicated(db):
 def test_a_new_signal_can_open_once_the_prior_one_resolves(db):
     symbol = _symbol()
     day1, day2 = SESSION, SESSION + timedelta(days=1)
-    write_todays_signals(db, [_signal(symbol)], day1)
+    write_todays_signals(db, [_signal(symbol, screening_date=day1)], day1)
     db.execute_insert("UPDATE signal_ledger SET status = 'stopped' WHERE symbol = %s", (symbol,))
 
-    written2 = write_todays_signals(db, [_signal(symbol, current_price=110.0)], day2)
+    written2 = write_todays_signals(db, [_signal(symbol, current_price=110.0, screening_date=day2)], day2)
     assert written2 == 1
     rows = db.execute_dict_query(
         "SELECT * FROM signal_ledger WHERE symbol = %s ORDER BY signal_date", (symbol,))

@@ -192,6 +192,32 @@ def check_new_session(key: str, now: Optional[datetime] = None, force: bool = Fa
     return Decision(True, latest, f"new US session {latest}" + (f" (last processed: {last})" if last else " (first run)"), source)
 
 
+class SessionError(ValueError):
+    """An explicit session that cannot be processed: not a US trading session, or not completed yet."""
+
+
+def resolve_session(explicit: Optional[date] = None, now: Optional[datetime] = None,
+                    sessions: Optional[Sessions] = None) -> Tuple[Optional[date], str]:
+    """The ONE definition of "which US session is this job processing?" -> (session, how).
+
+    explicit given -> it is validated (a real session on the calendar, already completed + settled) and
+    returned unchanged; a weekend/holiday/future/in-progress date raises SessionError instead of being
+    quietly adjusted. The pipeline passes the session its own gate chose, so every stage agrees.
+    explicit None  -> the latest completed session, i.e. exactly what `gate` would choose. None only if the
+    calendar is empty. Never derived from the wall-clock calendar date or from what the DB already holds."""
+    if sessions is None:
+        sessions, _ = get_sessions((now or datetime.now(timezone.utc)).astimezone(NY).date())
+    latest = latest_completed(sessions, now)
+    if explicit is None:
+        return latest, "latest completed session"
+    if explicit not in sessions:
+        raise SessionError(f"{explicit} is not a US trading session on the market calendar "
+                           "(weekend, holiday, or outside the calendar window)")
+    if latest is None or explicit > latest:
+        raise SessionError(f"session {explicit} has not completed yet (latest completed session: {latest})")
+    return explicit, "explicit"
+
+
 def require_data_current(data_session: date, gate: Decision) -> None:
     """Abort when a newer session has completed than the price data holds (the updater has not caught up)."""
     if gate.session and data_session < gate.session:

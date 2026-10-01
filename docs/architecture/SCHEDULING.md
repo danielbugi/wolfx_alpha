@@ -8,7 +8,8 @@
 > **snapshot, not a live sync**: re-diff before trusting them to reflect a change made directly on
 > the VPS after 2026-09-25 — see `deploy/vps/README.md`'s "Scheduling" section for the verification
 > command.
-> **Last verified:** 2026-09-25, read directly off the live VPS via root SSH.
+> **Last verified:** 2026-09-25, read directly off the live VPS via root SSH. Corrected 2026-10-01 (§2a,
+> pipeline/retry responsibilities) from a read-only production reconciliation.
 
 ## 1. All timers, one table
 
@@ -19,9 +20,10 @@ change; not yet fixed).
 
 | Timer | Israel schedule | Executable | Purpose | Updates data? | Sends Telegram? |
 |---|---|---|---|---|---|
-| `donchian-pipeline.timer` | 23:45, 01:00 | `run_pipeline.sh` → `automation_pipeline.sh` (in the `pipeline` compose service) | Full 13-step daily pipeline | Yes (price/index, weekly, monthly, fundamentals, quarterly) | Yes — calls the post-market publisher inline (step ~3) and again as a retry (step 13) |
-| `donchian-postmarket-retry.timer` | 23:45, then every ~20 min through 06:00 | `run_postmarket_retry.sh` → `publish_post_market.py` (in the `channel-sender` service) | Bounded freshness retry for **just** the 4 post-market posts | Yes, but only market index + daily price (never the heavy steps) | Yes |
+| `donchian-pipeline.timer` | 23:45, 01:00 (= 20:45, 22:00 UTC in summer) | `run_pipeline.sh` → `automation_pipeline.sh` (in the `pipeline` compose service) | **The only path that runs screener, ML and the signal-ledger write**, plus the full 13-step daily pipeline | Yes (price/index, weekly, monthly, fundamentals, quarterly, screener, ML, ledger) | Yes — calls the post-market publisher inline (step ~3) and again as a retry (step 13) |
+| `donchian-postmarket-retry.timer` | 23:45, then every ~20 min through 06:00 | `run_postmarket_retry.sh` → `publish_post_market.py` (in the `channel-sender` service) | Bounded freshness retry for **just** the 4 post-market posts. **Does not rescue the screening pipeline.** | Yes, but only market index + daily price (never the heavy steps; never screener/ML/ledger) | Yes |
 | `donchian-firstlight1-prices.timer` | 05:00 | `firstlight1_updateonly.sh` | Price safety-net + bot snapshot | Yes | No (`--snapshot-only`) |
+| `donchian-signal-ledger-eval.timer` | 03:30 | `run_channel_sender.sh mechanism/screeners/evaluate_signal_ledger.py` | Walks **already-written** `signal_ledger` rows forward to a result; never creates signals | Writes only ledger outcome fields | No |
 | `donchian-earnings-today.timer` | 10:00 | `run_channel_sender.sh mechanism/alerts/send_earnings_today.py` | Pre-market "who reports today" | No | Yes (one post, own kind) |
 | `donchian-notice-midday.timer` | 12:00 | `run_channel_sender.sh mechanism/alerts/send_channel_notices.py --slot 1` | Disclaimer + assistant-promo reminder, slot 1 | No | Yes (2 posts) |
 | `donchian-notice-evening.timer` | 20:00 | Same, `--slot 2` | Same, slot 2 | No | Yes |
@@ -40,7 +42,8 @@ Persistent=true
 ```
 Two fires a day: 23:45 (the primary attempt, ~45 min after the 16:00 ET close given
 `MARKET_SETTLE_MINUTES=30`) and 01:00 (a same-session retry if the vendor bar wasn't published yet
-at 23:45). **The 01:00 fire is a no-op once the day is already marked done** by
+at 23:45). In UTC (summer) these are 20:45 and 22:00 — which is why the updater's session logic must
+never be based on the container's UTC calendar date (see §2a). **The 01:00 fire is a no-op once the day is already marked done** by
 `mechanism/shared/market_calendar.py`'s session-mark step — `Persistent=true` means a missed fire
 (e.g. VPS was down) catches up on next boot rather than being silently skipped. `TimeoutStartSec=4h`.
 Runs steps 1–13 of `automation_pipeline.sh`; see [SYSTEM_OVERVIEW.md](SYSTEM_OVERVIEW.md) §3 for how
@@ -106,12 +109,48 @@ Re-applies the DOCKER-USER iptables filter (internet → containers restricted t
 at boot and after every Docker restart (`PartOf=docker.service`). Infrastructure, not application
 scheduling — included here for completeness since it's a systemd unit on the same host.
 
+## 2a. Session semantics and who is responsible for what (corrected 2026-10-01)
+
+**One session identity.** `automation_pipeline.sh` asks `market_calendar.py gate --key pipeline` for the
+session to process (`SESSION_DATE`: the newest US session whose close + `MARKET_SETTLE_MINUTES` has
+passed and which the `pipeline` key has not yet marked). That value is passed **explicitly** to the daily
+price updater and the screener (`--session`), checked by the freshness gate, and used for the ledger write
+and the final `market_calendar.py mark`. No component derives "today" from the wall clock. A manual run
+without `--session` resolves the latest completed session from the same calendar
+(`market_calendar.resolve_session`); a weekend, holiday or not-yet-complete date is an error, never adjusted.
+
+**Updater rule.** For each symbol: newest bar == target → skip (current); newest bar < target → fetch;
+newest bar > target → reported as `ahead_of_target`, untouched. Bars after the target are never ingested. The
+old rule ("skip when `now().date() - newest_bar <= 1`") treated yesterday's bar as current at the 20:45/22:00
+UTC runs, so the new session was never fetched until after UTC midnight; that stalled screener/ML/ledger on
+most weekdays after 2026-09-28.
+
+**Responsibilities — three jobs, no overlap:**
+
+| Job | Runs | Does **not** run |
+|---|---|---|
+| `donchian-pipeline` | gate → market index → price update (`--session`) → freshness check → post-market package → weekly/monthly/fundamentals/sector/earnings/quarterly → **screener (`--session`, writes `signal_ledger`)** → ML → **session mark** → post-market retry | — |
+| `donchian-postmarket-retry` | market index + price update (`--session <latest completed>`) → freshness check → the 4 post-market posts (per-kind idempotent) | Screener, ML, ledger write, session mark. **It does not rescue a failed pipeline run.** If the pipeline's two attempts both fail, screener/ML/ledger are skipped for that session until a pipeline attempt (or a deliberate manual run) succeeds; the `pipeline` session key stays unmarked so the next trigger retries it. |
+| `donchian-signal-ledger-eval` | Evaluates open `signal_ledger` rows forward | Never creates a signal |
+
+**Failed vs completed.** A session is marked only after steps 1–12 all succeed (`set -e`): a price-fetch
+failure, a failed freshness check (<90% coverage of the target session) or a screener failure leaves it
+unmarked. A symbol whose newest bar is not the target session is rejected with a logged reason
+(`stale_bar`) by the screener and again by the ledger writer; it is never relabelled to the target. If no
+symbol holds the target-session bar the screener exits non-zero.
+
+**Known gaps (documented, not fixed here).** Sessions 2026-09-29 and 2026-09-30 were never screened and have
+no ledger rows; they are deliberately not backfilled. `ml_predictions` and `breakouts` are stale legacy
+tables (last rows 2026-09-18/19); the ML output of record is the JSON artifact. Other wall-clock users remain
+in `market_index_updater.py`, `weekly_data_updater.py` and `monthly_data_updater.py`.
+
 ## 3. Failure semantics, not current failure state
 
 **A systemd service showing `failed` right now describes the last run's outcome, not this
 document's architecture.** `check_price_freshness` exiting non-zero when a vendor bar genuinely
 hasn't landed yet is *intended* behavior — that's what tells `donchian-pipeline.service` to report
-failed and lets the 01:00 fire (or the postmarket-retry timer) pick it back up. Don't read a `failed`
+failed and lets the 01:00 fire pick it back up (the postmarket-retry timer only re-publishes the Telegram
+posts; it does not re-run the screener, ML or ledger). Don't read a `failed`
 status as "the schedule is broken"; check the actual log line first
 (`journalctl -u donchian-pipeline.service`).
 

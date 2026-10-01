@@ -14,7 +14,8 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import time
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from dataclasses import dataclass
 import warnings
 import hashlib
 import json
@@ -37,11 +38,56 @@ from shared import (
 )
 
 
+CURRENT, FETCH, AHEAD, NEW_SYMBOL = "current", "fetch", "ahead_of_target", "new_symbol"
+
+
+@dataclass(frozen=True)
+class FetchPlan:
+    action: str                 # CURRENT | FETCH | AHEAD | NEW_SYMBOL
+    period: Optional[str]       # vendor lookback for FETCH / NEW_SYMBOL, else None
+    gap_days: Optional[int] = None
+
+
+def plan_symbol_fetch(latest_bar: Optional[date], target_session: Optional[date]) -> FetchPlan:
+    """Decide what a symbol needs for the session being processed. Pure: no clock, no DB.
+
+    The question is "does this symbol already hold the TARGET SESSION's bar?", never "how many calendar
+    days ago was the last bar" -- that proxy skipped every symbol at the 20:45/22:00 UTC pipeline runs
+    (yesterday's bar looked "current"), so the new session was never fetched.
+
+        latest == target  -> CURRENT (skip)        latest < target -> FETCH
+        latest >  target  -> AHEAD   (skip, reported -- unexpected, never silently treated as current)
+        no bars           -> NEW_SYMBOL (full year)
+        target unknown    -> always FETCH (never skip on a guess); the lookback is sized from the newest bar vs today.
+    """
+    if latest_bar is None:
+        return FetchPlan(NEW_SYMBOL, "1y")
+    if target_session is not None:
+        if latest_bar == target_session:
+            return FetchPlan(CURRENT, None, 0)
+        if latest_bar > target_session:
+            return FetchPlan(AHEAD, None, (latest_bar - target_session).days)
+        gap = (target_session - latest_bar).days
+    else:
+        gap = max((datetime.now().date() - latest_bar).days, 1)
+    if gap <= 5:
+        period = "5d"
+    elif gap <= 30:
+        period = "1mo"
+    elif gap <= 90:
+        period = "3mo"
+    else:
+        period = "1y"  # full refresh for very stale data
+    return FetchPlan(FETCH, period, gap)
+
+
 class EnhancedDailyDataUpdater:
     """Enhanced daily data updater with all bugs fixed and performance optimized"""
 
-    def __init__(self):
-        """Initialize with shared infrastructure"""
+    def __init__(self, target_session: Optional[date] = None):
+        """target_session: the US market session this run must bring every symbol up to (see
+        plan_symbol_fetch). None = unknown -> every symbol is fetched, none is skipped as "current"."""
+        self.target_session = target_session
         self.logger = setup_logging(__name__)
         self.logger.info("Enhanced Daily Data Updater initialized - ALL BUGS FIXED")
 
@@ -61,7 +107,10 @@ class EnhancedDailyDataUpdater:
             'start_time': None,
             'api_calls': 0,
             'db_operations': 0,
-            'cache_hits': 0
+            'cache_hits': 0,
+            'already_current': 0,
+            'ahead_of_target': 0,
+            'vendor_no_new_data': 0
         }
 
         # Cache for technical indicator calculations
@@ -297,41 +346,36 @@ class EnhancedDailyDataUpdater:
             self.logger.warning(f"Error getting latest date for {symbol}: {e}")
             return None
 
-    def get_efficient_stock_data(self, symbol: str) -> Optional[pd.DataFrame]:
+    def get_efficient_stock_data(self, symbol: str, target_session: Optional[date] = None) -> Optional[pd.DataFrame]:
         """
-        ENHANCED: Get only necessary stock data (incremental updates)
-        FIX: Only downloads recent data instead of full year for existing symbols
+        Get only the bars this symbol is missing for `target_session` (incremental update).
+
+        Returns None when there is nothing to store: the symbol already holds the target session's bar,
+        holds a LATER one (reported, never silently "current"), or the vendor has nothing newer yet.
+        target_session=None means "unknown" and fetches (see plan_symbol_fetch). Bars dated after the
+        target session are never returned, so one run only ever ingests one session boundary.
         """
         try:
             self.stats['api_calls'] += 1
 
-            # Get latest date we have data for
             latest_date = self.get_latest_date_for_symbol(symbol)
+            plan = plan_symbol_fetch(latest_date, target_session)
 
-            if latest_date:
-                # Calculate days since last update
-                days_since_update = (datetime.now().date() - latest_date).days
-
-                if days_since_update <= 1:
-                    self.logger.debug(f"{symbol}: Data is current (last update: {latest_date})")
-                    return None  # No update needed
-
-                # Get minimal period for incremental update
-                if days_since_update <= 5:
-                    period = "5d"
-                elif days_since_update <= 30:
-                    period = "1mo"
-                elif days_since_update <= 90:
-                    period = "3mo"
-                else:
-                    period = "1y"  # Full refresh for very stale data
-
-                self.logger.debug(
-                    f"{symbol}: Incremental update with {period} period ({days_since_update} days behind)")
-            else:
-                # New symbol - get full year
-                period = "1y"
+            if plan.action == CURRENT:
+                self.stats['already_current'] += 1
+                self.logger.debug(f"{symbol}: already holds session {target_session}")
+                return None
+            if plan.action == AHEAD:
+                self.stats['ahead_of_target'] += 1
+                self.logger.debug(f"{symbol}: newest bar {latest_date} is AHEAD of target session "
+                                  f"{target_session} -- not touching it (summarised at end of run)")
+                return None
+            period = plan.period
+            if plan.action == NEW_SYMBOL:
                 self.logger.debug(f"{symbol}: New symbol, getting full year of data")
+            else:
+                self.logger.debug(f"{symbol}: Incremental update with {period} period "
+                                  f"({plan.gap_days} days behind session {target_session})")
 
             def _fetch_yfinance(sym: str, per: str) -> Optional[pd.DataFrame]:
                 ticker = yf.Ticker(sym)
@@ -391,9 +435,12 @@ class EnhancedDailyDataUpdater:
             # Filter to only new data if we have existing data
             if latest_date:
                 hist = hist[hist['date'] > latest_date]
+            if target_session is not None:
+                hist = hist[hist['date'] <= target_session]
 
             if hist.empty:
-                self.logger.debug(f"{symbol}: No new data available")
+                self.stats['vendor_no_new_data'] += 1
+                self.logger.debug(f"{symbol}: No new data available up to session {target_session}")
                 return None
 
             return hist[['date', 'open', 'high', 'low', 'close', 'adj_close', 'volume']]
@@ -661,7 +708,7 @@ class EnhancedDailyDataUpdater:
             self.logger.debug(f"Processing {symbol}")
 
             # ENHANCED: Get only necessary stock data
-            new_price_data = self.get_efficient_stock_data(symbol)
+            new_price_data = self.get_efficient_stock_data(symbol, self.target_session)
 
             if new_price_data is None:
                 # No new data needed
@@ -1110,6 +1157,10 @@ class EnhancedDailyDataUpdater:
                 self.logger.info(f"🧪 Running enhanced test update with symbols: {test_symbols}")
 
             self.logger.info(f"🚀 Starting ENHANCED daily update at {self.stats['start_time']}")
+            if self.target_session:
+                self.logger.info(f"Target US session: {self.target_session} -- fetching every symbol whose newest bar is older")
+            else:
+                self.logger.warning("Target US session UNKNOWN -- fetching every symbol (nothing is skipped as current)")
             self.logger.info(f"💡 Enhancements: Fixed RSI, Added ATR, Bulk Operations, Concurrent Processing")
 
             # Get symbols to update
@@ -1158,6 +1209,9 @@ class EnhancedDailyDataUpdater:
             # Final report
             duration = datetime.now() - self.stats['start_time']
             success_rate = (self.stats['successful_updates'] / self.stats['total_symbols']) * 100
+            if self.stats['ahead_of_target']:
+                self.logger.warning(f"{self.stats['ahead_of_target']} symbols already hold bars NEWER than the target "
+                                    f"session {self.target_session} -- left untouched")
 
             self.logger.info(f"""
 🎉 ENHANCED Daily update completed in {duration}:
@@ -1168,6 +1222,7 @@ class EnhancedDailyDataUpdater:
 🚀 API calls: {self.stats['api_calls']}
 💾 DB operations: {self.stats['db_operations']}
 ⚡ Cache hit rate: {(self.stats['cache_hits'] / max(1, self.stats['total_symbols'])) * 100:.1f}%
+🗓  Target session: {self.target_session} | already current: {self.stats['already_current']} | vendor had nothing newer: {self.stats['vendor_no_new_data']} | ahead of target: {self.stats['ahead_of_target']}
 
 🔧 ENHANCEMENTS APPLIED:
    • Fixed RSI calculation with proper EMA
@@ -1193,6 +1248,9 @@ def main():
     parser.add_argument('--limit', type=int, help='Limit number of symbols to update')
     parser.add_argument('--test', nargs='+', help='Test with specific symbols')
     parser.add_argument('--config-test', action='store_true', help='Test configuration only')
+    parser.add_argument('--session', help='US market session (YYYY-MM-DD) to bring every symbol up to. '
+                                          'Default: the latest completed session on the market calendar '
+                                          '(the same one the pipeline gate picks).')
 
     args = parser.parse_args()
 
@@ -1217,8 +1275,18 @@ def main():
 
         return
 
+    # The target session is decided here, once, from the market calendar -- never from the clock date or
+    # from what the DB already holds (that proxy is what stopped the pipeline fetching new sessions).
+    from shared import market_calendar
+    try:
+        target, how = market_calendar.resolve_session(date.fromisoformat(args.session) if args.session else None)
+    except (ValueError, market_calendar.SessionError) as e:
+        print(f"❌ Cannot determine the target session: {e}", file=sys.stderr)
+        sys.exit(2)
+    print(f"Target session: {target} ({how})")
+
     # Run enhanced updater
-    updater = EnhancedDailyDataUpdater()
+    updater = EnhancedDailyDataUpdater(target_session=target)
 
     async def run_update():
         if args.test:

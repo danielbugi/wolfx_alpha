@@ -47,6 +47,7 @@ import logging
 from datetime import date
 from typing import Dict, List, Optional, Tuple
 
+from shared.session_integrity import partition_by_session, summarize_rejections
 from shared.trade_plan import compute_levels
 
 logger = logging.getLogger(__name__)
@@ -116,7 +117,20 @@ def write_todays_signals(db, signals: List[Dict], session_date: date) -> int:
     after the evaluator has already advanced a row is a deliberate no-op, not an error;
     a signal for a symbol/direction that already has an open position is also skipped,
     not an error -- see the position-invariant note above).
-    Never raises: a single bad signal is logged and skipped, not fatal to the batch."""
+    Never raises: a single bad signal is logged and skipped, not fatal to the batch.
+
+    SESSION INTEGRITY (defense in depth, 2026-10-01): `session_date` is the session the pipeline told the
+    screener to process. A tracked signal whose own `screening_date` is not exactly that session (a
+    symbol whose newest bar is stale, or from a later session) is REJECTED with a logged reason -- never
+    written under `session_date`, which would stamp one day's bar with another day's signal_date."""
+    tracked = [sg for sg in signals if sg.get("signal_type") in TRACKED_SIGNAL_TYPES]
+    _, rejected = partition_by_session(tracked, session_date, "screening_date")
+    if rejected:
+        logger.error(f"signal_ledger_writer: REJECTED {len(rejected)} signal(s) whose screening_date != "
+                     f"session {session_date}: {summarize_rejections(rejected)}")
+        rejected_ids = {id(sg) for sg, _ in rejected}
+        signals = [sg for sg in signals if id(sg) not in rejected_ids]
+
     try:
         strategy_id, strategy_version = _resolve_default_strategy(db)
     except Exception as e:  # noqa: BLE001 -- the whole batch is meaningless without a strategy row
