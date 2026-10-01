@@ -115,13 +115,14 @@ export function run(over: Partial<CaptureRun> & { status?: CaptureRun['health'][
 }
 
 export const runsNotAvailable = (): CaptureRunsResponse => ({
-  strategy: STRATEGY, availability: AVAIL_NOT_AVAILABLE, stuck_after_minutes: 30, definitions: {},
+  strategy: STRATEGY, availability: AVAIL_NOT_AVAILABLE, stuck_after_minutes: 30, definitions: {}, activation: null,
   overall: { status: 'not_available', session_date: null, reason: AVAIL_NOT_AVAILABLE.reason }, latest: null, history: [],
 });
 
 export function runsOf(latest: CaptureRun, history: CaptureRun[] = [latest], overall?: CaptureRunsResponse['overall']): CaptureRunsResponse {
   return {
     strategy: STRATEGY, availability: AVAIL_OK, stuck_after_minutes: 30, definitions: {},
+    activation: { state: 'enabled', active_from: '2026-10-01', current: null, boundaries: 1, pre_activation_sessions: 7 },
     overall: overall ?? { status: latest.health.status, session_date: latest.session_date, reason: latest.health.reasons[0] ?? null },
     latest, history,
   };

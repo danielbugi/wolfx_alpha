@@ -164,7 +164,7 @@ def test_a_strategy_without_captures_is_never_reported_as_zero(client, db):
     assert summary["forward_outcomes"]["state"] == "not_available"
     runs = client.get(f"{root}/capture-runs").json()
     assert runs["history"] == [] and runs["latest"] is None
-    assert runs["overall"]["status"] in ("not_available", "disabled")
+    assert runs["overall"]["status"] in ("not_available", "not_active")
     cands = client.get(f"{root}/candidates?direction=bullish&guard=passed&symbol=aa&limit=10").json()
     assert cands["items"] == [] and cands["total"] is None and cands["has_more"] is False
     assert cands["availability"]["state"] in ("not_available", "no_data")

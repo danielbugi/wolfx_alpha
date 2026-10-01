@@ -151,7 +151,15 @@ export default function CaptureHealthPanel({ data, error, onRetry }: { data: Cap
     >
       <div className="space-y-4" data-testid="capture-panel" data-overall={overall.status}>
         {availability.state !== 'ok' ? (
-          <AvailabilityNotice availability={availability} />
+          <>
+            <AvailabilityNotice availability={availability} />
+            {history.length > 0 && (
+              <div>
+                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Recent sessions</h3>
+                <History runs={history} />
+              </div>
+            )}
+          </>
         ) : (
           <>
             {overall.status !== 'complete' && overall.reason && (
@@ -167,6 +175,12 @@ export default function CaptureHealthPanel({ data, error, onRetry }: { data: Cap
               </div>
             )}
           </>
+        )}
+        {data.activation?.active_from && (
+          <p className="text-xs text-slate-500" data-testid="capture-activation">
+            Capture expected from {formatSession(data.activation.active_from)}
+            {data.activation.pre_activation_sessions ? ` · ${formatCount(data.activation.pre_activation_sessions)} earlier session(s) predate Release B capture and are not counted as missing.` : ''}
+          </p>
         )}
       </div>
     </Section>

@@ -157,7 +157,9 @@ export const CAPTURE_STATUS_META: Record<CaptureStatus, { label: string; chip: s
   partial: { label: 'PARTIAL', chip: 'bg-amber-100 text-amber-900', dot: 'bg-amber-500', text: 'text-amber-800', panel: 'border-amber-300 bg-amber-50' },
   failed: { label: 'FAILED', chip: 'bg-red-100 text-red-700', dot: 'bg-red-500', text: 'text-red-700', panel: 'border-red-200 bg-red-50' },
   running: { label: 'RUNNING', chip: 'bg-sky-50 text-sky-700', dot: 'bg-sky-500', text: 'text-sky-700', panel: 'border-sky-200 bg-sky-50' },
+  missing: { label: 'MISSING', chip: 'bg-red-100 text-red-700', dot: 'bg-red-500', text: 'text-red-700', panel: 'border-red-200 bg-red-50' },
   disabled: { label: 'DISABLED', chip: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400', text: 'text-slate-600', panel: 'border-slate-200 bg-slate-50' },
+  not_active: { label: 'NOT ACTIVE', chip: 'bg-slate-100 text-slate-500', dot: 'bg-slate-300', text: 'text-slate-500', panel: 'border-slate-200 bg-slate-50' },
   not_available: { label: 'NOT COLLECTED', chip: 'bg-slate-100 text-slate-500', dot: 'bg-slate-300', text: 'text-slate-500', panel: 'border-slate-200 bg-slate-50' },
 };
 

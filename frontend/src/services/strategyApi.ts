@@ -306,6 +306,16 @@ export interface Availability {
   reason: string | null;
   capture_runs: number | null;
   schema: Record<string, boolean>;
+  activation?: CaptureActivation | null;
+}
+
+/** Where capture is expected from (research_capture_activation). Before `active_from` capture is 'not_active'. */
+export interface CaptureActivation {
+  state: 'not_active' | 'enabled' | 'disabled';
+  active_from: string | null;
+  current: { state: 'enabled' | 'disabled'; effective_from_session: string; set_by: string; set_at: string; note: string } | null;
+  boundaries: number;
+  pre_activation_sessions?: number;
 }
 
 /** A count that may be unmeasured: `value` is null unless state is 'ok'. */
@@ -323,7 +333,7 @@ export interface FunnelStage extends CountMetric {
   label: string;
 }
 
-export type CaptureStatus = 'complete' | 'partial' | 'failed' | 'running' | 'disabled' | 'not_available';
+export type CaptureStatus = 'complete' | 'partial' | 'failed' | 'running' | 'missing' | 'disabled' | 'not_active' | 'not_available';
 
 export interface FeatureSetInfo {
   version: string;
@@ -396,6 +406,7 @@ export interface CaptureRunsResponse {
   availability: Availability;
   stuck_after_minutes: number;
   definitions: Record<string, string>;
+  activation: CaptureActivation | null;
   overall: { status: CaptureStatus; session_date: string | null; reason: string | null };
   latest: CaptureRun | null;
   history: CaptureRun[];

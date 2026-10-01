@@ -7,7 +7,7 @@ import type { DataHealth, StrategySummary } from '@/services/strategyApi';
 import prodSummaryJson from './fixtures/prod_summary.json';
 import prodHealthJson from './fixtures/prod_health.json';
 import {
-  disabledRun, failedRun, partialRun, researchNoData, researchOk, researchUnavailable, run, runsNotAvailable, runsOf,
+  AVAIL_NO_DATA, disabledRun, failedRun, partialRun, researchNoData, researchOk, researchUnavailable, run, runsNotAvailable, runsOf,
 } from './fixtures/research';
 
 vi.mock('@/hooks/usePagePerf', () => ({ usePagePerf: () => ({ markLoaded: () => {} }) }));
@@ -218,6 +218,28 @@ describe('Capture health panel', () => {
     const labels = rows.map((r) => within(r).getByText(/COMPLETE|PARTIAL|FAILED|DISABLED|RUNNING/).textContent);
     expect(new Set(labels).size).toBe(5);
     expect(statusOf(within(rows[1]).getByText('PARTIAL'))).toBe('partial');
+  });
+
+  it('NOT ACTIVE (before the activation boundary) is neutral, never missing or failed, and says why', () => {
+    const data = { ...runsNotAvailable(), availability: AVAIL_NO_DATA,
+      activation: { state: 'not_active' as const, active_from: null, current: null, boundaries: 0, pre_activation_sessions: 9 },
+      overall: { status: 'not_active' as const, session_date: null, reason: 'Release B capture is not active for this strategy yet: no activation boundary is set.' } };
+    render(<CaptureHealthPanel data={data} />);
+    expect(screen.getByTestId('capture-panel').getAttribute('data-overall')).toBe('not_active');
+    expect(screen.getAllByText('NOT ACTIVE').length).toBeGreaterThan(0);
+    expect(screen.queryByText('MISSING')).toBeNull();
+    expect(screen.queryByText('FAILED')).toBeNull();
+  });
+
+  it('MISSING (enabled, ledger signals, no run) is a red row; the activation note counts earlier sessions as not missing', () => {
+    const miss = { ...disabledRun(), session_date: '2026-10-05', health: { status: 'missing' as const, reasons: ['Capture was enabled for this session and the ledger recorded 25 signal(s), but no capture run exists.'], notes: [] } };
+    render(<CaptureHealthPanel data={runsOf(run(), [miss, run()])} />);
+    const rows = within(screen.getByRole('table', { name: 'Capture history' })).getAllByRole('row').slice(1);
+    expect(rows.map((r) => r.getAttribute('data-capture-status'))).toEqual(['missing', 'complete']);
+    expect(within(rows[0]).getByText('MISSING')).toBeTruthy();
+    const note = screen.getByTestId('capture-activation').textContent ?? '';
+    expect(note).toContain('Capture expected from');
+    expect(note).toContain('7 earlier session(s) predate Release B capture');
   });
 
   it('history rows carry session, candidates, captured, skipped, guard-rejected, missing and runtime', () => {
