@@ -90,11 +90,13 @@ logger = setup_logging("multi_timeframe_ml_screener")
 try:
     from ml_training.features import price_features as pf
     from alerts import digest_builder as dbld
+    from screeners import universe_guards as ug
     GUARDS_AVAILABLE = True
 except ImportError as e:
     print(f"Universe guards not available (falling back to unguarded signals): {e}")
     pf = None
     dbld = None
+    ug = None
     GUARDS_AVAILABLE = False
 
 
@@ -123,6 +125,10 @@ class MultiTimeframeMLScreener:
             target_session, _ = market_calendar.resolve_session(None)
         self.target_session = target_session
         self.stale_rejected = 0
+        # symbol -> guard reasons ([] = passed), filled by _apply_universe_guards; guards_evaluated is False when
+        # the guards were unavailable, so a consumer never reads "no entry" as "passed".
+        self.guard_decisions: Dict[str, List[str]] = {}
+        self.guards_evaluated = False
 
         # Initialize ML enhancer if available
         self.failed = False  # set when a run aborts, so the CLI can exit non-zero (pipeline `set -e`)
@@ -177,25 +183,10 @@ class MultiTimeframeMLScreener:
         for r in rows:
             by_symbol.setdefault(r['symbol'], []).append(r)
 
-        passed = set()
-        for sym, rs in by_symbol.items():
-            px = pd.DataFrame(rs)
-            for c in pf.OHLCV:
-                px[c] = pd.to_numeric(px[c], errors='coerce')
-            px = px.dropna(subset=['close']).sort_values('date').reset_index(drop=True)
-            n = len(px)
-            if n < dbld.MIN_BARS:
-                continue
-            ind = pf.compute_indicators(px)
-            # Prior 20 sessions, excluding today -- identical definition to
-            # send_daily_digest.analyse_universe's dv20 (there: g[...].iloc[-21:-1]).
-            dv20 = ind['dollar_vol_20'].iloc[-2] if n >= 2 else np.nan
-            if not (pd.notna(dv20) and dv20 >= pf.MIN_DOLLAR_VOLUME_20):
-                continue
-            disc = pf.find_discontinuities(px)
-            if len(disc) and (disc['pos'] >= (n - 1) - pf.LOOKBACK_BARS).any():
-                continue
-            passed.add(sym)
+        # A symbol with no price rows at all is dropped (insufficient history), never passed.
+        self.guard_decisions = {sym: ug.reasons_for_rows(by_symbol.get(sym, [])) for sym in symbols}
+        self.guards_evaluated = True
+        passed = {sym for sym, reasons in self.guard_decisions.items() if not reasons}
 
         dropped = len(symbols) - len(passed)
         if dropped:
@@ -246,6 +237,24 @@ class MultiTimeframeMLScreener:
             merged.append(fallback)
         return merged
 
+    def _capture_research_candidates(self, candidates: List[Dict], final_signals: List[Dict]) -> Dict:
+        """Optional, default-off, never-raising research capture (mechanism/research/observer.py). Returns the
+        (symbol, direction) -> lineage links for the ledger writer, or {} when capture is off or failed."""
+        try:
+            from research import observer
+            if not observer.is_enabled():
+                return {}
+            from screeners.signal_ledger_writer import _resolve_default_strategy
+            strategy = _resolve_default_strategy(db)
+            result = observer.capture_session(
+                candidates=candidates, final_signals=final_signals, guard_decisions=self.guard_decisions,
+                guards_evaluated=self.guards_evaluated, session_date=self.target_session, strategy=strategy,
+                connect=db.get_sync_connection, universe_size=getattr(self, "universe_size", None))
+            return result.links
+        except Exception as e:  # noqa: BLE001 -- research capture must never touch the screening result
+            logger.error(f"research capture failed (non-fatal, screening result unaffected): {e}")
+            return {}
+
     @timing_decorator()
     def screen_all_symbols(self) -> Dict:
         """Main screening function with ML enhancement"""
@@ -267,6 +276,7 @@ class MultiTimeframeMLScreener:
 
             logger.info(f"Found {len(all_signals)} multi-timeframe signals")
 
+            pre_guard_candidates = list(all_signals)  # everything the strategy produced, for the research funnel
             all_signals = self._apply_universe_guards(all_signals)
             logger.info(f"{len(all_signals)} signals after the liquidity/data-integrity guards")
 
@@ -323,10 +333,12 @@ class MultiTimeframeMLScreener:
             # is never affected, and is wrapped so a ledger-write failure can never fail this
             # method or the pipeline steps that follow it (ML rebuild, session mark, post-market
             # retry) -- see signal_ledger_writer.py's module docstring for the full reasoning.
+            links = self._capture_research_candidates(pre_guard_candidates, all_signals)
+
             try:
                 from screeners.signal_ledger_writer import write_todays_signals
                 # The explicit pipeline session -- never derived from the first signal's own date.
-                write_todays_signals(db, all_signals, self.target_session)
+                write_todays_signals(db, all_signals, self.target_session, links=links)
             except Exception as e:
                 logger.error(f"signal_ledger_writer failed (non-fatal, screening result unaffected): {e}")
 
@@ -783,6 +795,15 @@ class MultiTimeframeMLScreener:
                     stop_loss_price = current_price + (2 * atr)
                     target_price = current_price - (6 * atr)
 
+                # Inputs this screener fills in with a fabricated value when the data is missing (atr = 2% of
+                # price, rsi 50, volume_ratio 1.0, ...). The values stay (the dashboard shows them), but the
+                # names are recorded so the research capture and the ledger can refuse to treat them as real.
+                screener_defaults = [name for name, col in (
+                    ('atr_14', 'atr_14'), ('rsi_14', 'rsi_14'), ('volume_ratio', 'volume_ratio'),
+                    ('sma_20', 'sma_20'), ('sma_50', 'sma_50'), ('volume', 'volume'),
+                    ('open_price', 'open_price'), ('high_price', 'high_price'), ('low_price', 'low_price'),
+                    ('sector', 'sector')) if not row[col]]
+
                 # RICH SIGNAL DATA (matching old screener format)
                 signal = {
                     'symbol': symbol,
@@ -790,6 +811,7 @@ class MultiTimeframeMLScreener:
                     'urgency': urgency,
                     'screening_date': row['screening_date'],
                     'timestamp': datetime.now().isoformat(),
+                    'screener_defaults': screener_defaults,
 
                     # Price data
                     'current_price': current_price,

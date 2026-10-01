@@ -286,7 +286,7 @@ def run_screen(mts, monkeypatch, signals, enhanced_by_symbol=None, guard_survivo
                         lambda a, b: seen.update(results_order=[x["symbol"] for x in a]) or {"summary": {"total_signals": len(a)}})
     monkeypatch.setattr(s, "save_results", lambda r: None)
     monkeypatch.setattr(slw, "write_todays_signals",
-                        lambda db, sigs, session: seen.update(ledger_order=[x["symbol"] for x in sigs], session=session))
+                        lambda db, sigs, session, links=None: seen.update(ledger_order=[x["symbol"] for x in sigs], session=session))
     s.screen_all_symbols()
     assert not s.failed
     return seen
@@ -325,7 +325,49 @@ def test_timing_decorator_sits_on_screen_all_symbols_not_on_the_guard(mts):
 
 
 def test_the_guard_uses_the_shared_helpers_not_a_reimplementation(mts):
-    src = inspect.getsource(mts.MultiTimeframeMLScreener._apply_universe_guards)
+    src = inspect.getsource(mts.ug)
     for needle in ("pf.compute_indicators", "pf.find_discontinuities", "pf.MIN_DOLLAR_VOLUME_20",
                    "pf.LOOKBACK_BARS", "dbld.MIN_BARS"):
         assert needle in src
+    assert "ug.reasons_for_rows" in inspect.getsource(mts.MultiTimeframeMLScreener._apply_universe_guards)
+
+
+# ------------------------------------------------------------------ named reasons (the observer's input)
+def decisions(mts, monkeypatch, rows, symbols):
+    s, _ = screener(mts, monkeypatch, rows)
+    s._apply_universe_guards([sig(sym) for sym in symbols])
+    return s.guard_decisions
+
+
+def test_each_failing_rule_has_its_own_reason_and_a_passing_symbol_has_none(mts, monkeypatch):
+    jump = {i: {"open": 500.0, "high": 505.0, "low": 495.0, "close": 500.0} for i in range(70, 80)}
+    rows = (bars("SHORT", 40) + bars("THIN", 80, volume=1_000.0) + bars("GOOD", 80)
+            + bars("SPLIT", 80, overrides=jump))
+    d = decisions(mts, monkeypatch, rows, ["SHORT", "THIN", "GOOD", "SPLIT", "GHOST"])
+    assert d["SHORT"] == ["insufficient_history"]
+    assert d["GHOST"] == ["insufficient_history"]
+    assert d["THIN"] == ["illiquid_dollar_volume"]
+    assert d["GOOD"] == []
+    assert "price_discontinuity" in d["SPLIT"]
+
+
+def test_a_symbol_failing_two_rules_reports_both(mts, monkeypatch):
+    jump = {i: {"open": 500.0, "high": 505.0, "low": 495.0, "close": 500.0} for i in range(70, 80)}
+    d = decisions(mts, monkeypatch, bars("BOTH", 80, volume=1_000.0, overrides=jump), ["BOTH"])
+    assert d["BOTH"] == ["illiquid_dollar_volume", "price_discontinuity"]
+
+
+def test_decisions_agree_exactly_with_the_survivor_filter(mts, monkeypatch):
+    rows = bars("SHORT", 40) + bars("THIN", 80, volume=1_000.0) + bars("GOOD", 80) + bars("EDGE", 80, volume=10_000.0)
+    syms = ["SHORT", "THIN", "GOOD", "EDGE"]
+    s, _ = screener(mts, monkeypatch, rows)
+    kept = [x["symbol"] for x in s._apply_universe_guards([sig(x) for x in syms])]
+    assert kept == [sym for sym in syms if not s.guard_decisions[sym]] == ["GOOD", "EDGE"]
+    assert s.guards_evaluated is True
+
+
+def test_guards_unavailable_means_not_evaluated_never_passed(mts, monkeypatch):
+    monkeypatch.setattr(mts, "GUARDS_AVAILABLE", False)
+    s, _ = screener(mts, monkeypatch, bars("GOOD", 80))
+    out = s._apply_universe_guards([sig("GOOD")])
+    assert [x["symbol"] for x in out] == ["GOOD"] and s.guards_evaluated is False and s.guard_decisions == {}

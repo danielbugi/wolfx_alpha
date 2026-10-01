@@ -186,7 +186,7 @@ class Pipeline:
         monkeypatch.setattr(mc, "CACHE_PATH", tmp_path / "cache.json")
         monkeypatch.setenv("MARKET_SETTLE_MINUTES", "30")
         monkeypatch.setattr(cpf, "db", self.db)
-        monkeypatch.setattr(slw, "_resolve_default_strategy", lambda db: (1, "v1"))
+        monkeypatch.setattr(slw, "_resolve_default_strategy", lambda db: slw.StrategyRef(1, "donchian_breakout", "v1"))
         monkeypatch.setattr(slw, "_has_open_position", lambda *a, **k: False)
         mod = types.ModuleType("shared.tiingo_client")
         mod.get_daily_bars = lambda symbol, period=None: vendor_frame(*self.vendor_days.get(symbol, []))
@@ -280,7 +280,7 @@ def test_never_creates_a_next_day_target_with_a_previous_day_bar(tmp_path, monke
     signals = [{"symbol": "AAA", "signal_type": "bullish_breakout", "screening_date": sep30,
                 "current_price": 100.0, "atr_14": 2.0}]
     db = MemDB()
-    monkeypatch.setattr(slw, "_resolve_default_strategy", lambda db: (1, "v1"))
+    monkeypatch.setattr(slw, "_resolve_default_strategy", lambda db: slw.StrategyRef(1, "donchian_breakout", "v1"))
     monkeypatch.setattr(slw, "_has_open_position", lambda *a, **k: False)
     assert slw.write_todays_signals(db, signals, oct1) == 0
     assert db.ledger == {}
