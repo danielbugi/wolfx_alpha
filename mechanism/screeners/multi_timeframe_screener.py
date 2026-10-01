@@ -83,6 +83,20 @@ except ImportError as e:
 warnings.filterwarnings('ignore')
 logger = setup_logging("multi_timeframe_ml_screener")
 
+# Single source of truth for the liquidity + data-integrity guards, and for the digest's own
+# constants -- see MultiTimeframeMLScreener._apply_universe_guards. project_root was already added to
+# sys.path above (for ml_training.evaluation.performance_tracker); parent_dir (mechanism/) makes
+# `alerts` importable as a sibling package.
+try:
+    from ml_training.features import price_features as pf
+    from alerts import digest_builder as dbld
+    GUARDS_AVAILABLE = True
+except ImportError as e:
+    print(f"Universe guards not available (falling back to unguarded signals): {e}")
+    pf = None
+    dbld = None
+    GUARDS_AVAILABLE = False
+
 
 def safe_float(value):
     """Safely convert decimal/numeric values to float"""
@@ -134,6 +148,104 @@ class MultiTimeframeMLScreener:
         logger.info("Multi-Timeframe ML Screener initialized")
         logger.info(f"ML Enhancement: {'Available' if self.ml_enhancer else 'Not Available'}")
 
+    def _apply_universe_guards(self, signals: List[Dict]) -> List[Dict]:
+        """Drop signals for symbols that fail the SAME liquidity + data-integrity guards
+        mechanism/alerts/send_daily_digest.py / digest_builder.py already apply: a $1M/day, prior-20-
+        session average dollar-volume floor, at least digest_builder.MIN_BARS of price history, and no
+        price discontinuity (an unadjusted split / bad vendor bar) in the last price_features.LOOKBACK_BARS
+        bars. Uses the exact same functions the digest and ML training already trust
+        (ml_training/features/price_features.py), not a second reimplementation that could drift out of
+        sync with them again.
+
+        Root cause fixed here (2026-09-22, DATA_ML_MILESTONES.md): this screener detected breakouts
+        straight from technical_indicators/stock_prices SQL without ever applying either guard, so
+        illiquid preferred shares and bad-data price jumps counted as real breakouts here while the
+        digest correctly excluded them -- the direct cause of the dashboard showing more "breakouts"
+        than the channel for the same session.
+        """
+        if not signals or not GUARDS_AVAILABLE:
+            if not GUARDS_AVAILABLE:
+                logger.warning("Universe guards unavailable this run -- signals are unfiltered")
+            return signals
+
+        symbols = sorted(set(s['symbol'] for s in signals))
+        rows = db.execute_dict_query(
+            "SELECT symbol, date, open, high, low, close, volume FROM stock_prices "
+            "WHERE symbol = ANY(%(symbols)s) AND date <= %(target)s ORDER BY symbol, date",
+            {"symbols": symbols, "target": self.target_session})
+        by_symbol: Dict[str, List[Dict]] = {}
+        for r in rows:
+            by_symbol.setdefault(r['symbol'], []).append(r)
+
+        passed = set()
+        for sym, rs in by_symbol.items():
+            px = pd.DataFrame(rs)
+            for c in pf.OHLCV:
+                px[c] = pd.to_numeric(px[c], errors='coerce')
+            px = px.dropna(subset=['close']).sort_values('date').reset_index(drop=True)
+            n = len(px)
+            if n < dbld.MIN_BARS:
+                continue
+            ind = pf.compute_indicators(px)
+            # Prior 20 sessions, excluding today -- identical definition to
+            # send_daily_digest.analyse_universe's dv20 (there: g[...].iloc[-21:-1]).
+            dv20 = ind['dollar_vol_20'].iloc[-2] if n >= 2 else np.nan
+            if not (pd.notna(dv20) and dv20 >= pf.MIN_DOLLAR_VOLUME_20):
+                continue
+            disc = pf.find_discontinuities(px)
+            if len(disc) and (disc['pos'] >= (n - 1) - pf.LOOKBACK_BARS).any():
+                continue
+            passed.add(sym)
+
+        dropped = len(symbols) - len(passed)
+        if dropped:
+            logger.info(f"Universe guards: dropped {dropped}/{len(symbols)} symbols "
+                       f"(illiquid, too little history, or a price discontinuity)")
+        return [s for s in signals if s['symbol'] in passed]
+
+    def _merge_ml_scores(self, all_signals: List[Dict], ml_enhanced_signals: List[Dict]) -> List[Dict]:
+        """Merge the ML-enhanced copies (Grade A/B/C signals that went through enhance_signals_with_ml)
+        back onto the FULL signal list, and give every OTHER signal (Grade D/F, or any signal ML
+        enhancement was never attempted for) the identical combined_score formula with no ML
+        contribution (ml_part=0) -- the same one enhance_signals_with_ml itself uses when a signal has
+        no validated ML score.
+
+        Root cause fixed here (2026-09-22, DATA_ML_MILESTONES.md): _create_enhanced_results previously
+        built the dashboard's main signals.bullish_breakout/bearish_breakout/near_bullish/near_bearish
+        lists straight from `all_signals`, which never had combined_score set on it at all (only the
+        SEPARATE `ml_enhanced_signals` copies did, and only for Grade A/B/C signals). Every signal in
+        those main lists therefore carried combined_score=None, so the "sort by combined score" a few
+        lines below was sorting on an all-None key -- a no-op that silently left the list in whatever
+        order the SQL query happened to return (alphabetical), the exact opposite of "best stocks to
+        watch". ai_insights.top_ai_picks was unaffected (it already read from ml_enhanced_signals), which
+        is why that panel had real, if heavily tied, scores while the main lists had none at all.
+        """
+        # Only a copy that really carries a combined_score counts as ML-enhanced. When ML is unavailable or
+        # failed, screen_all_symbols passes the un-scored Grade A/B/C signals through as `ml_enhanced_signals`;
+        # taking those would leave combined_score=None and silently disable the ordering again.
+        enhanced_by_key = {(s['symbol'], s['signal_type']): s for s in ml_enhanced_signals
+                           if s.get('combined_score') is not None}
+        merged = []
+        for s in all_signals:
+            key = (s['symbol'], s['signal_type'])
+            if key in enhanced_by_key:
+                merged.append(enhanced_by_key[key])
+                continue
+            fallback = s.copy()
+            alignment_score = fallback.get('alignment_score', 0) or 0
+            fallback.update({
+                'ml_momentum_probability': None,
+                'ml_confidence': 'not_processed',
+                'ml_prediction_available': False,
+                'ml_trade_recommendation': 'hold',
+                'ml_risk_score': 50.0,
+                'ml_predicted_momentum_days': 7.0,
+                'ml_model_version': self.ml_enhancer.ml_model_version if self.ml_enhancer else None,
+                'combined_score': round(alignment_score * 0.6, 1),
+            })
+            merged.append(fallback)
+        return merged
+
     @timing_decorator()
     def screen_all_symbols(self) -> Dict:
         """Main screening function with ML enhancement"""
@@ -155,6 +267,9 @@ class MultiTimeframeMLScreener:
 
             logger.info(f"Found {len(all_signals)} multi-timeframe signals")
 
+            all_signals = self._apply_universe_guards(all_signals)
+            logger.info(f"{len(all_signals)} signals after the liquidity/data-integrity guards")
+
             # Filter high-quality signals (Grade A, B, C)
             high_quality_signals = [
                 signal for signal in all_signals
@@ -175,6 +290,18 @@ class MultiTimeframeMLScreener:
                     ml_enhanced_signals = high_quality_signals  # Fallback to non-ML enhanced
             else:
                 ml_enhanced_signals = high_quality_signals
+
+            # Every signal gets a real combined_score -- not just the Grade A/B/C subset that went
+            # through ML enhancement (see _merge_ml_scores' docstring for the bug this fixes).
+            all_signals = self._merge_ml_scores(all_signals, ml_enhanced_signals)
+
+            # Best-first, for real: _create_enhanced_results below builds every per-type list
+            # (signals.bullish_breakout etc. -- the dashboard's main tables) straight from all_signals in
+            # whatever order it arrives in. Without this, a correct combined_score on every signal still
+            # wasn't enough -- the list itself stayed in the SQL query's original (alphabetical) order,
+            # since enhance_signals_with_ml's own internal sort only ever applied to its OWN returned
+            # list (ml_enhanced_signals), not to this merged one.
+            all_signals.sort(key=lambda x: x.get('combined_score', 0) or 0, reverse=True)
 
             # Create comprehensive results
             results = self._create_enhanced_results(all_signals, ml_enhanced_signals)
