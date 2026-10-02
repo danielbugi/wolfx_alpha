@@ -473,6 +473,19 @@ except Exception as e:
     logger.error(f"❌ Error including strategy intelligence router: {e}")
 
 
+# Import and include the Market Intelligence router (internal, read-only: session market regime and sector / relative-strength
+# snapshots from mechanism/market_intelligence; answers `available: false` until migrations 24/25 are applied)
+try:
+    from routers.market_intelligence import market_intelligence_router
+
+    app.include_router(market_intelligence_router)
+    logger.info("✅ Market intelligence router included successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  Market intelligence router not available: {e}")
+except Exception as e:
+    logger.error(f"❌ Error including market intelligence router: {e}")
+
+
 # ============================================================================
 # HEALTH AND STATUS ENDPOINTS
 # ============================================================================
