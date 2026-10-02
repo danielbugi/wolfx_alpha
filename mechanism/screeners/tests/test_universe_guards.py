@@ -29,6 +29,9 @@ def mts(monkeypatch):
     if not m.GUARDS_AVAILABLE:
         pytest.skip("universe guards not importable here")
     monkeypatch.setattr(m, "ML_AVAILABLE", False)
+    # These tests exercise the guards themselves, so put every session on the guarded side of the boundary
+    # (gating is covered by test_guards_effective_from.py).
+    monkeypatch.setenv("GUARDS_EFFECTIVE_FROM", "2000-01-01")
     return m
 
 
@@ -193,12 +196,20 @@ def test_guard_is_a_noop_for_an_empty_signal_list_and_makes_no_query(mts, monkey
     assert s._apply_universe_guards([]) == [] and db.calls == []
 
 
-def test_unavailable_guards_leave_signals_unfiltered_and_make_no_query(mts, monkeypatch, caplog):
+def test_requested_but_unavailable_guards_fail_the_run_rather_than_pass_unfiltered(mts, monkeypatch):
     monkeypatch.setattr(mts, "GUARDS_AVAILABLE", False)
+    s, db = screener(mts, monkeypatch, [])
+    with pytest.raises(RuntimeError, match="GUARDS_EFFECTIVE_FROM"):
+        s._apply_universe_guards([sig("ANY")])
+    assert db.calls == []
+
+
+def test_unavailable_guards_are_irrelevant_while_inert(mts, monkeypatch):
+    monkeypatch.setattr(mts, "GUARDS_AVAILABLE", False)
+    monkeypatch.delenv("GUARDS_EFFECTIVE_FROM")
     s, db = screener(mts, monkeypatch, [])
     signals = [sig("ANY")]
     assert s._apply_universe_guards(signals) is signals and db.calls == []
-    assert "unavailable" in caplog.text.lower()
 
 
 # ------------------------------------------------------------------ ML-unprocessed + combined score
@@ -366,8 +377,9 @@ def test_decisions_agree_exactly_with_the_survivor_filter(mts, monkeypatch):
     assert s.guards_evaluated is True
 
 
-def test_guards_unavailable_means_not_evaluated_never_passed(mts, monkeypatch):
-    monkeypatch.setattr(mts, "GUARDS_AVAILABLE", False)
-    s, _ = screener(mts, monkeypatch, bars("GOOD", 80))
+def test_inert_guards_mean_not_evaluated_never_passed(mts, monkeypatch):
+    monkeypatch.delenv("GUARDS_EFFECTIVE_FROM")
+    s, db = screener(mts, monkeypatch, bars("GOOD", 80))
     out = s._apply_universe_guards([sig("GOOD")])
     assert [x["symbol"] for x in out] == ["GOOD"] and s.guards_evaluated is False and s.guard_decisions == {}
+    assert db.calls == []

@@ -89,6 +89,8 @@ GUARD_CHUNK = 250  # symbols whose price history is held in memory at once while
 # constants -- see MultiTimeframeMLScreener._apply_universe_guards. project_root was already added to
 # sys.path above (for ml_training.evaluation.performance_tracker); parent_dir (mechanism/) makes
 # `alerts` importable as a sibling package.
+from screeners import guards_boundary as gb  # stdlib only: importable even when the guard implementation is not
+
 try:
     from ml_training.features import price_features as pf
     from alerts import digest_builder as dbld
@@ -126,6 +128,11 @@ class MultiTimeframeMLScreener:
         if target_session is None:
             target_session, _ = market_calendar.resolve_session(None)
         self.target_session = target_session
+        # GUARDS_EFFECTIVE_FROM (screeners/guards_boundary.py): unset => guards inert; YYYY-MM-DD => guards apply to
+        # sessions on/after it. Resolved here, once, so a malformed value fails the run before any work is done
+        # (GuardsBoundaryError) instead of being read as "unset".
+        self.guards_boundary = gb.effective_from()
+        self.guards_active = gb.guards_apply(target_session, self.guards_boundary)
         self.stale_rejected = 0
         # symbol -> guard reasons ([] = passed), filled by _apply_universe_guards; guards_evaluated is False when
         # the guards were unavailable, so a consumer never reads "no entry" as "passed".
@@ -156,6 +163,11 @@ class MultiTimeframeMLScreener:
         logger.info("Multi-Timeframe ML Screener initialized")
         logger.info(f"ML Enhancement: {'Available' if self.ml_enhancer else 'Not Available'}")
 
+    def _guards_metadata(self) -> Dict:
+        return {'applied': self.guards_active,
+                'effective_from': self.guards_boundary.isoformat() if self.guards_boundary else None,
+                'session': self.target_session.isoformat()}
+
     def _apply_universe_guards(self, signals: List[Dict]) -> List[Dict]:
         """Drop signals for symbols that fail the SAME liquidity + data-integrity guards
         mechanism/alerts/send_daily_digest.py / digest_builder.py already apply: a $1M/day, prior-20-
@@ -171,9 +183,17 @@ class MultiTimeframeMLScreener:
         digest correctly excluded them -- the direct cause of the dashboard showing more "breakouts"
         than the channel for the same session.
         """
-        if not signals or not GUARDS_AVAILABLE:
-            if not GUARDS_AVAILABLE:
-                logger.warning("Universe guards unavailable this run -- signals are unfiltered")
+        logger.info(gb.describe(self.target_session, self.guards_boundary))
+        if not self.guards_active:
+            # Before the boundary (or no boundary set): behave exactly as before the guards existed -- no
+            # evaluation, no filtering, and guards_evaluated stays False so consumers never read "passed".
+            return signals
+        if not GUARDS_AVAILABLE:
+            # Explicitly requested but not importable: a silent unfiltered run would put an unguarded session on the
+            # wrong side of the boundary. Fail the run (screen_all_symbols marks it failed) instead.
+            raise RuntimeError(f"{gb.ENV_VAR} requires the universe guards for session {self.target_session} "
+                               f"but they could not be imported")
+        if not signals:
             return signals
 
         symbols = sorted(set(s['symbol'] for s in signals))
@@ -200,9 +220,8 @@ class MultiTimeframeMLScreener:
         passed = {sym for sym, reasons in self.guard_decisions.items() if not reasons}
 
         dropped = len(symbols) - len(passed)
-        if dropped:
-            logger.info(f"Universe guards: dropped {dropped}/{len(symbols)} symbols "
-                       f"(illiquid, too little history, or a price discontinuity)")
+        logger.info(f"Universe guards: dropped {dropped}/{len(symbols)} symbols "
+                    f"(illiquid, too little history, or a price discontinuity)")
         return [s for s in signals if s['symbol'] in passed]
 
     def _merge_ml_scores(self, all_signals: List[Dict], ml_enhanced_signals: List[Dict]) -> List[Dict]:
@@ -973,7 +992,8 @@ class MultiTimeframeMLScreener:
                     'screening_type': 'multi_timeframe_ml_enhanced',
                     'total_symbols_screened': len(set(s['symbol'] for s in all_signals)),
                     'ml_enhancement_enabled': self.ml_enhancer is not None,
-                    'version': 'multi_timeframe_v3.0_fixed'
+                    'version': 'multi_timeframe_v3.0_fixed',
+                    'universe_guards': self._guards_metadata(),
                 },
                 'summary': {
                     'total_signals': float(len(all_signals)),
@@ -1399,7 +1419,11 @@ if __name__ == "__main__":
         sys.exit(2)
     print(f"Screening session: {_target} ({_how})")
 
-    screener = MultiTimeframeMLScreener(target_session=_target)
+    try:
+        screener = MultiTimeframeMLScreener(target_session=_target)
+    except gb.GuardsBoundaryError as e:
+        print(f"Invalid configuration: {e}", file=sys.stderr)
+        sys.exit(2)
 
     if args.config_test:
         print("Configuration test passed")
