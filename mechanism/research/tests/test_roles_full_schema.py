@@ -84,8 +84,8 @@ class FullEnv:
 
 @pytest.fixture(scope="module")
 def full():
-    args = _connect_args()
     try:
+        args = _connect_args()
         boot = psycopg2.connect(**dict(args, dbname=args["dbname"]))
     except Exception as e:  # noqa: BLE001
         pytest.skip(f"Postgres unreachable: {type(e).__name__}")
