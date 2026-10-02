@@ -8,6 +8,11 @@
 -- search_path (production: public):
 --     PGOPTIONS='-c search_path=public' psql -v ON_ERROR_STOP=1 -1 -f deploy/db/research_roles.sql
 --
+-- Idempotent: safe to re-run, and it MUST be re-run (then deploy/db/research_roles_verify.sql) after every later
+-- migration that adds a table, sequence, view or function, otherwise the runtime role cannot see the new object (the
+-- verify script's coverage check fails until you do). Deliberately NO `ALTER DEFAULT PRIVILEGES`: it would hand the
+-- runtime role UPDATE/DELETE on every future table automatically, including any future immutable research table.
+--
 -- Roles (names are fixed; passwords are NEVER in this repo -- set them out of band with \password):
 --   donchian_owner           NOLOGIN. Owns the 8 research tables and the 8 research functions. The SECURITY DEFINER
 --                            functions therefore execute with this role's (small) privileges, not a superuser's.
@@ -48,6 +53,18 @@ BEGIN
     END IF;
 END;
 $roles$;
+
+-- ---------------------------------------------------------------------------------------------------
+-- 1b. No role may create objects in the schema through PUBLIC (nor the runtime role directly, nor schemas in the database). PG15+ already ships it that way, but a schema restored
+--     from an older dump can still carry `GRANT CREATE ... TO PUBLIC`, which would let donchian_app run DDL.
+-- ---------------------------------------------------------------------------------------------------
+DO $sch$
+BEGIN
+    EXECUTE format('REVOKE CREATE ON SCHEMA %I FROM PUBLIC', current_schema());
+    EXECUTE format('REVOKE CREATE ON DATABASE %I FROM donchian_app', current_database());
+    EXECUTE format('REVOKE CREATE ON SCHEMA %I FROM donchian_app', current_schema());
+END;
+$sch$;
 
 -- ---------------------------------------------------------------------------------------------------
 -- 2. Ownership: the research objects move to donchian_owner (functions then run as it, not as a superuser).
@@ -129,19 +146,23 @@ END;
 $adm$;
 
 -- ---------------------------------------------------------------------------------------------------
--- 6. OPTIONAL baseline for the runtime role on the PRE-EXISTING (non-research) tables. Today the services run as a
---    superuser, so this baseline has never been exercised: validate it in staging against the real workloads
---    (pipeline, backend, bot) BEFORE switching DB_USER. It deliberately omits TRUNCATE / TRIGGER / REFERENCES and
---    all DDL. (ml_training/models/momentum_predictor.py runs ALTER TABLE ml_models ADD COLUMN IF NOT EXISTS at
---    runtime: that needs ownership of ml_models -- run the training job as the owner or move that DDL into a
---    migration; see docs/operations/RESEARCH_DB_ROLES.md.)
+-- 6. Runtime baseline for the runtime role on every PRE-EXISTING (non-research) object -- REQUIRED before any service
+--    is switched to donchian_app, because those services currently run as a superuser and never needed it:
+--      tables/partitioned tables  SELECT, INSERT, UPDATE, DELETE   (no TRUNCATE / TRIGGER / REFERENCES)
+--      views / materialized views SELECT                           (production has latest_stock_data,
+--                                                                   latest_fundamentals, ml_training_data)
+--      sequences                  USAGE, SELECT, UPDATE            (nextval/currval/setval behind SERIAL inserts)
+--      functions                  EXECUTE                          (get_last_update_date & co.; explicit so a revoked
+--                                                                   PUBLIC default cannot silently lock the role out)
+--    No DDL of any kind: the schema is owned by someone else and donchian_app has no CREATE on it (1b above).
+--    Verified against the full bootstrapped schema by mechanism/research/tests/test_roles_full_schema.py.
 -- ---------------------------------------------------------------------------------------------------
 DO $base$
 DECLARE
     r RECORD;
 BEGIN
-    FOR r IN SELECT c.relname, c.relkind FROM pg_class c
-             WHERE c.relnamespace = to_regnamespace(current_schema()) AND c.relkind IN ('r', 'p', 'S')
+    FOR r IN SELECT c.oid, c.relname, c.relkind FROM pg_class c
+             WHERE c.relnamespace = to_regnamespace(current_schema()) AND c.relkind IN ('r', 'p', 'v', 'm', 'S')
                AND c.relname NOT IN ('feature_set_registry', 'candidate_capture_run', 'research_capture_activation',
                                      'research_maintenance_log', 'research_maintenance_session',
                                      'research_maintenance_audit', 'feature_snapshot', 'candidate_observation',
@@ -149,11 +170,22 @@ BEGIN
                                      'candidate_capture_run_id_seq', 'research_capture_activation_id_seq',
                                      'research_maintenance_log_id_seq', 'research_maintenance_session_id_seq',
                                      'research_maintenance_audit_id_seq') LOOP
+        -- REVOKE first so a re-run CONVERGES to the baseline (drops any drifted extra privilege such as TRUNCATE).
         IF r.relkind = 'S' THEN
+            EXECUTE format('REVOKE ALL ON SEQUENCE %I FROM donchian_app', r.relname);
             EXECUTE format('GRANT USAGE, SELECT, UPDATE ON SEQUENCE %I TO donchian_app', r.relname);
+        ELSIF r.relkind IN ('v', 'm') THEN
+            EXECUTE format('REVOKE ALL ON %I FROM donchian_app', r.relname);
+            EXECUTE format('GRANT SELECT ON %I TO donchian_app', r.relname);
         ELSE
+            EXECUTE format('REVOKE ALL ON %I FROM donchian_app', r.relname);
             EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I TO donchian_app', r.relname);
         END IF;
+    END LOOP;
+    FOR r IN SELECT p.oid::regprocedure AS sig FROM pg_proc p
+             WHERE p.pronamespace = to_regnamespace(current_schema()) AND p.prokind IN ('f', 'p')
+               AND p.proname NOT LIKE 'research\_%' LOOP
+        EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO donchian_app', r.sig);
     END LOOP;
 END;
 $base$;

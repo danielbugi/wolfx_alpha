@@ -24,6 +24,10 @@ DECLARE
                         'research_maintenance_begin(bigint)', 'research_maintenance_close(bigint)',
                         'research_capture_set_state(bigint,text,date,text)'];
     priv TEXT;
+    obj RECORD;
+    nrel INT := 0;
+    nfn INT := 0;
+    sch TEXT := current_schema();
 BEGIN
     -- roles and their attributes
     FOR t IN SELECT unnest(ARRAY['donchian_owner', 'donchian_app', 'donchian_research_admin']) LOOP
@@ -117,6 +121,66 @@ BEGIN
     END IF;
     RAISE NOTICE 'OK donchian_app: INSERT/SELECT only on immutable tables; no write on maintenance/activation tables; no EXECUTE on maintenance functions';
 
+    -- RUNTIME COVERAGE: every object the services use that is NOT part of the research layer must be reachable. This is
+    -- what catches a view/sequence/function the role script forgot (and any object a later migration added).
+    FOR obj IN SELECT c.oid, c.relname, c.relkind FROM pg_class c
+             WHERE c.relnamespace = to_regnamespace(sch) AND c.relkind IN ('r', 'p', 'v', 'm', 'S')
+               AND c.relname <> ALL (allt)
+               AND NOT (c.relkind = 'S' AND EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = c.oid AND d.deptype IN ('a', 'i')
+                                                    AND d.refobjid = ANY (SELECT to_regclass(x)::oid FROM unnest(allt) x)))
+    LOOP
+        nrel := nrel + 1;
+        IF obj.relkind = 'S' THEN
+            IF NOT (has_sequence_privilege('donchian_app', obj.oid, 'USAGE') AND has_sequence_privilege('donchian_app', obj.oid, 'SELECT')
+                    AND has_sequence_privilege('donchian_app', obj.oid, 'UPDATE')) THEN
+                RAISE EXCEPTION 'FAIL donchian_app lacks USAGE/SELECT/UPDATE on sequence %', obj.relname;
+            END IF;
+        ELSIF obj.relkind IN ('v', 'm') THEN
+            IF NOT has_table_privilege('donchian_app', obj.oid, 'SELECT') THEN
+                RAISE EXCEPTION 'FAIL donchian_app cannot SELECT from view %', obj.relname;
+            END IF;
+            FOREACH priv IN ARRAY ARRAY['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE'] LOOP
+                IF has_table_privilege('donchian_app', obj.oid, priv) THEN
+                    RAISE EXCEPTION 'FAIL donchian_app has % on view %', priv, obj.relname;
+                END IF;
+            END LOOP;
+        ELSE
+            FOREACH priv IN ARRAY ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE'] LOOP
+                IF NOT has_table_privilege('donchian_app', obj.oid, priv) THEN
+                    RAISE EXCEPTION 'FAIL donchian_app lacks % on table %', priv, obj.relname;
+                END IF;
+            END LOOP;
+            FOREACH priv IN ARRAY ARRAY['TRUNCATE', 'TRIGGER', 'REFERENCES'] LOOP
+                IF has_table_privilege('donchian_app', obj.oid, priv) THEN
+                    RAISE EXCEPTION 'FAIL donchian_app has % on table % (baseline is DML only)', priv, obj.relname;
+                END IF;
+            END LOOP;
+        END IF;
+    END LOOP;
+    FOR obj IN SELECT p.oid, p.oid::regprocedure AS sig FROM pg_proc p
+             WHERE p.pronamespace = to_regnamespace(sch) AND p.prokind IN ('f', 'p') AND p.proname NOT LIKE 'research\_%' LOOP
+        nfn := nfn + 1;
+        IF NOT has_function_privilege('donchian_app', obj.oid, 'EXECUTE') THEN
+            RAISE EXCEPTION 'FAIL donchian_app cannot EXECUTE %', obj.sig;
+        END IF;
+    END LOOP;
+    IF NOT has_schema_privilege('donchian_app', sch, 'USAGE') THEN
+        RAISE EXCEPTION 'FAIL donchian_app has no USAGE on schema %', sch;
+    END IF;
+    IF has_schema_privilege('donchian_app', sch, 'CREATE') THEN
+        RAISE EXCEPTION 'FAIL donchian_app (or PUBLIC) may CREATE in schema % -- the runtime role must not run DDL', sch;
+    END IF;
+    IF has_database_privilege('donchian_app', current_database(), 'CREATE') THEN
+        RAISE EXCEPTION 'FAIL donchian_app may CREATE schemas in database %', current_database();
+    END IF;
+    IF NOT has_database_privilege('donchian_app', current_database(), 'CONNECT') THEN
+        RAISE EXCEPTION 'FAIL donchian_app cannot CONNECT to database %', current_database();
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_class WHERE relowner = (SELECT oid FROM pg_roles WHERE rolname = 'donchian_app')) THEN
+        RAISE EXCEPTION 'FAIL donchian_app owns a relation (an owner can ALTER/DROP it)';
+    END IF;
+    RAISE NOTICE 'OK runtime coverage: % relations (tables DML / views SELECT / sequences USAGE+SELECT+UPDATE) and % functions reachable; no CREATE on schema or database; owns nothing', nrel, nfn;
+
     -- triggers are ALWAYS-enabled
     IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = ANY (SELECT to_regclass(x) FROM unnest(allt) x)
                AND NOT tgisinternal AND tgenabled <> 'A') THEN
@@ -148,6 +212,72 @@ BEGIN
     RAISE NOTICE 'OK behavioural: donchian_app was refused 10/10 mutation attempts (UPDATE/DELETE/TRUNCATE x3 tables + hatch)';
 END;
 $b$;
+
+-- Behavioural proof, part 2: the runtime role cannot run schema/maintenance/privilege operations. Each statement must
+-- fail with SQLSTATE 42501 (insufficient_privilege) specifically -- any other outcome (success, or an unrelated
+-- error such as a typo) fails the check, so a broken probe can never read as a pass.
+DO $d$
+DECLARE
+    tbl TEXT;
+    col TEXT;
+    trg RECORD;
+    stmt TEXT;
+    refused INT := 0;
+    expected INT := 0;
+    probes TEXT[];
+BEGIN
+    SELECT c.relname INTO tbl FROM pg_class c
+    WHERE c.relnamespace = to_regnamespace(current_schema()) AND c.relkind = 'r'
+      AND c.relname NOT LIKE 'research\_%' AND c.relname NOT IN ('candidate_observation', 'feature_snapshot',
+          'feature_set_registry', 'candidate_capture_run')
+      AND has_table_privilege('donchian_app', c.oid, 'DELETE')
+    ORDER BY (c.relname = 'ml_models') DESC, c.relname LIMIT 1;
+    IF tbl IS NULL THEN
+        RAISE NOTICE 'SKIP part 2: the schema has no baseline table to probe';
+        RETURN;
+    END IF;
+    SELECT attname INTO col FROM pg_attribute WHERE attrelid = to_regclass(tbl) AND attnum > 0 AND NOT attisdropped ORDER BY attnum LIMIT 1;
+    probes := ARRAY[
+        'CREATE TABLE zz_rb_probe (x int)',
+        'CREATE VIEW zz_rb_probe AS SELECT 1',
+        'CREATE FUNCTION zz_rb_probe() RETURNS int LANGUAGE sql AS ''SELECT 1''',
+        format('ALTER TABLE %I ADD COLUMN zz_rb_probe int', tbl),
+        format('ALTER TABLE %I DROP COLUMN %I', tbl, col),
+        format('ALTER TABLE %I RENAME TO zz_rb_probe', tbl),
+        format('DROP TABLE %I', tbl),
+        format('TRUNCATE %I', tbl),
+        format('CREATE INDEX zz_rb_probe ON %I (%I)', tbl, col),
+        format('COMMENT ON TABLE %I IS ''x''', tbl),
+        'ALTER TABLE candidate_observation DISABLE TRIGGER ALL',
+        'DROP FUNCTION research_guard_immutable() CASCADE',
+        'CREATE OR REPLACE FUNCTION research_guard_immutable() RETURNS trigger LANGUAGE plpgsql AS ''BEGIN RETURN NEW; END''',
+        'CREATE SCHEMA zz_rb_probe',
+        'CREATE ROLE zz_rb_probe',
+        'ALTER ROLE donchian_app SUPERUSER',
+        'ALTER ROLE donchian_app BYPASSRLS',
+        'SET session_replication_role = replica',
+        'COPY (SELECT 1) TO PROGRAM ''true''',
+        'ALTER SEQUENCE candidate_observation_id_seq RESTART'
+    ];
+    FOR trg IN SELECT t.tgname, c.relname FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
+               WHERE c.oid = to_regclass('candidate_observation') AND NOT t.tgisinternal LIMIT 1 LOOP
+        probes := probes || format('DROP TRIGGER %I ON %I', trg.tgname, trg.relname);
+    END LOOP;
+    SET LOCAL ROLE donchian_app;
+    FOREACH stmt IN ARRAY probes LOOP
+        expected := expected + 1;
+        BEGIN
+            EXECUTE stmt;
+            RAISE EXCEPTION 'FAIL donchian_app was allowed to run: %', stmt;
+        EXCEPTION WHEN insufficient_privilege THEN
+            refused := refused + 1;
+        END;
+    END LOOP;
+    RESET ROLE;
+    IF refused <> expected THEN RAISE EXCEPTION 'FAIL expected % refusals, saw %', expected, refused; END IF;
+    RAISE NOTICE 'OK behavioural: donchian_app was refused %/% schema/maintenance/privilege operations (DDL, TRUNCATE, ALTER/DROP, trigger and function tampering, role escalation, replication-role bypass, COPY PROGRAM)', refused, expected;
+END;
+$d$;
 
 ROLLBACK;
 \echo RESEARCH ROLE VERIFICATION PASSED

@@ -14,7 +14,8 @@
 -- and dropping a role that services still use is an outage); drop them by hand afterwards with
 --     DROP OWNED BY donchian_app; DROP ROLE donchian_app;   -- etc., once nothing connects as them.
 -- Services must be pointed back at their previous DB_USER FIRST; otherwise they lose access to every table.
--- It does not touch migration 22 (see deploy/db/rollback22.sql).
+-- It does not touch migration 22 (see deploy/db/rollback22.sql), and it does not re-grant CREATE on the schema to PUBLIC
+-- (research_roles.sql section 1b removed it; every supported Postgres version defaults to that anyway).
 
 DO $rb$
 DECLARE
@@ -44,7 +45,7 @@ BEGIN
 
     -- strip every privilege the three roles hold on objects in this schema
     FOR r IN SELECT c.relname, c.relkind FROM pg_class c
-             WHERE c.relnamespace = to_regnamespace(sch) AND c.relkind IN ('r', 'p', 'S') LOOP
+             WHERE c.relnamespace = to_regnamespace(sch) AND c.relkind IN ('r', 'p', 'v', 'm', 'S') LOOP
         IF r.relkind = 'S' THEN
             EXECUTE format('REVOKE ALL ON SEQUENCE %I FROM donchian_app, donchian_research_admin, donchian_owner', r.relname);
         ELSE
@@ -55,6 +56,11 @@ BEGIN
                              'research_maintenance_begin(bigint)', 'research_maintenance_close(bigint)',
                              'research_capture_set_state(bigint,text,date,text)'] LOOP
         EXECUTE format('REVOKE ALL ON FUNCTION %s FROM donchian_app, donchian_research_admin, donchian_owner', f);
+    END LOOP;
+    -- the explicit EXECUTE grants research_roles.sql section 6 gave the runtime role on the non-research functions
+    FOR r IN SELECT p.oid::regprocedure AS sig FROM pg_proc p
+             WHERE p.pronamespace = to_regnamespace(sch) AND p.prokind IN ('f', 'p') AND p.proname NOT LIKE 'research\_%' LOOP
+        EXECUTE format('REVOKE ALL ON FUNCTION %s FROM donchian_app, donchian_research_admin, donchian_owner', r.sig);
     END LOOP;
     EXECUTE format('REVOKE ALL ON SCHEMA %I FROM donchian_app, donchian_research_admin, donchian_owner', sch);
 
