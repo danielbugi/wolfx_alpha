@@ -415,7 +415,7 @@ jobs:
             echo "::endgroup::"
           done < /tmp/migration_files.txt
 
-      - name: Verify expected tables exist (56 after migrations 1-25: Phase 4A.6's 41, then Release A/B and the 5 Market Intelligence tables of migrations 24/25)
+      - name: "Verify expected tables exist (56 after migrations 1-25: Phase 4A.6's 41, then Release A/B and the 5 Market Intelligence tables of migrations 24/25)"
         run: |
           count=$(psql -tAc "SELECT count(*) FROM pg_tables WHERE schemaname='public'")
           echo "Tables found: $count"
