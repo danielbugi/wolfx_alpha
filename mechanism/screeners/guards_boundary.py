@@ -1,6 +1,8 @@
 """GUARDS_EFFECTIVE_FROM -- the explicit, session-dated boundary at which the screener's universe guards start to apply.
 
 Why it exists: the guards (screeners/universe_guards.py) change which breakouts enter the signal ledger (~4-6% fewer).
+The same boundary also switches the other behaviour that arrived with them (see SCOPE below): ranking by combined score,
+the ML-unprocessed fallback fields, and the ledger writer's refusal of defaulted-ATR signals.
 Deploying a new mechanism image must NOT silently change the ledger population mid-history, so the guards are gated by
 an operator-set session date instead of by "the image that contains them":
 
@@ -60,3 +62,15 @@ def describe(session: date, boundary: Optional[date]) -> str:
     state = "ACTIVE" if guards_apply(session, boundary) else "INERT"
     cmp = ">=" if state == "ACTIVE" else "<"
     return f"Universe guards mode: {state} (session {session} {cmp} {ENV_VAR}={boundary})"
+
+
+# Everything the boundary switches. ONE boundary on purpose: these changes arrived together, change the same
+# session's ledger population / list order, and a mixed state (e.g. guards on, ordering legacy) would be a
+# configuration that was never tested or replayed. Splitting it would add operator error, not control.
+SCOPE = ("universe_guards", "combined_score_ranking", "ml_unprocessed_fallback", "ledger_integrity_refusals")
+
+
+def describe_behaviour(session: date, boundary: Optional[date]) -> str:
+    """The second stable log line: which behaviour set this session runs under (validated by `validate_release_b guards`)."""
+    mode = "NEW" if guards_apply(session, boundary) else "LEGACY"
+    return f"Screener behaviour mode: {mode} ({', '.join(SCOPE)})"

@@ -50,8 +50,8 @@ def ledger(monkeypatch):
     from screeners import signal_ledger_writer as slw
     seen = {}
     monkeypatch.setattr(slw, "write_todays_signals",
-                        lambda db, sigs, session, links=None: seen.update(symbols=[x["symbol"] for x in sigs],
-                                                                          session=session, links=links))
+                        lambda db, sigs, session, links=None, strict=True: seen.update(
+                            symbols=[x["symbol"] for x in sigs], session=session, links=links, strict=strict))
     return seen
 
 

@@ -297,7 +297,8 @@ def run_screen(mts, monkeypatch, signals, enhanced_by_symbol=None, guard_survivo
                         lambda a, b: seen.update(results_order=[x["symbol"] for x in a]) or {"summary": {"total_signals": len(a)}})
     monkeypatch.setattr(s, "save_results", lambda r: None)
     monkeypatch.setattr(slw, "write_todays_signals",
-                        lambda db, sigs, session, links=None: seen.update(ledger_order=[x["symbol"] for x in sigs], session=session))
+                        lambda db, sigs, session, links=None, strict=True: seen.update(
+                            ledger_order=[x["symbol"] for x in sigs], session=session, strict=strict))
     s.screen_all_symbols()
     assert not s.failed
     return seen
@@ -325,6 +326,75 @@ def test_guard_drops_happen_before_scoring_and_before_the_ledger_write(mts, monk
 
 def test_the_ledger_receives_the_explicit_session_after_the_guards(mts, monkeypatch):
     assert run_screen(mts, monkeypatch, [sig("X")])["session"] == SESSION
+
+
+# ------------------------------------------------------------------ one boundary gates ALL the new behaviour
+# Deploying the image with no boundary (or screening a session before it) must reproduce 4d9bf93 exactly: SQL order, no
+# merged combined_score fields, no ledger-integrity refusals. On/after the boundary: the new behaviour. Explicit session
+# dates only -- never the clock.
+LEGACY_SIGNALS = lambda: [sig("AAA", grade="C", alignment=50), sig("ZZZ", grade="A", alignment=90), sig("MMM", grade="B", alignment=70)]  # noqa: E731
+
+
+def _count_merges(mts, monkeypatch):
+    calls, real = [], mts.MultiTimeframeMLScreener._merge_ml_scores
+
+    def spy(self, *a, **k):
+        calls.append(1)
+        return real(self, *a, **k)
+    monkeypatch.setattr(mts.MultiTimeframeMLScreener, "_merge_ml_scores", spy)
+    return calls
+
+
+def _boundary(monkeypatch, value):
+    if value is None:
+        monkeypatch.delenv("GUARDS_EFFECTIVE_FROM", raising=False)
+    else:
+        monkeypatch.setenv("GUARDS_EFFECTIVE_FROM", value)
+
+
+@pytest.mark.parametrize("value", [None, "", "2026-09-30"], ids=["unset", "blank", "session-before-boundary"])
+def test_legacy_behaviour_when_unset_or_before_the_boundary(mts, monkeypatch, caplog, value):
+    caplog.set_level("INFO")
+    _boundary(monkeypatch, value)
+    merges = _count_merges(mts, monkeypatch)
+    seen = run_screen(mts, monkeypatch, LEGACY_SIGNALS())
+    assert seen["results_order"] == ["AAA", "ZZZ", "MMM"] and seen["ledger_order"] == ["AAA", "ZZZ", "MMM"]  # SQL order kept
+    assert merges == []                                                                                      # no merge / fallback fields
+    assert seen["strict"] is False                                                                           # no ledger refusals
+    assert "Screener behaviour mode: LEGACY" in caplog.text and "Screener behaviour mode: NEW" not in caplog.text
+
+
+@pytest.mark.parametrize("session", [SESSION], ids=["boundary-session"])
+def test_new_behaviour_on_the_boundary_session(mts, monkeypatch, caplog, session):
+    caplog.set_level("INFO")
+    _boundary(monkeypatch, SESSION.isoformat())
+    s, _ = screener(mts, monkeypatch, [], target=session)
+    assert s.guards_active is True
+    merges = _count_merges(mts, monkeypatch)
+    seen = run_screen(mts, monkeypatch, LEGACY_SIGNALS())      # run_screen builds its own screener for SESSION
+    assert seen["results_order"] == ["ZZZ", "MMM", "AAA"] and len(merges) == 1
+    assert seen["strict"] is True
+    assert "Screener behaviour mode: NEW" in caplog.text
+
+
+def test_the_boundary_session_itself_is_new_and_the_day_before_is_legacy(mts, monkeypatch):
+    _boundary(monkeypatch, SESSION.isoformat())
+    before, _ = screener(mts, monkeypatch, [], target=SESSION - timedelta(days=1))
+    on, _ = screener(mts, monkeypatch, [], target=SESSION)
+    assert (before.guards_active, on.guards_active) == (False, True)
+
+
+def test_replaying_a_historical_session_is_deterministic(mts, monkeypatch):
+    """Same (boundary, session) => same behaviour however many times, whenever it is run."""
+    _boundary(monkeypatch, "2026-10-07")
+    runs = [run_screen(mts, monkeypatch, LEGACY_SIGNALS()) for _ in range(3)]       # SESSION 2026-09-29 < boundary
+    assert all(r["results_order"] == ["AAA", "ZZZ", "MMM"] and r["strict"] is False for r in runs)
+
+
+def test_no_gated_behaviour_reads_the_clock(mts):
+    src = inspect.getsource(mts.MultiTimeframeMLScreener.screen_all_symbols)
+    assert "date.today" not in src and "MECHANISM_SHA" not in src   # (datetime.now there is only run timing)
+    assert src.count("self.guards_active") >= 3          # merge, sort, ledger strictness
 
 
 # ------------------------------------------------------------------ structure

@@ -15,15 +15,37 @@
 | P1 | Migration 23 `mechanism/add_ml_models_registry_columns.sql` adds the 3 `ml_models` columns. `momentum_predictor.py` no longer runs DDL at runtime; it only checks the columns exist and fails loudly if not. | `docker-compose.yml` init list, CI migration floor 23 |
 | P2 | The postgres container and the four applications have separate credential chains. Postgres: `POSTGRES_BOOTSTRAP_*` → `DB_*`. Each app: `<SVC>_DB_*` → `APP_DB_*` → `DB_*`. **Never switch a service by editing `DB_USER`.** | [ENVIRONMENT.md](../dev/ENVIRONMENT.md) |
 | P3 | `research_roles.sql` covers tables, views, sequences and functions; the verify script proves the runtime role can do the runtime operations and cannot create/alter/drop/truncate/maintain. The script is convergent (re-running undoes drift). | [RESEARCH_DB_ROLES.md](RESEARCH_DB_ROLES.md) |
-| P4 | `GUARDS_EFFECTIVE_FROM`: unset/blank = guards **inert**; `YYYY-MM-DD` = guards apply to sessions ≥ that date; malformed = the run fails (never silently unset). The decision is a pure function of (boundary, explicit session). | `mechanism/screeners/guards_boundary.py` |
+| P4 | `GUARDS_EFFECTIVE_FROM` (one boundary for *all* session-effective screener behaviour, see below): unset/blank = legacy/**inert**; `YYYY-MM-DD` = guards apply to sessions ≥ that date; malformed = the run fails (never silently unset). The decision is a pure function of (boundary, explicit session). | `mechanism/screeners/guards_boundary.py` |
 | P5 | `mechanism/validate_release_b.py` — read-only validation for every stage (§3). | this file |
 | P6 | Docs corrected: frontend is deployed **manually** with the Vercel CLI (DEPLOYMENT.md §3, CI_CD.md); `DB_USER` hazard; env variables; this guide. | |
 
+### Behaviour neutrality — one boundary gates everything that changed
+
+Production `4d9bf93` has no universe guards. They arrived together with three other behaviour changes. **All four** are now
+switched by the single session-effective boundary `GUARDS_EFFECTIVE_FROM` (`guards_boundary.SCOPE`):
+
+| Behaviour | Legacy (boundary unset, or session < boundary) | New (session >= boundary) |
+|---|---|---|
+| universe liquidity/integrity guards | not evaluated, nothing dropped | evaluated, failing symbols dropped |
+| ranking | lists stay in SQL order, as at `4d9bf93` | merged and sorted best `combined_score` first |
+| ML-unprocessed fallback (`combined_score = alignment*0.6`, `ml_confidence='not_processed'`) | not applied, the un-merged signals are used | applied to every signal ML did not process |
+| ledger-integrity refusals (defaulted ATR, unusable price/ATR) | not applied — the writer behaves as at `4d9bf93` | defaulted-ATR / unusable signals are refused |
+
+**Deploying the new image with the boundary unset therefore preserves the currently deployed production behaviour**, and so does
+re-screening any session before the boundary. One boundary rather than four on purpose: the changes arrived together and alter the
+same session's ledger population and list order, so a mixed state (e.g. guards on, ranking legacy) was never tested or replayed and
+would only add an operator-error mode. The screener logs two stable lines per run — `Universe guards mode: INERT|ACTIVE` and
+`Screener behaviour mode: LEGACY|NEW` — and `results.metadata.universe_guards` records `applied`, `effective_from`, `session` and
+`scope`; the validator requires them to agree (S8). The decision is a pure function of (boundary, the explicit session date): no
+wall clock, no deploy time, deterministic on historical replay.
+
+Research capture's `tracked_intent` flag uses the *new* ledger-eligibility rule, so capture must not be activated for a session
+before the boundary: S12 must come after S7, and `VAL capture --session E --guards-from D` fails otherwise.
+
 ### Two things the owner must accept before S6
 
-1. **The image is not behaviour-neutral.** Production `4d9bf93` has no universe guards. They arrived in `7ea07b1` together with
-   ranking by *combined score* and the *ML-unprocessed fallback*. `GUARDS_EFFECTIVE_FROM` gates only the guards; the ranking and
-   fallback change takes effect on the first pipeline run on the new image, flag or no flag.
+1. **A single, intended behaviour change at `D`.** From the first session on/after `D` the ledger population, list order and
+   score fields change (about 4–6% fewer ledger rows from the guards alone). Choose `D` knowingly; before it, nothing changes.
 2. **Roles/grants are a point-in-time snapshot.** There are no default privileges. After **any** later migration re-run
    `research_roles.sql` and `research_roles_verify.sql`; a table added by migration 24/25 is uncovered until you do, and any new
    *immutable* table must first be added to the §6 exclusion list of the role script.
@@ -65,14 +87,14 @@ VAL() { docker run --rm -i --network donchian-screener_app_net --env-file "$ENVF
 | S4 | `VAL schema --expect exact --capture inactive --ml-models absent` | migration 22 EXACT vs the golden fingerprint; all triggers `ENABLE ALWAYS`; row counts 0; no activation row; no capture run; lineage all-or-none. |
 | S5 | `VAL schema --expect exact --capture inactive` | the 3 `ml_models` columns now present (the default for `--ml-models`). |
 | S7 | `VAL config --env-file $ENVF --expect-guards set --check-boundary-vs-db` | exactly one valid `GUARDS_EFFECTIVE_FROM`; `D` strictly after the latest completed session. |
-| S6 / S11 | `VAL config --env-file $ENVF --expect-guards unset` | boundary unset while only the image is deployed. |
-| S8 | `journalctl -u donchian-pipeline.service --since "<fire>" \| VAL guards --session D --expect active --log -` (add `--results <path>` to also check `metadata.universe_guards`) | exactly one mode line `ACTIVE` and one `dropped N/M` line; `M` in 2,900–3,100; `N/M` ≤ 15%; today's candidate count within [50%, 200%] of the 5-session median; ledger ≤ results breakouts; no ledger symbol with a price discontinuity in its lookback. |
+| S6 / S11 | `VAL config --env-file $ENVF --expect-guards unset` | boundary unset while only the image is deployed (behaviour is legacy: confirm the run logs `Universe guards mode: INERT` and `Screener behaviour mode: LEGACY`). |
+| S8 | `journalctl -u donchian-pipeline.service --since "<fire>" \| VAL guards --session D --expect active --log -` (add `--results <path>` to also check `metadata.universe_guards`) | exactly one guards mode line `ACTIVE`, exactly one behaviour line `NEW` (the two must agree) and one `dropped N/M` line; `M` in 2,900–3,100; `N/M` ≤ 15%; today's candidate count within [50%, 200%] of the 5-session median; ledger ≤ results breakouts; no ledger symbol with a price discontinuity in its lookback. |
 | S8 | `VAL delivery --session D` | a `prod` post-market row `sent`, no duplicate. |
 | S9 | `VAL roles --expect present` | attributes, no membership of owner/admin by the app, all 8 tables + 8 functions owned by `donchian_owner`, runtime coverage of every non-research table/view/sequence/function, the five maintenance/`set_state` functions executable by the admin group only, no CREATE on schema/database. |
 | S9b | `VAL roles --expect present` | WARN while the admin group has a single member (the hatch needs two distinct people). |
 | S10 | `VAL connections --forbid-user trading_user` | no service still connects as the bootstrap user (psql/pg_dump/the tool itself are allowed). Run after each service switch. |
 | S12 | `VAL schema --expect exact --capture active` · `VAL config --env-file $ENVF --expect-capture on` | boundary row enabled; kill switch on; all three keys agree. |
-| S13 | `VAL capture --session E` | exactly one run row, `complete`, `hash_drift = 0`, observations = captured + already-captured, `captured + already + stale_skipped = candidates`, linked ledger rows, triggers still `ALWAYS`. |
+| S13 | `VAL capture --session E --guards-from D` | exactly one run row, `complete`, `hash_drift = 0`, observations = captured + already-captured, `captured + already + stale_skipped = candidates`, linked ledger rows, triggers still `ALWAYS`. |
 
 `--results` needs the screener's `multi_timeframe_ml_enhanced_*.json` for the session; mount it into the container
 (`-v <host data dir>:/data:ro`) — confirm the host path at S0, it is not assumed here.

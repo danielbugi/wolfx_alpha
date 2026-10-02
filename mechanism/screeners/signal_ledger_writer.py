@@ -161,18 +161,19 @@ def _has_open_position(db, symbol: str, strategy_id: int, direction: int, sessio
         OPEN_POSITION_EXISTS_SQL, (symbol, strategy_id, direction, session_date)))
 
 
-def write_todays_signals(db, signals: List[Dict], session_date: date, links: Optional[Links] = None) -> int:
+def write_todays_signals(db, signals: List[Dict], session_date: date, links: Optional[Links] = None,
+                         strict: bool = True) -> int:
     """The pipeline's call: the default strategy for `session_date`. See write_signals."""
     try:
         strategy = _resolve_default_strategy(db)
     except Exception as e:  # noqa: BLE001 -- the whole batch is meaningless without a strategy row
         logger.error(f"signal_ledger_writer: cannot resolve default strategy, skipping batch: {e}")
         return 0
-    return write_signals(db, signals, session_date, strategy, links)
+    return write_signals(db, signals, session_date, strategy, links, strict)
 
 
 def write_signals(db, signals: List[Dict], session_date: date, strategy: StrategyRef,
-                  links: Optional[Links] = None) -> int:
+                  links: Optional[Links] = None, strict: bool = True) -> int:
     """Upsert one signal_ledger row per real breakout in `signals` for `session_date` under `strategy`.
     Returns the number of rows attempted (not necessarily changed -- a same-day re-run
     after the evaluator has already advanced a row is a deliberate no-op, not an error;
@@ -186,7 +187,11 @@ def write_signals(db, signals: List[Dict], session_date: date, strategy: Strateg
     written under `session_date`, which would stamp one day's bar with another day's signal_date.
 
     `links`: (symbol, direction) -> ObservationLink from the research observer; absent entries write NULL
-    lineage (never a guess)."""
+    lineage (never a guess).
+
+    `strict` (default True): refuse a signal whose ATR was a screener default or whose price/ATR is unusable (see
+    `ledger_ineligibility`). The screener passes strict=False for a session BEFORE the GUARDS_EFFECTIVE_FROM boundary,
+    which reproduces the pre-boundary writer exactly (no such refusal), so deploying the image changes no ledger row."""
     links = links or {}
     tracked = [sg for sg in signals if sg.get("signal_type") in TRACKED_SIGNAL_TYPES]
     _, rejected = partition_by_session(tracked, session_date, "screening_date")
@@ -204,7 +209,7 @@ def write_signals(db, signals: List[Dict], session_date: date, strategy: Strateg
 
         symbol = signal.get("symbol")
         try:
-            reason = ledger_ineligibility(signal, session_date)
+            reason = ledger_ineligibility(signal, session_date) if strict else None
             if reason == "defaulted_atr":
                 logger.warning(f"signal_ledger_writer: REFUSED {symbol} on {session_date}: its ATR was a screener "
                                f"default, not a measured value -- no invented trade plan is recorded")

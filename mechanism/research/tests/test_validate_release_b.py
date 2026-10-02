@@ -89,8 +89,10 @@ def test_the_callable_function_list_matches_the_fingerprint_non_trigger_function
 
 
 # ======================================================================= guard log evidence (S6 / S8)
-INERT = "INFO Universe guards mode: INERT (session 2026-10-07; GUARDS_EFFECTIVE_FROM is unset)\n"
-ACTIVE = "INFO Universe guards mode: ACTIVE (session 2026-10-07 >= GUARDS_EFFECTIVE_FROM=2026-10-07)\n"
+INERT = ("INFO Universe guards mode: INERT (session 2026-10-07; GUARDS_EFFECTIVE_FROM is unset)\n"
+         "INFO Screener behaviour mode: LEGACY (universe_guards, combined_score_ranking, ml_unprocessed_fallback, ledger_integrity_refusals)\n")
+ACTIVE = ("INFO Universe guards mode: ACTIVE (session 2026-10-07 >= GUARDS_EFFECTIVE_FROM=2026-10-07)\n"
+          "INFO Screener behaviour mode: NEW (universe_guards, combined_score_ranking, ml_unprocessed_fallback, ledger_integrity_refusals)\n")
 
 
 def _guard(text, expect, **kw):
@@ -139,16 +141,29 @@ def test_a_mode_that_contradicts_the_expectation_fails():
     assert _guard(ACTIVE + "Universe guards: dropped 100/3000 symbols\n", "inert").failed
 
 
+def test_the_two_mode_lines_must_agree_and_both_must_be_present():
+    guards_only = INERT.splitlines(True)[0]
+    assert _status(_guard(guards_only, "inert"), "guards.log.behaviour_line") == v.FAIL            # image predates the fix
+    mixed = INERT.splitlines(True)[0] + ACTIVE.splitlines(True)[1]                                  # guards INERT, behaviour NEW
+    assert _status(_guard(mixed, "inert"), "guards.log.behaviour_mode") == v.FAIL
+    mixed = ACTIVE.splitlines(True)[0] + INERT.splitlines(True)[1] + "Universe guards: dropped 100/3000 symbols\n"
+    assert _status(_guard(mixed, "active"), "guards.log.behaviour_mode") == v.FAIL
+    assert _status(_guard(INERT + INERT.splitlines(True)[1], "inert"), "guards.log.behaviour_line") == v.FAIL  # duplicated
+
+
 def test_the_log_lines_the_screener_emits_are_the_lines_this_tool_parses():
     from screeners import guards_boundary as gb
     assert v.GUARD_MODE_RE.search(gb.describe(D, None)).group(1) == "INERT"
     assert v.GUARD_MODE_RE.search(gb.describe(D, D)).group(1) == "ACTIVE"
+    assert v.BEHAVIOUR_MODE_RE.search(gb.describe_behaviour(D, None)).group(1) == "LEGACY"
+    assert v.BEHAVIOUR_MODE_RE.search(gb.describe_behaviour(D, D)).group(1) == "NEW"
     screener_src = open(os.path.join(ROOT, "mechanism", "screeners", "multi_timeframe_screener.py"), encoding="utf-8").read()
     assert "Universe guards: dropped" in screener_src and v.GUARD_DROPPED_RE.search("Universe guards: dropped 12/3000 symbols")
 
 
 def _results(applied, session="2026-10-07", bull=3, bear=2):
-    return {"metadata": {"universe_guards": {"applied": applied, "effective_from": "2026-10-07", "session": session}},
+    return {"metadata": {"universe_guards": {"applied": applied, "effective_from": "2026-10-07", "session": session,
+                                          "scope": list(__import__("screeners.guards_boundary", fromlist=["x"]).SCOPE)}},
             "signals": {"bullish_breakout": [{}] * bull, "bearish_breakout": [{}] * bear, "near_bullish": [{}] * 9}}
 
 
@@ -519,6 +534,13 @@ def test_an_active_guard_run_whose_ledger_still_holds_a_discontinuity_symbol_fai
 def test_capture_for_a_session_with_no_run_row_fails_on_the_real_schema(full, env):  # noqa: F811
     code, out = _run(["capture", "--session", "2099-01-15"], env)
     assert code == 1 and "FAIL capture.run_row" in out
+
+
+def test_a_capture_session_before_the_guards_boundary_fails(full, env):  # noqa: F811
+    _, out = _run(["capture", "--session", "2099-01-15", "--guards-from", "2099-01-16"], env)
+    assert "FAIL capture.after_guards_boundary" in out
+    _, out = _run(["capture", "--session", "2099-01-15", "--guards-from", "2099-01-15"], env)
+    assert "PASS capture.after_guards_boundary" in out
 
 
 def test_delivery_on_the_real_schema_reports_missing_rows(full, env):  # noqa: F811

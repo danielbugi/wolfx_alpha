@@ -53,6 +53,7 @@ RESEARCH_ROLES = ("donchian_owner", "donchian_app", "donchian_research_admin")
 CAPTURE_ENV_VAR = "RESEARCH_CAPTURE_ENABLED"
 
 GUARD_MODE_RE = re.compile(r"Universe guards mode: (INERT|ACTIVE)\b[^\n]*")
+BEHAVIOUR_MODE_RE = re.compile(r"Screener behaviour mode: (LEGACY|NEW)\b[^\n]*")
 GUARD_DROPPED_RE = re.compile(r"Universe guards: dropped (\d+)/(\d+) symbols")
 
 # Runbook S8 thresholds.
@@ -400,7 +401,8 @@ def parse_guard_log(text: str) -> Dict[str, object]:
     modes = [m.group(0) for m in GUARD_MODE_RE.finditer(text)]
     states = [GUARD_MODE_RE.match(m).group(1) for m in modes]
     dropped = [(int(a), int(b)) for a, b in GUARD_DROPPED_RE.findall(text)]
-    return {"modes": modes, "states": states, "dropped": dropped}
+    behaviour = [m.group(1) for m in BEHAVIOUR_MODE_RE.finditer(text)]
+    return {"modes": modes, "states": states, "dropped": dropped, "behaviour": behaviour}
 
 
 def check_guard_log(rep: Report, text: str, expect: str, lo: int = UNIVERSE_MIN, hi: int = UNIVERSE_MAX) -> None:
@@ -411,6 +413,16 @@ def check_guard_log(rep: Report, text: str, expect: str, lo: int = UNIVERSE_MIN,
     else:
         rep.check(states[0].lower() == expect, "guards.log.mode", f"{states[0]} (as expected)",
                   f"{states[0]}, expected {expect.upper()}")
+    # The same boundary switches the guards, combined-score ranking, the ML-unprocessed fallback and the ledger-integrity
+    # refusals; the two mode lines must agree, otherwise the image is running a mixed behaviour set nobody tested.
+    beh = p["behaviour"]
+    want = "LEGACY" if expect == "inert" else "NEW"
+    if len(beh) != 1:
+        rep.add(FAIL, "guards.log.behaviour_line",
+                f"expected exactly one 'Screener behaviour mode:' line, found {len(beh)} (image predates the single-boundary fix?)")
+    else:
+        rep.check(beh[0] == want, "guards.log.behaviour_mode", f"{beh[0]} (consistent with guards {expect.upper()})",
+                  f"{beh[0]}, expected {want} to match guards {expect.upper()}")
     if expect == "inert":
         rep.check(not dropped, "guards.log.no_drop_line", "no 'dropped N/M' line while inert",
                   f"inert run logged a drop line {dropped}")
@@ -435,6 +447,8 @@ def check_guard_results(rep: Report, results: dict, session: date, expect: str) 
                   f"applied={ug.get('applied')}, expected {expect == 'active'}")
         rep.check(ug.get("session") == session.isoformat(), "guards.results.session", f"session={ug.get('session')}",
                   f"results are for session {ug.get('session')}, not {session}")
+        rep.check(set(ug.get("scope") or ()) == set(gb.SCOPE), "guards.results.scope",
+                  f"boundary scope = {', '.join(gb.SCOPE)}", f"scope {ug.get('scope')} != {list(gb.SCOPE)} (image predates the single-boundary fix?)")
     sig = results.get("signals") or {}
     return len(sig.get("bullish_breakout", [])) + len(sig.get("bearish_breakout", []))
 
@@ -562,6 +576,8 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--no-db", action="store_true")
     k = sub.add_parser("capture")
     k.add_argument("--session", type=_date, required=True)
+    k.add_argument("--guards-from", type=_date,
+                   help="the GUARDS_EFFECTIVE_FROM date: capture must not start before the boundary (its tracked-intent flag uses the new ledger rules)")
     d = sub.add_parser("delivery")
     d.add_argument("--session", type=_date, required=True)
     return ap
@@ -611,6 +627,11 @@ def run(argv: Sequence[str], env: Optional[Dict[str, str]] = None, out=sys.stdou
                 check_guard_db(db, rep, args.session, args.expect, breakouts)
         elif args.cmd == "capture":
             check_capture(db, rep, args.session)
+            if args.guards_from is not None:
+                rep.check(args.session >= args.guards_from, "capture.after_guards_boundary",
+                          f"{args.session} >= GUARDS_EFFECTIVE_FROM {args.guards_from}",
+                          f"capture session {args.session} precedes GUARDS_EFFECTIVE_FROM {args.guards_from}: "
+                          "tracked_intent would use ledger rules the ledger itself did not apply")
         elif args.cmd == "delivery":
             check_delivery(db, rep, args.session)
     except ReadOnlyViolation:

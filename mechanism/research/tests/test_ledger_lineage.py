@@ -116,6 +116,11 @@ def test_a_defaulted_atr_is_refused_not_written(db, strategy):
     assert [r["symbol"] for r in ledger(db)] == ["BBB"]
 
 
+def test_non_strict_reproduces_the_pre_boundary_writer_and_writes_a_defaulted_atr_row(db, strategy):
+    assert write_signals(db, [sig(screener_defaults=["atr_14"]), sig("BBB")], SESSION, strategy, strict=False) == 2
+    assert sorted(r["symbol"] for r in ledger(db)) == ["AAA", "BBB"]
+
+
 @pytest.mark.parametrize("signal,expected", [
     (sig(), None),
     (sig(signal_type="near_bullish"), "not_a_tracked_type"),

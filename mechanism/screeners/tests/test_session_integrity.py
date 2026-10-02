@@ -189,6 +189,6 @@ def test_screen_all_symbols_writes_the_ledger_under_the_explicit_session_not_the
     monkeypatch.setattr(s, "_create_enhanced_results", lambda a, b: {"summary": {"total_signals": len(a)}})
     monkeypatch.setattr(s, "save_results", lambda r: None)
     seen = {}
-    monkeypatch.setattr(slw, "write_todays_signals", lambda db, signals, session, links=None: seen.update(session=session))
+    monkeypatch.setattr(slw, "write_todays_signals", lambda db, signals, session, links=None, strict=True: seen.update(session=session))
     s.screen_all_symbols()
     assert seen["session"] == TUE

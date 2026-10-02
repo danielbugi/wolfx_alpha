@@ -166,7 +166,8 @@ class MultiTimeframeMLScreener:
     def _guards_metadata(self) -> Dict:
         return {'applied': self.guards_active,
                 'effective_from': self.guards_boundary.isoformat() if self.guards_boundary else None,
-                'session': self.target_session.isoformat()}
+                'session': self.target_session.isoformat(),
+                'scope': list(gb.SCOPE)}
 
     def _apply_universe_guards(self, signals: List[Dict]) -> List[Dict]:
         """Drop signals for symbols that fail the SAME liquidity + data-integrity guards
@@ -333,7 +334,11 @@ class MultiTimeframeMLScreener:
 
             # Every signal gets a real combined_score -- not just the Grade A/B/C subset that went
             # through ML enhancement (see _merge_ml_scores' docstring for the bug this fixes).
-            all_signals = self._merge_ml_scores(all_signals, ml_enhanced_signals)
+            # Session-effective, like the guards: before the boundary (or with none set) the lists keep the legacy
+            # order and the legacy un-merged score fields, so deploying the image changes nothing.
+            logger.info(gb.describe_behaviour(self.target_session, self.guards_boundary))
+            if self.guards_active:
+                all_signals = self._merge_ml_scores(all_signals, ml_enhanced_signals)
 
             # Best-first, for real: _create_enhanced_results below builds every per-type list
             # (signals.bullish_breakout etc. -- the dashboard's main tables) straight from all_signals in
@@ -341,7 +346,8 @@ class MultiTimeframeMLScreener:
             # wasn't enough -- the list itself stayed in the SQL query's original (alphabetical) order,
             # since enhance_signals_with_ml's own internal sort only ever applied to its OWN returned
             # list (ml_enhanced_signals), not to this merged one.
-            all_signals.sort(key=lambda x: x.get('combined_score', 0) or 0, reverse=True)
+            if self.guards_active:
+                all_signals.sort(key=lambda x: x.get('combined_score', 0) or 0, reverse=True)
 
             # Create comprehensive results
             results = self._create_enhanced_results(all_signals, ml_enhanced_signals)
@@ -368,7 +374,7 @@ class MultiTimeframeMLScreener:
             try:
                 from screeners.signal_ledger_writer import write_todays_signals
                 # The explicit pipeline session -- never derived from the first signal's own date.
-                write_todays_signals(db, all_signals, self.target_session, links=links)
+                write_todays_signals(db, all_signals, self.target_session, links=links, strict=self.guards_active)
             except Exception as e:
                 logger.error(f"signal_ledger_writer failed (non-fatal, screening result unaffected): {e}")
 

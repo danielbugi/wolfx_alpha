@@ -158,7 +158,7 @@ def test_results_metadata_records_whether_guards_applied(mts, monkeypatch):
     for session, applied in ((date(2026, 10, 6), False), (D, True)):
         s = mts.MultiTimeframeMLScreener(target_session=session)
         assert s._guards_metadata() == {"applied": applied, "effective_from": "2026-10-07",
-                                        "session": session.isoformat()}
+                                        "session": session.isoformat(), "scope": list(gb.SCOPE)}
 
 
 def test_the_failed_run_path_when_guards_are_required_but_unavailable(mts, monkeypatch):
