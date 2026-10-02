@@ -78,6 +78,23 @@ TARGETS = {
 }
 
 
+REGISTRY_REQUIRED_COLUMNS = ("evaluation", "feature_set_version", "target")   # created by migration 23, never at runtime
+
+
+class RegistrySchemaError(RuntimeError):
+    """ml_models lacks columns the registry insert needs (migration 23 not applied)."""
+
+
+def missing_registry_columns(conn):
+    """Read-only capability check: which required ml_models columns are absent. Uses the catalog (not
+    information_schema) so the answer does not depend on the caller's table privileges. Never mutates."""
+    cur = conn.cursor()
+    cur.execute("SELECT attname FROM pg_attribute WHERE attrelid = to_regclass('ml_models') AND attnum > 0 "
+                "AND NOT attisdropped AND attname = ANY(%s)", (list(REGISTRY_REQUIRED_COLUMNS),))
+    present = {r[0] for r in cur.fetchall()}
+    return [c for c in REGISTRY_REQUIRED_COLUMNS if c not in present]
+
+
 class MomentumBreakoutPredictor:
     def __init__(self, target="momentum", exclude=()):
         self.db_config = ml_config.db_config
@@ -215,7 +232,21 @@ class MomentumBreakoutPredictor:
         return {k: {"value": v[0], "required": v[1], "pass": bool(v[2])} for k, v in checks.items()}, all(v[2] for v in checks.values())
 
     # ------------------------------------------------------------------ pipeline
+    def assert_registry_ready(self):
+        """Fail fast (before minutes of training) if the model registry cannot record a promotion."""
+        conn = psycopg2.connect(**self.db_config)
+        try:
+            missing = missing_registry_columns(conn)
+        finally:
+            conn.close()
+        if missing:
+            raise RegistrySchemaError(
+                f"ml_models is missing column(s) {', '.join(missing)} -- apply migration 23 "
+                "(mechanism/add_ml_models_registry_columns.sql) as the table owner. The application never alters schema.")
+
     def run(self, promote=True, min_date=None):
+        if promote:
+            self.assert_registry_ready()
         print(f"Target: {self.target} -- {TARGETS[self.target][1]}")
         X, y, meta = self.load_dataset(min_date)
         dates = meta["date"]
@@ -299,9 +330,6 @@ class MomentumBreakoutPredictor:
             h = report["holdout"]
             conn = psycopg2.connect(**self.db_config)
             cur = conn.cursor()
-            cur.execute("ALTER TABLE ml_models ADD COLUMN IF NOT EXISTS evaluation JSONB")
-            cur.execute("ALTER TABLE ml_models ADD COLUMN IF NOT EXISTS feature_set_version VARCHAR(20)")
-            cur.execute("ALTER TABLE ml_models ADD COLUMN IF NOT EXISTS target VARCHAR(30)")
             cur.execute("UPDATE ml_models SET is_active = FALSE WHERE is_active = TRUE")
             cur.execute("""INSERT INTO ml_models (model_name, version, model_type, training_start_date, training_end_date,
                     training_samples, auc_score, model_file_path, scaler_file_path, feature_names, is_active, deployment_date,
@@ -323,7 +351,10 @@ def main():
     ap.add_argument("--min-date", default=None, help="only use samples on/after this date")
     ap.add_argument("--exclude", nargs="*", default=[], help="feature names to drop (ablation)")
     a = ap.parse_args()
-    MomentumBreakoutPredictor(a.target, a.exclude).run(promote=not a.no_promote, min_date=a.min_date)
+    try:
+        MomentumBreakoutPredictor(a.target, a.exclude).run(promote=not a.no_promote, min_date=a.min_date)
+    except RegistrySchemaError as e:
+        sys.exit(f"ERROR: {e}")
 
 
 if __name__ == "__main__":

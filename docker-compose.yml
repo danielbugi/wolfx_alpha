@@ -64,6 +64,7 @@ services:
       - ./mechanism/add_strategy_identity_release_a.sql:/docker-entrypoint-initdb.d/20_add_strategy_identity_release_a.sql:ro
       - ./mechanism/add_signal_ledger_eval_flags.sql:/docker-entrypoint-initdb.d/21_add_signal_ledger_eval_flags.sql:ro
       - ./mechanism/add_research_observation_tables.sql:/docker-entrypoint-initdb.d/22_add_research_observation_tables.sql:ro
+      - ./mechanism/add_ml_models_registry_columns.sql:/docker-entrypoint-initdb.d/23_add_ml_models_registry_columns.sql:ro
     networks: [app_net]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-trading_user} -d ${DB_NAME:-donchian_docker_dev}"]

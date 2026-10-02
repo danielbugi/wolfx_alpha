@@ -399,7 +399,7 @@ jobs:
           cat -n /tmp/migration_files.txt
           # A floor, not a pin -- this must rise every time a new numbered init mount is added, so a future
           # migration silently missing from docker-compose.yml itself (not just from this job) still gets caught.
-          test "$n" -ge 21 || { echo "Expected at least 21 migration files from docker-compose.yml, found $n -- its init-mount list format may have changed"; exit 1; }
+          test "$n" -ge 23 || { echo "Expected at least 23 migration files from docker-compose.yml, found $n -- its init-mount list format may have changed"; exit 1; }
 
       - name: Apply every discovered migration file, in that exact order
         # This is the exact regression guard for both bugs found during Phase 2 local validation
