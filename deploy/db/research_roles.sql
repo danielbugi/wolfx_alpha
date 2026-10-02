@@ -101,6 +101,11 @@ REVOKE ALL ON candidate_observation, feature_snapshot, feature_set_registry, can
 REVOKE ALL ON candidate_observation, feature_snapshot, feature_set_registry, candidate_capture_run,
               research_capture_activation, research_maintenance_log, research_maintenance_session,
               research_maintenance_audit FROM donchian_app;
+-- the five callable (SECURITY DEFINER) entry points are for the admin group only; revoke convergently so a stray
+-- EXECUTE granted to the runtime role (or restored to PUBLIC) is undone by re-running this script
+REVOKE ALL ON FUNCTION research_maintenance_open(text,text,integer), research_maintenance_approve(bigint),
+              research_maintenance_begin(bigint), research_maintenance_close(bigint),
+              research_capture_set_state(bigint,text,date,text) FROM PUBLIC, donchian_app;
 
 -- ---------------------------------------------------------------------------------------------------
 -- 4. Runtime role: what the services legitimately do to the research tables, and nothing more.
