@@ -24,6 +24,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 from zoneinfo import ZoneInfo
 
 MECH = Path(__file__).resolve().parents[1]
@@ -61,7 +62,9 @@ RECAP_SESSIONS = 5
 # telegram_post_delivery claim -- see the sending loop in main() below. "daily_digest" is not buildable by
 # this script at all (send_daily_digest.py owns it) so it isn't listed here. --to owner (private review in
 # your own chat with the bot) is exempt: it was never part of the production delivery contract.
-CLAIMABLE_KINDS = frozenset({"momentum_board", "market_health", "top_gainers"})
+CLAIMABLE_KINDS = frozenset({"momentum_board", "market_health", "top_gainers", "market_environment"})
+# market_environment is not part of the post-market package (not enabled); listing it here only means a manual --send to a channel
+# goes through the same atomic claim, never an unguarded send.
 
 
 # ------------------------------------------------------------------ loading the facts
@@ -147,7 +150,25 @@ def top_gainers_from(rows, limit: int = 10) -> list:
     return sorted(pool, key=lambda r: (-r["ret1_pct"], r["symbol"]))[:limit]
 
 
-def load_context(session, top_n: int = 5, with_news: bool = False, with_scoreboard: bool = False) -> cx.Ctx:
+def load_market_intelligence(session) -> Optional[dict]:
+    """The OBSERVED Market Intelligence payload for exactly `session` (never "latest"), or None. Read-only. None when the snapshot is missing
+    or the storage is not provisioned (migrations 24/25 / the runtime grant): the post then says nothing rather than something invented."""
+    import psycopg2.errors
+    from market_intelligence import payload as mi_payload
+    from market_intelligence import store as mi_store
+    sess = pd.Timestamp(session).date()
+    try:
+        with db.get_sync_connection() as conn:
+            cur = conn.cursor()
+            market = mi_store.get_market_snapshot(cur, sess, "observed")
+            p = mi_payload.build(market, mi_store.get_sector_snapshots(cur, sess, "observed") if market else [])
+            conn.rollback()
+    except (psycopg2.errors.UndefinedTable, psycopg2.errors.InsufficientPrivilege):
+        return None
+    return p if p.get("available") else None
+
+
+def load_context(session, top_n: int = 5, with_news: bool = False, with_scoreboard: bool = False, with_intel: bool = False) -> cx.Ctx:
     t0 = time.time()
     df = load_universe_history(session)
     rows, universe_n, breadth, _skipped = analyse_universe(df, session)
@@ -171,7 +192,8 @@ def load_context(session, top_n: int = 5, with_news: bool = False, with_scoreboa
         breakout_symbols=[r["symbol"] for r in rows if r["cat"] == "breakout"], sector_bars=bars20, sector_unclassified=unclassified,
         macro_tiles=mc.load_macro_tiles(db, session), base=load_base_rates(), recap=load_recap(session, w, sector_of),
         news=news, scoreboard=load_scoreboard(w, session) if with_scoreboard else None, board=load_board(session, w),
-        week_number=int(ts.isocalendar().week), top_gainers=top_gainers_from(rows))
+        week_number=int(ts.isocalendar().week), top_gainers=top_gainers_from(rows),
+        intel=load_market_intelligence(session) if with_intel else None)
 
 
 # ------------------------------------------------------------------ sending
@@ -254,7 +276,7 @@ def main() -> int:
     if not args.date:
         market_calendar.require_data_current(session, gate)
     print(f"Session {session} | {cover_n} symbols priced | trying kinds: {', '.join(kinds)}")
-    ctx = load_context(session, with_news='news' in kinds, with_scoreboard='scoreboard' in kinds)
+    ctx = load_context(session, with_news='news' in kinds, with_scoreboard='scoreboard' in kinds, with_intel='market_environment' in kinds)
 
     built = []
     auto = not (args.all or args.kind != "auto")

@@ -66,11 +66,13 @@ SERVICE_NOTES: List[Tuple[str, str, str]] = [
      "reference, not a plan for you."),
 ]
 
-# which note covers which kind of channel post (the digest's own lists = "lists"); promo and the notices are not data posts
+# which note covers which kind of channel post (the digest's own lists = "lists"); promo and the notices are not data posts.
+# "market_environment" shares the market_health note: START_HERE is at its parsed-length limit (test_channel_tools), so a dedicated note needs
+# the pinned post restructured first -- which is a requirement before that post is ever enabled.
 NOTE_FOR_KIND: Dict[str, str] = {
     "digest": "lists", "momentum_board": "momentum_board", "market_health": "market_health", "top_gainers": "top_gainers", "sector": "sector",
     "macro": "macro", "gaps": "gaps", "near_highs": "gaps", "aligned": "aligned", "base_rate": "base_rate", "recap": "recap", "scoreboard": "recap",
-    "news": "news", "assistant": "assistant", "earnings_today": "earnings_today",
+    "news": "news", "assistant": "assistant", "earnings_today": "earnings_today", "market_environment": "market_health",
 }
 
 

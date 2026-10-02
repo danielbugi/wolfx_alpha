@@ -26,7 +26,9 @@ from alerts.message_format import fmt_price
 from alerts.texts import DEFINITIONS, DISCLAIMER_ONE_LINE
 
 CAPTION_LIMIT = 1024
-KINDS = ("momentum_board", "market_health", "top_gainers", "sector", "macro", "gaps", "near_highs", "aligned", "base_rate", "recap", "promo", "news", "scoreboard", "disclaimer", "assistant", "earnings_today")
+KINDS = ("momentum_board", "market_health", "top_gainers", "sector", "macro", "gaps", "near_highs", "aligned", "base_rate", "recap", "promo", "news", "scoreboard", "disclaimer", "assistant", "earnings_today", "market_environment")
+# "market_environment" is built and reviewable (--kind market_environment, dry run / --to owner) but NOT enabled: it is in no
+# daily package (publish_post_market.POST_MARKET_KINDS), never chosen by pick_kinds(), and load_context() only reads its data when asked.
 # "momentum_board", "market_health" and "top_gainers" are three of the four standard post-market posts
 # (2026-09-25 redesign; the fourth, "daily_digest", is built by send_daily_digest.py, a separate
 # multi-message flow, not a single Post here) -- mechanism/alerts/publish_post_market.py sends all four
@@ -79,6 +81,7 @@ class Ctx:
     notice_index: int = 0                                         # which variant of the rotating assistant post to show
     earnings_today: Optional[List[Dict]] = None                   # today's reporters in the covered universe: symbol, close, sector (any may be None)
     top_gainers: Optional[List[Dict]] = None                      # top N of the full liquid universe by ret1_pct (send_channel_posts.load_context) -- reuses analyse_universe's rows, no extra calculation
+    intel: Optional[Dict] = None                                  # a market_intelligence.payload (mi_payload_v1) for exactly this session; None = not loaded / not available
 
 
 def _sign_arrow(pct: float) -> str:
@@ -468,8 +471,53 @@ def post_board(ctx: Ctx) -> Optional[Post]:
     return Post("momentum_board", "\n".join(lines), cc.render_board_card(b))
 
 
+# ------------------------------------------------------------------ market environment (Market Intelligence; built, not enabled)
+# Neutral headings on purpose: the dashboard/API use the model's own state names, the channel says what the reading describes.
+ENV_TILT = {"RISK_ON": "Broadly positive", "RISK_OFF": "Broadly negative", "NEUTRAL": "Mixed"}
+ENV_HORIZONS = ("5", "20", "60")
+ENV_SECTOR_HORIZON = "20"
+
+
+def _env_changes(by_horizon: Dict, label: str) -> Optional[str]:
+    """'S&P 500 · 5 sessions +0.2% · 20 sessions +1.1%': only the horizons that have a value; None when none do."""
+    parts = [f"{h} sessions {_signed(by_horizon[h])}%" for h in ENV_HORIZONS if by_horizon.get(h) is not None]
+    return f"{label}: " + " · ".join(parts) if parts else None
+
+
+def post_market_environment(ctx: Ctx) -> Optional[Post]:
+    """A descriptive read of the market backdrop from the stored Market Intelligence snapshot of exactly `ctx.session`. Observed rows only (a
+    reconstructed snapshot is never posted), nothing when the snapshot is missing, from another session, or the regime model could not be
+    computed -- no zero, no carried-forward value, no guessed classification. Text only, no image."""
+    p = ctx.intel
+    if not p or not p.get("available") or not p.get("observed") or str(p.get("session_date")) != ctx.session.isoformat():
+        return None
+    r = p.get("regime") or {}
+    tilt = ENV_TILT.get(r.get("state")) if r.get("available") else None
+    if tilt is None:
+        return None
+    lines = [f"<b>Market environment: {tilt}</b>", f"{ctx.session:%a %d %b} · {len(r.get('components') or [])} measures, fixed rules"]
+    if r.get("strength_label"):
+        lines.append(f"Reading strength: {html.escape(str(r['strength_label']))}")
+    rets = p.get("returns") or {}
+    body = []
+    spx = _env_changes(rets.get("spx") or {}, "S&amp;P 500")
+    med = _env_changes({h: (v or {}).get("ret") for h, v in (rets.get("universe_median") or {}).items()}, "Median stock")
+    body += [x for x in (spx, med) if x]
+    if body:
+        lines += ["", _rows_block(body)]
+    ranked = [s for s in p.get("sectors") or [] if s.get("rank_20") is not None and ((s.get("horizons") or {}).get(ENV_SECTOR_HORIZON) or {}).get("ret") is not None]
+    if len(ranked) >= 2:
+        k = min(3, len(ranked) // 2)
+        row = lambda s: f"{html.escape(s['sector'])} {_signed(s['horizons'][ENV_SECTOR_HORIZON]['ret'])}%"      # noqa: E731
+        lines += ["", f"<b>Sectors over {ENV_SECTOR_HORIZON} sessions</b> · middle stock of each",
+                  f"Leading: {' · '.join(row(s) for s in ranked[:k])}", f"Lagging: {' · '.join(row(s) for s in ranked[::-1][:k])}"]
+    lines += ["", "<i>Fixed rules, not tested as a predictor.</i>"]
+    return Post("market_environment", "\n".join(lines))
+
+
 # ------------------------------------------------------------------ registry
-BUILDERS = {"disclaimer": post_disclaimer, "assistant": post_assistant, "momentum_board": post_board, "market_health": post_health,
+BUILDERS = {"market_environment": post_market_environment,
+"disclaimer": post_disclaimer, "assistant": post_assistant, "momentum_board": post_board, "market_health": post_health,
             "top_gainers": post_top_gainers, "sector": post_sector, "macro": post_macro, "gaps": post_gaps, "near_highs": post_near_highs,
             "aligned": post_aligned, "base_rate": post_base_rate, "recap": post_recap, "promo": post_promo, "news": post_news,
             "scoreboard": post_scoreboard, "earnings_today": post_earnings_today}

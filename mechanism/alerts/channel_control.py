@@ -48,7 +48,7 @@ KIND_LABELS = {
     "board": "Momentum board", "health": "Market health", "momentum_board": "Momentum board", "market_health": "Market health",
     "sector": "Sector rotation", "macro": "Beyond stocks", "gaps": "Gaps and volume",
     "near_highs": "Near highs", "aligned": "Longer-timeframe breakouts", "base_rate": "Base rates", "recap": "Weekly recap",
-    "news": "News", "scoreboard": "List scoreboard", "promo": "Assistant promotion", "assistant": "Assistant notice",
+    "news": "News", "market_environment": "Market environment", "scoreboard": "List scoreboard", "promo": "Assistant promotion", "assistant": "Assistant notice",
     "disclaimer": "Disclaimer notice", "start_here": "Start here (pinned)", "alert_header": "Legacy alerts - header",
     "alert_card": "Legacy alerts - card", "manual": "Manual post", "other": "Other"}
 
