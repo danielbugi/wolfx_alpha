@@ -399,7 +399,7 @@ jobs:
           cat -n /tmp/migration_files.txt
           # A floor, not a pin -- this must rise every time a new numbered init mount is added, so a future
           # migration silently missing from docker-compose.yml itself (not just from this job) still gets caught.
-          test "$n" -ge 23 || { echo "Expected at least 23 migration files from docker-compose.yml, found $n -- its init-mount list format may have changed"; exit 1; }
+          test "$n" -ge 25 || { echo "Expected at least 25 migration files from docker-compose.yml, found $n -- its init-mount list format may have changed"; exit 1; }
 
       - name: Apply every discovered migration file, in that exact order
         # This is the exact regression guard for both bugs found during Phase 2 local validation
@@ -415,11 +415,11 @@ jobs:
             echo "::endgroup::"
           done < /tmp/migration_files.txt
 
-      - name: Verify expected tables exist (41, matching Phase 4A.6's verified count -- 36 original + 4 captured drifted + telegram_post_delivery)
+      - name: Verify expected tables exist (56 after migrations 1-25: Phase 4A.6's 41, then Release A/B and the 5 Market Intelligence tables of migrations 24/25)
         run: |
           count=$(psql -tAc "SELECT count(*) FROM pg_tables WHERE schemaname='public'")
           echo "Tables found: $count"
-          test "$count" -ge 41 || { echo "Expected at least 41 tables, found $count"; exit 1; }
+          test "$count" -ge 56 || { echo "Expected at least 56 tables, found $count"; exit 1; }
 
       - name: Verify telegram_post_delivery's structure and concurrency-guard constraint (2026-09-25 audit P1-5 -- this table's own migration was previously applied on the VPS but never validated by CI)
         run: |
