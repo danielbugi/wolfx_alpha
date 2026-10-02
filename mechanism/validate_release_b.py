@@ -4,6 +4,7 @@
 Read-only validation tooling for the Release B activation runbook (stages S0-S13).
 
     python mechanism/validate_release_b.py schema      --expect absent|exact [--capture inactive|active|any]
+                                                       [--ml-models present|absent|any]
     python mechanism/validate_release_b.py roles       --expect absent|present
     python mechanism/validate_release_b.py connections [--forbid-user trading_user]
     python mechanism/validate_release_b.py config      [--env-file PATH] [--expect-guards unset|set] [--expect-capture unset|on]
@@ -17,7 +18,8 @@ condition), 2 = bad usage / cannot connect.
 
 This tool NEVER writes. Three independent layers enforce that, and the tests prove each one:
   1. the session is opened with `default_transaction_read_only=on` and psycopg2 `readonly=True`;
-  2. every statement must start with SELECT / WITH / SHOW (anything else raises before it reaches the server);
+  2. every statement must start with SELECT / WITH / SHOW and contain no write keyword (anything else raises before it
+     reaches the server);
   3. the transaction is always rolled back and the connection closed.
 It reads database settings from the usual DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD variables. It never prints a
 secret: `config --env-file` extracts only GUARDS_EFFECTIVE_FROM and RESEARCH_CAPTURE_ENABLED and ignores every other line.
@@ -146,7 +148,7 @@ class ReadOnlyDB:
 
 
 # ------------------------------------------------------------------ schema (S0 / S2 / S4 / S5 / capture inactivity)
-def check_schema(db: ReadOnlyDB, rep: Report, expect: str, capture: str = "any") -> None:
+def check_schema(db: ReadOnlyDB, rep: Report, expect: str, capture: str = "any", ml_models: str = "present") -> None:
     ro = db.scalar("SHOW transaction_read_only")
     rep.check(ro == "on", "session.read_only", "transaction_read_only=on", f"transaction_read_only={ro!r}")
 
@@ -159,11 +161,17 @@ def check_schema(db: ReadOnlyDB, rep: Report, expect: str, capture: str = "any")
         for d in diffs[:25]:
             rep.add(FAIL, "migration22.diff", d)
 
-    missing = [c for c in ML_MODELS_REQUIRED_COLUMNS if c not in {
-        r[0] for r in db.q("SELECT attname FROM pg_attribute WHERE attrelid = to_regclass('ml_models') AND attnum > 0 "
-                           "AND NOT attisdropped AND attname = ANY(%s)", (list(ML_MODELS_REQUIRED_COLUMNS),))}]
-    rep.check(not missing, "migration23.ml_models_columns", "evaluation, feature_set_version, target present",
-              f"ml_models lacks {missing} (migration 23 not applied; register_model would fail closed)")
+    have = {r[0] for r in db.q("SELECT attname FROM pg_attribute WHERE attrelid = to_regclass('ml_models') AND attnum > 0 "
+                                "AND NOT attisdropped AND attname = ANY(%s)", (list(ML_MODELS_REQUIRED_COLUMNS),))}
+    missing = [c for c in ML_MODELS_REQUIRED_COLUMNS if c not in have]
+    if ml_models == "present":
+        rep.check(not missing, "migration23.ml_models_columns", "evaluation, feature_set_version, target present",
+                  f"ml_models lacks {missing} (migration 23 not applied; register_model would fail closed)")
+    elif ml_models == "absent":
+        rep.check(not have, "migration23.ml_models_columns", "none of the 3 columns exist yet (migration 23 not applied)",
+                  f"migration 23 columns already present: {sorted(have)}")
+    else:
+        rep.add(INFO, "migration23.ml_models_columns", f"present: {sorted(have)}")
 
     if expect != "exact":
         return
@@ -317,7 +325,14 @@ def check_app_privileges(db: ReadOnlyDB, rep: Report, app: str = "donchian_app",
 
 # ------------------------------------------------------------------ connections (S10 / S11)
 def check_connections(db: ReadOnlyDB, rep: Report, forbid_user: Optional[str], allow_app: str) -> None:
-    rows = db.q("SELECT usename, application_name, count(*) FROM pg_stat_activity WHERE datname = current_database() "
+    sees_all = db.scalar("SELECT rolsuper OR pg_has_role(current_user, 'pg_read_all_stats', 'member') "
+                         "FROM pg_roles WHERE rolname = current_user")
+    if not sees_all:
+        # a runtime role sees other users' sessions with their identity hidden: "no trading_user connections" would pass falsely
+        rep.add(FAIL, "connections.visibility", "this connection cannot see other users' sessions (needs a superuser or "
+                "pg_read_all_stats); run the tool with the bootstrap identity, not the runtime role")
+        return
+    rows =db.q("SELECT usename, application_name, count(*) FROM pg_stat_activity WHERE datname = current_database() "
                 "AND pid <> pg_backend_pid() AND usename IS NOT NULL GROUP BY 1, 2 ORDER BY 1, 2")
     for u, a, n in rows:
         rep.add(INFO, "connection", f"user={u} application_name={a or '-'} count={n}")
@@ -526,6 +541,8 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("schema")
     s.add_argument("--expect", choices=("absent", "exact"), required=True)
     s.add_argument("--capture", choices=("inactive", "active", "any"), default="any")
+    s.add_argument("--ml-models", choices=("present", "absent", "any"), default="present",
+                   help="migration 23 columns on ml_models (default present; use absent before S5)")
     r = sub.add_parser("roles")
     r.add_argument("--expect", choices=("absent", "present"), required=True)
     c = sub.add_parser("connections")
@@ -565,7 +582,7 @@ def run(argv: Sequence[str], env: Optional[Dict[str, str]] = None, out=sys.stdou
                 print(f"cannot connect read-only: {type(ex).__name__}", file=sys.stderr)
                 return 2
         if args.cmd == "schema":
-            check_schema(db, rep, args.expect, args.capture)
+            check_schema(db, rep, args.expect, args.capture, args.ml_models)
         elif args.cmd == "roles":
             check_roles(db, rep, args.expect)
         elif args.cmd == "connections":

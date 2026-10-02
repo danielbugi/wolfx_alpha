@@ -24,6 +24,9 @@
 |---|---|---|---|
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` | [required] | `localhost`/`5432`/`trading_production`/`trading_user` | `DB_USER` must be `trading_user` in any fresh bootstrap — `create_trading_schema.sql` ends with a `GRANT ... TO trading_user` assuming that role exists |
 | `DB_PASSWORD` | [secret] | `''` | |
+| `APP_DB_USER`, `APP_DB_PASSWORD` | [optional] / [secret] | unset | Shared application identity for backend, bot, pipeline and channel-sender (docker-compose only). Unset = every service keeps using `DB_USER`/`DB_PASSWORD`. **This is how services are switched to `donchian_app`** — never by editing `DB_USER`, which stays the bootstrap/admin identity |
+| `BACKEND_DB_*`, `BOT_DB_*`, `PIPELINE_DB_*`, `SENDER_DB_*` (`_USER`, `_PASSWORD`) | [optional] / [secret] | unset | Per-service override of the shared pair, so services can be switched one at a time. Resolution per service: `<SVC>_DB_*` → `APP_DB_*` → `DB_*` |
+| `POSTGRES_BOOTSTRAP_USER`, `POSTGRES_BOOTSTRAP_PASSWORD` | [optional] / [secret] | falls back to `DB_USER`/`DB_PASSWORD` | Identity the postgres container is initialised with and its healthcheck uses. Must stay the superuser even after the apps move to `donchian_app` |
 | `DB_POOL_MIN`, `DB_POOL_MAX` | [optional] | `8`/`30` | Read only by `backend/main.py`'s own connection pool |
 | `DB_POOL_MIN_SIZE`, `DB_POOL_MAX_SIZE` | [optional] | `2`/`10` | Read only by `mechanism/shared/config.py`'s `DatabaseManager` — **a separate pool from the two above**, tuning one has no effect on the other (see [../architecture/DATABASE.md](../architecture/DATABASE.md) §7) |
 | `DB_TIMEOUT` | [optional] | `60` (seconds) | `mechanism/shared/config.py` |

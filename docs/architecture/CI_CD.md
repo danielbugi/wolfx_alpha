@@ -57,9 +57,9 @@ any `infra` touch reruns everything) feeds 5 jobs:
 
 | | Backend | Mechanism (pipeline/bot/channel-sender) | Frontend |
 |---|---|---|---|
-| Built by | `cd.yml` | `cd.yml` | Vercel (its own build, triggered by its own GitHub integration — not this repo's `cd.yml`) |
-| Deployed by | `cd.yml`'s `deploy` job, automatically once dispatched | A human, manually, on the VPS, after the image is pushed | Vercel automatically on push to `main` |
-| Rollback | Automatic on failed health, or `deploy/vps/rollback.sh` | Manual: re-pin the previous SHA and re-run the manual steps | Vercel's own deployment history / instant rollback |
+| Built by | `cd.yml` | `cd.yml` | Vercel's build, started by a human running `vercel deploy --prod` (the project is **not** git-connected; not this repo's `cd.yml`) |
+| Deployed by | `cd.yml`'s `deploy` job, automatically once dispatched | A human, manually, on the VPS, after the image is pushed | A human, manually, with the Vercel CLI — a push to `main` deploys nothing (see [DEPLOYMENT.md §3](../operations/DEPLOYMENT.md)) |
+| Rollback | Automatic on failed health, or `deploy/vps/rollback.sh` | Manual: re-pin the previous SHA and re-run the manual steps | Vercel instant rollback to the previous production deployment |
 | Image tag | Immutable 12-hex commit SHA — never `latest` | Same | N/A (Vercel's own build artifact, not a Docker image here) |
 
 ## 5. Known open gap: no required reviewer on `production`

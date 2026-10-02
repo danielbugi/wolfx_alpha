@@ -83,11 +83,24 @@ gated step, not yet done.
 
 ## 3. Frontend
 
-Deployed by **Vercel's own GitHub integration**, not `cd.yml` — a push to `main` that touches
-`frontend/` triggers Vercel's own build and deploy automatically. `frontend/Dockerfile` and the
-`frontend` Compose service exist only as a documented break-glass fallback
-(`profiles: ["self-hosted-frontend-fallback"]`), not the real production path. Rollback is Vercel's
-own deployment history (instant rollback to any previous build from the Vercel dashboard).
+Deployed **manually with the Vercel CLI**, not by `cd.yml` and **not** by a GitHub integration. The Vercel
+project `first-light-dashboard` is not connected to GitHub (verified 2026-09-29: a push to `main` deployed nothing and
+production kept serving the previous build). **A commit to `main`, even with CI green, never changes the live dashboard.**
+
+To deploy exactly a committed tree (no `.env.local`, no uncommitted files):
+
+```bash
+SHA=<commit>; WORK=$(mktemp -d)
+git archive "$SHA" frontend | tar -x -C "$WORK"
+cp frontend/.vercel/project.json "$WORK/frontend/.vercel/project.json"    # project link (not committed)
+cd "$WORK/frontend" && vercel deploy --prod --yes
+```
+
+`NEXT_PUBLIC_API_BASE_URL` lives in the Vercel project's Production environment, not in the repo. Verify afterwards from
+somewhere that can reach the site (the VPS, or the owner's browser): fetch the route and grep the served JS chunks for a
+string introduced by the change. Rollback is Vercel's instant rollback to the previous production deployment
+(dashboard or `vercel rollback`). `frontend/Dockerfile` and the `frontend` Compose service exist only as a documented
+break-glass fallback (`profiles: ["self-hosted-frontend-fallback"]`), not the production path.
 
 ## 4. Database migrations
 

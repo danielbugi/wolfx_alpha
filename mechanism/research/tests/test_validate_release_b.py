@@ -602,3 +602,27 @@ def test_a_connection_failure_exits_2_without_leaking_the_password(capsys):
 def test_a_query_error_is_a_failed_check_never_a_silent_pass(full, env):  # noqa: F811
     code, out = _run(["schema", "--expect", "exact"], dict(env, DB_NAME="postgres"))
     assert code == 1 and "FAIL" in out
+
+
+def test_connections_refuses_to_judge_from_a_runtime_role_that_cannot_see_other_sessions(full, env):  # noqa: F811
+    app_env = dict(env, DB_USER=full.app, DB_PASSWORD="appsecret-" + uuid.uuid4().hex)
+    full.exec_admin(f'ALTER ROLE "{full.app}" PASSWORD %s', app_env["DB_PASSWORD"])
+    code, out = _run(["connections", "--forbid-user", "trading_user"], app_env)
+    assert code == 1 and "FAIL connections.visibility" in out and app_env["DB_PASSWORD"] not in out
+
+
+def test_ml_models_expectation_can_be_absent_present_or_unchecked(full, env):  # noqa: F811
+    assert _run(["schema", "--expect", "exact", "--ml-models", "present"], env)[0] == 0
+    code, out = _run(["schema", "--expect", "exact", "--ml-models", "absent"], env)
+    assert code == 1 and "FAIL migration23.ml_models_columns" in out
+    assert _run(["schema", "--expect", "exact", "--ml-models", "any"], env)[0] == 0
+    full.exec_admin("ALTER TABLE ml_models RENAME COLUMN evaluation TO evaluation_zz")
+    full.exec_admin("ALTER TABLE ml_models RENAME COLUMN feature_set_version TO feature_set_version_zz")
+    full.exec_admin("ALTER TABLE ml_models RENAME COLUMN target TO target_zz")
+    try:
+        assert _run(["schema", "--expect", "exact", "--ml-models", "absent"], env)[0] == 0      # the pre-S5 production state
+        assert _run(["schema", "--expect", "exact"], env)[0] == 1                               # default demands them
+    finally:
+        full.exec_admin("ALTER TABLE ml_models RENAME COLUMN evaluation_zz TO evaluation")
+        full.exec_admin("ALTER TABLE ml_models RENAME COLUMN feature_set_version_zz TO feature_set_version")
+        full.exec_admin("ALTER TABLE ml_models RENAME COLUMN target_zz TO target")

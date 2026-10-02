@@ -67,14 +67,21 @@ Precondition: migration 22 applied and `check_research_migration_preflight.py --
 2. Set `donchian_app`'s password out of band (`\password donchian_app`), store it only in the VPS env file.
 3. Verify: `PGOPTIONS='-c search_path=public' psql -v ON_ERROR_STOP=1 -f deploy/db/research_roles_verify.sql`
    (reads real ACLs, then proves behaviour with `SET LOCAL ROLE donchian_app` in a rolled-back transaction).
-4. **Audit what the app role needs *beyond* the research tables before switching.** The runtime currently uses a
-   superuser; `donchian_app` must be granted the rights the existing services need on all non-research tables
-   (`SELECT/INSERT/UPDATE/DELETE` on the application tables, sequence usage). That grant list is a separate, reviewed
-   change — **not** part of `research_roles.sql`.
-   **Known finding:** `ml_training/models/momentum_predictor.py` runs `ALTER TABLE ml_models …` at runtime, which needs
-   table-owner rights; it must be moved to a migration or run as the owner before the app can lose superuser.
-5. Switch services one at a time (`DB_USER=donchian_app`), watching `systemctl`/logs; keep the old credentials available
-   until a full scheduled run passes.
+4. **Runtime coverage of the non-research objects.** The services currently run as a superuser; `research_roles.sql`
+   §6 grants `donchian_app` what they need on every pre-existing object (tables `SELECT/INSERT/UPDATE/DELETE`, views
+   `SELECT`, sequences `USAGE/SELECT/UPDATE`, functions `EXECUTE`; no DDL) and `research_roles_verify.sql` proves it, including
+   a block of refused prohibited operations (rehearsed on a full production-shaped schema by
+   `mechanism/research/tests/test_roles_full_schema.py`). **There are no default privileges: re-run the role script and the
+   verify script after every later migration** (a new table is not covered until you do), and add any new immutable table
+   to the §6 exclusion list. The former `ALTER TABLE ml_models` runtime DDL is gone (migration 23,
+   `add_ml_models_registry_columns.sql`; the runtime now only checks the columns exist), so the app no longer needs owner rights.
+5. Switch services one at a time by setting **`APP_DB_USER`/`APP_DB_PASSWORD`** (or `<SVC>_DB_USER`/`_PASSWORD` for one
+   service) in the VPS env file — **never** by editing `DB_USER`, which is also the postgres bootstrap identity and the
+   migration/admin identity (see [../dev/ENVIRONMENT.md](../dev/ENVIRONMENT.md)). Watch `systemctl`/logs; keep the old
+   credentials available until a full scheduled run passes. Deploy scripts take the compose files from
+   `/opt/donchian/compose` and the release bundle under `/opt/donchian/releases/<tag>/`: sync the new compose bundle first or
+   the variable chain does not exist on the host. The read-only checks for this stage are
+   `mechanism/validate_release_b.py roles` and `connections` ([RELEASE_B_ACTIVATION.md](RELEASE_B_ACTIVATION.md)).
 
 The immutability is **real only after step 5**. Until then the verification in step 3 passes for `donchian_app` while
 the services keep running as a superuser.
