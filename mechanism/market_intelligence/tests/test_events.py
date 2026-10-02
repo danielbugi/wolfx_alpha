@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 
 import mi_samples  # noqa: F401  (path setup)
+from mi_fixtures import conn, connect, mi_env  # noqa: F401  (explicit fixtures: no top-level `conftest` name that could shadow research/tests)
 from market_intelligence import events as E
 from market_intelligence import store
 

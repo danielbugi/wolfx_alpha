@@ -4,6 +4,7 @@ import psycopg2
 import pytest
 
 import mi_samples as S
+from mi_fixtures import conn, connect, mi_env  # noqa: F401  (explicit fixtures: no top-level `conftest` name that could shadow research/tests)
 from market_intelligence import provenance as P
 from market_intelligence import store
 

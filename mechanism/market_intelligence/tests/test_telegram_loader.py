@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from datetime import date
 
 import mi_samples as S
+from mi_fixtures import conn, connect, mi_env  # noqa: F401  (explicit fixtures: no top-level `conftest` name that could shadow research/tests)
 import psycopg2
 import psycopg2.errors
 import pytest

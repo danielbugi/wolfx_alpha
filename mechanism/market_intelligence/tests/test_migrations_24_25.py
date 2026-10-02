@@ -7,7 +7,7 @@ import psycopg2.errors
 import pytest
 
 import mi_samples as S
-from conftest import MIGRATIONS, ROOT
+from mi_fixtures import MIGRATIONS, ROOT, conn, connect, mi_env  # noqa: F401  (explicit fixtures: no top-level `conftest` name)
 from market_intelligence import store
 
 TABLES = ["universe_snapshot", "market_snapshot", "sector_snapshot", "market_event", "market_event_revision"]

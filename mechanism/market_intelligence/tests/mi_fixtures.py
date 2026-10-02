@@ -1,4 +1,5 @@
-"""Throwaway-schema Postgres fixture for the Market Intelligence tests: migrations 24 and 25 applied in a fresh schema per test, so the
+"""Throwaway-schema Postgres fixtures for the Market Intelligence tests (imported EXPLICITLY by each test module; deliberately NOT a conftest.py --
+two conftest.py files in directories without __init__.py share the module name `conftest`, so one would shadow mechanism/research/tests/conftest.py): migrations 24 and 25 applied in a fresh schema per test, so the
 real triggers, CHECKs and composite FKs are exercised without touching the public schema. Skips only when Postgres is unreachable (the
 CI real-Postgres job treats any skip as a failure)."""
 import os
