@@ -91,6 +91,9 @@ cannot reach the maintenance hatch (pinned by `mechanism/research/tests/test_imp
 Applying it: `python mechanism/check_research_migration_preflight.py` before, `--verify` after -- see
 [../operations/DEPLOYMENT.md](../operations/DEPLOYMENT.md) §4.
 
+### Market Intelligence (migrations 24/25 -- **written and CI-tested, NOT applied to production**)
+`universe_snapshot` / `market_snapshot` / `sector_snapshot` (24: strategy-neutral, immutable session-level market context -- `risk_regime_v1`, `rs_v1`; each row carries `provenance` `observed`|`reconstructed`) · `market_event` / `market_event_revision` (25: append-only earnings/catalyst event model with a database-stamped `known_at`; no collector exists). Immutability = `ENABLE ALWAYS` triggers; the app role gets SELECT+INSERT, admin SELECT. Nothing writes them yet. The sector map for a past session is `reconstructed`, never PIT-safe. See [MARKET_INTELLIGENCE.md](MARKET_INTELLIGENCE.md).
+
 ### Digest / channel content
 `digest_runs` (one row per US session actually sent) · `digest_stocks` (**every** liquid stock's
 facts for that session — close, 1-day %, volume ×, range × ATR, distance below the 20-day high,

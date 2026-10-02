@@ -61,6 +61,9 @@ S15 frontend (**manual Vercel deploy**, see DEPLOYMENT.md §3).
 Capture needs three independent keys: image `<A>`, `RESEARCH_CAPTURE_ENABLED=1`, and an `enabled` boundary row. Migration 22 alone
 does nothing observable.
 
+### Market Intelligence (migrations 24/25) is a separate, later decision
+Not part of the Release B sequence above. Deploying image `<A>` is behaviour-neutral with respect to it (nothing writes, schedules or applies it; the API degrades to `not_provisioned`; see `test_activation_neutral.py`). If the owner later applies 24/25: apply atomically, then **re-run `deploy/db/research_roles.sql` and `research_roles_verify.sql`** (they grant/verify the five new tables, their sequences and two functions), and only then consider a writer. Details: [../architecture/MARKET_INTELLIGENCE.md](../architecture/MARKET_INTELLIGENCE.md).
+
 ## 3. The validation tool
 
 Exit codes: **0** no FAIL; **1** at least one FAIL (a runbook STOP condition); **2** usage error or cannot connect. Each check

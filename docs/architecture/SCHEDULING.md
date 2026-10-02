@@ -11,6 +11,9 @@
 > **Last verified:** 2026-09-25, read directly off the live VPS via root SSH. Corrected 2026-10-01 (§2a,
 > pipeline/retry responsibilities) from a read-only production reconciliation.
 
+> **Market Intelligence has no timer.** No unit, script or pipeline step runs `mechanism/market_intelligence` (pinned by `test_activation_neutral.py`); the
+> Market Environment Telegram post is in no package or rotation. See [MARKET_INTELLIGENCE.md](MARKET_INTELLIGENCE.md).
+
 ## 1. All timers, one table
 
 All Israel-local schedules use systemd's native per-timer `Asia/Jerusalem` calendar tag — DST-safe
