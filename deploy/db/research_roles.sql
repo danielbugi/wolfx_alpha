@@ -174,7 +174,11 @@ BEGIN
                                      'candidate_observation_id_seq', 'feature_snapshot_id_seq',
                                      'candidate_capture_run_id_seq', 'research_capture_activation_id_seq',
                                      'research_maintenance_log_id_seq', 'research_maintenance_session_id_seq',
-                                     'research_maintenance_audit_id_seq') LOOP
+                                     'research_maintenance_audit_id_seq',
+                                     'universe_snapshot', 'market_snapshot', 'sector_snapshot', 'market_event',
+                                     'market_event_revision', 'universe_snapshot_id_seq', 'market_snapshot_id_seq',
+                                     'sector_snapshot_id_seq', 'market_event_event_id_seq',
+                                     'market_event_revision_id_seq') LOOP
         -- REVOKE first so a re-run CONVERGES to the baseline (drops any drifted extra privilege such as TRUNCATE).
         IF r.relkind = 'S' THEN
             EXECUTE format('REVOKE ALL ON SEQUENCE %I FROM donchian_app', r.relname);
@@ -194,3 +198,36 @@ BEGIN
     END LOOP;
 END;
 $base$;
+
+-- ---------------------------------------------------------------------------------------------------
+-- 7. Market Intelligence tables (migrations 24 / 25). Conditional: a database that has not applied them is unaffected, so this
+--    script stays valid before and after those migrations. APPEND-ONLY with no maintenance hatch: the runtime role gets
+--    SELECT + INSERT, the admin group gets SELECT only (their guard raises unconditionally; a correction is a new version).
+--    Re-run this script (and the verifier) after applying 24 / 25 -- they are excluded from the section 6 baseline above.
+-- ---------------------------------------------------------------------------------------------------
+DO $mi$
+DECLARE
+    t TEXT;
+    f TEXT;
+    seq TEXT;
+BEGIN
+    FOREACH t IN ARRAY ARRAY['universe_snapshot', 'market_snapshot', 'sector_snapshot', 'market_event', 'market_event_revision'] LOOP
+        IF to_regclass(t) IS NULL THEN CONTINUE; END IF;
+        EXECUTE format('ALTER TABLE %I OWNER TO donchian_owner', t);
+        EXECUTE format('REVOKE ALL ON %I FROM PUBLIC', t);
+        EXECUTE format('REVOKE ALL ON %I FROM donchian_app', t);
+        EXECUTE format('REVOKE ALL ON %I FROM donchian_research_admin', t);
+        EXECUTE format('GRANT SELECT, INSERT ON %I TO donchian_app', t);
+        EXECUTE format('GRANT SELECT ON %I TO donchian_research_admin', t);
+        seq := pg_get_serial_sequence(t, CASE WHEN t = 'market_event' THEN 'event_id' ELSE 'id' END);
+        EXECUTE format('ALTER SEQUENCE %s OWNER TO donchian_owner', seq);
+        EXECUTE format('REVOKE ALL ON SEQUENCE %s FROM PUBLIC, donchian_app', seq);
+        EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %s TO donchian_app', seq);
+    END LOOP;
+    FOREACH f IN ARRAY ARRAY['research_market_guard()', 'research_market_event_stamp()'] LOOP
+        IF to_regprocedure(f) IS NOT NULL THEN
+            EXECUTE format('ALTER FUNCTION %s OWNER TO donchian_owner', f);
+        END IF;
+    END LOOP;
+END;
+$mi$;

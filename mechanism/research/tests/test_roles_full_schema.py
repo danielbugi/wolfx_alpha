@@ -24,7 +24,9 @@ from conftest import (ROOT, ROLES_ROLLBACK_SQL, ROLES_SQL, ROLES_VERIFY_SQL, _co
 
 RESEARCH = {"feature_set_registry", "feature_snapshot", "candidate_observation", "candidate_capture_run",
             "research_capture_activation", "research_maintenance_log", "research_maintenance_session",
-            "research_maintenance_audit"}
+            "research_maintenance_audit",
+            # Market Intelligence (migrations 24/25): append-only, runtime INSERT/SELECT -- not the DML baseline
+            "universe_snapshot", "market_snapshot", "sector_snapshot", "market_event", "market_event_revision"}
 APP_PASSWORD = "rb-full-schema-test-only"
 
 
@@ -387,6 +389,73 @@ def test_rollback_strips_views_sequences_and_functions_too(full):
                               "AND has_function_privilege(%s, p.oid, 'EXECUTE') "
                               "AND NOT EXISTS (SELECT 1 FROM aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) a "
                               "WHERE a.grantee = 0 AND a.privilege_type = 'EXECUTE')", full.app)[0][0] == 0
+    finally:
+        full.run_script(ROLES_SQL)
+        full.run_script(ROLES_VERIFY_SQL)
+
+
+# ------------------------------------------------------------------ Market Intelligence tables (migrations 24 / 25)
+MI_TABLES = ["universe_snapshot", "market_snapshot", "sector_snapshot", "market_event", "market_event_revision"]
+
+
+def test_mi_tables_are_append_only_for_the_runtime_role(full):
+    """INSERT + SELECT only: no UPDATE / DELETE / TRUNCATE for the runtime role, and no write of any kind for the admin group
+    (there is no maintenance hatch for these tables)."""
+    for t in MI_TABLES:
+        assert _catalog(full, "SELECT has_table_privilege(%s, %s, 'SELECT'), has_table_privilege(%s, %s, 'INSERT')",
+                        full.app, t, full.app, t) == [(True, True)], t
+        for priv in ("UPDATE", "DELETE", "TRUNCATE", "TRIGGER", "REFERENCES"):
+            assert _catalog(full, "SELECT has_table_privilege(%s, %s, %s)", full.app, t, priv)[0][0] is False, (t, priv)
+        for priv in ("INSERT", "UPDATE", "DELETE", "TRUNCATE"):
+            assert _catalog(full, "SELECT has_table_privilege(%s, %s, %s)", full.group, t, priv)[0][0] is False, (t, priv)
+        assert _catalog(full, "SELECT has_table_privilege('public', %s, 'SELECT')", t)[0][0] is False, t
+        assert _catalog(full, "SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid = %s::regclass", t)[0][0] == full.owner, t
+
+
+def test_mi_runtime_role_can_append_events_and_the_database_stamps_ingestion(full):
+    key = "pytest:" + uuid.uuid4().hex
+    conn = full.app_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("INSERT INTO market_event (event_key, symbol, event_type) VALUES (%s, 'AAA', 'earnings_scheduled')", (key,))
+        cur.execute("INSERT INTO market_event_revision (event_key, revision, event_time, known_at_basis, source, source_ref, "
+                    "pit_grade, status, payload_hash, provenance) VALUES (%s, 1, DATE '2099-01-15', 'ingested', 'fake', 'r1', "
+                    "'B', 'scheduled', %s, 'observed') RETURNING known_at = ingested_at, ingested_at > NOW() - INTERVAL '1 minute'",
+                    (key, "0" * 64))
+        assert cur.fetchone() == (True, True)
+        for sql in ("UPDATE market_event_revision SET status = 'confirmed'", "DELETE FROM market_event_revision",
+                    "TRUNCATE market_event_revision", "UPDATE market_event SET symbol = 'ZZZ'"):
+            err = _refused(conn, sql)
+            assert isinstance(err, psycopg2.errors.InsufficientPrivilege), (sql, err)
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+@pytest.mark.parametrize("break_sql,expected", [
+    ("GRANT UPDATE ON market_snapshot TO {app}", "has UPDATE on market_snapshot"),
+    ("GRANT DELETE ON universe_snapshot TO {app}", "has DELETE on universe_snapshot"),
+    ("GRANT TRUNCATE ON sector_snapshot TO {app}", "has TRUNCATE on sector_snapshot"),
+    ("REVOKE INSERT ON market_event_revision FROM {app}", "lacks INSERT/SELECT on market_event_revision"),
+    ("GRANT INSERT ON market_event TO {group}", "may write market_event"),
+    ("ALTER TABLE market_snapshot DISABLE TRIGGER market_snapshot_immutable_row", "is not ENABLE ALWAYS"),
+])
+def test_verify_detects_mi_drift(full, snapshot_state, break_sql, expected):
+    full.exec_admin(break_sql.format(app=f'"{full.app}"', group=f'"{full.group}"'))
+    try:
+        _verify_fails(full, expected)
+    finally:
+        full.exec_admin("ALTER TABLE market_snapshot ENABLE ALWAYS TRIGGER market_snapshot_immutable_row")
+
+
+def test_rollback_hands_the_mi_objects_back(full):
+    original = _catalog(full, "SELECT current_user")[0][0]
+    full.run_script(ROLES_ROLLBACK_SQL, research_roles__original_owner=original)
+    try:
+        for t in MI_TABLES:
+            assert _catalog(full, "SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid = %s::regclass", t)[0][0] == original, t
+            assert _catalog(full, "SELECT has_table_privilege(%s, %s, 'INSERT')", full.app, t)[0][0] is False, t
+        assert _catalog(full, "SELECT pg_get_userbyid(proowner) FROM pg_proc WHERE proname = 'research_market_guard'")[0][0] == original
     finally:
         full.run_script(ROLES_SQL)
         full.run_script(ROLES_VERIFY_SQL)

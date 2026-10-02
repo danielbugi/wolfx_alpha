@@ -28,6 +28,7 @@ DECLARE
     nrel INT := 0;
     nfn INT := 0;
     sch TEXT := current_schema();
+    mi TEXT[];
 BEGIN
     -- roles and their attributes
     FOR t IN SELECT unnest(ARRAY['donchian_owner', 'donchian_app', 'donchian_research_admin']) LOOP
@@ -42,6 +43,13 @@ BEGIN
             UNION ALL SELECT 'bypassrls' FROM pg_roles WHERE rolname = t AND rolbypassrls) x;
         IF bad IS NOT NULL THEN RAISE EXCEPTION 'FAIL role % has dangerous attribute(s): %', t, bad; END IF;
     END LOOP;
+    -- Market Intelligence tables (migrations 24 / 25) are included when present: append-only, runtime INSERT/SELECT, admin SELECT only.
+    mi := ARRAY(SELECT x FROM unnest(ARRAY['universe_snapshot', 'market_snapshot', 'sector_snapshot', 'market_event',
+                                           'market_event_revision']) x WHERE to_regclass(x) IS NOT NULL);
+    allt := allt || mi;
+    imm := imm || mi;
+    fns := fns || ARRAY(SELECT x FROM unnest(ARRAY['research_market_guard()', 'research_market_event_stamp()']) x
+                        WHERE to_regprocedure(x) IS NOT NULL);
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'donchian_owner' AND rolcanlogin) THEN
         RAISE EXCEPTION 'FAIL donchian_owner must be NOLOGIN';
     END IF;
@@ -68,7 +76,7 @@ BEGIN
             RAISE EXCEPTION 'FAIL function % is not owned by donchian_owner', f;
         END IF;
     END LOOP;
-    RAISE NOTICE 'OK 8 tables and 8 functions are owned by donchian_owner';
+    RAISE NOTICE 'OK % tables and % functions are owned by donchian_owner', array_length(allt, 1), array_length(fns, 1);
 
     -- runtime role: forbidden privileges
     FOREACH t IN ARRAY allt LOOP
@@ -83,6 +91,13 @@ BEGIN
         IF NOT has_table_privilege('donchian_app', t, 'INSERT') OR NOT has_table_privilege('donchian_app', t, 'SELECT') THEN
             RAISE EXCEPTION 'FAIL donchian_app lacks INSERT/SELECT on %', t;
         END IF;
+    END LOOP;
+    FOREACH t IN ARRAY mi LOOP
+        IF has_table_privilege('donchian_research_admin', t, 'INSERT') OR has_table_privilege('donchian_research_admin', t, 'UPDATE')
+           OR has_table_privilege('donchian_research_admin', t, 'DELETE') OR has_table_privilege('donchian_research_admin', t, 'TRUNCATE') THEN
+            RAISE EXCEPTION 'FAIL donchian_research_admin may write % (append-only, no maintenance hatch)', t;
+        END IF;
+        IF has_table_privilege('public', t, 'SELECT') THEN RAISE EXCEPTION 'FAIL PUBLIC may SELECT %', t; END IF;
     END LOOP;
     FOREACH t IN ARRAY maint LOOP
         IF has_table_privilege('donchian_app', t, 'INSERT') OR has_table_privilege('donchian_app', t, 'UPDATE') THEN
@@ -195,6 +210,8 @@ DO $b$
 DECLARE
     t TEXT;
     refused INT := 0;
+    expected INT := 10;
+    mc TEXT;
 BEGIN
     SET LOCAL ROLE donchian_app;
     FOREACH t IN ARRAY ARRAY['candidate_observation', 'feature_snapshot', 'feature_set_registry'] LOOP
@@ -205,11 +222,22 @@ BEGIN
         BEGIN EXECUTE format('TRUNCATE %I', t); RAISE EXCEPTION 'FAIL TRUNCATE on % was allowed', t;
         EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1; END;
     END LOOP;
+    FOREACH t IN ARRAY ARRAY['universe_snapshot', 'market_snapshot', 'sector_snapshot', 'market_event', 'market_event_revision'] LOOP
+        IF to_regclass(t) IS NULL THEN CONTINUE; END IF;
+        expected := expected + 3;
+        SELECT attname INTO mc FROM pg_attribute WHERE attrelid = to_regclass(t) AND attnum > 0 AND NOT attisdropped ORDER BY attnum LIMIT 1;
+        BEGIN EXECUTE format('UPDATE %I SET %I = %I', t, mc, mc); RAISE EXCEPTION 'FAIL UPDATE on % was allowed', t;
+        EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1; END;
+        BEGIN EXECUTE format('DELETE FROM %I', t); RAISE EXCEPTION 'FAIL DELETE on % was allowed', t;
+        EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1; END;
+        BEGIN EXECUTE format('TRUNCATE %I', t); RAISE EXCEPTION 'FAIL TRUNCATE on % was allowed', t;
+        EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1; END;
+    END LOOP;
     BEGIN PERFORM research_maintenance_begin(1); RAISE EXCEPTION 'FAIL donchian_app executed the maintenance hatch';
     EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1; END;
     RESET ROLE;
-    IF refused <> 10 THEN RAISE EXCEPTION 'FAIL expected 10 refusals, saw %', refused; END IF;
-    RAISE NOTICE 'OK behavioural: donchian_app was refused 10/10 mutation attempts (UPDATE/DELETE/TRUNCATE x3 tables + hatch)';
+    IF refused <> expected THEN RAISE EXCEPTION 'FAIL expected % refusals, saw %', expected, refused; END IF;
+    RAISE NOTICE 'OK behavioural: donchian_app was refused %/% mutation attempts (UPDATE/DELETE/TRUNCATE on every immutable table + the maintenance hatch)', refused, expected;
 END;
 $b$;
 

@@ -408,6 +408,11 @@ def _roles_report(full, env):  # noqa: F811
     ("GRANT {group} TO {app}", "roles.app_not_in.{group}"),
     ("ALTER ROLE {app} SUPERUSER", "roles.{app}.no_privileged_attributes"),
     ("ALTER TABLE feature_set_registry OWNER TO {app}", "roles.research_objects_owned_by_owner"),
+    ("GRANT UPDATE ON market_snapshot TO {app}", "privileges.research_tables_read_insert_only"),
+    ("GRANT DELETE ON market_event_revision TO {app}", "privileges.research_tables_read_insert_only"),
+    ("REVOKE INSERT ON sector_snapshot FROM {app}", "privileges.market_intelligence_append_only"),
+    ("GRANT UPDATE ON universe_snapshot TO {group}", "privileges.market_intelligence_append_only"),
+    ("ALTER TABLE market_event OWNER TO {app}", "roles.research_objects_owned_by_owner"),
 ])
 def test_role_drift_is_detected(full, env, snapshot_state, break_sql, check):  # noqa: F811
     view = full.admin().cursor()

@@ -42,6 +42,19 @@ BEGIN
                              'research_maintenance_close(bigint)', 'research_capture_set_state(bigint,text,date,text)'] LOOP
         EXECUTE format('ALTER FUNCTION %s OWNER TO %I', f, orig);
     END LOOP;
+    -- Market Intelligence objects (migrations 24 / 25), when present: tables, their sequences and the two trigger functions
+    FOREACH t IN ARRAY ARRAY['universe_snapshot', 'market_snapshot', 'sector_snapshot', 'market_event', 'market_event_revision'] LOOP
+        IF to_regclass(t) IS NOT NULL THEN
+            EXECUTE format('ALTER TABLE %I OWNER TO %I', t, orig);
+            EXECUTE format('ALTER SEQUENCE %s OWNER TO %I',
+                           pg_get_serial_sequence(t, CASE WHEN t = 'market_event' THEN 'event_id' ELSE 'id' END), orig);
+        END IF;
+    END LOOP;
+    FOREACH f IN ARRAY ARRAY['research_market_guard()', 'research_market_event_stamp()'] LOOP
+        IF to_regprocedure(f) IS NOT NULL THEN
+            EXECUTE format('ALTER FUNCTION %s OWNER TO %I', f, orig);
+        END IF;
+    END LOOP;
 
     -- strip every privilege the three roles hold on objects in this schema
     FOR r IN SELECT c.relname, c.relkind FROM pg_class c

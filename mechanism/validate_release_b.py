@@ -50,6 +50,9 @@ CALLABLE_RESEARCH_FUNCTIONS = ("research_maintenance_open(text,text,integer)", "
                                "research_maintenance_begin(bigint)", "research_maintenance_close(bigint)",
                                "research_capture_set_state(bigint,text,date,text)")
 RESEARCH_ROLES = ("donchian_owner", "donchian_app", "donchian_research_admin")
+# Market Intelligence (migrations 24 / 25): a separate release from Release B, append-only, runtime INSERT/SELECT. Present only once applied;
+# when present they must not be mistaken for ordinary DML-baseline tables.
+MARKET_INTELLIGENCE_TABLES = ("universe_snapshot", "market_snapshot", "sector_snapshot", "market_event", "market_event_revision")
 CAPTURE_ENV_VAR = "RESEARCH_CAPTURE_ENABLED"
 
 GUARD_MODE_RE = re.compile(r"Universe guards mode: (INERT|ACTIVE)\b[^\n]*")
@@ -244,14 +247,15 @@ def check_roles(db: ReadOnlyDB, rep: Report, expect: str, names: Optional[Dict[s
     if len(admins) == 1:
         rep.add(WARN, "roles.admin_group_members", "only one approver; the maintenance hatch needs two distinct people")
 
+    mi_present = [t for t in MARKET_INTELLIGENCE_TABLES if db.scalar("SELECT to_regclass(%s) IS NOT NULL", (t,))]
     wrong_owner = db.q(
         "SELECT c.relname, pg_get_userbyid(c.relowner) FROM pg_class c WHERE c.oid = ANY(%s::regclass[]) "
-        "AND pg_get_userbyid(c.relowner) <> %s", (list(fp.TABLES), owner))
+        "AND pg_get_userbyid(c.relowner) <> %s", (list(fp.TABLES) + mi_present, owner))
     wrong_fn_owner = db.q(
         "SELECT p.oid::regprocedure::text FROM pg_proc p WHERE p.oid = ANY(%s::regprocedure[]) "
         "AND pg_get_userbyid(p.proowner) <> %s", (list(fp.FUNCTIONS), owner))
     rep.check(not wrong_owner and not wrong_fn_owner, "roles.research_objects_owned_by_owner",
-              f"8 tables + 8 functions owned by {owner}", f"wrong owner: {wrong_owner} {wrong_fn_owner}")
+              f"the research objects (and any Market Intelligence tables) are owned by {owner}", f"wrong owner: {wrong_owner} {wrong_fn_owner}")
     owns = db.q("SELECT relname FROM pg_class WHERE relowner = (SELECT oid FROM pg_roles WHERE rolname = %s) LIMIT 5", (app,))
     rep.check(not owns, "roles.app_owns_nothing", f"{app} owns no relation", f"{app} owns {owns}")
 
@@ -263,7 +267,8 @@ def check_app_privileges(db: ReadOnlyDB, rep: Report, app: str = "donchian_app",
     def tp(oid, priv):
         return db.scalar("SELECT has_table_privilege(%s, %s::oid, %s)", (app, oid, priv))
 
-    research = tuple(fp.TABLES)
+    mi = tuple(t for t in MARKET_INTELLIGENCE_TABLES if db.scalar("SELECT to_regclass(%s) IS NOT NULL", (t,)))
+    research = tuple(fp.TABLES) + mi
     bad: List[str] = []
     nrel = 0
     rels = db.q(
@@ -309,10 +314,21 @@ def check_app_privileges(db: ReadOnlyDB, rep: Report, app: str = "donchian_app",
     rep.check(not no_admin, "privileges.admin_can_execute", "the admin group can execute all five",
               f"admin group cannot execute {no_admin}")
 
-    imm = [f"{t}:{p}" for t in fp.TABLES for p in ("UPDATE", "DELETE", "TRUNCATE")
+    imm = [f"{t}:{p}" for t in research for p in ("UPDATE", "DELETE", "TRUNCATE")
            if db.scalar("SELECT has_table_privilege(%s, %s::regclass, %s)", (app, t, p))]
     rep.check(not imm, "privileges.research_tables_read_insert_only", "no UPDATE/DELETE/TRUNCATE on any research table",
               f"mutating privileges: {imm}")
+
+    if mi:
+        no_ins = [t for t in mi if not (db.scalar("SELECT has_table_privilege(%s, %s::regclass, 'INSERT')", (app, t))
+                                        and db.scalar("SELECT has_table_privilege(%s, %s::regclass, 'SELECT')", (app, t)))]
+        admin_w = [f"{t}:{p}" for t in mi for p in ("INSERT", "UPDATE", "DELETE", "TRUNCATE")
+                   if db.scalar("SELECT has_table_privilege(%s, %s::regclass, %s)", (group, t, p))]
+        rep.check(not no_ins and not admin_w, "privileges.market_intelligence_append_only",
+                  f"{len(mi)} Market Intelligence tables: runtime INSERT/SELECT, admin group read-only",
+                  f"runtime lacks INSERT/SELECT on {no_ins}; admin group may write {admin_w}")
+    else:
+        rep.add(INFO, "privileges.market_intelligence_append_only", "migrations 24/25 not applied; nothing to check")
 
     rep.check(bool(db.scalar("SELECT has_schema_privilege(%s, current_schema(), 'USAGE')", (app,))),
               "privileges.schema_usage", "USAGE on schema", "no USAGE on the schema")
