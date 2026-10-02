@@ -10,6 +10,16 @@
 # docker-compose.prod.yml is a separate overlay (pinned image tags, resource limits, a real
 # secrets file) — design-only per this session's scope, not used by the commands above.
 
+# Database identities (P2, 2026-10): the postgres bootstrap identity and the application runtime identities are
+# SEPARATE variables so that moving the apps to a least-privilege role can never rename the postgres superuser.
+#   postgres:   POSTGRES_BOOTSTRAP_USER / _PASSWORD   (fallback: DB_USER / DB_PASSWORD -- the legacy single pair)
+#   each app:   <SVC>_DB_USER / _PASSWORD, SVC in BACKEND | BOT | PIPELINE | SENDER (channel-sender)
+#               -> APP_DB_USER / _PASSWORD (shared default for all four) -> DB_USER / DB_PASSWORD (legacy)
+# With none of the new variables set every service renders exactly as before. DB_USER/DB_PASSWORD keep meaning
+# "bootstrap/admin identity" (also what deploy/db/backup_production.py and auth_smoke.sh read) -- never edit DB_USER
+# to switch an application's role; set APP_DB_USER (or a per-service variable) instead. The container-facing names
+# stay DB_USER / DB_PASSWORD, so no application code changes. Procedure: docs/operations/RELEASE_B_ACTIVATION.md.
+
 name: donchian-screener
 
 networks:
@@ -32,8 +42,8 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_NAME:-donchian_docker_dev}
-      POSTGRES_USER: ${DB_USER:-trading_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-docker_local_dev_only_change_me}
+      POSTGRES_USER: ${POSTGRES_BOOTSTRAP_USER:-${DB_USER:-trading_user}}
+      POSTGRES_PASSWORD: ${POSTGRES_BOOTSTRAP_PASSWORD:-${DB_PASSWORD:-docker_local_dev_only_change_me}}
     # Deliberately NOT published to the host — see docs/devops/PRODUCTION_READINESS_CHECKLIST.md's
     # "Firewall" section. Every other service reaches it as `postgres:5432` on app_net.
     volumes:
@@ -67,7 +77,7 @@ services:
       - ./mechanism/add_ml_models_registry_columns.sql:/docker-entrypoint-initdb.d/23_add_ml_models_registry_columns.sql:ro
     networks: [app_net]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-trading_user} -d ${DB_NAME:-donchian_docker_dev}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_BOOTSTRAP_USER:-${DB_USER:-trading_user}} -d ${DB_NAME:-donchian_docker_dev}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -86,8 +96,8 @@ services:
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_NAME: ${DB_NAME:-donchian_docker_dev}
-      DB_USER: ${DB_USER:-trading_user}
-      DB_PASSWORD: ${DB_PASSWORD:-docker_local_dev_only_change_me}
+      DB_USER: ${BACKEND_DB_USER:-${APP_DB_USER:-${DB_USER:-trading_user}}}
+      DB_PASSWORD: ${BACKEND_DB_PASSWORD:-${APP_DB_PASSWORD:-${DB_PASSWORD:-docker_local_dev_only_change_me}}}
       API_HOST: 0.0.0.0
     volumes:
       - ./breakout_results:/app/breakout_results
@@ -136,8 +146,8 @@ services:
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_NAME: ${DB_NAME:-donchian_docker_dev}
-      DB_USER: ${DB_USER:-trading_user}
-      DB_PASSWORD: ${DB_PASSWORD:-docker_local_dev_only_change_me}
+      DB_USER: ${BOT_DB_USER:-${APP_DB_USER:-${DB_USER:-trading_user}}}
+      DB_PASSWORD: ${BOT_DB_PASSWORD:-${APP_DB_PASSWORD:-${DB_PASSWORD:-docker_local_dev_only_change_me}}}
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
@@ -158,8 +168,8 @@ services:
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_NAME: ${DB_NAME:-donchian_docker_dev}
-      DB_USER: ${DB_USER:-trading_user}
-      DB_PASSWORD: ${DB_PASSWORD:-docker_local_dev_only_change_me}
+      DB_USER: ${PIPELINE_DB_USER:-${APP_DB_USER:-${DB_USER:-trading_user}}}
+      DB_PASSWORD: ${PIPELINE_DB_PASSWORD:-${APP_DB_PASSWORD:-${DB_PASSWORD:-docker_local_dev_only_change_me}}}
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
@@ -184,8 +194,8 @@ services:
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_NAME: ${DB_NAME:-donchian_docker_dev}
-      DB_USER: ${DB_USER:-trading_user}
-      DB_PASSWORD: ${DB_PASSWORD:-docker_local_dev_only_change_me}
+      DB_USER: ${SENDER_DB_USER:-${APP_DB_USER:-${DB_USER:-trading_user}}}
+      DB_PASSWORD: ${SENDER_DB_PASSWORD:-${APP_DB_PASSWORD:-${DB_PASSWORD:-docker_local_dev_only_change_me}}}
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
