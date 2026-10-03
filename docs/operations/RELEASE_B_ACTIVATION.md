@@ -1,8 +1,9 @@
 # Release B — activation: operator guide and read-only validation tool
 
-> **Status: PREPARED, NOT EXECUTED.** Nothing here has been run against production. Production is frozen at `4d9bf93`
-> (`CURRENT_MECHANISM_SHA=4d9bf93069cb`); migrations 22 and 23 are not applied; no `donchian_*` role exists; services run as the
-> bootstrap superuser. Every stage that changes production needs its own explicit owner go-ahead (commit ≠ deploy).
+> **Status (2026-10-03): S1–S8 EXECUTED; S9 onward NOT started.** Production runs image `cfd83f72f960` (`CURRENT_MECHANISM_SHA`);
+> migrations 22 and 23 are applied, 24/25 are not; `GUARDS_EFFECTIVE_FROM=2026-10-02`; research capture is OFF; no `donchian_*`
+> role exists and services still run as the bootstrap `trading_user`. The first guarded session (2026-10-02) was validated in S8.
+> Every remaining stage that changes production needs its own explicit owner go-ahead (commit ≠ deploy).
 >
 > The full audit, stage-by-stage actions, STOP conditions and the rollback matrix are in
 > `agent_reports/architecture/2026-10-02_release-b-production-activation-runbook.md` (a local, git-ignored working document — not in the repository). This file is the operator-facing summary
@@ -79,10 +80,25 @@ cannot (not superuser, not `pg_read_all_stats`) it reports FAIL `connections.vis
 
 ```bash
 A=<12-hex activation sha>; ENVF=/opt/donchian/env/.env
-VAL() { docker run --rm -i --network donchian-screener_app_net --env-file "$ENVF" -e DB_HOST=postgres \
+VAL() { docker run --rm -i --network donchian-screener_app_net --env-file "$ENVF" -e DB_HOST=postgres -e PYTHONPATH=/app \
           --entrypoint python ghcr.io/danielbugi/wolfx_alpha-mechanism:"$A" mechanism/validate_release_b.py "$@"; }
 # confirm the network name once with: docker network ls | grep app_net
 ```
+
+* `-e PYTHONPATH=/app` is required: the image workdir is `/app`, but the script is run as `mechanism/validate_release_b.py`, so
+  without it `ml_training.features.price_features` does not import and `guards.db.discontinuity_proxy` FAILs with
+  `ModuleNotFoundError` (a harness defect, not a production one).
+* `-i` keeps stdin open, so **`VAL` consumes stdin**. Inside a script piped to `ssh bash -s`/`bash -s` it swallows the rest of the
+  script; give every call that is not meant to read a log `</dev/null`. Only `VAL guards --log -` is meant to read stdin.
+* To feed a log and a results file (mount the host breakout-results dir; the screener writes
+  `multi_timeframe_ml_enhanced_<ts>.json` there), strip ANSI colour/CR first — this is the validated S8 invocation:
+
+  ```bash
+  sed 's/\x1b\[[0-9;]*m//g' "$LOG" | tr '\r' '\n' | \
+    docker run --rm -i --network donchian-screener_app_net --env-file "$ENVF" -e DB_HOST=postgres -e PYTHONPATH=/app \
+      -v /opt/donchian/compose/breakout_results:/data:ro --entrypoint python ghcr.io/danielbugi/wolfx_alpha-mechanism:"$A" \
+      mechanism/validate_release_b.py guards --session D --expect active --log - --results /data/<results.json>
+  ```
 
 | Stage | Command | What it enforces |
 |---|---|---|
@@ -91,7 +107,7 @@ VAL() { docker run --rm -i --network donchian-screener_app_net --env-file "$ENVF
 | S5 | `VAL schema --expect exact --capture inactive` | the 3 `ml_models` columns now present (the default for `--ml-models`). |
 | S7 | `VAL config --env-file $ENVF --expect-guards set --check-boundary-vs-db` | exactly one valid `GUARDS_EFFECTIVE_FROM`; `D` strictly after the latest completed session. |
 | S6 / S11 | `VAL config --env-file $ENVF --expect-guards unset` | boundary unset while only the image is deployed (behaviour is legacy: confirm the run logs `Universe guards mode: INERT` and `Screener behaviour mode: LEGACY`). |
-| S8 | `journalctl -u donchian-pipeline.service --since "<fire>" \| VAL guards --session D --expect active --log -` (add `--results <path>` to also check `metadata.universe_guards`) | exactly one guards mode line `ACTIVE`, exactly one behaviour line `NEW` (the two must agree) and one `dropped N/M` line; `M` in 2,900–3,100; `N/M` ≤ 15%; today's candidate count within [50%, 200%] of the 5-session median; ledger ≤ results breakouts; no ledger symbol with a price discontinuity in its lookback. |
+| S8 | `journalctl -u donchian-pipeline.service --since "<fire>" \| VAL guards --session D --expect active --log -` (add `--results <path>` to also check `metadata.universe_guards`) | exactly one guards mode line `ACTIVE`, exactly one behaviour line `NEW` (the two must agree) and one `dropped N/M` line. **`M` is the number of distinct *candidate* symbols (breakout + near-breakout signals) entering the guards — not the ~3,066-symbol stock universe.** Invariants (FAIL): `M > 0`, `0 ≤ N ≤ M`, `N/M` ≤ 15%; with `--results`: `metadata.total_symbols_screened == M − N` and the results' signal total == the logged `N signals after the … guards`. WARN only: `M` outside the research band 1,362–1,871 (16 pre-activation sessions 2026-09-01..09-23, median 1,730; first guarded session 2026-10-02: 77/1,440). Also: today's ledger count within [50%, 200%] of the 5-session median; ledger ≤ results breakouts; no ledger symbol with a price discontinuity in its lookback. |
 | S8 | `VAL delivery --session D` | a `prod` post-market row `sent`, no duplicate. |
 | S9 | `VAL roles --expect present` | attributes, no membership of owner/admin by the app, all 8 tables + 8 functions owned by `donchian_owner`, runtime coverage of every non-research table/view/sequence/function, the five maintenance/`set_state` functions executable by the admin group only, no CREATE on schema/database. |
 | S9b | `VAL roles --expect present` | WARN while the admin group has a single member (the hatch needs two distinct people). |

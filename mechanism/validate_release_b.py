@@ -58,9 +58,17 @@ CAPTURE_ENV_VAR = "RESEARCH_CAPTURE_ENABLED"
 GUARD_MODE_RE = re.compile(r"Universe guards mode: (INERT|ACTIVE)\b[^\n]*")
 BEHAVIOUR_MODE_RE = re.compile(r"Screener behaviour mode: (LEGACY|NEW)\b[^\n]*")
 GUARD_DROPPED_RE = re.compile(r"Universe guards: dropped (\d+)/(\d+) symbols")
+GUARD_AFTER_RE = re.compile(r"(\d+) signals after the liquidity/data-integrity guards")
 
 # Runbook S8 thresholds.
-UNIVERSE_MIN, UNIVERSE_MAX = 2900, 3100
+# `M` in "dropped N/M symbols" is the number of DISTINCT SYMBOLS ENTERING `_apply_universe_guards`, i.e. the symbols that
+# produced a breakout or near-breakout signal that session (`len({s['symbol'] for s in signals})`). It is NOT the stock
+# universe (~3,066 symbols with a bar). It is therefore checked by invariants (M > 0, 0 <= N <= M, N/M <= MAX_DROP_FRACTION,
+# M - N == the symbols/signals downstream) and compared with a research band that can only WARN.
+# Source of the band: an offline replay of the guards over the 16 sessions 2026-09-01..2026-09-23 (pre-activation
+# measurement, script not committed) saw M between 1,362 and 1,871 (median 1,730); the first guarded production session,
+# 2026-10-02, had M=1,440. It is an anomaly detector only: the candidate population follows the market.
+GUARD_INPUT_RESEARCH_BAND = (1362, 1871)
 MAX_DROP_FRACTION = 0.15
 COLLAPSE_FRACTION = 0.5
 EXPLODE_FACTOR = 2.0
@@ -421,7 +429,10 @@ def parse_guard_log(text: str) -> Dict[str, object]:
     return {"modes": modes, "states": states, "dropped": dropped, "behaviour": behaviour}
 
 
-def check_guard_log(rep: Report, text: str, expect: str, lo: int = UNIVERSE_MIN, hi: int = UNIVERSE_MAX) -> None:
+def check_guard_log(rep: Report, text: str, expect: str,
+                    band: Tuple[int, int] = GUARD_INPUT_RESEARCH_BAND) -> Optional[Dict[str, Optional[int]]]:
+    """Returns {n, m, after} (dropped, guard-input symbols, post-guard signal count or None) for an active run that logged
+    one sane drop line, so the results file can be reconciled against it; otherwise None."""
     p = parse_guard_log(text)
     states, dropped = p["states"], p["dropped"]
     if len(states) != 1:
@@ -442,19 +453,40 @@ def check_guard_log(rep: Report, text: str, expect: str, lo: int = UNIVERSE_MIN,
     if expect == "inert":
         rep.check(not dropped, "guards.log.no_drop_line", "no 'dropped N/M' line while inert",
                   f"inert run logged a drop line {dropped}")
-        return
+        return None
     if len(dropped) != 1:
         rep.add(FAIL, "guards.log.dropped_line", f"expected exactly one 'dropped N/M symbols' line, found {len(dropped)}")
-        return
+        return None
     n, m = dropped[0]
-    rep.check(lo <= m <= hi, "guards.log.universe_size", f"M={m} within {lo}-{hi}", f"M={m} outside {lo}-{hi}")
-    frac = (n / m) if m else 1.0
+    sane = m > 0 and 0 <= n <= m
+    rep.check(sane, "guards.log.guard_input_symbol_count",
+              f"M={m} distinct candidate symbols entered the guards, N={n} dropped (M > 0, 0 <= N <= M)",
+              f"impossible guard counts N={n}, M={m} (need M > 0 and 0 <= N <= M)")
+    if not sane:
+        return None
+    lo, hi = band
+    if not lo <= m <= hi:
+        rep.add(WARN, "guards.log.guard_input_symbol_count_band",
+                f"M={m} is outside the research band {lo}-{hi} (WARN only: M is the candidate-symbol count, which follows "
+                "the market; it is not the stock universe)")
+    frac = n / m
     rep.check(frac <= MAX_DROP_FRACTION, "guards.log.drop_fraction", f"dropped {n}/{m} = {frac:.1%} (<= {MAX_DROP_FRACTION:.0%})",
               f"dropped {n}/{m} = {frac:.1%} exceeds {MAX_DROP_FRACTION:.0%}")
+    after_all = [int(a) for a in GUARD_AFTER_RE.findall(text)]
+    after: Optional[int] = None
+    if len(after_all) == 1:
+        after = after_all[0]
+    else:
+        rep.add(WARN, "guards.log.post_guard_signals",
+                f"expected exactly one 'N signals after the ... guards' line, found {len(after_all)}; log/results signal-count reconciliation skipped")
+    return {"n": n, "m": m, "after": after}
 
 
-def check_guard_results(rep: Report, results: dict, session: date, expect: str) -> Optional[int]:
-    """Validates the screener's results JSON metadata; returns the breakout count (bullish + bearish) it contains."""
+def check_guard_results(rep: Report, results: dict, session: date, expect: str,
+                        guard: Optional[Dict[str, Optional[int]]] = None) -> Optional[int]:
+    """Validates the screener's results JSON metadata; returns the breakout count (bullish + bearish) it contains.
+    `guard` is check_guard_log's result: the results must carry exactly the symbols/signals that survived the guards
+    (symbols == M - N, signals == the logged post-guard count)."""
     ug = (results.get("metadata") or {}).get("universe_guards")
     if ug is None:
         rep.add(FAIL, "guards.results.metadata", "metadata.universe_guards is missing (image predates P4?)")
@@ -466,6 +498,21 @@ def check_guard_results(rep: Report, results: dict, session: date, expect: str) 
         rep.check(set(ug.get("scope") or ()) == set(gb.SCOPE), "guards.results.scope",
                   f"boundary scope = {', '.join(gb.SCOPE)}", f"scope {ug.get('scope')} != {list(gb.SCOPE)} (image predates the single-boundary fix?)")
     sig = results.get("signals") or {}
+    if guard is not None:
+        n, m, after = guard["n"], guard["m"], guard["after"]
+        meta = results.get("metadata") or {}
+        syms = meta.get("total_symbols_screened")
+        if syms is None:
+            rep.add(WARN, "guards.results.symbols_reconcile", "metadata.total_symbols_screened missing; symbol reconciliation skipped")
+        else:
+            rep.check(syms == m - n, "guards.results.symbols_reconcile",
+                      f"results carry {syms} symbols == M - N ({m} - {n})",
+                      f"results carry {syms} symbols != M - N ({m} - {n} = {m - n}): log and results disagree")
+        if after is not None:
+            total = sum(len(v) for v in sig.values() if isinstance(v, list))
+            rep.check(total == after, "guards.results.signals_reconcile",
+                      f"results carry {total} signals == {after} logged after the guards",
+                      f"results carry {total} signals != {after} logged after the guards: log and results disagree")
     return len(sig.get("bullish_breakout", [])) + len(sig.get("bearish_breakout", []))
 
 
@@ -630,15 +677,16 @@ def run(argv: Sequence[str], env: Optional[Dict[str, str]] = None, out=sys.stdou
                 latest = db.scalar("SELECT max(signal_date) FROM signal_ledger")
             check_config(rep, values, args.expect_guards, args.expect_capture, latest)
         elif args.cmd == "guards":
+            guard = None
             if args.log:
                 text = sys.stdin.read() if args.log == "-" else open(args.log, encoding="utf-8", errors="replace").read()
-                check_guard_log(rep, text, args.expect)
+                guard = check_guard_log(rep, text, args.expect)
             else:
                 rep.add(WARN, "guards.log", "no --log given; log evidence not checked")
             breakouts = None
             if args.results:
                 with open(args.results, encoding="utf-8") as fh:
-                    breakouts = check_guard_results(rep, json.load(fh), args.session, args.expect)
+                    breakouts = check_guard_results(rep, json.load(fh), args.session, args.expect, guard)
             if db is not None:
                 check_guard_db(db, rep, args.session, args.expect, breakouts)
         elif args.cmd == "capture":

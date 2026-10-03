@@ -114,12 +114,30 @@ def test_an_active_run_with_a_plausible_drop_passes():
     assert not rep.failed and _status(rep, "guards.log.drop_fraction") == v.PASS
 
 
+def test_a_candidate_symbol_count_far_below_the_stock_universe_is_not_a_failure():
+    # 2026-10-02 production: 77/1440. M is the distinct candidate symbols entering the guards, not the ~3,066 universe.
+    for line in ("Universe guards: dropped 77/1440 symbols\n", "Universe guards: dropped 10/300 symbols\n",
+                 "Universe guards: dropped 100/9000 symbols\n"):
+        rep = _guard(ACTIVE + line, "active")
+        assert not rep.failed, line
+        assert _status(rep, "guards.log.guard_input_symbol_count") == v.PASS
+    assert not _by(rep, "guards.log.universe_size")
+
+
+def test_the_research_band_is_a_warning_never_a_gate():
+    inside = _guard(ACTIVE + "Universe guards: dropped 77/1440 symbols\n", "active")
+    assert not _by(inside, "guards.log.guard_input_symbol_count_band")                          # 1,440 is inside 1,362-1,871
+    outside = _guard(ACTIVE + "Universe guards: dropped 10/300 symbols\n", "active")
+    assert _status(outside, "guards.log.guard_input_symbol_count_band") == v.WARN and not outside.failed
+    assert v.GUARD_INPUT_RESEARCH_BAND == (1362, 1871)
+
+
 @pytest.mark.parametrize("line,check", [
-    ("Universe guards: dropped 600/3000 symbols\n", "guards.log.drop_fraction"),       # 20% > 15%
-    ("Universe guards: dropped 10/1500 symbols\n", "guards.log.universe_size"),        # M far below 2,900
-    ("Universe guards: dropped 10/9000 symbols\n", "guards.log.universe_size"),
+    ("Universe guards: dropped 600/3000 symbols\n", "guards.log.drop_fraction"),                # 20% > 15%
+    ("Universe guards: dropped 0/0 symbols\n", "guards.log.guard_input_symbol_count"),          # M must be > 0
+    ("Universe guards: dropped 11/10 symbols\n", "guards.log.guard_input_symbol_count"),        # N > M is impossible
 ])
-def test_active_run_thresholds_are_stop_conditions(line, check):
+def test_active_run_thresholds_and_impossible_counts_are_stop_conditions(line, check):
     rep = _guard(ACTIVE + line, "active")
     assert rep.failed and _status(rep, check) == v.FAIL
 
@@ -151,6 +169,12 @@ def test_the_two_mode_lines_must_agree_and_both_must_be_present():
     assert _status(_guard(INERT + INERT.splitlines(True)[1], "inert"), "guards.log.behaviour_line") == v.FAIL  # duplicated
 
 
+def test_the_post_guard_signal_line_is_the_line_the_screener_emits():
+    screener_src = open(os.path.join(ROOT, "mechanism", "screeners", "multi_timeframe_screener.py"), encoding="utf-8").read()
+    assert "signals after the liquidity/data-integrity guards" in screener_src
+    assert v.GUARD_AFTER_RE.search("INFO 1363 signals after the liquidity/data-integrity guards").group(1) == "1363"
+
+
 def test_the_log_lines_the_screener_emits_are_the_lines_this_tool_parses():
     from screeners import guards_boundary as gb
     assert v.GUARD_MODE_RE.search(gb.describe(D, None)).group(1) == "INERT"
@@ -175,6 +199,68 @@ def test_results_metadata_is_checked_and_the_breakout_count_returned():
     rep = _rep()
     v.check_guard_results(rep, {"metadata": {}, "signals": {}}, D, "inert")
     assert rep.failed                                                                       # image predates the metadata
+
+
+# --- N/M reconciliation between the log, the results file and the post-guard signal count
+POST = "1363 signals after the liquidity/data-integrity guards\n"
+RUN = ACTIVE + "Universe guards: dropped 77/1440 symbols\n" + POST
+
+
+def _logged(text=RUN):
+    return v.check_guard_log(_rep(), text, "active")
+
+
+def _rec_results(symbols=1363, signals=(155, 159, 299, 750)):
+    r = _results(True, bull=signals[0], bear=signals[1])
+    r["signals"]["near_bullish"] = [{}] * signals[2]
+    r["signals"]["near_bearish"] = [{}] * signals[3]
+    r["metadata"]["total_symbols_screened"] = symbols
+    return r
+
+
+def test_the_log_returns_n_m_and_the_post_guard_count():
+    assert _logged() == {"n": 77, "m": 1440, "after": 1363}
+    assert _logged(ACTIVE + "Universe guards: dropped 77/1440 symbols\n") == {"n": 77, "m": 1440, "after": None}
+    assert _logged(ACTIVE + "Universe guards: dropped 600/3000 symbols\n")["m"] == 3000        # failed drop fraction still reconciles
+    assert _logged(ACTIVE + "Universe guards: dropped 11/10 symbols\n") is None                # impossible: nothing to reconcile
+
+
+def test_a_consistent_log_and_results_file_reconcile():
+    # symbols in the results == M - N (1440 - 77 = 1363); signals == the logged post-guard count
+    rep = _rep()
+    v.check_guard_results(rep, _rec_results(), D, "active", _logged())
+    assert not rep.failed
+    assert _status(rep, "guards.results.symbols_reconcile") == v.PASS
+    assert _status(rep, "guards.results.signals_reconcile") == v.PASS
+
+
+def test_a_results_file_that_disagrees_with_the_log_fails():
+    rep = _rep()
+    v.check_guard_results(rep, _rec_results(symbols=1400), D, "active", _logged())               # symbols != M - N
+    assert _status(rep, "guards.results.symbols_reconcile") == v.FAIL
+    rep = _rep()
+    v.check_guard_results(rep, _rec_results(signals=(155, 159, 299, 751)), D, "active", _logged())   # signals != logged count
+    assert _status(rep, "guards.results.signals_reconcile") == v.FAIL
+
+
+def test_missing_reconciliation_evidence_is_never_a_silent_pass():
+    results = _rec_results()
+    del results["metadata"]["total_symbols_screened"]
+    rep = _rep()
+    v.check_guard_results(rep, results, D, "active", _logged())
+    assert _status(rep, "guards.results.symbols_reconcile") == v.WARN                            # reported, not skipped quietly
+    rep = _rep()
+    v.check_guard_log(rep, ACTIVE + "Universe guards: dropped 77/1440 symbols\n", "active")
+    assert _status(rep, "guards.log.post_guard_signals") == v.WARN
+    rep = _rep()
+    v.check_guard_log(rep, ACTIVE + "Universe guards: dropped 77/1440 symbols\n" + POST * 2, "active")
+    assert _status(rep, "guards.log.post_guard_signals") == v.WARN                               # duplicated line
+
+
+def test_malformed_or_absent_guard_evidence_fails():
+    assert _guard(ACTIVE + "Universe guards: dropped x/y symbols\n", "active").failed          # unparseable line == no line
+    assert _guard(ACTIVE + "Universe guards: dropped 77/1440\n", "active").failed              # truncated line
+    assert _guard("", "active").failed
 
 
 # ======================================================================= config / env (S7 / S12)
