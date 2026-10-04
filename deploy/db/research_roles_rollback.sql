@@ -44,7 +44,8 @@ BEGIN
     END LOOP;
     -- Market Intelligence objects (migrations 24 / 25), when present: tables, their sequences and the two trigger functions
     FOREACH t IN ARRAY ARRAY['universe_snapshot', 'market_snapshot', 'sector_snapshot', 'market_event', 'market_event_revision',
-                             'forward_return_label'] LOOP
+                             'forward_return_label',
+                             'source_observation', 'source_poll', 'catalyst_classification', 'stock_relative_strength', 'dataset_manifest', 'experiment_registration', 'experiment_result'] LOOP
         IF to_regclass(t) IS NOT NULL THEN
             EXECUTE format('ALTER TABLE %I OWNER TO %I', t, orig);
             EXECUTE format('ALTER SEQUENCE %s OWNER TO %I',
@@ -52,7 +53,8 @@ BEGIN
         END IF;
     END LOOP;
     FOREACH f IN ARRAY ARRAY['research_market_guard()', 'research_market_event_stamp()', 'research_label_guard()',
-                             'research_label_consistency()'] LOOP
+                             'research_label_consistency()',
+                             'research_observation_guard()', 'research_observation_stamp()', 'research_poll_stamp()', 'research_classification_guard()', 'research_classification_consistency()', 'research_rs_guard()', 'research_rs_stamp()', 'research_registry_guard()', 'research_registry_stamp()', 'research_registry_consistency()'] LOOP
         IF to_regprocedure(f) IS NOT NULL THEN
             EXECUTE format('ALTER FUNCTION %s OWNER TO %I', f, orig);
         END IF;

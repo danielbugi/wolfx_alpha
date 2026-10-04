@@ -78,6 +78,10 @@ services:
       - ./mechanism/add_market_snapshot_tables.sql:/docker-entrypoint-initdb.d/24_add_market_snapshot_tables.sql:ro
       - ./mechanism/add_market_event_tables.sql:/docker-entrypoint-initdb.d/25_add_market_event_tables.sql:ro
       - ./mechanism/add_forward_return_label_table.sql:/docker-entrypoint-initdb.d/26_add_forward_return_label_table.sql:ro
+      - ./mechanism/add_source_observation_tables.sql:/docker-entrypoint-initdb.d/27_add_source_observation_tables.sql:ro
+      - ./mechanism/add_catalyst_classification_table.sql:/docker-entrypoint-initdb.d/28_add_catalyst_classification_table.sql:ro
+      - ./mechanism/add_stock_relative_strength_table.sql:/docker-entrypoint-initdb.d/29_add_stock_relative_strength_table.sql:ro
+      - ./mechanism/add_dataset_experiment_registry_tables.sql:/docker-entrypoint-initdb.d/30_add_dataset_experiment_registry_tables.sql:ro
     networks: [app_net]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_BOOTSTRAP_USER:-${DB_USER:-trading_user}} -d ${DB_NAME:-donchian_docker_dev}"]

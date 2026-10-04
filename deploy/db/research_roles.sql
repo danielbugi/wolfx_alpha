@@ -179,7 +179,9 @@ BEGIN
                                      'market_event_revision', 'universe_snapshot_id_seq', 'market_snapshot_id_seq',
                                      'sector_snapshot_id_seq', 'market_event_event_id_seq',
                                      'market_event_revision_id_seq',
-                                     'forward_return_label', 'forward_return_label_id_seq') LOOP
+                                     'forward_return_label', 'forward_return_label_id_seq',
+                                     'source_observation', 'source_poll', 'catalyst_classification', 'stock_relative_strength', 'dataset_manifest', 'experiment_registration', 'experiment_result',
+                                     'source_observation_id_seq', 'source_poll_id_seq', 'catalyst_classification_id_seq', 'stock_relative_strength_id_seq', 'dataset_manifest_id_seq', 'experiment_registration_id_seq', 'experiment_result_id_seq') LOOP
         -- REVOKE first so a re-run CONVERGES to the baseline (drops any drifted extra privilege such as TRUNCATE).
         IF r.relkind = 'S' THEN
             EXECUTE format('REVOKE ALL ON SEQUENCE %I FROM donchian_app', r.relname);
@@ -216,7 +218,8 @@ DECLARE
     seq TEXT;
 BEGIN
     FOREACH t IN ARRAY ARRAY['universe_snapshot', 'market_snapshot', 'sector_snapshot', 'market_event', 'market_event_revision',
-                          'forward_return_label'] LOOP
+                          'forward_return_label',
+                          'source_observation', 'source_poll', 'catalyst_classification', 'stock_relative_strength', 'dataset_manifest', 'experiment_registration', 'experiment_result'] LOOP
         IF to_regclass(t) IS NULL THEN CONTINUE; END IF;
         EXECUTE format('ALTER TABLE %I OWNER TO donchian_owner', t);
         EXECUTE format('REVOKE ALL ON %I FROM PUBLIC', t);
@@ -230,7 +233,8 @@ BEGIN
         EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %s TO donchian_app', seq);
     END LOOP;
     FOREACH f IN ARRAY ARRAY['research_market_guard()', 'research_market_event_stamp()', 'research_label_guard()',
-                          'research_label_consistency()'] LOOP
+                          'research_label_consistency()',
+                          'research_observation_guard()', 'research_observation_stamp()', 'research_poll_stamp()', 'research_classification_guard()', 'research_classification_consistency()', 'research_rs_guard()', 'research_rs_stamp()', 'research_registry_guard()', 'research_registry_stamp()', 'research_registry_consistency()'] LOOP
         IF to_regprocedure(f) IS NOT NULL THEN
             EXECUTE format('ALTER FUNCTION %s OWNER TO donchian_owner', f);
         END IF;

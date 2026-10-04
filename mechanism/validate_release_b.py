@@ -54,7 +54,10 @@ RESEARCH_ROLES = ("donchian_owner", "donchian_app", "donchian_research_admin")
 # when present they must not be mistaken for ordinary DML-baseline tables.
 MARKET_INTELLIGENCE_TABLES = ("universe_snapshot", "market_snapshot", "sector_snapshot", "market_event", "market_event_revision",
                               # migration 26 (fwd_v1 forward-outcome labels): same append-only runtime grant model
-                              "forward_return_label")
+                              "forward_return_label",
+                              # migrations 27-30 (first-seen observations, catalyst classification, per-stock RS, dataset/experiment registry)
+                              "source_observation", "source_poll", "catalyst_classification", "stock_relative_strength",
+                              "dataset_manifest", "experiment_registration", "experiment_result")
 CAPTURE_ENV_VAR = "RESEARCH_CAPTURE_ENABLED"
 
 GUARD_MODE_RE = re.compile(r"Universe guards mode: (INERT|ACTIVE)\b[^\n]*")

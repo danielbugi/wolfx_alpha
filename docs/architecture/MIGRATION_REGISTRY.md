@@ -47,8 +47,12 @@ migrated and later preflights passed, but this audit did not re-query it.
 | 24 | add_market_snapshot_tables.sql | `universe_snapshot`, `market_snapshot`, `sector_snapshot`, `research_market_guard()` | verified: **not applied** (S11 `SCHEMA` probe) |
 | 25 | add_market_event_tables.sql | `market_event`, `market_event_revision`, `research_market_event_stamp()`; **requires 24** | verified: **not applied** |
 | 26 | add_forward_return_label_table.sql | `forward_return_label`, `research_label_guard()`, `research_label_consistency()`; **requires 22** | not applied (lab slice 2; nothing writes to it until a separate owner-authorised activation) |
+| 27 | add_source_observation_tables.sql | `source_observation` (hash-chained first-seen log), `source_poll`, `research_observation_guard()`, `research_observation_stamp()`, `research_poll_stamp()`; independent | not applied (lab slice 3; nothing writes to it until a separate owner-authorised activation) |
+| 28 | add_catalyst_classification_table.sql | `catalyst_classification`, `research_classification_guard()`, `research_classification_consistency()`; **requires 25** | not applied (lab slice 3; dormant) |
+| 29 | add_stock_relative_strength_table.sql | `stock_relative_strength`, `research_rs_guard()`, `research_rs_stamp()`; independent | not applied (lab slice 3; written only under the runner's opt-in `--with-stock-rs`) |
+| 30 | add_dataset_experiment_registry_tables.sql | `dataset_manifest`, `experiment_registration`, `experiment_result`, `research_registry_guard()`/`_stamp()`/`_consistency()`; logically after 22/26, no FK | not applied (lab slice 3; dormant) |
 
-Next free number: **27**.
+Next free number: **31**.
 
 ## 3. Drift that already happened (do not repeat)
 
@@ -82,11 +86,11 @@ backfilled into `market_event`.
 
 ## 5. Recommendation: allocation rule and provisional order (nothing is assigned)
 
-Numbers 26+ are **not** reserved. A number is assigned only in the commit that adds the SQL file, its init-mount line, its row in section 2 and its
+Numbers 31+ are **not** reserved (26-30 were assigned by lab slices 2-3). A number is assigned only in the commit that adds the SQL file, its init-mount line, its row in section 2 and its
 roles/verify update together, and the registry test must pass in that commit. Two lanes can therefore never collide silently: the second to merge
 sees a failing test and renumbers.
 
-Provisional dependency order, for planning only (final numbers decided at merge time):
+Provisional dependency order, for planning only. Items 1-4 are now assigned (26, 27, 28, 30; per-stock RS persistence is 29); the list is kept as the original plan:
 
 1. `forward_return_label` (`fwd_v1`): depends on 22. Immutable, so it needs an exclusion-list entry and an append-only grant (SELECT+INSERT).
 2. Earnings first-seen observation log and earnings facts: independent. Fixes `earnings_calendar`'s overwrite problem going forward only.
