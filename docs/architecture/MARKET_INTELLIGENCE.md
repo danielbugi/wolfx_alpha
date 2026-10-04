@@ -124,3 +124,10 @@ python -m pytest backend/tests/test_market_intelligence_api.py mechanism/alerts/
 `observed` only with PIT-evidenced sectors on the newest session. The sector point-in-time audit (bulk-loaded `daily_fundamentals`,
 ~96 % of rows created on one day) and all methodology: [docs/research/MI_RUNNER_B1.md](../research/MI_RUNNER_B1.md). Section 3's
 statement that historical sector maps are never PIT-safe stands.
+
+## 10. Observation layer, registry and trials (lab Slice 3, migrations 27-30 -- not applied)
+
+Immutable first-seen observations (27), versioned catalyst classifications (28), per-stock `rs_v1` rows (29) and the dataset manifest / experiment
+registry (30) are specified in [LAB_SLICE3_OBSERVATION_LAYER.md](../research/LAB_SLICE3_OBSERVATION_LAYER.md) and
+[DATASET_MANIFEST_AND_EXPERIMENT_REGISTRY.md](../research/DATASET_MANIFEST_AND_EXPERIMENT_REGISTRY.md). The EDGAR dry-run collector and the
+provider-neutral vendor trial harness: [EDGAR_DRY_RUN_AND_VENDOR_TRIAL.md](../research/EDGAR_DRY_RUN_AND_VENDOR_TRIAL.md). All are dormant.
