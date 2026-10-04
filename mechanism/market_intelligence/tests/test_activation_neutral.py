@@ -8,6 +8,7 @@ import re
 from mi_samples import ROOT
 
 SKIP_DIRS = {"node_modules", ".git", "__pycache__", ".venv", "tests", "docs", "history", "backups", "SKILLS", ".next"}
+RUNNER = "mechanism/market_intelligence/runner.py"          # the one, unscheduled, operator-run caller of the writers
 WRITERS = re.compile(r"\b(write_session|write_universe_snapshot|append_event_revision)\b")
 
 
@@ -30,11 +31,31 @@ def test_nothing_outside_the_package_and_its_tests_writes_the_market_intelligenc
     for top in ("mechanism", "backend", "ml_training", "deploy"):
         for p in _files(top, (".py", ".sh", ".service", ".timer", ".yml", ".yaml")):
             rel = os.path.relpath(p, ROOT).replace("\\", "/")
-            if rel.startswith("mechanism/market_intelligence/store.py"):
+            if rel in ("mechanism/market_intelligence/store.py", RUNNER):
                 continue
             if WRITERS.search(_read(p)):
                 callers.append(rel)
     assert callers == []
+
+
+def test_the_runner_is_imported_and_referenced_by_nothing_but_its_own_tests():
+    """Not by a pipeline stage, an orchestrator, a backend router, a timer or a workflow: running it is an operator decision."""
+    hits = []
+    for top in ("mechanism", "backend", "ml_training", "deploy", ".github"):
+        for p in _files(top, (".py", ".sh", ".service", ".timer", ".yml", ".yaml")):
+            rel = os.path.relpath(p, ROOT).replace("\\", "/")
+            if rel.startswith("mechanism/market_intelligence/"):
+                continue
+            if re.search(r"market_intelligence(\.|/)runner|market_intelligence import runner|mi_runner", _read(p)):
+                hits.append(rel)
+    assert hits == [], hits
+
+
+def test_the_runner_defaults_to_a_dry_run_and_has_no_importable_side_effects():
+    text = _read(os.path.join(ROOT, RUNNER))
+    assert "apply: bool = False" in text and '"--apply", action="store_true"' in text
+    assert 'if __name__ == "__main__":' in text
+    assert not re.search(r"^(run|main|compute_session)\(", text, re.M)
 
 
 def test_no_scheduled_unit_workflow_or_script_runs_market_intelligence():

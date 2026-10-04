@@ -93,7 +93,8 @@ def write_universe_snapshot(cur, session_date: date, sector_map: Mapping[str, Op
 
 
 def write_session(cur, regime: RiskRegime, rs: RelativeStrength, provenance: str, source: str, code_ref: str,
-                  reconstruction_basis: Optional[str] = None, feature_set_version: str = FEATURE_SET_VERSION) -> Dict[str, Any]:
+                  reconstruction_basis: Optional[str] = None, feature_set_version: str = FEATURE_SET_VERSION,
+                  measurements: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
     """One session's universe + market + sector snapshots, insert-only, in the caller's transaction (the caller commits).
     The sector map's own provenance (rs.coverage['sector_map']) must equal the row provenance: an observed row can never be built on a
     reconstructed sector map, and a reconstructed one can never claim PIT-safety."""
@@ -108,7 +109,12 @@ def write_session(cur, regime: RiskRegime, rs: RelativeStrength, provenance: str
 
     rec, srec = regime.to_record(), rs.session_record()
     sectors = rs.sector_records()
-    h = content_hash({"regime": rec, "rs": srec, "sectors": sectors, "universe": uni.content_hash, "provenance": provenance})
+    hashed = {"regime": rec, "rs": srec, "sectors": sectors, "universe": uni.content_hash, "provenance": provenance}
+    coverage = dict(rs.coverage)
+    if measurements:                        # breadth / sector measurements ride in the JSONB coverage column (migration 24 has no typed home)
+        coverage["measurements"] = dict(measurements)
+        hashed["measurements"] = dict(measurements)
+    h = content_hash(hashed)
     u, sp = rs.universe, rs.spx_ret
 
     def hz(d: Mapping[int, Any], h_: int, key: Optional[str] = None) -> Any:
@@ -128,13 +134,13 @@ def write_session(cur, regime: RiskRegime, rs: RelativeStrength, provenance: str
          _f(hz(sp, 5)), _f(hz(sp, 20)), _f(hz(sp, 60)),
          _f(hz(u, 5, "ret")), _f(hz(u, 20, "ret")), _f(hz(u, 60, "ret")),
          hz(u, 5, "n_valid"), hz(u, 20, "n_valid"), hz(u, 60, "n_valid"),
-         _json(rs.coverage), source, uni.id, h, code_ref, reconstruction_basis))
+         _json(coverage), source, uni.id, h, code_ref, reconstruction_basis))
     row = cur.fetchone()
     if not row:
         cur.execute("SELECT id, content_hash FROM market_snapshot WHERE session_date = %s AND feature_set_version = %s AND provenance = %s",
                     (rs.session_date, feature_set_version, provenance))
         ex = cur.fetchone()
-        return {"universe": uni, "market": Written(ex[0], False, ex[1]), "sectors_written": 0}
+        return {"universe": uni, "market": Written(ex[0], False, ex[1]), "sectors_written": 0, "computed_hash": h}
     market = Written(row[0], True, h)
     n = 0
     for s in rs.sectors:
@@ -149,7 +155,7 @@ def write_session(cur, regime: RiskRegime, rs: RelativeStrength, provenance: str
             "sec_vs_univ_5, sec_vs_univ_20, sec_vs_univ_60, rank_20, market_snapshot_id, reconstruction_basis) "
             "VALUES (" + ",".join(["%s"] * 23) + ") ON CONFLICT (session_date, feature_set_version, provenance, sector) DO NOTHING", vals)
         n += cur.rowcount
-    return {"universe": uni, "market": market, "sectors_written": n}
+    return {"universe": uni, "market": market, "sectors_written": n, "computed_hash": h}
 
 
 def append_event_revision(cur, d: ev.EventDraft, declared_basis: Optional[str] = None) -> Written:

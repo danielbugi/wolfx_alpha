@@ -116,3 +116,11 @@ python -m pytest backend/tests/test_market_intelligence_api.py mechanism/alerts/
 ```
 
 `test_import_separation` / `test_isolation` pin that pure modules import no DB driver and that no pipeline package imports this one.
+
+## 9. Writer / runner (lab, not scheduled)
+
+`mechanism/market_intelligence/runner.py` (`mi_v2`) is the single, operator-run, unscheduled caller of the writers: regime + breadth
+(`breadth_v1`) + sector (`sector_v1`) + relative strength for one explicit session, dry-run by default, fail-closed on a non-session,
+`observed` only with PIT-evidenced sectors on the newest session. The sector point-in-time audit (bulk-loaded `daily_fundamentals`,
+~96 % of rows created on one day) and all methodology: [docs/research/MI_RUNNER_B1.md](../research/MI_RUNNER_B1.md). Section 3's
+statement that historical sector maps are never PIT-safe stands.
