@@ -178,7 +178,8 @@ BEGIN
                                      'universe_snapshot', 'market_snapshot', 'sector_snapshot', 'market_event',
                                      'market_event_revision', 'universe_snapshot_id_seq', 'market_snapshot_id_seq',
                                      'sector_snapshot_id_seq', 'market_event_event_id_seq',
-                                     'market_event_revision_id_seq') LOOP
+                                     'market_event_revision_id_seq',
+                                     'forward_return_label', 'forward_return_label_id_seq') LOOP
         -- REVOKE first so a re-run CONVERGES to the baseline (drops any drifted extra privilege such as TRUNCATE).
         IF r.relkind = 'S' THEN
             EXECUTE format('REVOKE ALL ON SEQUENCE %I FROM donchian_app', r.relname);
@@ -200,10 +201,13 @@ END;
 $base$;
 
 -- ---------------------------------------------------------------------------------------------------
--- 7. Market Intelligence tables (migrations 24 / 25). Conditional: a database that has not applied them is unaffected, so this
+-- 7. Append-only research tables: Market Intelligence (migrations 24 / 25) and fwd_v1 labels (migration 26). Conditional: a database that has not applied them is unaffected, so this
 --    script stays valid before and after those migrations. APPEND-ONLY with no maintenance hatch: the runtime role gets
 --    SELECT + INSERT, the admin group gets SELECT only (their guard raises unconditionally; a correction is a new version).
---    Re-run this script (and the verifier) after applying 24 / 25 -- they are excluded from the section 6 baseline above.
+--    Re-run this script (and the verifier) after applying 24 / 25 / 26 -- they are excluded from the section 6 baseline above
+--    (a new immutable table is silently given full DML by section 6 unless it is named in that exclusion list).
+--    forward_return_label: the label generator needs exactly SELECT + INSERT here, plus SELECT on candidate_observation,
+--    stock_prices and market_index_prices (all already granted); it never needs UPDATE / DELETE / TRUNCATE.
 -- ---------------------------------------------------------------------------------------------------
 DO $mi$
 DECLARE
@@ -211,7 +215,8 @@ DECLARE
     f TEXT;
     seq TEXT;
 BEGIN
-    FOREACH t IN ARRAY ARRAY['universe_snapshot', 'market_snapshot', 'sector_snapshot', 'market_event', 'market_event_revision'] LOOP
+    FOREACH t IN ARRAY ARRAY['universe_snapshot', 'market_snapshot', 'sector_snapshot', 'market_event', 'market_event_revision',
+                          'forward_return_label'] LOOP
         IF to_regclass(t) IS NULL THEN CONTINUE; END IF;
         EXECUTE format('ALTER TABLE %I OWNER TO donchian_owner', t);
         EXECUTE format('REVOKE ALL ON %I FROM PUBLIC', t);
@@ -224,7 +229,8 @@ BEGIN
         EXECUTE format('REVOKE ALL ON SEQUENCE %s FROM PUBLIC, donchian_app', seq);
         EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %s TO donchian_app', seq);
     END LOOP;
-    FOREACH f IN ARRAY ARRAY['research_market_guard()', 'research_market_event_stamp()'] LOOP
+    FOREACH f IN ARRAY ARRAY['research_market_guard()', 'research_market_event_stamp()', 'research_label_guard()',
+                          'research_label_consistency()'] LOOP
         IF to_regprocedure(f) IS NOT NULL THEN
             EXECUTE format('ALTER FUNCTION %s OWNER TO donchian_owner', f);
         END IF;

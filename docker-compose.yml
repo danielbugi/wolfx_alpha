@@ -77,6 +77,7 @@ services:
       - ./mechanism/add_ml_models_registry_columns.sql:/docker-entrypoint-initdb.d/23_add_ml_models_registry_columns.sql:ro
       - ./mechanism/add_market_snapshot_tables.sql:/docker-entrypoint-initdb.d/24_add_market_snapshot_tables.sql:ro
       - ./mechanism/add_market_event_tables.sql:/docker-entrypoint-initdb.d/25_add_market_event_tables.sql:ro
+      - ./mechanism/add_forward_return_label_table.sql:/docker-entrypoint-initdb.d/26_add_forward_return_label_table.sql:ro
     networks: [app_net]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_BOOTSTRAP_USER:-${DB_USER:-trading_user}} -d ${DB_NAME:-donchian_docker_dev}"]

@@ -26,7 +26,9 @@ RESEARCH = {"feature_set_registry", "feature_snapshot", "candidate_observation",
             "research_capture_activation", "research_maintenance_log", "research_maintenance_session",
             "research_maintenance_audit",
             # Market Intelligence (migrations 24/25): append-only, runtime INSERT/SELECT -- not the DML baseline
-            "universe_snapshot", "market_snapshot", "sector_snapshot", "market_event", "market_event_revision"}
+            "universe_snapshot", "market_snapshot", "sector_snapshot", "market_event", "market_event_revision",
+            # fwd_v1 labels (migration 26): append-only as well
+            "forward_return_label"}
 APP_PASSWORD = "rb-full-schema-test-only"
 
 
@@ -395,7 +397,8 @@ def test_rollback_strips_views_sequences_and_functions_too(full):
 
 
 # ------------------------------------------------------------------ Market Intelligence tables (migrations 24 / 25)
-MI_TABLES = ["universe_snapshot", "market_snapshot", "sector_snapshot", "market_event", "market_event_revision"]
+MI_TABLES = ["universe_snapshot", "market_snapshot", "sector_snapshot", "market_event", "market_event_revision",
+             "forward_return_label"]
 
 
 def test_mi_tables_are_append_only_for_the_runtime_role(full):

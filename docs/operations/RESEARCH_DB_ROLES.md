@@ -103,3 +103,14 @@ roles (dropping a role services still use is an outage); drop them by hand after
   could reach `signal_ledger`. Only the owner/superuser can issue it; the statement triggers block it for everyone else
   and `donchian_app` has no `TRUNCATE` privilege.
 * Backups: `pg_dump` as the owner/superuser is unaffected by any of this.
+* **Append-only tables added after migration 22 (24, 25, 26).** `universe_snapshot`, `market_snapshot`, `sector_snapshot`,
+  `market_event`, `market_event_revision` and `forward_return_label` have **no maintenance hatch**: `donchian_app` gets
+  `SELECT` + `INSERT` only (and sequence `USAGE`/`SELECT`), the admin group gets `SELECT`, the owner is `donchian_owner`,
+  and a correction is a new version row. They are conditional in `research_roles.sql` section 7 (valid before and after
+  the migration), **excluded from the section 6 full-DML baseline** (the `NOT IN (...)` list there — a new immutable
+  table that is not named in that list silently receives full DML) and covered by the verifier and the rollback script.
+  After applying any of these migrations, re-run `research_roles.sql` and `research_roles_verify.sql`.
+  Minimum runtime privileges for the fwd_v1 label generator (migration 26): `SELECT` on `candidate_observation`,
+  `stock_prices`, `market_index_prices` (the section 6 baseline already grants these), and `SELECT` + `INSERT` on
+  `forward_return_label`. It never needs `UPDATE`, `DELETE`, `TRUNCATE` or any DDL. `mechanism/research/tests/
+  test_roles_full_schema.py` proves this on a bootstrapped full schema and must run in CI (it needs a superuser).

@@ -46,8 +46,9 @@ migrated and later preflights passed, but this audit did not re-query it.
 | 23 | add_ml_models_registry_columns.sql | 3 `ml_models` columns | verified: applied |
 | 24 | add_market_snapshot_tables.sql | `universe_snapshot`, `market_snapshot`, `sector_snapshot`, `research_market_guard()` | verified: **not applied** (S11 `SCHEMA` probe) |
 | 25 | add_market_event_tables.sql | `market_event`, `market_event_revision`, `research_market_event_stamp()`; **requires 24** | verified: **not applied** |
+| 26 | add_forward_return_label_table.sql | `forward_return_label`, `research_label_guard()`, `research_label_consistency()`; **requires 22** | not applied (lab slice 2; nothing writes to it until a separate owner-authorised activation) |
 
-Next free number: **26**.
+Next free number: **27**.
 
 ## 3. Drift that already happened (do not repeat)
 
