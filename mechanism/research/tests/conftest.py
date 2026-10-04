@@ -102,6 +102,12 @@ def lconn(labels_env):
 
 
 @pytest.fixture
+def registry_env():
+    """Migration 30 alone (dataset manifest + experiment registry carry no foreign key to any other table)."""
+    yield from _schema_env(["add_dataset_experiment_registry_tables.sql"])
+
+
+@pytest.fixture
 def conn(schema_env):
     _, connect = schema_env
     with connect() as c:
