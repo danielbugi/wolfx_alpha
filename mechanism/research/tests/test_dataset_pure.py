@@ -11,8 +11,11 @@ import pytest
 
 import research.lab.dataset_assemble as A
 import research.lab.dataset_audit as AU
+import research.lab.dataset_authoring as AUTH
 import research.lab.dataset_baselines as B
+import research.lab.dataset_cli as CLI
 import research.lab.dataset_contract as C
+import research.lab.dataset_readiness as RY
 import research.lab.dataset_reader as RD
 import research.lab.dataset_report as RP
 import research.lab.dataset_runner as R
@@ -313,7 +316,7 @@ def test_report_hash_verification_helpers():
 
 
 # ------------------------------------------------------------------ textual guards
-PURE = (C, A, AU, B, RP)
+PURE = (C, A, AU, B, RP, AUTH, RY)
 
 
 def code_only(module):
@@ -356,3 +359,31 @@ def test_the_harness_modules_do_not_reference_production_or_hatches():
         assert not re.search(r"research_maintenance_|maintenance_ticket|research_capture_set_state|research_audit_append_only|research_guard_immutable", src)
         assert "116.220" not in src and "PROD_SENDING_ENABLED" not in src and "TELEGRAM" not in src
         assert not re.search(r"research\.labels|research import labels", src)
+
+
+def _function_sources(module):
+    tree = ast.parse(inspect.getsource(module))
+    return {n.name: ast.unparse(n) for n in tree.body if isinstance(n, ast.FunctionDef)}
+
+
+def test_the_owner_cli_writes_to_the_database_only_through_the_one_explicit_register_path():
+    src = code_only(CLI)
+    assert not re.search(r"(INSERT|UPDATE|DELETE|ALTER|CREATE|DROP|TRUNCATE|GRANT|REVOKE|COPY|VACUUM)", src), "the CLI issues no write SQL of its own"
+    assert ".execute(" in src and src.count("RS.insert_") == 2 and "RS.insert_" in _function_sources(CLI)["_register"]
+    funcs = _function_sources(CLI)
+    assert all("RS.insert_" not in body for name, body in funcs.items() if name != "_register")
+    assert all("record_validation" not in body and "record_test" not in body for name, body in funcs.items() if name != "_register")
+    assert [n for n, body in funcs.items() if "readonly=False" in body or "connect(a, readonly=False)" in body] == ["_register"]
+    assert "conn.set_session(readonly=True)" in src and "os.environ.get(a.password_env)" in src and src.count("os.environ") == 1
+    for w in ("datetime.now", "date.today", "utcnow", "time.time(", "sklearn", "xgboost", "torch", "random", "numpy", "pandas", "TELEGRAM", "PROD_SENDING_ENABLED",
+              "116.220", "shell=True", "--password\""):
+        assert w not in src, w
+    assert not re.search(r"research_maintenance_|maintenance_ticket|research_capture_set_state|research_audit_append_only|research_guard_immutable", src)
+
+
+def test_the_owner_cli_reimplements_none_of_the_shared_contracts():
+    src = code_only(CLI)
+    for w in ("hashlib", "sha256", "def is_known", "def dataset_hash", "def revalidate", "def assemble", "def audit_dataset", "def run_baselines", "def build_report"):
+        assert w not in src, w
+    for needed in ("R.build_from_manifest", "R.verify_manifest", "R.author_input_hashes", "AUTH.parse_manifest_file", "READY.assess"):
+        assert needed in src, needed

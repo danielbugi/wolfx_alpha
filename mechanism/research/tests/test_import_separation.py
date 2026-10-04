@@ -136,6 +136,23 @@ def test_label_modules_only_ever_insert_into_the_label_table_and_never_touch_the
         assert set(m.lower() for m in inserts.findall(text)) <= {"forward_return_label"}, name
 
 
+OWNER_CLI = "mechanism/research/lab/dataset_cli.py"
+
+
+def test_the_owner_dataset_cli_uses_only_the_pure_calendar_helpers_of_the_label_engine_and_nothing_imports_the_cli():
+    """The one carve-out from the rule below: the owner-run dataset CLI derives a session calendar with the label engine's own (read-only)
+    calendar code rather than re-implementing it. It may import only `sessions` and `fwd_v1` -- never the label repository or runner -- and no
+    other runtime module may import the CLI, so it stays an operator tool the pipeline cannot reach."""
+    cli = read(os.path.join(ROOT, OWNER_CLI))
+    imported = set(re.findall(r"^\s*(?:from|import)\s+(research\.labels[\w.]*)", cli, re.M))
+    assert imported == {"research.labels.fwd_v1", "research.labels.sessions"}, imported
+    assert not re.search(r"research\.labels\.(repository|runner)|research import labels", cli)
+    for rel, path in runtime_python_files():
+        rel = rel.replace("\\", "/")
+        if rel != OWNER_CLI:
+            assert "dataset_cli" not in read(path), f"{rel} imports the owner dataset CLI"
+
+
 def test_only_the_label_repository_writes_the_label_table_and_nothing_imports_the_runner_from_the_pipeline():
     write = re.compile(r"\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM|TRUNCATE(?:\s+TABLE)?)\s+forward_return_label\b", re.I)
     for rel, path in runtime_python_files():
@@ -143,7 +160,7 @@ def test_only_the_label_repository_writes_the_label_table_and_nothing_imports_th
         text = read(path)
         if rel != "mechanism/research/labels/repository.py":
             assert not write.search(text), f"{rel} writes forward_return_label"
-        if not rel.startswith("mechanism/research/labels/"):
+        if not rel.startswith("mechanism/research/labels/") and rel != OWNER_CLI:
             assert "research.labels" not in text and "research import labels" not in text, \
                 f"{rel} imports the label engine: it is activated by a separate, owner-authorised stage"
 

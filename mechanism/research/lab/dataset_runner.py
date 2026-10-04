@@ -112,29 +112,62 @@ def load_manifest(cur, manifest_hash: str, calendar: Sequence) -> M.Manifest:
     return C.revalidate_manifest(got["manifest"], manifest_hash, list(calendar), got["created_at"])
 
 
-def build_dataset(conn, manifest_hash: str, calendar: Sequence, *, code: Optional[CodeIdentity], allow_code_sha_drift: bool = False,
-                  include_test: bool = False, registration_hash: Optional[str] = None) -> Build:
-    """Build the dataset the manifest names. `calendar` is the explicit trading-session list (its hash is in the manifest)."""
+def _check_test_split(cur, include_test: bool, registration_hash: Optional[str]) -> None:
+    if not include_test:
+        return
+    if not registration_hash:
+        raise LabError(["the test split is evaluated through a registered experiment: pass registration_hash"])
+    kinds = RS.result_kinds(cur, registration_hash)
+    if "validation" not in kinds:
+        raise LabError(["the test split needs a recorded validation result first"])
+    if "test" in kinds:
+        raise LabError(["the test window was already evaluated for this experiment; a re-test is a new experiment"])
+    if "failed" in kinds or "abandoned" in kinds:
+        raise LabError(["the experiment is closed (failed/abandoned): its test window stays unevaluated"])
+
+
+@dataclass(frozen=True)
+class Verified:
+    """What `verify_manifest` proves without assembling anything: the parsed config, the code check, every database fingerprint and the
+    verification of each manifest input hash. `verification.ok` False means a build would fail closed."""
+    config: C.DatasetConfig
+    code_check: Dict[str, Any]
+    fingerprints: Mapping[str, str]
+    verification: C.InputVerification
+    post_cutoff_counts: Mapping[str, int]
+
+
+def _verify(manifest: M.Manifest, cfg: C.DatasetConfig, raw: Mapping[str, Any]):
+    doc = manifest.document
+    fingerprints = {s: C.fingerprint(s, raw[s], _cutoff(doc)) for s in C.enabled_db_sources(cfg)}
+    return fingerprints, C.verify_inputs(doc, cfg, manifest.calendar, cfg.universe_members, fingerprints)
+
+
+def verify_manifest(conn, manifest: M.Manifest, *, code: Optional[CodeIdentity], allow_code_sha_drift: bool = False) -> Verified:
+    """Everything a build checks BEFORE assembling: config parse, code identity, then the database fingerprints against the manifest's input
+    hashes (read-only). Raises on a config / code problem; a fingerprint mismatch is returned (`verification.ok` False) so it can be shown."""
     with RD.read_only_session(conn):
         cur = conn.cursor()
-        manifest = load_manifest(cur, manifest_hash, calendar)
+        cfg = C.config_for(manifest.document)
+        code_check = _check_code(manifest.document, code, allow_code_sha_drift)
+        raw = RD.read_raw(cur, manifest, cfg)
+        post = RD.post_cutoff_counts(cur, manifest, cfg)
+    fingerprints, verification = _verify(manifest, cfg, raw)
+    return Verified(cfg, code_check, fingerprints, verification, post)
+
+
+def _build(conn, fetch, *, code: Optional[CodeIdentity], allow_code_sha_drift: bool, include_test: bool,
+           registration_hash: Optional[str]) -> Build:
+    with RD.read_only_session(conn):
+        cur = conn.cursor()
+        manifest = fetch(cur)
         doc = manifest.document
         cfg = C.config_for(doc)
         code_check = _check_code(doc, code, allow_code_sha_drift)
-        if include_test:
-            if not registration_hash:
-                raise LabError(["the test split is evaluated through a registered experiment: pass registration_hash"])
-            kinds = RS.result_kinds(cur, registration_hash)
-            if "validation" not in kinds:
-                raise LabError(["the test split needs a recorded validation result first"])
-            if "test" in kinds:
-                raise LabError(["the test window was already evaluated for this experiment; a re-test is a new experiment"])
-            if "failed" in kinds or "abandoned" in kinds:
-                raise LabError(["the experiment is closed (failed/abandoned): its test window stays unevaluated"])
+        _check_test_split(cur, include_test, registration_hash)
         raw = RD.read_raw(cur, manifest, cfg)
         post = RD.post_cutoff_counts(cur, manifest, cfg)
-    fingerprints = {s: C.fingerprint(s, raw[s], _cutoff(doc)) for s in C.enabled_db_sources(cfg)}
-    verification = C.verify_inputs(doc, cfg, manifest.calendar, cfg.universe_members, fingerprints)
+    fingerprints, verification = _verify(manifest, cfg, raw)
     assembly = A.assemble(manifest, cfg, raw)
     audit = AU.audit(manifest, cfg, raw, assembly, verification)
     if not audit.ok:
@@ -144,6 +177,21 @@ def build_dataset(conn, manifest_hash: str, calendar: Sequence, *, code: Optiona
     report = RP.build_report(manifest, cfg, assembly.rows, dhash, audit, baselines)
     report = _with_code_check(report, code_check)
     return Build(manifest, cfg, code_check, verification, fingerprints, assembly, audit, dhash, baselines, report, include_test, post)
+
+
+def build_dataset(conn, manifest_hash: str, calendar: Sequence, *, code: Optional[CodeIdentity], allow_code_sha_drift: bool = False,
+                  include_test: bool = False, registration_hash: Optional[str] = None) -> Build:
+    """Build the dataset the (registered) manifest names. `calendar` is the explicit trading-session list (its hash is in the manifest)."""
+    return _build(conn, lambda cur: load_manifest(cur, manifest_hash, calendar), code=code, allow_code_sha_drift=allow_code_sha_drift,
+                  include_test=include_test, registration_hash=registration_hash)
+
+
+def build_from_manifest(conn, manifest: M.Manifest, *, code: Optional[CodeIdentity], allow_code_sha_drift: bool = False,
+                        include_test: bool = False, registration_hash: Optional[str] = None) -> Build:
+    """The same build for a manifest the caller already holds and has validated (a manifest FILE), so nothing needs to be registered -- or
+    written -- first. The identical steps run; the dataset it yields equals `build_dataset`'s for the same manifest."""
+    return _build(conn, lambda cur: manifest, code=code, allow_code_sha_drift=allow_code_sha_drift, include_test=include_test,
+                  registration_hash=registration_hash)
 
 
 def author_input_hashes(conn, provisional: M.Manifest, cfg: C.DatasetConfig) -> Dict[str, str]:

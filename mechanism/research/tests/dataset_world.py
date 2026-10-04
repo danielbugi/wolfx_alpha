@@ -281,8 +281,8 @@ from research.lab import registry_store as RS  # noqa: E402
 
 
 class Env:
-    def __init__(self, connect, conn, world, manifest):
-        self.connect, self.conn, self.world, self.manifest = connect, conn, world, manifest
+    def __init__(self, connect, conn, world, manifest, schema=None):
+        self.connect, self.conn, self.world, self.manifest, self.schema = connect, conn, world, manifest, schema
         self.manifest_hash = manifest.manifest_hash
         self.code = R.CodeIdentity(SHA, True)
 
@@ -316,7 +316,7 @@ def _make_env():
         manifest = author_manifest(conn)
         RS.insert_manifest(conn.cursor(), manifest)
         conn.commit()
-        yield Env(connect, conn, world, manifest)
+        yield Env(connect, conn, world, manifest, schema)
     finally:
         try:
             conn.rollback()

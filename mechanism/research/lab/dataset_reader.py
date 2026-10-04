@@ -165,3 +165,12 @@ def post_cutoff_counts(cur, manifest: Manifest, cfg: C.DatasetConfig) -> Dict[st
     report and every hash (a later append must not change them), but a run that sees appends can say so."""
     wanted = set(sources_for(cfg))
     return {s: (len(_READERS[s](cur, manifest, cfg, after=True)) if s in wanted else 0) for s in sorted(C.SOURCE_COLUMNS)}
+
+
+def read_candidate_symbols(cur, strategy_key: str, strategy_version: str, lo: date, hi: date, cutoff: datetime) -> List[str]:
+    """Authoring helper: the distinct symbols the strategy has candidate observations for inside [lo, hi] captured by the cutoff, sorted.
+    This is the OBSERVED candidate universe -- not the tradable universe -- and says nothing about symbols that were never observed."""
+    cur.execute("SELECT DISTINCT c.symbol FROM candidate_observation c JOIN strategies s ON s.id = c.strategy_id "
+                "WHERE s.strategy_key = %s AND c.strategy_version = %s AND c.session_date BETWEEN %s AND %s AND c.captured_at <= %s "
+                "ORDER BY c.symbol", (strategy_key, strategy_version, lo, hi, cutoff.astimezone(timezone.utc)))
+    return [r[0] for r in cur.fetchall()]

@@ -24,7 +24,7 @@ import math
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 
 from research.lab import manifest as M
 from research.lab.manifest import LabError, canonical_hash
@@ -405,14 +405,21 @@ def dataset_header(manifest_hash: str, doc: Mapping[str, Any], row_count: int) -
             "columns": [list(c) for c in COLUMNS], "row_count": row_count}
 
 
+def dataset_chunks(manifest: M.Manifest, rows: Sequence[Mapping[str, Any]]) -> Iterator[bytes]:
+    """The canonical byte stream of the dataset: the header, then each row (canonical order) preceded by a newline. `dataset_hash` is the
+    sha256 of exactly these bytes, so a file holding them hashes to the dataset_hash."""
+    ordered = sorted(rows, key=row_sort_key)
+    yield _dump(dataset_header(manifest.manifest_hash, manifest.document, len(ordered))).encode()
+    for r in ordered:
+        yield b"\n"
+        yield _dump(encode_row(r)).encode()
+
+
 def dataset_hash(manifest: M.Manifest, rows: Sequence[Mapping[str, Any]]) -> str:
     """Deterministic identity of the final dataset. Independent of the order `rows` arrives in (canonical row order is applied here)."""
-    ordered = sorted(rows, key=row_sort_key)
     h = hashlib.sha256()
-    h.update(_dump(dataset_header(manifest.manifest_hash, manifest.document, len(ordered))).encode())
-    for r in ordered:
-        h.update(b"\n")
-        h.update(_dump(encode_row(r)).encode())
+    for chunk in dataset_chunks(manifest, rows):
+        h.update(chunk)
     return h.hexdigest()
 
 
