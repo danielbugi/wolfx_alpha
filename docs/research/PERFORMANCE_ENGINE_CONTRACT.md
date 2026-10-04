@@ -64,7 +64,32 @@ Known data limits that apply to every number: the ledger is the live screener's 
 stop and a target touched on the same bar (recorded conservatively as stopped, flagged `same_bar_stop_and_target`); `quality_grade`/`sector` are captured at
 signal time. 165 historical production rows carry `model_version='unknown'` and are treated as `unscored` on read, not rewritten.
 
-## 7. Not in this slice
+## 7. HTTP API (C2) — read-only, authenticated, strategy-generic
 
-No HTTP endpoint yet (C2 will add `backend/routers` + `backend/services` pairs delegating to `performance.breakdown`), no UI, no storage of any computed
-metric. `forward_return_labels` stays `not_available` in `CAPABILITIES` until `fwd_v1` exists.
+Code: `backend/routers/strategy_performance.py` + `backend/services/strategy_performance_service.py`; registered (guarded) in `backend/main.py`.
+Strategy and version are **path parameters**; there is no endpoint for any one strategy (a test fails on a path or source mentioning one).
+All routes are GET under `/api/strategies` (the existing router is unchanged; `/api/performance` is the unrelated latency tracker).
+
+| Route | Returns |
+|---|---|
+| `GET /api/strategies/performance/contract` | static, no DB: available dimensions, unavailable dimensions (+ what each requires), unavailable metrics, metric list, `min_sample_size`, the `{value, n, state}` shape |
+| `GET /api/strategies/{key}/{version}/performance` | strategy, reference session, tracking counts, performance block (`win_rate`, `average_r`, `median_r`, holding, MAE; MFE `not_available`), bullish/bearish blocks, declared exit rules (or `not_available`), unavailable metrics and dimensions |
+| `GET .../performance/outcomes` | terminal-status counts and shares (n shown), same-bar ambiguity, target milestones with their semantics, expiry sign split, exit rules |
+| `GET .../performance/breakdowns` | every dimension over one connection — available ones with groups, unavailable ones with `state: not_available` and `requires` (never omitted, never empty-as-zero) |
+| `GET .../performance/breakdowns/{dimension}` | one dimension: `direction`, `exit`, `quality_grade`, `sector`, `signal_month`, `holding_bars`, `model_scored`; the six unavailable ones answer 200 `not_available` after only the strategy lookup |
+
+Errors: unknown strategy/version → 404 `strategy_not_found`; unknown dimension → 422 `unknown_dimension` (lists the valid ones, runs no query); malformed
+key/version/dimension → 422 before any query.
+
+Contract rules the tests pin: every metric is `{value, n, state}` and an unavailable/no-data metric has `value: null` (never 0); a real 0.0 with a
+small sample is `preliminary`, not hidden; `profit_factor` with no losing signal is `not_available`; each group lists `signals` and `resolved`;
+strategies never mix; the performance view equals `/summary` for the same strategy; GET requests leave the ledger byte-identical.
+
+Dimensions that stay unavailable until their source is activated in production (nothing here fabricates them): market regime and volatility regime
+(migration 24 rows, `observed` only), relative strength, earnings proximity and earnings surprise (a PIT event source with `known_at`), catalyst, ML score
+bucket (the score is not stored). `forward_return_labels` / MFE stay `not_available` in `CAPABILITIES` because `fwd_v1` (migration 26) is lab-only and
+not applied in production.
+
+## 8. Not in this slice
+
+No UI (C3), no storage of any computed metric, no write endpoint.

@@ -637,6 +637,6 @@ jobs:
           set -o pipefail
           python -m pytest mechanism/screeners/tests mechanism/shared/tests mechanism/strategy_analytics/tests \
             mechanism/research/tests mechanism/market_intelligence/tests backend/tests/test_strategy_intelligence_api.py backend/tests/test_research_api.py \
-            backend/tests/test_market_intelligence_api.py mechanism/alerts/tests/test_strategy_intel.py \
+            backend/tests/test_market_intelligence_api.py backend/tests/test_strategy_performance_api.py mechanism/alerts/tests/test_strategy_intel.py \
             -q -rs -p no:cacheprovider | tee /tmp/db_tests.txt
           if grep -qi "skipped" /tmp/db_tests.txt; then echo "::error::DB-backed tests skipped -- Postgres not reached"; exit 1; fi
