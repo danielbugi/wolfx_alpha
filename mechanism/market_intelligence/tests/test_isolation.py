@@ -6,7 +6,7 @@ import re
 from mi_samples import ROOT
 
 PKG = os.path.join(ROOT, "mechanism", "market_intelligence")
-PURE = ["risk_regime.py", "relative_strength.py", "events.py", "provenance.py", "breadth.py", "sector_intel.py"]
+PURE = ["risk_regime.py", "relative_strength.py", "events.py", "provenance.py", "breadth.py", "sector_intel.py", "filing_contract.py"]
 READ_ONLY_IO = ["inputs.py", "runner.py"]          # touch a database only through a connection handed in; never read the clock or the environment
 NO_CLOCK = re.compile(r"datetime\.now|date\.today|utcnow|time\.time\(|os\.environ|requests|urllib|yfinance|sqlalchemy")
 CLOCK_OR_IO = re.compile(r"psycopg2|sqlalchemy|requests|urllib|yfinance|datetime\.now|date\.today|utcnow|time\.time\(|os\.environ|open\(")
