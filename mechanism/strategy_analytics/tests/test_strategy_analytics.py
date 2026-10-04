@@ -324,6 +324,16 @@ def test_data_health_classifies_waiting_lagging_stale_missing_and_invalid(fetch,
     assert waiting not in [a["id"] for a in h["attention"]["open_signals"]]
 
 
+def test_legacy_unknown_model_version_is_not_counted_as_model_coverage(fetch, ledger):
+    _calendar(ledger)
+    ledger.signal(model_version="m1")
+    ledger.signal(model_version="unknown")        # historical placeholder rows: not scored, never a model
+    ledger.signal(model_version="UNKNOWN ")
+    ledger.signal(model_version=None)
+    cov = A.data_health(fetch, ledger.strategy)["coverage"]["model_version"]
+    assert cov["count"] == 1 and cov["total"] == 4
+
+
 def test_data_health_held_and_invariant_violations(fetch, ledger):
     _calendar(ledger)
     held = ledger.signal(evaluation_flag="split_suspect", last_evaluated_date=S[3], signal_date=S[1])

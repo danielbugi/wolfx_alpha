@@ -349,3 +349,36 @@ def test_the_capture_run_counts_what_was_skipped(world):
     (status, stale_n, skipped) = table(world, "SELECT status, stale_skipped, skipped_symbols FROM candidate_capture_run")[0]
     assert status == "complete" and stale_n == 1 and "BBB" in skipped
     assert_identity(res)
+
+
+# ------------------------------------------------------------------------------------------ model provenance (pure)
+from datetime import date as _date
+_PURE_SESSION = _date(2099, 1, 15)
+
+
+def _funnel_for(final):
+    c = {"symbol": "AAA", "signal_type": "bullish_breakout", "screening_date": _PURE_SESSION, "alignment_score": 80}
+    return observer._funnel(c, _PURE_SESSION, final, 1, {"AAA": []}, True)
+
+
+def test_ml_model_version_is_recorded_only_when_the_model_scored_the_candidate():
+    scored = _funnel_for({"combined_score": 66.0, "ml_prediction_available": True, "ml_momentum_probability": 61.0,
+                          "ml_confidence": "medium", "ml_model_version": "m_test"})
+    assert scored["ml_status"] == "scored" and scored["ml_model_version"] == "m_test"
+
+
+def test_ml_model_version_is_null_for_a_candidate_a_loaded_model_did_not_score():
+    f = _funnel_for({"combined_score": 30.0, "ml_prediction_available": False, "ml_momentum_probability": None,
+                     "ml_model_version": "m_test"})
+    assert f["ml_status"] == "not_processed" and f["ml_model_version"] is None
+
+
+@pytest.mark.parametrize("legacy", ["unknown", None, ""])
+def test_ml_model_version_is_never_a_placeholder(legacy):
+    f = _funnel_for({"combined_score": 30.0, "ml_prediction_available": False, "ml_momentum_probability": None,
+                     "ml_model_version": legacy})
+    assert f["ml_model_version"] is None
+
+
+def test_ml_model_version_is_null_for_a_candidate_with_no_final_signal():
+    assert _funnel_for(None)["ml_model_version"] is None
