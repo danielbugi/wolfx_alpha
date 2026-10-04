@@ -237,3 +237,11 @@ After S11 returns PASS and the owner approves, each step separately authorized, 
 2. Event/catalyst source for P6 (SEC EDGAR recommended) and revenue/guidance source for P5.
 3. Whether P1a (touches the screener) may be merged to `main` before S11 closes, or held on the branch (recommended: hold).
 4. Whether the new UI area replaces or sits beside `/strategies` (recommended: beside, re-linked).
+
+## Addendum 2026-10-04: owner decisions that supersede parts of this plan
+
+- Three parallel lanes: A Research Foundation (model_version fix -> fwd_v1 -> dataset builder -> ML evaluation), B Market Intelligence (24 audit -> regime/breadth/sector/RS -> earnings -> catalysts), C Analytics/Product (generic performance engine -> APIs -> UI -> system/data-quality UI).
+- The First Light UI sits above the existing /strategies concept; Strategy Intelligence stays, Donchian Breakout v1 is one strategy.
+- First authoritative catalyst source: SEC EDGAR. Event ingestion is kept separate from catalyst classification; classifications are versioned and never rewrite the event. The revenue/guidance vendor is NOT chosen: a source-capability assessment comes first.
+- Section 8 migration numbers are NOT assigned. See `docs/architecture/MIGRATION_REGISTRY.md` (M27 is dropped: the migration 24 audit found no gap).
+- Historical `model_version='unknown'` production rows are not normalised (see `MODEL_VERSION_SEMANTICS_AND_HISTORICAL_ROWS.md`).

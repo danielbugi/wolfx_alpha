@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.join(ROOT, "mechanism"))
 
 from strategy_analytics import analytics as A  # noqa: E402
 from strategy_analytics import definitions as D  # noqa: E402
+from strategy_analytics import performance as P  # noqa: E402
 
 
 # =================================================================== pure
@@ -460,3 +461,78 @@ def test_list_strategies_includes_tracking(fetch, ledger):
     assert mine["tracking"]["total_signals"] == 2 and mine["tracking"]["open"] == 1
     assert mine["tracking"]["resolved"] == 1 and mine["display_name"] == ledger.key
     assert A.get_strategy(fetch, ledger.key, "v2") is None
+
+
+# =================================================================== performance engine (strategy-generic)
+def test_declared_exit_rules_match_the_trade_plan_constants():
+    from shared import trade_plan as TP
+    r = P.EXIT_RULES[("donchian_breakout", "v1")]
+    assert (r["stop_atr_mult"], r["target_atr_mults"], r["expiry_bars"]) == (
+        TP.STOP_ATR_MULT, TP.TARGET_ATR_MULTS, TP.PLAN_HORIZON_BARS)
+
+
+def test_undeclared_strategy_does_not_inherit_exit_rules():
+    assert P.exit_rules({"strategy_key": "other", "strategy_version": "v1"})["state"] == "not_available"
+    assert P.exit_rules({"strategy_key": "donchian_breakout", "strategy_version": "v1"})["state"] == "declared"
+
+
+def test_contract_names_what_is_unavailable_and_why():
+    c = P.contract()
+    assert "direction" in c["dimensions"] and "market_regime" not in c["dimensions"]
+    for k in ("market_regime", "earnings_proximity", "catalyst", "ml_score_bucket"):
+        assert c["unavailable_dimensions"][k]["state"] == "not_available"
+        assert c["unavailable_dimensions"][k]["requires"]
+    assert c["unavailable_metrics"]["max_favourable_excursion"]["state"] == "not_available"
+    assert not set(c["dimensions"]) & set(c["unavailable_dimensions"])
+
+
+def test_breakdown_rejects_unknown_dimension_and_never_queries_for_unavailable_ones():
+    with pytest.raises(ValueError):
+        P.breakdown(_never_called, {"id": 1}, "symbol; DROP TABLE signal_ledger")
+    out = P.breakdown(_never_called, {"id": 1}, "market_regime")
+    assert out["state"] == "not_available" and out["groups"] == [] and out["requires"]
+
+
+def test_breakdown_by_grade_uses_resolved_signals_only(fetch, ledger):
+    ledger.signal(grade="A", status="target1", outcome_r=1.0, bars_held=3)
+    ledger.signal(grade="A", status="stopped", outcome_r=-1.0, bars_held=2)
+    ledger.signal(grade="A")                                  # open: counted as a signal, not in any rate
+    ledger.signal(grade="B", status="target3", outcome_r=3.0, bars_held=12)
+    ledger.signal(grade=None, status="expired", outcome_r=-0.5, bars_held=20)
+    out = P.breakdown(fetch, ledger.strategy, "quality_grade")
+    g = {x["bucket"]: x for x in out["groups"]}
+    assert set(g) == {"A", "B", "ungraded"} and out["state"] == "ok"
+    a = g["A"]
+    assert (a["signals"], a["open"], a["resolved"], a["winners"]) == (3, 1, 2, 1)
+    assert a["win_rate"] == {"value": 0.5, "n": 2, "state": "preliminary"}
+    assert a["sum_r"]["value"] == 0.0 and a["profit_factor"]["value"] == 1.0
+    # no losing resolved signal: undefined, never infinite and never 0
+    assert g["B"]["profit_factor"]["state"] == "not_available"
+    assert g["ungraded"]["average_r"]["value"] == -0.5 and g["ungraded"]["winners"] == 0
+
+
+def test_breakdown_model_scored_treats_legacy_unknown_as_unscored(fetch, ledger):
+    ledger.signal(model_version="unknown", status="stopped", outcome_r=-1.0, bars_held=2)
+    ledger.signal(model_version=None, status="stopped", outcome_r=-1.0, bars_held=2)
+    ledger.signal(model_version="momentum_v7", status="target1", outcome_r=1.0, bars_held=2)
+    g = {x["bucket"]: x for x in P.breakdown(fetch, ledger.strategy, "model_scored")["groups"]}
+    assert (g["unscored"]["resolved"], g["scored"]["resolved"]) == (2, 1)
+
+
+def test_breakdown_holding_buckets_and_empty_strategy(fetch, ledger):
+    assert P.breakdown(fetch, ledger.strategy, "direction") == {
+        "strategy_id": ledger.strategy["id"], "dimension": "direction", "label": "Direction", "state": "no_data",
+        "definitions_version": D.DEFINITIONS_VERSION, "groups": [], "truncated": False}
+    ledger.signal(status="target1", outcome_r=1.0, bars_held=5)
+    ledger.signal(status="target1", outcome_r=1.0, bars_held=6)
+    ledger.signal(status="expired", outcome_r=0.1, bars_held=20)
+    ledger.signal()
+    buckets = {x["bucket"]: x["resolved"] for x in P.breakdown(fetch, ledger.strategy, "holding_bars")["groups"]}
+    assert buckets == {"01-05": 1, "06-10": 1, "16+": 1, "unresolved": 0}
+
+
+def test_breakdown_never_mixes_strategies(fetch, ledger):
+    ledger.signal(status="target1", outcome_r=1.0, bars_held=3, direction=1)
+    ledger.signal(status="stopped", outcome_r=-1.0, bars_held=3, direction=-1)
+    g = {x["bucket"]: x for x in P.breakdown(fetch, ledger.strategy, "direction")["groups"]}
+    assert (g["bullish"]["signals"], g["bearish"]["signals"]) == (1, 1)
