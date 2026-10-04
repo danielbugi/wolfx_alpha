@@ -296,3 +296,20 @@ def test_stock_relative_strength_fails_closed_on_a_non_session(runner_env):
 def test_a_stock_without_a_pit_sector_has_no_vs_sector_measurement(runner_env):
     df = runner.stock_relative_strength(runner_env.connect, EARLY, ["S0001", "S0120"])      # S0001: no evidence at EARLY; S0120: clean row
     assert pd.isna(df.loc["S0001", "vs_sector_20"]) and df.loc["S0001", "sector"] is None
+
+
+# ---------------------------------------------------------------- opt-in per-stock persistence (migration 29)
+def test_per_stock_rows_are_written_only_when_asked_in_the_same_transaction_and_idempotently(runner_env):
+    fsv = runner_env.fsv()
+    plain = _run(runner_env, session=EARLY, fsv=fsv)
+    assert plain.stock_rs_written is None and _counts(runner_env, "stock_relative_strength") == 0
+    assert _run(runner_env, session=EARLY, fsv=fsv, apply=False, with_stock_rs=True).stock_rs_written is None   # a dry run writes nothing
+    assert _counts(runner_env, "stock_relative_strength") == 0
+    first = _run(runner_env, session=EARLY, fsv=runner_env.fsv(), with_stock_rs=True)
+    assert first.stock_rs_written == 1100 * 3 and _counts(runner_env, "stock_relative_strength") == 1100 * 3
+    again = _run(runner_env, session=EARLY, fsv=first.feature_set_version, with_stock_rs=True)
+    assert again.stock_rs_written == 0 and _counts(runner_env, "stock_relative_strength") == 1100 * 3
+    with runner_env.connect() as c:
+        rows = store.get_stock_rs(c.cursor(), EARLY, feature_set_version=first.feature_set_version, include_reconstructed=True)
+    assert len(rows) == 1100 * 3 and {r["provenance"] for r in rows} == {"reconstructed"}
+    assert all(r["sector_pit_safe"] is False for r in rows)

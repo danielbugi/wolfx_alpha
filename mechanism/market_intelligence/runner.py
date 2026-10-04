@@ -79,6 +79,7 @@ class RunReport:
     sector_audit: Dict[str, Any]
     created: Optional[bool] = None
     sectors_written: int = 0
+    stock_rs_written: Optional[int] = None      # None = not requested (--with-stock-rs)
     content_hash: Optional[str] = None
     differs_from_stored: bool = False
     warnings: List[str] = field(default_factory=list)
@@ -145,7 +146,7 @@ def compute_session(conn, session_date: date, *, provenance: str, sector_rule: s
 
 def run(connect: Callable[[], AbstractContextManager], session_date: date, *, provenance: str,
         sector_rule: str = inputs.RULE_PIT_EVIDENCED, apply: bool = False, code_ref: Optional[str] = None,
-        feature_set_version: str = FEATURE_SET_VERSION) -> RunReport:
+        feature_set_version: str = FEATURE_SET_VERSION, with_stock_rs: bool = False) -> RunReport:
     if apply and not code_ref:
         raise ValueError("code_ref (the git revision of the code that computed the row) is required to write")
     with connect() as conn:
@@ -164,6 +165,11 @@ def run(connect: Callable[[], AbstractContextManager], session_date: date, *, pr
         cur = conn.cursor()
         res = store.write_session(cur, c.regime, c.rs, provenance, SOURCE, code_ref, c.reconstruction_basis,
                                   feature_set_version=feature_set_version, measurements=c.measurements)
+        if with_stock_rs:                   # opt-in: migration 29's per-stock table; default off so mi_v2's requirements are unchanged
+            srs = store.write_stock_rs(cur, c.rs, provenance, feature_set_version, code_ref, c.reconstruction_basis)
+            report.stock_rs_written = srs["written"]
+            if srs["differs_from_stored"]:
+                report.warnings.append("per-stock rows for this session/version/provenance exist with a different run hash; they were not changed")
         conn.commit()
         report.created = res["market"].created
         report.sectors_written = res["sectors_written"]
@@ -199,13 +205,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--sector-rule", default=inputs.RULE_PIT_EVIDENCED, choices=inputs.RULES)
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--code-ref")
+    ap.add_argument("--with-stock-rs", action="store_true", help="also write per-stock rs_v1 rows (needs migration 29; default off)")
     a = ap.parse_args(argv)
     from shared.database import db
     if not db.initialize_sync_pool():
         print("database unavailable", file=sys.stderr)
         return 2
     try:
-        print(run(db.get_sync_connection, a.session, provenance=a.provenance, sector_rule=a.sector_rule, apply=a.apply, code_ref=a.code_ref))
+        print(run(db.get_sync_connection, a.session, provenance=a.provenance, sector_rule=a.sector_rule, apply=a.apply, code_ref=a.code_ref,
+                        with_stock_rs=a.with_stock_rs))
         return 0
     except (SessionNotAvailable, ProvenanceRefused) as e:
         print(f"refused (failing closed): {e}", file=sys.stderr)

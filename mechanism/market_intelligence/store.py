@@ -184,6 +184,36 @@ def append_event_revision(cur, d: ev.EventDraft, declared_basis: Optional[str] =
     return Written(cur.fetchone()[0], True, h)
 
 
+def write_stock_rs(cur, rs: RelativeStrength, provenance: str, feature_set_version: str, code_ref: str,
+                   reconstruction_basis: Optional[str] = None) -> Dict[str, Any]:
+    """Per-stock rs_v1 rows (migration 29), insert-only, in the caller's transaction. Every universe stock gets one row per horizon; an unavailable
+    measurement is stored as state='unavailable' with NULLs. Idempotent on the table's UNIQUE key: a re-run writes nothing it already has, and a
+    re-run whose inputs were restated leaves the stored rows alone (`differs_from_stored`) -- a correction is a new model_version."""
+    from market_intelligence.stock_rs_rows import records_hash, stock_rs_records
+    sem = rs.coverage.get("sector_map") or {}
+    if sem.get("provenance") != provenance:
+        raise ValueError(f"sector map provenance {sem.get('provenance')!r} does not match the row provenance {provenance!r}")
+    recs = stock_rs_records(rs)
+    if not recs:
+        return {"n_records": 0, "written": 0, "run_content_hash": None, "differs_from_stored": False}
+    h = records_hash(recs, rs.session_date.isoformat(), rs.model_version, feature_set_version, provenance)
+    written = 0
+    for r in recs:
+        cur.execute(
+            "INSERT INTO stock_relative_strength (session_date, symbol, horizon_sessions, model_version, feature_set_version, provenance, "
+            "reconstruction_basis, sector, sector_pit_safe, state, ret_pct, vs_spx_pp, vs_sector_pp, rs_percentile, n_universe_valid, "
+            "benchmark_symbol, run_content_hash, code_ref) VALUES (" + ",".join(["%s"] * 18) + ") "
+            "ON CONFLICT (session_date, symbol, horizon_sessions, model_version, feature_set_version, provenance) DO NOTHING",
+            (rs.session_date, r["symbol"], r["horizon_sessions"], rs.model_version, feature_set_version, provenance, reconstruction_basis,
+             r["sector"], r["sector_pit_safe"], r["state"], r["ret_pct"], r["vs_spx_pp"], r["vs_sector_pp"], r["rs_percentile"],
+             r["n_universe_valid"], r["benchmark_symbol"], h, code_ref))
+        written += cur.rowcount
+    cur.execute("SELECT count(*) FROM stock_relative_strength WHERE session_date = %s AND model_version = %s AND feature_set_version = %s "
+                "AND provenance = %s AND run_content_hash <> %s",
+                (rs.session_date, rs.model_version, feature_set_version, provenance, h))
+    return {"n_records": len(recs), "written": written, "run_content_hash": h, "differs_from_stored": cur.fetchone()[0] > 0}
+
+
 # ------------------------------------------------------------------ readers (observed-only unless explicitly widened)
 def _num(v: Any) -> Any:
     return float(v) if isinstance(v, Decimal) else v
@@ -244,4 +274,23 @@ def get_event_revisions(cur, event_keys: Optional[List[str]] = None, include_rec
     cur2 = cur.connection.cursor(cursor_factory=RealDictCursor)
     cur2.execute("SELECT r.*, e.symbol, e.event_type FROM market_event_revision r JOIN market_event e USING (event_key) WHERE "
                  + " AND ".join(where) + " ORDER BY r.event_key, r.revision", args)
+    return [_row(r) for r in cur2.fetchall()]
+
+
+def get_stock_rs(cur, session_date: date, symbols: Optional[List[str]] = None, model_version: str = "rs_v1",
+                 feature_set_version: str = "mi_v2", include_reconstructed: bool = False, known_by: Optional[Any] = None) -> List[Dict[str, Any]]:
+    """Per-stock rows for one session. Observed-only by default; `known_by` (tz-aware) restricts to rows whose DB-stamped created_at is <= it, so a
+    research read can never see a row that did not yet exist. A missing measurement is state='unavailable' with None, never 0."""
+    clause, params = prov.sql_filter("provenance", None, include_reconstructed)
+    where, args = [clause, "session_date = %s", "model_version = %s", "feature_set_version = %s"], list(params) + [session_date, model_version, feature_set_version]
+    if symbols is not None:
+        where.append("symbol = ANY(%s)")
+        args.append(list(symbols))
+    if known_by is not None:
+        if getattr(known_by, "tzinfo", None) is None:
+            raise ValueError("known_by must be timezone-aware")
+        where.append("created_at <= %s")
+        args.append(known_by)
+    cur2 = cur.connection.cursor(cursor_factory=RealDictCursor)
+    cur2.execute("SELECT * FROM stock_relative_strength WHERE " + " AND ".join(where) + " ORDER BY symbol, horizon_sessions, provenance", args)
     return [_row(r) for r in cur2.fetchall()]

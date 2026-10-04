@@ -19,7 +19,7 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.dirname(__file__))
 
 MIGRATIONS = ["create_trading_schema.sql", "add_market_data_tables.sql", "add_ml_dataset_tables.sql",
-              "add_market_snapshot_tables.sql", "add_market_event_tables.sql"]
+              "add_market_snapshot_tables.sql", "add_market_event_tables.sql", "add_stock_relative_strength_table.sql"]
 T = date(2026, 9, 30)
 EARLY = date(2026, 9, 25)          # a real session earlier than the newest one
 N_DAYS, N_STOCKS = 260, 1100
