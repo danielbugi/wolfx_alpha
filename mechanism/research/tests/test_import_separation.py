@@ -95,7 +95,8 @@ def test_activation_table_is_only_read_by_runtime_code():
             readers.append(rel.replace("\\", "/"))
     assert set(readers) <= {"mechanism/research/repository.py", "mechanism/strategy_analytics/research.py",
                             "mechanism/check_research_migration_preflight.py",
-                            "mechanism/research/schema_fingerprint.py", "mechanism/validate_release_b.py"}
+                            "mechanism/research/schema_fingerprint.py", "mechanism/validate_release_b.py",
+                            "mechanism/research/lab/research_status_reader.py"}
 
 
 def test_no_runtime_python_writes_any_research_table_except_through_the_capture_repository():

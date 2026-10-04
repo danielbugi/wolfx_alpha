@@ -8,21 +8,28 @@ modules and are only *called* here. What this module adds is I/O: argv, a databa
     PYTHONPATH=mechanism python -m research.lab.dataset_cli validate --manifest manifest.json                <db>
     PYTHONPATH=mechanism python -m research.lab.dataset_cli build    --manifest manifest.json --out-dir out  <db>
         [--register --experiment-name NAME]  [--include-test --registration-hash H]  [--require-eligible]
+    PYTHONPATH=mechanism python -m research.lab.dataset_cli status   --spec spec.json [--cutoff ISO|db-now] [--out-dir out] [--json]  <db>
+        [--require-no-readiness-failures]
     where <db> is  --host H --dbname D --user U [--port P] [--password-env VAR]   (the password is read from the environment, never argv)
 
 Read-only by default: the connection is `set_session(readonly=True)` and every read additionally runs inside the harness's read-only
 transaction, so a write raises instead of happening. Only `--register` opens a SECOND, writable connection, and only to record the manifest,
 the diagnostic registration and one count-only result through the existing registry.
 
+`status` (Slice 6) is read-only end to end and writes nothing to the database, not even the registry: it reports how much genuinely observed,
+point-in-time-safe history exists and what still keeps the Slice 5 contract from passing. It never states eligibility and claims no edge.
+
 Exit codes: 0 ok | 1 validation / build / fingerprint / code / PIT / audit failure | 2 usage | 3 database connection or schema failure |
-4 `--require-eligible` and the dataset is not model-research-eligible.
+4 `--require-eligible` and the dataset is not model-research-eligible, or `status --require-no-readiness-failures` and a failure is listed.
 """
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
@@ -34,6 +41,8 @@ from research.lab import dataset_reader as RD
 from research.lab import dataset_readiness as READY
 from research.lab import dataset_runner as R
 from research.lab import manifest as M
+from research.lab import research_status as ST
+from research.lab import research_status_reader as SR
 from research.lab import registry_store as RS
 from research.lab.manifest import LabError
 from research.labels.fwd_v1 import CalendarError
@@ -47,6 +56,9 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 # every file `build` writes whose bytes are a pure function of (manifest, database content at the cutoff, code): the reproducibility set
 CANONICAL_ARTIFACTS = ("dataset.jsonl", "audit.json", "audit.txt", "verification.json", "report.json", "report.txt", "readiness.json",
                        "readiness.txt", "identities.json")
+STATUS_ARTIFACTS = ("status.json", "status.txt")        # canonical: a pure function of (spec, cutoff, database content at the cutoff)
+STATUS_CONTEXT_ARTIFACT = "status_context.json"          # volatile: database target, database time, running code, rows that arrived after the cutoff
+STATUS_CONTEXT_SCHEMA = "lab_research_status_context_v1"
 CONTEXT_ARTIFACT = "run_context.json"      # run metadata (rows that arrived after the cutoff, registry ids): deliberately outside the set above
 
 _SOURCE_TABLES = {"candidates": ("candidate_observation", "feature_snapshot", "strategies"), "labels": ("forward_return_label",),
@@ -123,6 +135,28 @@ def _code(code_provider: CodeProvider, repo_root: str) -> R.CodeIdentity:
         raise LabError([f"cannot determine the code identity ({type(e).__name__}): a dataset must be reproducible from a commit"])
 
 
+def _file_calendar(authoring: AUTH.Authoring, spec_path: Path) -> Optional[List[Any]]:
+    if not authoring.calendar_file:
+        return None
+    cal_path = Path(authoring.calendar_file)
+    cal_path = cal_path if cal_path.is_absolute() else spec_path.resolve().parent / cal_path
+    try:
+        return AUTH.parse_calendar_text(cal_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise UsageError(f"calendar file not found: {cal_path}")
+
+
+def _resolve_calendar(authoring: AUTH.Authoring, file_cal, conn):
+    """(sessions, source): the explicit calendar file, else derived from the database. Call inside a read-only session."""
+    if file_cal is not None:
+        return file_cal, "explicit_calendar_file"
+    lo, hi, bench = authoring.calendar_derive
+    try:
+        return derive_sessions(conn, lo, hi, bench)
+    except CalendarError as e:
+        raise LabError([f"cannot derive the trading calendar from the database: {e}"])
+
+
 # ------------------------------------------------------------------ author
 def cmd_author(a: argparse.Namespace, connect: Connect, code_provider: CodeProvider, out: Callable[[str], None]) -> int:
     spec_path = Path(a.spec)
@@ -133,14 +167,7 @@ def cmd_author(a: argparse.Namespace, connect: Connect, code_provider: CodeProvi
     code = _code(code_provider, a.repo_root)
     if not code.tree_clean:
         raise LabError(["the working tree is not clean: a manifest records the code it was authored with, and that must be a commit"])
-    file_cal = None
-    if authoring.calendar_file:
-        cal_path = Path(authoring.calendar_file)
-        cal_path = cal_path if cal_path.is_absolute() else spec_path.resolve().parent / cal_path
-        try:
-            file_cal = AUTH.parse_calendar_text(cal_path.read_text(encoding="utf-8"))
-        except FileNotFoundError:
-            raise UsageError(f"calendar file not found: {cal_path}")
+    file_cal = _file_calendar(authoring, spec_path)
 
     conn = connect(a, readonly=True)
     try:
@@ -148,14 +175,7 @@ def cmd_author(a: argparse.Namespace, connect: Connect, code_provider: CodeProvi
         with RD.read_only_session(conn):
             cur = conn.cursor()
             now = RS.db_now(cur)
-            if file_cal is not None:
-                calendar, cal_source = file_cal, "explicit_calendar_file"
-            else:
-                lo, hi, bench = authoring.calendar_derive
-                try:
-                    calendar, cal_source = derive_sessions(conn, lo, hi, bench)
-                except CalendarError as e:
-                    raise LabError([f"cannot derive the trading calendar from the database: {e}"])
+            calendar, cal_source = _resolve_calendar(authoring, file_cal, conn)
             members = None
             if authoring.universe_from_db:
                 strat = authoring.config.get("strategy")
@@ -375,6 +395,82 @@ def cmd_build(a: argparse.Namespace, connect: Connect, code_provider: CodeProvid
     return EXIT_OK
 
 
+# ------------------------------------------------------------------ status
+def _parse_cutoff(text: str):
+    if text == "db-now":
+        return None
+    try:
+        d = datetime.fromisoformat(text)
+    except ValueError:
+        d = None
+    if d is None or d.tzinfo is None:
+        raise UsageError("--cutoff must be an ISO timestamp WITH a UTC offset (e.g. 2026-10-05T00:00:00+00:00) or the word db-now")
+    return d.astimezone(timezone.utc)
+
+
+def _status_code(code_provider: CodeProvider, repo_root: str) -> Dict[str, Any]:
+    """Volatile context only: the status has no code identity of its own and must not fail because git is unavailable or the tree is dirty."""
+    try:
+        c = code_provider(repo_root)
+        return {"running_code_sha": c.sha, "tree_clean": c.tree_clean}
+    except Exception as e:  # noqa: BLE001
+        return {"running_code_sha": None, "unavailable": type(e).__name__}
+
+
+def _status_summary(doc: Dict[str, Any]) -> str:
+    blockers = sum(1 for f in doc["integrity"] if f["severity"] == "blocker" and f["count"])
+    return (f"STATUS  hash {doc['status_hash']}  readiness failures {len(doc['readiness_failures'])}  integrity blockers {blockers}  "
+            f"contract data checks {'ALL PASS' if doc['contract'].get('data_checks_all_pass') else 'NOT all passing'}  predictive edge claimed: none")
+
+
+def cmd_status(a: argparse.Namespace, connect: Connect, code_provider: CodeProvider, out: Callable[[str], None]) -> int:
+    spec_path = Path(a.spec)
+    authoring = AUTH.parse_authoring(_read_json(a.spec, "status spec"))
+    override = _parse_cutoff(a.cutoff) if a.cutoff else authoring.knowledge_cutoff_at
+    out_dir = Path(a.out_dir) if a.out_dir else None
+    if out_dir is not None and out_dir.exists() and (not out_dir.is_dir() or any(out_dir.iterdir())):
+        raise UsageError(f"{out_dir} exists and is not empty: status never overwrites artifacts")
+    file_cal = _file_calendar(authoring, spec_path)
+    strat = authoring.config.get("strategy")
+    if not (isinstance(strat, dict) and strat.get("key") and strat.get("version")):
+        raise LabError(["config.strategy {key, version} is required"])
+    base_cfg = SR.parse_cfg(authoring, [])
+    conn = connect(a, readonly=True)
+    try:
+        _preflight(conn, _tables_for(base_cfg) + list(SR.EXTRA_TABLES) + (list(_CALENDAR_TABLES) if file_cal is None else []))
+        with RD.read_only_session(conn):
+            now = RS.db_now(conn.cursor())
+            authoring = dataclasses.replace(authoring, knowledge_cutoff_at=override if override is not None else now.replace(microsecond=0))
+            calendar, cal_source = _resolve_calendar(authoring, file_cal, conn)
+        inp, context = SR.collect(conn, authoring, calendar, cal_source, now)
+    finally:
+        conn.close()
+    doc = ST.build_status(inp)
+    if not ST.verify_status_hash(doc):
+        raise LabError(["internal: the status document does not re-derive its own hash"])
+    text = ST.render_text(doc)
+    ctx = {"schema": STATUS_CONTEXT_SCHEMA, "database": _db_target(a), "mode": "read_only", "database_time": context["database_time"],
+           "post_cutoff_rows_ignored": context["post_cutoff_rows"], "code": _status_code(code_provider, a.repo_root), "status_hash": doc["status_hash"]}
+    if out_dir is not None:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        _write_new(out_dir / "status.json", AUTH.dump_json(doc))
+        _write_new(out_dir / "status.txt", text)
+        _write_new(out_dir / STATUS_CONTEXT_ARTIFACT, AUTH.dump_json(ctx))
+    failed = bool(a.require_no_readiness_failures and doc["readiness_failures"])
+    if a.json:
+        _emit(out, AUTH.dump_json(doc))
+    else:
+        _emit(out, _status_summary(doc))
+        if not a.quiet:
+            _emit(out, "")
+            _emit(out, text)
+        if out_dir is not None:
+            _emit(out, f"artifacts in {out_dir}: " + ", ".join(STATUS_ARTIFACTS + (STATUS_CONTEXT_ARTIFACT,)))
+        if failed:
+            _emit(out, f"{len(doc['readiness_failures'])} readiness failure(s) listed and --require-no-readiness-failures was given.")
+    return EXIT_NOT_ELIGIBLE if failed else EXIT_OK
+
+
 # ------------------------------------------------------------------ argv
 def _parser() -> argparse.ArgumentParser:
     db = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
@@ -403,6 +499,14 @@ def _parser() -> argparse.ArgumentParser:
     s.add_argument("--registration-hash")
     s.add_argument("--require-eligible", action="store_true", help="exit 4 (and register nothing) unless model_research_eligible")
     s.add_argument("--quiet", action="store_true", help="omit the full report text from stdout (it is still written to report.txt)")
+    s = sub.add_parser("status", parents=[db], allow_abbrev=False,
+                       help="read-only research observation status: what is accumulating, what is missing, what blocks the Slice 5 contract")
+    s.add_argument("--spec", required=True, help="an authoring spec (the same file `author` takes); only its config/calendar/windows are used")
+    s.add_argument("--cutoff", help="ISO timestamp WITH a UTC offset, or db-now, replacing the spec's knowledge_cutoff_at (the status is a pure function of the cutoff)")
+    s.add_argument("--out-dir", help="also write status.json, status.txt and the volatile status_context.json here (must be new or empty)")
+    s.add_argument("--json", action="store_true", help="print the canonical status.json on stdout instead of the text")
+    s.add_argument("--quiet", action="store_true", help="print only the one-line summary (the full text is still written to status.txt)")
+    s.add_argument("--require-no-readiness-failures", action="store_true", help="exit 4 if any readiness failure is listed")
     return p
 
 
@@ -416,7 +520,7 @@ def main(argv: Optional[Sequence[str]] = None, *, connect: Optional[Connect] = N
         args = _parser().parse_args(argv)
     except SystemExit as e:
         return EXIT_USAGE if e.code else EXIT_OK
-    handler = {"author": cmd_author, "validate": cmd_validate, "build": cmd_build}[args.command]
+    handler = {"author": cmd_author, "validate": cmd_validate, "build": cmd_build, "status": cmd_status}[args.command]
     try:
         return handler(args, connect, code_provider, out)
     except UsageError as e:

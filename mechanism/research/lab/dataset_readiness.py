@@ -158,15 +158,13 @@ def _check(cid: str, passed: bool, detail: str) -> Dict[str, Any]:
     return {"id": cid, "passed": bool(passed), "detail": detail}
 
 
-def assess(*, manifest: M.Manifest, cfg: C.DatasetConfig, rows: Sequence[Mapping[str, Any]], audit_document: Mapping[str, Any],
-           audit_hash: str, verification: C.InputVerification, code_check: Mapping[str, Any], dataset_hash: str, report_hash: str,
-           inputs_hash: str, include_test: bool) -> Dict[str, Any]:
-    doc = manifest.document
-    prim = [r for r in rows if r["horizon_sessions"] == cfg.primary_horizon]
+def assess_data(*, cfg: C.DatasetConfig, windows_train_end: str, maturity: str, prim: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """The data-derived part of the verdict (checks 5-10), a pure function of the PRIMARY-horizon assembled rows and the config. `assess` (a built,
+    audited dataset) and the Slice 6 status layer both call exactly this function, so the two can never define 'ready' differently."""
     enabled = cfg.enabled()
     cov = {n: _source_coverage(n, prim) for n in list(PROVENANCE_SOURCES) + list(STATE_SOURCES) if enabled.get(n)}
     earliest = _earliest_trustworthy(cov, prim, enabled)
-    labels = _labels(prim, doc["label_maturity_session"])
+    labels = _labels(prim, maturity)
     need = {s: max(MIN_FINAL_LABELS[s], cfg.min_sample) for s in M.SPLITS}
     sample = {s: {"final_labelled_rows": labels["by_split"][s]["final"], "required": need[s]} for s in M.SPLITS}
     sector_unsafe = sum(1 for r in prim if r["rs__state"] == C.OK and r["rs_sector_pit_safe"] is False) if enabled.get("stock_rs") else 0
@@ -176,6 +174,31 @@ def assess(*, manifest: M.Manifest, cfg: C.DatasetConfig, rows: Sequence[Mapping
     tv = [r for r in prim if r["split"] in ("train", "validation")]
     missing_fraction = _frac(sum(1 for r in tv if r["label_status"] == C.MISSING), len(tv))
     short = {s: v for s, v in sample.items() if v["final_labelled_rows"] < v["required"]}
+    checks = [
+        _check("no_reconstructed_value_in_dataset", reconstructed_used == 0, f"{reconstructed_used} cells carry a reconstructed or unknown-provenance value"),
+        _check("relative_strength_sector_pit_safe", sector_unsafe == 0, f"{sector_unsafe} relative-strength cells use a sector map that is not point-in-time safe"),
+        _check("observed_coverage_sufficient", not weak, f"observed-and-in-time coverage must be >= {MIN_OBSERVED_COVERAGE:.0%} per context source; "
+               + ("all pass" if not weak else f"below: {weak}")),
+        _check("trusted_pit_date_determined", earliest["all_sources"] is not None and earliest["all_sources"] <= windows_train_end,
+               "earliest trustworthy PIT date " + (f"is {earliest['all_sources']} (the train window ends {windows_train_end})" if earliest["all_sources"]
+                                                    else f"is not determinable ({earliest['reason']})")
+               + "; it must fall inside the train window"),
+        _check("labels_present", missing_fraction is not None and missing_fraction <= MAX_MISSING_LABEL_FRACTION,
+               f"missing-label fraction of train+validation primary-horizon rows {missing_fraction} (max {MAX_MISSING_LABEL_FRACTION})"),
+        _check("final_label_samples_sufficient", not short, "final-labelled primary-horizon rows per split vs required: "
+               + ", ".join(f"{s} {v['final_labelled_rows']}/{v['required']}" for s, v in sample.items())),
+    ]
+    return {"coverage": cov, "earliest": earliest, "labels": labels, "sample": sample, "checks": checks, "sector_unsafe_cells": sector_unsafe,
+            "missing_label_fraction": missing_fraction}
+
+
+def assess(*, manifest: M.Manifest, cfg: C.DatasetConfig, rows: Sequence[Mapping[str, Any]], audit_document: Mapping[str, Any],
+           audit_hash: str, verification: C.InputVerification, code_check: Mapping[str, Any], dataset_hash: str, report_hash: str,
+           inputs_hash: str, include_test: bool) -> Dict[str, Any]:
+    doc = manifest.document
+    prim = [r for r in rows if r["horizon_sessions"] == cfg.primary_horizon]
+    data = assess_data(cfg=cfg, windows_train_end=doc["windows"]["train"][1], maturity=doc["label_maturity_session"], prim=prim)
+    cov, earliest, labels, sample = data["coverage"], data["earliest"], data["labels"], data["sample"]
     verif_ok = bool(verification.ok) and not verification.by_kind("unverifiable")
     checks = [
         _check("audit_passed", audit_document.get("verdict") == "PASS" and not audit_document.get("fatal"),
@@ -186,18 +209,7 @@ def assess(*, manifest: M.Manifest, cfg: C.DatasetConfig, rows: Sequence[Mapping
                f"code check '{code_check.get('status')}', clean tree {code_check.get('tree_clean')}"),
         _check("reconstructed_policy_is_exclude", cfg.reconstructed_policy == "exclude",
                f"reconstructed_policy is '{cfg.reconstructed_policy}' (research eligibility requires 'exclude')"),
-        _check("no_reconstructed_value_in_dataset", reconstructed_used == 0, f"{reconstructed_used} cells carry a reconstructed or unknown-provenance value"),
-        _check("relative_strength_sector_pit_safe", sector_unsafe == 0, f"{sector_unsafe} relative-strength cells use a sector map that is not point-in-time safe"),
-        _check("observed_coverage_sufficient", not weak, f"observed-and-in-time coverage must be >= {MIN_OBSERVED_COVERAGE:.0%} per context source; "
-               + ("all pass" if not weak else f"below: {weak}")),
-        _check("trusted_pit_date_determined", earliest["all_sources"] is not None and earliest["all_sources"] <= doc["windows"]["train"][1],
-               "earliest trustworthy PIT date " + (f"is {earliest['all_sources']} (the train window ends {doc['windows']['train'][1]})" if earliest["all_sources"]
-                                                    else f"is not determinable ({earliest['reason']})")
-               + "; it must fall inside the train window"),
-        _check("labels_present", missing_fraction is not None and missing_fraction <= MAX_MISSING_LABEL_FRACTION,
-               f"missing-label fraction of train+validation primary-horizon rows {missing_fraction} (max {MAX_MISSING_LABEL_FRACTION})"),
-        _check("final_label_samples_sufficient", not short, "final-labelled primary-horizon rows per split vs required: "
-               + ", ".join(f"{s} {v['final_labelled_rows']}/{v['required']}" for s, v in sample.items())),
+        *data["checks"],
         _check("test_split_unevaluated", not include_test, "the test split has not been revealed by this build" if not include_test
                else "this build revealed the test split: it is spent for any further model selection"),
     ]

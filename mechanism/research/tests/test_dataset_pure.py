@@ -19,6 +19,8 @@ import research.lab.dataset_readiness as RY
 import research.lab.dataset_reader as RD
 import research.lab.dataset_report as RP
 import research.lab.dataset_runner as R
+import research.lab.research_status as ST
+import research.lab.research_status_reader as SRD
 from dataset_world import CAL, CUTOFF, HORIZONS, MAT, config, make_spec
 from lab_samples import NOW
 from research.lab import manifest as M
@@ -316,7 +318,7 @@ def test_report_hash_verification_helpers():
 
 
 # ------------------------------------------------------------------ textual guards
-PURE = (C, A, AU, B, RP, AUTH, RY)
+PURE = (C, A, AU, B, RP, AUTH, RY, ST)
 
 
 def code_only(module):
@@ -342,6 +344,16 @@ def test_the_reader_issues_select_statements_only():
     sql = re.findall(r"SELECT ", src)
     assert len(sql) >= 8
     assert "commit(" not in src and "set_session(readonly=True)" in src
+
+
+def test_the_status_reader_issues_select_statements_only_and_the_status_command_never_registers():
+    src = code_only(SRD)
+    assert not re.search(r"(INSERT|UPDATE|DELETE|ALTER|CREATE|DROP|TRUNCATE|GRANT|REVOKE|COPY|VACUUM|LOCK)", src)
+    assert "commit(" not in src and "set_config" not in src.lower() and "research_capture_set_state" not in src and len(re.findall(r"SELECT ", src)) >= 8
+    for w in ("datetime.now", "date.today", "utcnow", "time.time(", "sklearn", "xgboost", "torch", "random", "numpy", "pandas", "os.environ", "subprocess"):
+        assert w not in src, w
+    body = _function_sources(CLI)["cmd_status"]
+    assert "_register" not in body and "RS.insert_" not in body and "readonly=True" in body and "readonly=False" not in body
 
 
 def test_the_runner_writes_only_through_the_registry():

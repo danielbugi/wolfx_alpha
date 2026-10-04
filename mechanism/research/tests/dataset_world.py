@@ -190,7 +190,7 @@ class World:
                    dict(d=d, p=provenance, sector=sector, r20=(idx + si) % 7 - 3.0, s20=(idx + si) % 5 - 2.0, u20=(idx + si) % 3 - 1.0,
                         rk=si + 1, mid=mid, basis=basis, ca=captured_at or at(idx)))
 
-    def stock_rs(self, symbol, idx, *, provenance="observed", created_at=None):
+    def stock_rs(self, symbol, idx, *, provenance="observed", created_at=None, run_hash=None):
         k = UNIVERSE.index(symbol)
         rec = provenance == "reconstructed"
         sector = SECTOR_OF.get(symbol)
@@ -199,7 +199,8 @@ class World:
                "benchmark_symbol, run_content_hash, code_ref, created_at) VALUES (%s, %s, %s, 'rs_v1', 'mi_v2', %s, %s, %s, %s, 'ok', %s, %s, "
                "%s, %s, 3, '^GSPC', %s, 'test', %s)",
                (CAL[idx], symbol, PRIMARY, provenance, "reconstructed (test)" if rec else None, sector, (not rec) and sector is not None,
-                (idx + k) % 13 - 6.0, (idx + k) % 9 - 4.0, (idx + k) % 7 - 3.0, float((idx * 13 + k * 29) % 101), sha("rs", idx),
+                (idx + k) % 13 - 6.0, (idx + k) % 9 - 4.0, None if sector is None else (idx + k) % 7 - 3.0, float((idx * 13 + k * 29) % 101),
+                run_hash or sha("rs", idx),
                 created_at or at(idx, 21, 30)))
 
     # -- events / classifications / first-seen ----------------------------------------------------------------------
