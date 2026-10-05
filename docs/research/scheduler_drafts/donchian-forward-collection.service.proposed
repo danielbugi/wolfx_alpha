@@ -1,0 +1,14 @@
+# DRAFT -- NOT INSTALLED. Would live at /etc/systemd/system/donchian-forward-collection.service (and be committed to deploy/vps/ at activation,
+# together with a deliberate amendment of the "no deploy unit references the collector" guard test).
+[Unit]
+Description=First Light: forward collection (market + sector + relative strength + labels) for the latest completed session
+After=docker.service
+Requires=docker.service
+OnFailure=donchian-forward-collection-alert.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/donchian/scripts/run_forward_collection.sh
+TimeoutStartSec=45m
+# 3 = another run holds the lock: not a failure (the second fire re-checks)
+SuccessExitStatus=3

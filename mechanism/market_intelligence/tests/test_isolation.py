@@ -79,7 +79,7 @@ def test_no_strategy_or_ml_path_imports_market_intelligence():
                 rel = os.path.relpath(os.path.join(base, f), ROOT).replace("\\", "/")
                 if re.search(r"^\s*(from|import)\s+market_intelligence", _src(os.path.join(base, f)), re.M):
                     offenders.append(rel)
-    allowed_prefixes = ("backend/routers/", "backend/services/", "mechanism/alerts/")
+    allowed_prefixes = ("backend/routers/", "backend/services/", "mechanism/alerts/", "mechanism/forward_collection/")
     bad = [o for o in offenders if not o.startswith(allowed_prefixes)]
     assert not bad, bad
     assert not [o for o in offenders if o.startswith(("mechanism/screeners", "mechanism/research", "mechanism/ml_enhancement", "ml_training"))]

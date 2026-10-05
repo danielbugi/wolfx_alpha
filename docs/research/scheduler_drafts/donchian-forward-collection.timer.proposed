@@ -1,0 +1,16 @@
+# DRAFT -- NOT INSTALLED.
+#
+# Two fires per session day, both on the calendar day AFTER the session, in Jerusalem time (the tag every other production timer uses):
+#   03:15  first attempt: after the 23:45 pipeline and its 01:00 retry (a full run takes ~87 min, so the retry finishes by ~02:30; margin 45 min)
+#   08:15  the retry: the same session again (idempotent; a lock refusal exits 3, which is not an alert)
+# The second fire's worst case (08:15 + 45 min timeout + 60 s) is still before 00:00 UTC of session+2, so with availability_grace_days=1 every
+# observation this schedule can write is known before its decision deadline (contract.required_grace_days() computes this over every weekday of
+# both daylight-saving offsets; a test pins it). The weekend fires find nothing new to do and exit 0 ("latest completed session" is unchanged).
+[Timer]
+OnCalendar=*-*-* 03:15:00 Asia/Jerusalem
+OnCalendar=*-*-* 08:15:00 Asia/Jerusalem
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

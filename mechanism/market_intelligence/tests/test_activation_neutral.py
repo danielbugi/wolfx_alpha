@@ -38,6 +38,11 @@ def test_nothing_outside_the_package_and_its_tests_writes_the_market_intelligenc
     assert callers == []
 
 
+# Slice 7 (dormant, lab): the one composition root that orchestrates the runner. Nothing else may reference it; forward_collection's own guard test
+# pins that nothing outside that package imports the package.
+FORWARD_COLLECTION_STEPS = "mechanism/forward_collection/steps.py"
+
+
 def test_the_runner_is_imported_and_referenced_by_nothing_but_its_own_tests():
     """Not by a pipeline stage, an orchestrator, a backend router, a timer or a workflow: running it is an operator decision."""
     hits = []
@@ -45,6 +50,8 @@ def test_the_runner_is_imported_and_referenced_by_nothing_but_its_own_tests():
         for p in _files(top, (".py", ".sh", ".service", ".timer", ".yml", ".yaml")):
             rel = os.path.relpath(p, ROOT).replace("\\", "/")
             if rel.startswith("mechanism/market_intelligence/"):
+                continue
+            if rel == FORWARD_COLLECTION_STEPS:
                 continue
             if re.search(r"market_intelligence(\.|/)runner|market_intelligence import runner|mi_runner", _read(p)):
                 hits.append(rel)
