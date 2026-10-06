@@ -17,8 +17,12 @@ Slice 5 research-readiness contract — without reconstruction or backfill?*
 Proof: `tests/test_convergence_db.py` simulates a disposable world from **zero** trustworthy history, session by session on a simulated clock,
 through the **real** writers only (the screener's candidate-capture hook, the Market Intelligence runner, the fwd_v1 label runner). Nothing inserts
 an "ideal" row; the only things written directly are what the production price/fundamentals updaters write (bars, index prices, fundamentals).
-After 262 simulated sessions the Slice 6 status reports `data_checks_all_pass = true`. The same simulation with symbols that have no sector does **not**
-pass (see "No-sector policy") — that is the one open owner decision.
+After 262 simulated sessions the Slice 6 status reports `data_checks_all_pass = true`. The same simulation with symbols that have no sector **also**
+passes since Slice 8 (owner decision: Option B, see "No-sector policy"); before Slice 8 it did not.
+
+> **Slice 8 update:** the no-sector policy is resolved (Option B). Details, the changed identities and the sector provenance chain are in
+> [LAB_SLICE8_NO_SECTOR_SEMANTICS.md](LAB_SLICE8_NO_SECTOR_SEMANTICS.md). Where this document describes the policy as unresolved, read it as the
+> historical Slice 7 state.
 
 ## What was added
 
@@ -142,15 +146,15 @@ the preflight turns an inconsistency into a blocker. The drafts live under `docs
 
 ## Activation preflight (read-only)
 
-`python -m forward_collection preflight --spec <authoring spec>` → `collector stack ready for activation: YES|NO`, with `ready_ignoring_owner_decision`
-reported separately so a pending owner decision is never confused with a technical gap. Checks: required tables and the RS stamp function exist ·
+`python -m forward_collection preflight --spec <authoring spec>` → `collector stack ready for activation: YES|NO` (schema `forward_collection_preflight_v2`;
+the Slice 7 `ready_ignoring_owner_decision` / `owner_decision` fields are gone because no owner decision is pending any more). Checks: required tables and the RS stamp function exist ·
 the runtime role holds INSERT+SELECT on the five collector tables and SELECT on the inputs · a trading calendar is derivable from stored bars ·
 capture state is *reported* (non-blocking) · every enabled dataset source has a collector · the spec's versions equal what the writers write ·
-the scheduler design is self-consistent and agrees with the spec's grace days · **the no-sector policy is resolved**.
+the scheduler design is self-consistent and agrees with the spec's grace days · **the no-sector policy is resolved** (a recorded fact: Option B).
 
-Today it answers **NO**, and the only blocker in a healthy schema is `no_sector_policy_resolved` (an owner decision).
+In a healthy schema it answers **YES** (it answered NO in Slice 7 with `no_sector_policy_resolved` as the only blocker).
 
-## No-sector policy — OWNER DECISION REQUIRED
+## No-sector policy — RESOLVED in Slice 8: Option B (the Slice 7 analysis follows, unchanged)
 
 A symbol with no point-in-time-evidenced sector gets an RS row with `state='ok'`, `sector NULL`, `sector_pit_safe=false` (the writer's existing
 never-omit rule). Slice 5 check 6 (`relative_strength_sector_pit_safe`) counts such a cell against readiness, so a candidate symbol without a sector
@@ -164,9 +168,11 @@ symbols without a sector) → every session still collects `COMPLETE`, the Slice
 | **B** keep the symbol; its sector-relative cell is *unavailable* | the writer already stores it this way; the dataset assembler/audit would stop counting that cell against the sector-PIT check because no sector value was ever claimed | **Recommended — but changes Slice 4/5 assembly semantics** (and therefore the dataset hash of any dataset containing such a cell). Requires an owner decision and a deliberate, separately reviewed Slice 4/5 change. |
 | **C** market-relative fallback | substitutes a market-relative value | **Rejected.** Changes the meaning of an existing feature and mixes two definitions in one column. |
 
-Slice 7 therefore does **not** choose: `NO_SECTOR_POLICY = "unresolved"` and the preflight reports NO until it is set. The convergence guarantee below is
-**conditional on every candidate symbol having a sector** — which the collector can *report* (`capture_verify.candidate_rows_without_sector`,
-`verify.rs_ok_cells_without_sector`, the status's `stock_rs_ok_cells_without_sector`) but cannot cure.
+Slice 7 did not choose (`NO_SECTOR_POLICY = "unresolved"`). The owner then chose **Option B**, and Slice 8 made the reviewed Slice 4/5 change:
+`NO_SECTOR_POLICY = "B_null_sector_relative"`; the verify step now fails only a sector-relative VALUE that lacks a PIT-safe sector
+(`rs_sector_relative_values_without_pit_safe_sector`); a no-sector symbol is a legitimate row whose sector-relative value is NULL. The collector still
+*reports* the count (`capture_verify.candidate_rows_without_sector`, `verify.rs_ok_cells_without_sector`, the status's
+`stock_rs_ok_cells_without_sector`, now severity `info`).
 
 ## Convergence proof
 
@@ -192,7 +198,7 @@ reconstruction can substitute for it (reconstructed rows never satisfy observed 
 
 Each step is its own owner approval; none is implied by a merge.
 
-1. Resolve the no-sector policy (above). Decide the dataset spec (windows, `availability_grace_days ≥ 1`).
+1. ~~Resolve the no-sector policy~~ (done: Option B, Slice 8). Decide the dataset spec (windows, `availability_grace_days ≥ 1`).
 2. Apply the Market Intelligence / research migrations to production (24/25 and the rest the preflight names), forward-safe, each verified by a real
    query. Grant the runtime role INSERT+SELECT per `research_roles.sql`.
 3. Deliberately amend the "no deploy unit references the collector" guard (`test_activation_neutral.py`, `test_guards.py`) in the same PR that adds the

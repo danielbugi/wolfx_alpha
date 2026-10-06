@@ -3,7 +3,7 @@
 One explicit session is processed by an ordered list of steps. A session is COMPLETE only when every required step succeeded AND the read-back
 verification agrees with the database; nothing is ever reported as done because something else was absent. This module owns the vocabulary
 (steps, outcomes, verdicts), the per-source collector contract, the pure session classifier, the declared scheduler design and the
-unresolved no-sector policy. It does not decide what any research value means: the writers and the Slice 5/6 contracts own that.
+owner-decided no-sector policy (Option B). It does not decide what any research value means: the writers and the Slice 5/6 contracts own that.
 """
 from __future__ import annotations
 
@@ -107,17 +107,20 @@ def spec_version_blockers(market_fsv: Optional[str], sector_fsv: Optional[str], 
     return out
 
 
-# ------------------------------------------------------------------ the no-sector policy (UNRESOLVED: an owner decision)
-NO_SECTOR_POLICY = "unresolved"
+# ------------------------------------------------------------------ the no-sector policy (OWNER DECISION: Option B)
+# Decided by the owner for the lab (Slice 8): a symbol with no point-in-time-safe sector STAYS in the universe; its sector-relative RS value is
+# unavailable (NULL, with the explicit state `no_sector`), never 0, never a market-relative substitute, and the symbol is never excluded.
+NO_SECTOR_POLICY = "B_null_sector_relative"
 NO_SECTOR_OPTIONS: Dict[str, Dict[str, str]] = {
     "A_exclude": {"what": "drop symbols without a PIT-safe sector from the relative-strength rows",
                   "verdict": "REJECTED: the writer's never-omit rule exists so an omitted row cannot be mistaken for a stock outside the universe; "
                              "it also silently changes the universe and every coverage figure"},
-    "B_null_sector_relative": {"what": "keep the symbol; its sector-relative field is unavailable (NULL), and the dataset assembler/audit stop counting that "
-                                       "cell against the sector-PIT check because no sector value was ever claimed for it",
-                               "verdict": "RECOMMENDED but needs the owner: the writer ALREADY stores such a row this way (vs_sector_pp NULL, "
-                                          "sector_pit_safe False); what changes is the Slice 4/5 assembly + audit rule, hence the dataset hash of any "
-                                          "dataset containing such a cell"},
+    "B_null_sector_relative": {"what": "keep the symbol; its sector-relative field is unavailable (NULL) with the explicit dataset state `no_sector`; the "
+                                       "candidate stays valid, only the sector-relative strength is unavailable",
+                               "verdict": "ADOPTED (owner decision, Slice 8): the writer already stores such a row this way (vs_sector_pp NULL, "
+                                          "sector_pit_safe False); the dataset contract (lab_dataset_v2), audit and readiness now treat that NULL as a "
+                                          "legitimate unavailable value and still fail any NON-NULL sector-relative value that is not backed by an "
+                                          "observed, fresh, point-in-time-safe sector"},
     "C_market_relative_fallback": {"what": "substitute a market-relative value for the missing sector-relative one",
                                    "verdict": "REJECTED: changes the meaning of the existing RS feature and would mix two definitions in one column"},
 }

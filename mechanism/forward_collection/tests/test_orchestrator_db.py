@@ -337,7 +337,7 @@ def test_an_unknown_provenance_is_rejected_by_the_database(world):
         conn.rollback()
 
 
-def test_a_session_with_symbols_lacking_a_sector_is_collected_completely_and_reports_the_unsafe_cells():
+def test_a_session_with_symbols_lacking_a_sector_is_collected_completely_with_null_sector_relative_values():
     gen = FW.make_world(n_days=8, n_stocks=FW.SMALL_UNIVERSE, no_sector=("S0003", "S0004"))
     from _pytest.monkeypatch import MonkeyPatch
     mp = MonkeyPatch()
@@ -347,9 +347,11 @@ def test_a_session_with_symbols_lacking_a_sector_is_collected_completely_and_rep
         strat, steps = start(w)
         evening(w, 0, strat)
         rep = morning(w, 0, steps)
-        assert rep.verdict == C.COMPLETE                     # collection is complete; what the missing sector MEANS is the owner's policy decision
+        assert rep.verdict == C.COMPLETE                     # Option B: a no-sector symbol is a legitimate row whose sector-relative value is NULL
         v = [s for s in rep.steps if s.name == C.STEP_VERIFY][0]
         assert v.detail["rs_ok_cells_without_sector"] == 2 * 3 and v.detail["rs_ok_cells_not_sector_pit_safe"] >= 2 * 3
+        assert v.detail["rs_sector_relative_values_without_pit_safe_sector"] == 0 and v.detail["permanent_problems"] == []
+        assert w.count("stock_relative_strength", "session_date = %s AND sector IS NULL AND vs_sector_pp IS NOT NULL", (w.sessions[0],)) == 0
         assert w.count("stock_relative_strength", "state = 'ok' AND sector IS NULL AND session_date = %s", (w.sessions[0],)) == 2 * 3
     finally:
         mp.undo()

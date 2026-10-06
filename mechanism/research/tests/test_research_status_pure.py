@@ -238,7 +238,7 @@ def test_relative_strength_conflicts_and_sector_gaps_are_reported():
     sec_rows[8]["n_sectors"] = 1
     d = ST.build_status(make(rs={"rows": rs_rows}, sector={"rows": sec_rows}))
     assert integ(d, "stock_rs_sessions_with_multiple_runs")["count"] == 1 and "stock_rs_sessions_with_multiple_runs" in failure_ids(d)
-    assert integ(d, "stock_rs_ok_cells_without_sector")["count"] == 1 and integ(d, "stock_rs_ok_cells_without_sector")["severity"] == "warning"
+    assert integ(d, "stock_rs_ok_cells_without_sector")["count"] == 1 and integ(d, "stock_rs_ok_cells_without_sector")["severity"] == "info"
     assert integ(d, "stock_rs_ok_cells_sector_map_unsafe")["count"] == 2 and "stock_rs_ok_cells_sector_map_unsafe" in failure_ids(d)
     assert integ(d, "sector_observed_sector_count_varies")["count"] == 1
 
@@ -297,7 +297,9 @@ def evaluated_contract(passed=False, final=(20, 10, 10)):
         "labels_present", "final_label_samples_sufficient")]
     return {"evaluated": True, "provisional_rows": 30, "data_checks": checks, "earliest_trustworthy_pit_date": CAL[0].isoformat(), "coverage": {},
             "label_maturity": {}, "sample": {s: {"final_labelled_rows": n, "required": r} for s, n, r in zip(("train", "validation", "test"), final, (300, 100, 100))},
-            "sector_unsafe_cells": 0}
+            "sector_unsafe_cells": 0,
+            "sector_relative": {"rows": 30, "states": {"ok": 30}, "observed_sector_relative_rows": 30, "observed_sector_relative_fraction": 1.0,
+                                "null_not_zero": 0, "threshold": None}}
 
 
 def test_failing_slice5_data_checks_are_listed_with_their_own_ids_and_detail():

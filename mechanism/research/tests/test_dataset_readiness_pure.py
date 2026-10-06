@@ -24,6 +24,7 @@ def row(split, day, label="final", **over):
     r = {"horizon_sessions": 20, "split": split, "t0_session": day, "horizon_session": day + timedelta(days=28), "label_status": label,
          "market__state": C.OK, "market__provenance": "observed", "sector__state": C.OK, "sector__provenance": "observed",
          "rs__state": C.OK, "rs__provenance": "observed", "rs_sector_pit_safe": True, "breadth__state": C.OK,
+         "rs_vs_sector_pp": 1.5, "rs_vs_sector__state": C.OK, "rs_sector": "Technology",
          "catalyst__state": C.CATALYST_NONE_OBSERVED, "first_seen__state": C.OK}
     r.update(over)
     return r
@@ -108,9 +109,59 @@ def test_unknown_provenance_counts_as_reconstructed_never_as_observed():
     assert {"no_reconstructed_value_in_dataset", "observed_coverage_sufficient"} <= failed(d)
 
 
-def test_a_sector_map_that_is_not_pit_safe_blocks_eligibility():
-    d = assess(_tweak(lambda r: r["split"] == "train", rs_sector_pit_safe=False))
+NO_SECTOR_CELL = dict(sector__state=C.NO_SECTOR, sector__provenance=None, rs_sector_pit_safe=False, rs_vs_sector_pp=None,
+                      rs_vs_sector__state=C.NO_SECTOR, rs_sector=None)
+
+
+def test_a_sector_relative_value_without_a_pit_safe_sector_blocks_eligibility():
+    d = assess(_tweak(lambda r: r["split"] == "train", rs_sector_pit_safe=False))     # a non-NULL value, but its sector map is not PIT-safe
     assert "relative_strength_sector_pit_safe" in failed(d)
+
+
+@pytest.mark.parametrize("name,over", [
+    ("value_without_a_sector", dict(rs_sector=None)),
+    ("value_not_in_state_ok", dict(rs_vs_sector__state=C.SECTOR_STALE)),
+    ("value_under_state_no_sector", dict(rs_vs_sector__state=C.NO_SECTOR)),
+    ("value_under_reconstructed_rs_row", dict(rs__provenance="reconstructed")),
+    ("value_under_unknown_provenance", dict(rs__provenance="mystery")),
+    ("value_flagged_unsafe", dict(rs_vs_sector__state=C.UNSAFE_VALUE)),
+])
+def test_every_way_a_non_null_sector_relative_value_can_be_unproven_blocks_eligibility(name, over):
+    d = assess(_tweak(lambda r: r["t0_session"] == TR[0] and r["split"] == "train", **over))
+    assert "relative_strength_sector_pit_safe" in failed(d), name
+
+
+def test_option_b_a_few_no_sector_candidates_stay_and_do_not_fail_readiness():
+    rows = good_rows()
+    for r in rows[:25]:                                   # 25 of 500 = 5% legitimately have no sector
+        r.update(NO_SECTOR_CELL)
+    d = assess(rows)
+    assert "relative_strength_sector_pit_safe" not in failed(d)
+    assert failed(d) == set() and d["eligibility"]["model_research_eligible"] is True
+    sr = d["coverage"]["sector_relative"]
+    assert sr["states"][C.NO_SECTOR] == 25 and sr["observed_sector_relative_rows"] == 475 and sr["null_not_zero"] == 25
+    assert sr["threshold"] is None and "never 0" in sr["note"]
+
+
+def test_option_b_many_no_sector_candidates_are_reported_by_the_sector_context_coverage_not_by_the_rs_check():
+    rows = good_rows()
+    for r in rows[:100]:                                  # 20% have no sector: the sector CONTEXT is sparse, which is its own (deliberate) check
+        r.update(NO_SECTOR_CELL)
+    d = assess(rows)
+    assert "relative_strength_sector_pit_safe" not in failed(d)
+    assert failed(d) == {"observed_coverage_sufficient"}
+
+
+def test_a_null_sector_relative_value_is_never_unsafe_whatever_its_state():
+    for st in (C.NO_SECTOR, C.SECTOR_NOT_PIT_SAFE, C.SECTOR_STALE, C.SECTOR_UNCONFIRMED, C.SECTOR_IDENTITY_CONFLICT, C.SECTOR_VALUE_UNAVAILABLE):
+        r = row("train", TR[0], rs_vs_sector_pp=None, rs_vs_sector__state=st, rs_sector=None, rs_sector_pit_safe=False)
+        assert RY.sector_relative_unsafe(r) is False, st
+
+
+def test_an_unknown_provenance_sector_is_never_quietly_null():
+    d = assess(_tweak(lambda r: r["t0_session"] == TR[0] and r["split"] == "train", sector__state=C.SECTOR_UNKNOWN_PROVENANCE, sector__provenance=None))
+    assert "no_reconstructed_value_in_dataset" in failed(d)
+    assert d["coverage"]["by_source"]["sector"]["unknown_provenance_used"] > 0
 
 
 def test_weak_observed_coverage_blocks_eligibility_even_when_nothing_is_reconstructed():

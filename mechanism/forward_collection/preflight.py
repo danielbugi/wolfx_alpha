@@ -1,8 +1,8 @@
 """Read-only activation preflight: `collector stack ready for activation: YES/NO`.
 
-Inspects the database catalog, the dataset spec against the collector contract, the declared scheduler design and the unresolved no-sector
-policy. It never writes, never installs, never changes capture state: every query is a SELECT / catalog lookup, run in a transaction that is
-rolled back. It reports `ready_ignoring_owner_decision` separately so a pending OWNER decision is never confused with a technical gap.
+Inspects the database catalog, the dataset spec against the collector contract, the declared scheduler design and the no-sector policy
+(owner-decided Option B, so it is a recorded fact, not a blocker). It never writes, never installs, never changes capture state: every query is
+a SELECT / catalog lookup, run in a transaction that is rolled back.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from research.lab import research_status_reader as SR
 from . import contract as C
 from . import steps as S
 
-SCHEMA = "forward_collection_preflight_v1"
+SCHEMA = "forward_collection_preflight_v2"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REQUIRED_TABLES = ("stock_prices", "market_index_prices", "daily_fundamentals", "universe_snapshot", "market_snapshot", "sector_snapshot",
                    "stock_relative_strength", "forward_return_label", "candidate_observation", "candidate_capture_run",
@@ -30,8 +30,8 @@ READ_TABLES = ("stock_prices", "market_index_prices", "daily_fundamentals", "can
 CAPTURE_ENV = "RESEARCH_CAPTURE_ENABLED"
 
 
-def _check(cid: str, ok: bool, detail: Any, *, owner: bool = False, blocking: bool = True) -> Dict[str, Any]:
-    return {"id": cid, "ok": bool(ok), "blocking": blocking, "owner_decision": owner, "detail": detail}
+def _check(cid: str, ok: bool, detail: Any, *, blocking: bool = True) -> Dict[str, Any]:
+    return {"id": cid, "ok": bool(ok), "blocking": blocking, "detail": detail}
 
 
 def run_preflight(connect, spec: Mapping[str, Any], *, env: Optional[Mapping[str, str]] = None, repo_root: Path = REPO_ROOT) -> Dict[str, Any]:
@@ -121,11 +121,9 @@ def run_preflight(connect, spec: Mapping[str, Any], *, env: Optional[Mapping[str
                           "installed_units_in_repo": installed, "note": "design only: nothing is installed by this slice"}))
     nsp = {"policy": C.NO_SECTOR_POLICY, "options": C.NO_SECTOR_OPTIONS,
            "symbols_without_pit_safe_sector_now": sectors.get("n_without_sector"), "universe_now": sectors.get("n_universe")}
-    checks.append(_check("no_sector_policy_resolved", C.no_sector_policy_resolved(), nsp, owner=True))
+    checks.append(_check("no_sector_policy_resolved", C.no_sector_policy_resolved(), nsp))
 
-    technical = [c for c in checks if c["blocking"] and not c["owner_decision"]]
-    owner = [c for c in checks if c["blocking"] and c["owner_decision"]]
-    tech_ok = all(c["ok"] for c in technical)
-    ready = tech_ok and all(c["ok"] for c in owner)
-    return {"schema": SCHEMA, "collector_stack_ready_for_activation": "YES" if ready else "NO", "ready_ignoring_owner_decision": tech_ok,
-            "blockers": [c["id"] for c in technical + owner if not c["ok"]], "checks": checks, "read_only": True}
+    blocking = [c for c in checks if c["blocking"]]
+    ready = all(c["ok"] for c in blocking)
+    return {"schema": SCHEMA, "collector_stack_ready_for_activation": "YES" if ready else "NO",
+            "blockers": [c["id"] for c in blocking if not c["ok"]], "checks": checks, "read_only": True}

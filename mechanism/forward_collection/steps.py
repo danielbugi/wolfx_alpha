@@ -121,7 +121,8 @@ def make_verify(feature_set_version: str = FEATURE_SET_VERSION):
                     permanent.append("a sector row is stamped at or after the decision deadline")
                 cur.execute("SELECT horizon_sessions, count(*), max(created_at), "
                             "count(*) FILTER (WHERE state = 'ok' AND sector IS NULL), "
-                            "count(*) FILTER (WHERE state = 'ok' AND NOT sector_pit_safe) "
+                            "count(*) FILTER (WHERE state = 'ok' AND NOT sector_pit_safe), "
+                            "count(*) FILTER (WHERE state = 'ok' AND vs_sector_pp IS NOT NULL AND (sector IS NULL OR NOT sector_pit_safe)) "
                             "FROM stock_relative_strength WHERE session_date = %s AND provenance = 'observed' AND model_version = %s "
                             "AND feature_set_version = %s GROUP BY horizon_sessions", (ctx.session, RS_MODEL_VERSION, feature_set_version))
                 by_h = {r[0]: r for r in cur.fetchall()}
@@ -133,6 +134,12 @@ def make_verify(feature_set_version: str = FEATURE_SET_VERSION):
                         permanent.append(f"relative-strength rows for horizon {h} are stamped at or after the decision deadline")
                 det["rs_ok_cells_without_sector"] = sum(r[3] for r in by_h.values())
                 det["rs_ok_cells_not_sector_pit_safe"] = sum(r[4] for r in by_h.values())
+                # Option B: a cell with no PIT-safe sector is a LEGITIMATE row whose sector-relative value is NULL. Only a sector-relative
+                # VALUE without a PIT-safe sector is a violation (the table CHECKs forbid it; this re-reads the facts rather than trusting that).
+                unsafe_values = sum(r[5] for r in by_h.values())
+                det["rs_sector_relative_values_without_pit_safe_sector"] = unsafe_values
+                if unsafe_values:
+                    permanent.append(f"{unsafe_values} relative-strength rows carry a sector-relative value without a point-in-time-safe sector")
             cur.execute("SELECT (SELECT count(*) FROM market_snapshot WHERE session_date = %s AND provenance = 'reconstructed'), "
                         "(SELECT count(*) FROM stock_relative_strength WHERE session_date = %s AND provenance = 'reconstructed')",
                         (ctx.session, ctx.session))

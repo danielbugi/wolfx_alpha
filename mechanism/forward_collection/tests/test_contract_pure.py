@@ -70,10 +70,18 @@ def test_version_blockers_name_every_mismatch():
     assert C.spec_version_blockers("mi_v2", "mi_v2", None, "fwd_v1", "fwd_v1.m1", (7,))
 
 
-def test_no_sector_policy_is_unresolved_and_rejects_nothing_silently():
-    assert C.NO_SECTOR_POLICY == "unresolved" and not C.no_sector_policy_resolved()
+def test_no_sector_policy_is_the_owner_decided_option_b_and_the_other_options_stay_rejected():
+    assert C.NO_SECTOR_POLICY == "B_null_sector_relative" and C.no_sector_policy_resolved()
     assert set(C.NO_SECTOR_OPTIONS) == {"A_exclude", "B_null_sector_relative", "C_market_relative_fallback"}
+    assert C.NO_SECTOR_OPTIONS["B_null_sector_relative"]["verdict"].startswith("ADOPTED")
+    assert C.NO_SECTOR_OPTIONS["A_exclude"]["verdict"].startswith("REJECTED")
     assert C.NO_SECTOR_OPTIONS["C_market_relative_fallback"]["verdict"].startswith("REJECTED")
+
+
+def test_only_option_b_counts_as_a_resolved_policy(monkeypatch):
+    for bad in ("unresolved", "A_exclude", "C_market_relative_fallback", "", "b"):
+        monkeypatch.setattr(C, "NO_SECTOR_POLICY", bad)
+        assert not C.no_sector_policy_resolved(), bad
 
 
 # ------------------------------------------------------------------ scheduler design

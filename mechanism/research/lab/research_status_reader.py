@@ -169,7 +169,8 @@ def _contract(cur, authoring: AUTH.Authoring, calendar: Sequence[date], cal_sour
     doc = manifest.document
     d = READY.assess_data(cfg=pcfg, windows_train_end=doc["windows"]["train"][1], maturity=doc["label_maturity_session"], prim=prim)
     return {"evaluated": True, "provisional_rows": len(prim), "data_checks": d["checks"], "earliest_trustworthy_pit_date": d["earliest"]["all_sources"],
-            "coverage": d["coverage"], "label_maturity": d["labels"], "sample": d["sample"], "sector_unsafe_cells": d["sector_unsafe_cells"]}
+            "coverage": d["coverage"], "label_maturity": d["labels"], "sample": d["sample"], "sector_unsafe_cells": d["sector_unsafe_cells"],
+            "sector_relative": d["sector_relative"]}
 
 
 # ------------------------------------------------------------------ entry point

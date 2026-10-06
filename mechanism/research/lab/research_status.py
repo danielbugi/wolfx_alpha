@@ -24,7 +24,7 @@ from research.lab import dataset_readiness as READY
 from research.lab import manifest as M
 from research.lab.manifest import canonical_hash
 
-STATUS_SCHEMA = "lab_research_status_v1"
+STATUS_SCHEMA = "lab_research_status_v2"
 DISTINCTION = READY.DISTINCTION
 
 # Declared and printed in every document (not options).
@@ -87,7 +87,7 @@ INTEGRITY_CATALOGUE = (
     ("stock_rs_sessions_observed_and_reconstructed", "stock_rs", "info", "sessions holding both an observed and a reconstructed relative-strength row"),
     ("stock_rs_rows_off_calendar", "stock_rs", "warning", "relative-strength rows whose session is not a session of the calendar"),
     ("stock_rs_sessions_with_multiple_runs", "stock_rs", "blocker", "observed sessions carrying more than one distinct run content hash (conflicting observations)"),
-    ("stock_rs_ok_cells_without_sector", "stock_rs", "warning", "observed 'ok' relative-strength cells for symbols with no sector: they carry sector_pit_safe=false, which Slice 5 check 6 counts"),
+    ("stock_rs_ok_cells_without_sector", "stock_rs", "info", "observed 'ok' relative-strength cells for symbols with no sector (Option B): the candidate stays, its sector-relative value is NULL (never 0, never market-relative); readiness does not count it"),
     ("stock_rs_ok_cells_sector_map_unsafe", "stock_rs", "blocker", "observed 'ok' relative-strength cells that have a sector but a sector map that is not point-in-time safe"),
     ("labels_computed_before_horizon", "labels", "blocker", "label rows computed before their own horizon session began (impossible availability)"),
     ("labels_off_calendar", "labels", "warning", "label rows whose t0 session is not a session of the calendar"),
@@ -428,7 +428,7 @@ def build_status(inp: Mapping[str, Any]) -> Dict[str, Any]:
                          "data_checks_all_pass": all(c["passed"] for c in ct["data_checks"]),
                          "earliest_trustworthy_pit_date": ct["earliest_trustworthy_pit_date"], "per_source_coverage": ct["coverage"],
                          "label_maturity": ct["label_maturity"], "sample": ct["sample"],
-                         "sector_pit_unsafe_cells": ct["sector_unsafe_cells"]})
+                         "sector_pit_unsafe_cells": ct["sector_unsafe_cells"], "sector_relative": ct["sector_relative"]})
         for c in ct["data_checks"]:
             if not c["passed"]:
                 failures.append({"id": c["id"], "scope": "slice5_data_check", "detail": c["detail"]})

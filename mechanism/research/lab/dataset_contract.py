@@ -27,9 +27,11 @@ from decimal import Decimal
 from typing import Any, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 
 from research.lab import manifest as M
+from research.lab import sector_provenance as SP
 from research.lab.manifest import LabError, canonical_hash
 
-DATASET_SCHEMA = "lab_dataset_v1"
+DATASET_SCHEMA = "lab_dataset_v2"
+LEGACY_DATASET_SCHEMAS = ("lab_dataset_v1",)
 CONFIG_SCHEMA = "lab_dataset_config_v1"
 RECONSTRUCTED_POLICIES = ("exclude", "include_flagged")
 
@@ -42,6 +44,8 @@ RECONSTRUCTED_EXCLUDED = "reconstructed_excluded"
 NO_SECTOR = "no_sector"
 SECTOR_NAME_LATE = "sector_name_late"      # the candidate's own sector attribute was stamped after the decision deadline: not used
 SECTOR_ASOF_AFTER_T0 = "sector_asof_after_t0"
+SECTOR_STALE = "sector_stale"              # the candidate's sector source row is older than SP.SECTOR_MAX_AGE_DAYS: not used (v2)
+SECTOR_UNKNOWN_PROVENANCE = "sector_unknown_provenance"   # a sector with no source / no source date: fails closed, an audit finding (v2)
 NOT_ENABLED = "not_enabled"                # the manifest does not configure this source
 UNKNOWN_AVAILABILITY = "unknown_availability"
 MISSING = "missing"                        # label state only: no label row at this horizon
@@ -63,6 +67,7 @@ COLUMNS: Tuple[Tuple[str, str], ...] = (
     ("sector_vs_spx_20", "float"), ("sector_vs_univ_20", "float"), ("sector_rank_20", "int"), ("sector_available_at", "ts"),
     ("rs__state", "str"), ("rs__provenance", "str"), ("rs_ret_pct", "float"), ("rs_vs_spx_pp", "float"), ("rs_vs_sector_pp", "float"),
     ("rs_percentile", "float"), ("rs_n_universe", "int"), ("rs_sector_pit_safe", "bool"), ("rs_available_at", "ts"),
+    ("rs_sector", "str"), ("rs_vs_sector__state", "str"),
     ("catalyst__state", "str"), ("catalyst_n_events", "int"), ("catalyst_n_unknown_availability", "int"), ("catalyst_labels", "str"),
     ("catalyst_latest_event_time", "date"), ("catalyst_available_at", "ts"),
     ("first_seen__state", "str"), ("first_seen_json", "str"), ("first_seen_available_at", "ts"),
@@ -70,6 +75,20 @@ COLUMNS: Tuple[Tuple[str, str], ...] = (
 COLUMN_NAMES = tuple(n for n, _ in COLUMNS)
 COLUMN_TYPES = dict(COLUMNS)
 assert len(set(COLUMN_NAMES)) == len(COLUMN_NAMES)
+
+# ------------------------------------------------------------------ frozen identity of the previous contract
+# `lab_dataset_v1` had no sector-relative cell state (a no-sector symbol could only be told apart by sector_pit_safe = false). v2 adds exactly the
+# two columns below. The v1 identity is kept so a v1 manifest / dataset hash is still *recognised* (and reproducible: project the rows onto the
+# v1 columns). A test pins schema_hash('lab_dataset_v1'); it must never change.
+V2_ADDED_COLUMNS = ("rs_sector", "rs_vs_sector__state")
+COLUMNS_V1: Tuple[Tuple[str, str], ...] = tuple(c for c in COLUMNS if c[0] not in V2_ADDED_COLUMNS)
+COLUMNS_BY_SCHEMA: Dict[str, Tuple[Tuple[str, str], ...]] = {"lab_dataset_v1": COLUMNS_V1, "lab_dataset_v2": COLUMNS}
+
+
+def _columns_of(schema: str) -> Tuple[Tuple[str, str], ...]:
+    if schema not in COLUMNS_BY_SCHEMA:
+        raise LabError([f"unknown dataset schema '{schema}' (known: {sorted(COLUMNS_BY_SCHEMA)})"])
+    return COLUMNS_BY_SCHEMA[schema]
 
 # The fixed sources. `state_column` names the column that carries the source's state in the dataset.
 SOURCE_STATE_COLUMNS = {"market": "market__state", "breadth": "breadth__state", "sector": "sector__state", "stock_rs": "rs__state",
@@ -325,6 +344,69 @@ def effective_deadline(t0: date, grace_days: int, cutoff: datetime) -> datetime:
     return min(decision_deadline(t0, grace_days), cutoff.astimezone(timezone.utc))
 
 
+# ------------------------------------------------------------------ sector decisions (v2)
+# State of `rs_vs_sector__state` -- the cell the sector-relative RS value lives in. Only OK is an observed, point-in-time-safe sector-relative
+# measurement. NO_SECTOR is the owner-decided Option B: the candidate stays, the sector-relative value is NULL (never 0, never market-relative).
+SECTOR_VALUE_UNAVAILABLE = "sector_value_unavailable"   # a fresh PIT-safe sector exists but the model produced no value (too few members)
+SECTOR_NOT_PIT_SAFE = "sector_not_pit_safe"             # the RS row says its sector map was not PIT-safe; value NULL
+SECTOR_UNCONFIRMED = "sector_unconfirmed"               # the candidate snapshot has no usable sector at the decision point; value masked
+SECTOR_IDENTITY_CONFLICT = "sector_identity_conflict"   # the candidate's fresh sector differs from the RS row's sector; value masked
+SECTOR_RECONSTRUCTED = "sector_reconstructed"           # reconstructed sector information: never safe
+UNSAFE_VALUE = "unsafe_value"                           # a NON-NULL sector-relative value that cannot be proved safe: kept so readiness blocks it
+SECTOR_REL_STATES = (OK, NO_SECTOR, SECTOR_VALUE_UNAVAILABLE, SECTOR_NOT_PIT_SAFE, SECTOR_UNCONFIRMED, SECTOR_IDENTITY_CONFLICT, SECTOR_STALE,
+                     SECTOR_UNKNOWN_PROVENANCE, SECTOR_RECONSTRUCTED, UNSAFE_VALUE)
+# states in which the dataset exposes the RS row's own sector tag in `rs_sector`
+SECTOR_EXPOSED_STATES = (OK, SECTOR_VALUE_UNAVAILABLE, UNSAFE_VALUE, SECTOR_RECONSTRUCTED)
+
+
+def candidate_sector_evidence(c: Mapping[str, Any], t0: date, known) -> SP.SectorEvidence:
+    """The evidence class of the sector tag stored on the candidate's own snapshot, at decision session `t0`."""
+    return SP.classify_sector_evidence(sector=c["fs_sector"], source=c["fs_sector_source"], asof=c["fs_sector_asof"], t0=t0,
+                                       provenance="observed", available=known(c["fs_captured_at"]))
+
+
+def sector_name_state(ev: SP.SectorEvidence) -> str:
+    """`sector__state` for a candidate-level evidence class: OK means the sector name may be used to look up the sector snapshot."""
+    if ev.state == SP.OBSERVED_FRESH:
+        return OK
+    if ev.state == SP.OBSERVED_STALE:
+        return SECTOR_STALE
+    if ev.state == SP.UNKNOWN:
+        return SECTOR_UNKNOWN_PROVENANCE
+    if ev.state == SP.UNAVAILABLE:
+        return {SP.NO_SECTOR: NO_SECTOR, SP.NAME_LATE: SECTOR_NAME_LATE, SP.ASOF_AFTER_T0: SECTOR_ASOF_AFTER_T0}[ev.reason]
+    raise LabError([f"a candidate sector snapshot cannot be '{ev.state}'"])
+
+
+def relative_sector_cell(*, provenance: Optional[str], rs_sector: Any, value: Optional[float], pit_safe: Any,
+                         cand: SP.SectorEvidence) -> Tuple[str, bool, Optional[str]]:
+    """Decide the sector-relative RS cell of ONE selected, state-ok RS row. Returns (state, keep_value, exposed rs_sector).
+
+    A sector-relative value survives only when ALL of these hold: the RS row is observed, names a sector, flags its sector map PIT-safe, and the
+    candidate's own snapshot independently shows the SAME sector as observed and fresh at t0. Everything else is NULL with a state saying why --
+    except a NON-NULL value that is not provably safe, which is KEPT (state `unsafe_value` / `sector_reconstructed`) so readiness blocks the dataset
+    rather than the problem being silently masked."""
+    sec = SP.clean_sector(rs_sector)
+    has = value is not None
+    if provenance != "observed":
+        return SECTOR_RECONSTRUCTED, True, sec
+    if sec is None:
+        return (UNSAFE_VALUE, True, None) if has else (NO_SECTOR, False, None)
+    if pit_safe is not True:
+        return (UNSAFE_VALUE, True, sec) if has else (SECTOR_NOT_PIT_SAFE, False, None)
+    if cand.state == SP.UNKNOWN:
+        return SECTOR_UNKNOWN_PROVENANCE, False, None
+    if cand.state == SP.RECONSTRUCTED:
+        return SECTOR_RECONSTRUCTED, False, None
+    if cand.state == SP.UNAVAILABLE:
+        return SECTOR_UNCONFIRMED, False, None
+    if cand.state == SP.OBSERVED_STALE:
+        return SECTOR_STALE, False, None
+    if cand.sector != sec:
+        return SECTOR_IDENTITY_CONFLICT, False, None
+    return (OK if has else SECTOR_VALUE_UNAVAILABLE), True, sec
+
+
 # ------------------------------------------------------------------ canonical values
 def _num(v: Any, what: str) -> float:
     if isinstance(v, bool):
@@ -379,46 +461,57 @@ def row_sort_key(row: Mapping[str, Any]) -> Tuple[Any, ...]:
     return tuple(row[k] for k in ROW_SORT)
 
 
-def encode_row(row: Mapping[str, Any]) -> List[Any]:
+def encode_row(row: Mapping[str, Any], schema: str = DATASET_SCHEMA) -> List[Any]:
+    """Encode one row under `schema`. Rows are always built with the CURRENT columns; under a frozen legacy schema the columns that schema never
+    had (V2_ADDED_COLUMNS) are projected away. Any other missing / extra column is an error."""
+    cols = _columns_of(schema)
     missing = [n for n in COLUMN_NAMES if n not in row]
     extra = [k for k in row if k not in COLUMN_TYPES]
     if missing or extra:
         raise LabError([f"row columns differ from the contract: missing {missing}, unexpected {extra}"])
-    return [encode_cell(row[n], t, n) for n, t in COLUMNS]
+    return [encode_cell(row[n], t, n) for n, t in cols]
 
 
 def _dump(o: Any) -> str:
     return json.dumps(o, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
 
 
-def schema_hash() -> str:
+def schema_hash(schema: str = DATASET_SCHEMA) -> str:
     """Identity of the dataset contract itself: columns, source column lists and query versions. Recomputed from code, so a manifest built under
     another contract fails verification instead of silently describing a different dataset."""
-    return canonical_hash({"schema": DATASET_SCHEMA, "columns": [list(c) for c in COLUMNS],
+    return canonical_hash({"schema": schema, "columns": [list(c) for c in _columns_of(schema)],
                            "source_columns": {k: list(v) for k, v in sorted(SOURCE_COLUMNS.items())},
                            "query_versions": dict(sorted(QUERY_VERSIONS.items()))})
 
 
-def dataset_header(manifest_hash: str, doc: Mapping[str, Any], row_count: int) -> Dict[str, Any]:
-    return {"schema": DATASET_SCHEMA, "manifest_hash": manifest_hash, "label_version": doc["label_version"],
+def legacy_schema_of(declared_schema_hash: Optional[str]) -> Optional[str]:
+    """The frozen legacy schema a declared `contract.dataset_schema` hash belongs to, or None (current schema, or not a known contract)."""
+    for name in LEGACY_DATASET_SCHEMAS:
+        if declared_schema_hash == schema_hash(name):
+            return name
+    return None
+
+
+def dataset_header(manifest_hash: str, doc: Mapping[str, Any], row_count: int, schema: str = DATASET_SCHEMA) -> Dict[str, Any]:
+    return {"schema": schema, "manifest_hash": manifest_hash, "label_version": doc["label_version"],
             "label_methodology_version": doc["label_methodology_version"], "feature_versions": dict(doc["feature_versions"]),
-            "columns": [list(c) for c in COLUMNS], "row_count": row_count}
+            "columns": [list(c) for c in _columns_of(schema)], "row_count": row_count}
 
 
-def dataset_chunks(manifest: M.Manifest, rows: Sequence[Mapping[str, Any]]) -> Iterator[bytes]:
+def dataset_chunks(manifest: M.Manifest, rows: Sequence[Mapping[str, Any]], schema: str = DATASET_SCHEMA) -> Iterator[bytes]:
     """The canonical byte stream of the dataset: the header, then each row (canonical order) preceded by a newline. `dataset_hash` is the
     sha256 of exactly these bytes, so a file holding them hashes to the dataset_hash."""
     ordered = sorted(rows, key=row_sort_key)
-    yield _dump(dataset_header(manifest.manifest_hash, manifest.document, len(ordered))).encode()
+    yield _dump(dataset_header(manifest.manifest_hash, manifest.document, len(ordered), schema)).encode()
     for r in ordered:
         yield b"\n"
-        yield _dump(encode_row(r)).encode()
+        yield _dump(encode_row(r, schema)).encode()
 
 
-def dataset_hash(manifest: M.Manifest, rows: Sequence[Mapping[str, Any]]) -> str:
+def dataset_hash(manifest: M.Manifest, rows: Sequence[Mapping[str, Any]], schema: str = DATASET_SCHEMA) -> str:
     """Deterministic identity of the final dataset. Independent of the order `rows` arrives in (canonical row order is applied here)."""
     h = hashlib.sha256()
-    for chunk in dataset_chunks(manifest, rows):
+    for chunk in dataset_chunks(manifest, rows, schema):
         h.update(chunk)
     return h.hexdigest()
 

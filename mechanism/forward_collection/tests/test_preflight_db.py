@@ -1,4 +1,4 @@
-"""The activation preflight: read-only, honest about the owner decision, never a silent YES."""
+"""The activation preflight: read-only, technical blockers only (the no-sector policy is the owner-decided Option B), never a silent YES."""
 from contextlib import contextmanager
 from datetime import timedelta
 
@@ -35,26 +35,25 @@ def by_id(rep):
     return {c["id"]: c for c in rep["checks"]}
 
 
-def test_preflight_is_read_only_and_reports_the_owner_decision_as_the_only_blocker(world):
+def test_preflight_is_read_only_and_has_no_owner_decision_blocker(world):
     before = {t: world.count(t) for t in TABLES}
     rep = P.run_preflight(readonly(world), spec(world), env={})
     assert {t: world.count(t) for t in TABLES} == before
-    assert rep["read_only"] is True and rep["schema"] == P.SCHEMA
-    assert rep["ready_ignoring_owner_decision"] is True, [c for c in rep["checks"] if not c["ok"]]
-    assert rep["collector_stack_ready_for_activation"] == "NO"
-    assert rep["blockers"] == ["no_sector_policy_resolved"]
-    assert by_id(rep)["no_sector_policy_resolved"]["owner_decision"] is True
+    assert rep["read_only"] is True and rep["schema"] == P.SCHEMA == "forward_collection_preflight_v2"
+    assert rep["collector_stack_ready_for_activation"] == "YES", [c for c in rep["checks"] if not c["ok"]]
+    assert rep["blockers"] == [] and "ready_ignoring_owner_decision" not in rep
+    assert "owner_decision" not in {k for c in rep["checks"] for k in c}
+    assert by_id(rep)["no_sector_policy_resolved"]["ok"] is True and by_id(rep)["no_sector_policy_resolved"]["detail"]["policy"] == "B_null_sector_relative"
     assert by_id(rep)["capture_state_reported"]["blocking"] is False
 
 
-def test_it_becomes_yes_only_when_the_owner_decision_is_recorded(world, monkeypatch):
-    monkeypatch.setattr(C, "NO_SECTOR_POLICY", "B_null_sector_relative")
+def test_an_unresolved_no_sector_policy_is_a_blocker_again(world, monkeypatch):
+    monkeypatch.setattr(C, "NO_SECTOR_POLICY", "unresolved")
     rep = P.run_preflight(readonly(world), spec(world), env={})
-    assert rep["collector_stack_ready_for_activation"] == "YES" and rep["blockers"] == []
+    assert rep["collector_stack_ready_for_activation"] == "NO" and rep["blockers"] == ["no_sector_policy_resolved"]
 
 
-def test_an_enabled_catalyst_or_first_seen_source_blocks_activation(world, monkeypatch):
-    monkeypatch.setattr(C, "NO_SECTOR_POLICY", "B_null_sector_relative")
+def test_an_enabled_catalyst_or_first_seen_source_blocks_activation(world):
     cat = {"catalyst": {"lookback_days": 5, "classifier": "c", "classifier_version": "1"}}
     rep = P.run_preflight(readonly(world), spec(world, config_over=cat), env={})
     assert rep["collector_stack_ready_for_activation"] == "NO" and "dataset_sources_have_collectors" in rep["blockers"]

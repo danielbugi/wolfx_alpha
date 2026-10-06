@@ -17,6 +17,7 @@ Fatal codes
   masked_value_leak                          a cell whose state says "not used" still carries a value or an availability stamp
   reconstructed_policy_violation             a reconstructed input present under the `exclude` policy
   selection_mismatch                         the assembled cell is not what the raw rows say was known at the deadline
+  sector_provenance_unknown                  a sector (candidate snapshot or sector-relative cell) whose provenance cannot be established
 """
 from __future__ import annotations
 
@@ -29,19 +30,20 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 from research.lab import dataset_assemble as A
 from research.lab import dataset_contract as C
 from research.lab import manifest as M
+from research.lab import sector_provenance as SP
 from research.lab.manifest import canonical_hash
 
-AUDIT_SCHEMA = "lab_dataset_audit_v1"
+AUDIT_SCHEMA = "lab_dataset_audit_v2"
 EXAMPLES = 5
 
 NOT_USED_STATES = (C.ABSENT, C.LATE, C.RECONSTRUCTED_EXCLUDED, C.NOT_ENABLED, C.NO_SECTOR, C.SECTOR_ASOF_AFTER_T0,
-                   C.SECTOR_NAME_LATE)
+                   C.SECTOR_NAME_LATE, C.SECTOR_STALE, C.SECTOR_UNKNOWN_PROVENANCE)
 # per source: the value columns that must be NULL whenever the source's state is not "used"
 VALUE_COLUMNS: Dict[str, Tuple[str, ...]] = {
     "market": ("regime_state", "regime_score", "regime_strength", "market__provenance", "market_available_at"),
     "breadth": ("breadth_sma50_pct", "breadth_sma200_pct", "net_highs_lows_pct"),
     "sector": ("sector__provenance", "sector_ret_20", "sector_vs_spx_20", "sector_vs_univ_20", "sector_rank_20", "sector_available_at"),
-    "stock_rs": ("rs__provenance", "rs_ret_pct", "rs_vs_spx_pp", "rs_vs_sector_pp", "rs_percentile", "rs_n_universe", "rs_sector_pit_safe",
+    "stock_rs": ("rs__provenance", "rs_ret_pct", "rs_vs_spx_pp", "rs_vs_sector_pp", "rs_percentile", "rs_n_universe", "rs_sector_pit_safe", "rs_sector",
                  "rs_available_at"),
     "catalyst": (),
     "first_seen": ("first_seen_json", "first_seen_available_at"),
@@ -86,7 +88,7 @@ def _num(v: Any) -> Any:
 MARKET_VALUES = {"regime_state": "regime_state", "regime_score": "regime_score", "regime_strength": "regime_strength"}
 SECTOR_VALUES = {"sector_ret_20": "sec_ret_20", "sector_vs_spx_20": "sec_vs_spx_20", "sector_vs_univ_20": "sec_vs_univ_20",
                  "sector_rank_20": "rank_20"}
-RS_VALUES = {"rs_ret_pct": "ret_pct", "rs_vs_spx_pp": "vs_spx_pp", "rs_vs_sector_pp": "vs_sector_pp", "rs_percentile": "rs_percentile",
+RS_VALUES = {"rs_ret_pct": "ret_pct", "rs_vs_spx_pp": "vs_spx_pp", "rs_percentile": "rs_percentile",
              "rs_n_universe": "n_universe_valid", "rs_sector_pit_safe": "sector_pit_safe"}
 BREADTH_KEYS = {"breadth_sma50_pct": "c3_breadth_sma50", "breadth_sma200_pct": "c4_breadth_sma200", "net_highs_lows_pct": "c5_net_highs_lows"}
 
@@ -135,31 +137,79 @@ def _cross_check(f: _Findings, label: str, key: str, raw_rows: Sequence[Mapping[
             f.add("selection_mismatch", f"{label} {key}: marked reconstructed_excluded but the raw rows do not say that")
 
 
-NAME_UNUSED = (C.NO_SECTOR, C.SECTOR_ASOF_AFTER_T0, C.SECTOR_NAME_LATE)
+NAME_UNUSED = (C.NO_SECTOR, C.SECTOR_ASOF_AFTER_T0, C.SECTOR_NAME_LATE, C.SECTOR_STALE, C.SECTOR_UNKNOWN_PROVENANCE)
+_UNAVAILABLE_REASON_STATE = {SP.NO_SECTOR: C.NO_SECTOR, SP.NAME_LATE: C.SECTOR_NAME_LATE, SP.ASOF_AFTER_T0: C.SECTOR_ASOF_AFTER_T0}
+
+
+def _candidate_evidence(c: Mapping[str, Any], t0: date, known) -> SP.SectorEvidence:
+    return SP.classify_sector_evidence(sector=c["fs_sector"], source=c["fs_sector_source"], asof=c["fs_sector_asof"], t0=t0,
+                                       provenance="observed", available=known(c["fs_captured_at"]))
 
 
 def _sector_name_check(f, key, r, c, cfg, known, t0) -> None:
-    """The sector NAME is the candidate's own attribute (its feature snapshot), independent of whether a sector snapshot exists for it."""
+    """The sector NAME is the candidate's own attribute (its feature snapshot), independent of whether a sector snapshot exists for it. It is
+    usable only as an observed, fresh sector (SP.OBSERVED_FRESH); every other evidence class has its own state and no name."""
     if not cfg.sector_feature_set_version:
         return
     if c is None:
         f.add("selection_mismatch", f"{key}: no raw candidate row to check the sector name against")
         return
-    if c["fs_sector"] is None:
-        expected = C.NO_SECTOR
-    elif not known(c["fs_captured_at"]):
-        expected = C.SECTOR_NAME_LATE
-    elif c["fs_sector_asof"] is not None and c["fs_sector_asof"] > t0:
-        expected = C.SECTOR_ASOF_AFTER_T0
-    else:
+    ev = _candidate_evidence(c, t0, known)
+    if ev.state == SP.OBSERVED_FRESH:
         expected = None
+    elif ev.state == SP.OBSERVED_STALE:
+        expected = C.SECTOR_STALE
+    elif ev.state == SP.UNKNOWN:
+        expected = C.SECTOR_UNKNOWN_PROVENANCE
+        f.add("sector_provenance_unknown", f"{key}: candidate sector {ev.sector!r} has {ev.reason}")
+    else:
+        expected = _UNAVAILABLE_REASON_STATE[ev.reason]
     state = r["sector__state"]
     if expected is not None:
         if state != expected or r["sector"] is not None:
             f.add("masked_value_leak" if r["sector"] is not None else "selection_mismatch",
                   f"{key}: sector state {state!r} / name {r['sector']!r}, the raw candidate says {expected!r}")
-    elif state in NAME_UNUSED or r["sector"] != c["fs_sector"]:
-        f.add("selection_mismatch", f"{key}: sector name {r['sector']!r} / state {state!r} do not match the candidate's sector {c['fs_sector']!r}")
+    elif state in NAME_UNUSED or r["sector"] != ev.sector:
+        f.add("selection_mismatch", f"{key}: sector name {r['sector']!r} / state {state!r} do not match the candidate's sector {ev.sector!r}")
+
+
+def _expected_relative_cell(raw: Mapping[str, Any], ev: SP.SectorEvidence) -> Tuple[str, Any, Optional[str]]:
+    """Re-derive (state, value the dataset may carry, exposed rs_sector) for the SELECTED raw RS row and the candidate's sector evidence."""
+    sec, val = SP.clean_sector(raw["sector"]), raw["vs_sector_pp"]
+    if raw["provenance"] != "observed":
+        return C.SECTOR_RECONSTRUCTED, val, sec
+    if sec is None:
+        return (C.UNSAFE_VALUE, val, None) if val is not None else (C.NO_SECTOR, None, None)
+    if raw["sector_pit_safe"] is not True:
+        return (C.UNSAFE_VALUE, val, sec) if val is not None else (C.SECTOR_NOT_PIT_SAFE, None, None)
+    blocked = {SP.UNKNOWN: C.SECTOR_UNKNOWN_PROVENANCE, SP.RECONSTRUCTED: C.SECTOR_RECONSTRUCTED, SP.UNAVAILABLE: C.SECTOR_UNCONFIRMED,
+               SP.OBSERVED_STALE: C.SECTOR_STALE}
+    if ev.state in blocked:
+        return blocked[ev.state], None, None
+    if ev.sector != sec:
+        return C.SECTOR_IDENTITY_CONFLICT, None, None
+    return (C.OK if val is not None else C.SECTOR_VALUE_UNAVAILABLE), val, sec
+
+
+def _rs_sector_check(f, key, r, raw_rs_rows, c, cfg, known, t0) -> None:
+    """The sector-relative RS cell: its state, its value and the sector tag it exposes must be exactly what the selected raw RS row and the
+    candidate's own sector evidence imply. A sector-relative value is never carried without a fresh, observed, PIT-safe, agreeing sector."""
+    state = r["rs_vs_sector__state"]
+    if r["rs__state"] != C.OK:
+        if state != r["rs__state"] or r["rs_vs_sector_pp"] is not None or r["rs_sector"] is not None:
+            f.add("selection_mismatch", f"{key}: RS cell is {r['rs__state']!r} but the sector-relative cell is {state!r} / values set")
+        return
+    match = [x for x in raw_rs_rows if x["provenance"] == r["rs__provenance"] and x["created_at"] == r["rs_available_at"] and x["state"] == "ok"]
+    if len(match) != 1 or c is None:
+        f.add("selection_mismatch", f"{key}: the sector-relative cell is not backed by exactly one known raw RS row and one candidate")
+        return
+    want_state, want_val, want_sec = _expected_relative_cell(match[0], _candidate_evidence(c, t0, known))
+    want = (want_state, _num(want_val), want_sec if want_state in C.SECTOR_EXPOSED_STATES else None)
+    got = (state, _num(r["rs_vs_sector_pp"]), r["rs_sector"])
+    if got != want:
+        f.add("selection_mismatch", f"{key}: sector-relative cell {got!r} but the raw rows imply {want!r}")
+    if want_state == C.SECTOR_UNKNOWN_PROVENANCE:
+        f.add("sector_provenance_unknown", f"{key}: the sector behind a sector-relative RS cell has unknown provenance")
 
 
 def _catalyst_expected(raw_events: Sequence[Mapping[str, Any]], cls: Mapping[Tuple[str, int], Mapping[str, Any]], t0: date,
@@ -205,7 +255,10 @@ def audit(manifest: M.Manifest, cfg: C.DatasetConfig, raw: Mapping[str, Sequence
 
     # ---- input hashes
     for c in verification.failures():
-        f.add("input_hash_missing" if c.status == "MISSING" else "input_hash_mismatch", f"{c.key} [{c.kind}]")
+        legacy = C.legacy_schema_of(c.expected) if c.key == "contract.dataset_schema" else None
+        hint = (f" (built under the frozen {legacy} contract: rebuild under {C.DATASET_SCHEMA}, or reproduce the old dataset with the code "
+                "revision pinned in its manifest)") if legacy else ""
+        f.add("input_hash_missing" if c.status == "MISSING" else "input_hash_mismatch", f"{c.key} [{c.kind}]{hint}")
 
     # ---- accounting
     cands = [r for r in raw["candidates"] if r["strategy_key"] == cfg.strategy_key and r["strategy_version"] == cfg.strategy_version]
@@ -293,6 +346,9 @@ def audit(manifest: M.Manifest, cfg: C.DatasetConfig, raw: Mapping[str, Sequence
         if cfg.catalyst:
             _catalyst_check(f, key, r, events_by_symbol.get(r["symbol"], ()), cls_by_rev, cfg, known, t0)
         _sector_name_check(f, key, r, cand_sector.get((r["symbol"], t0, r["direction"])), cfg, known, t0)
+        if cfg.stock_rs:
+            _rs_sector_check(f, key, r, idx_by_source["stock_rs"].get((t0, r["symbol"]), ()), cand_sector.get((r["symbol"], t0, r["direction"])),
+                             cfg, known, t0)
         if cfg.reconstructed_policy == "exclude":
             for col in ("market__provenance", "sector__provenance", "rs__provenance"):
                 if r[col] == "reconstructed":
@@ -380,9 +436,21 @@ def _document(manifest: M.Manifest, cfg: C.DatasetConfig, raw: Mapping[str, Sequ
         n = sum(1 for r in rows if r[col] == "reconstructed")
         if n:
             limit("reconstructed_input_used", n, f"{n} rows read a RECONSTRUCTED {src} value (policy include_flagged); never point-in-time safe")
-    n = sum(1 for r in rows if r["rs_sector_pit_safe"] is False)
-    if n:
-        limit("sector_not_pit_safe", n, f"{n} rows carry a relative-strength value whose sector map is not point-in-time safe")
+    if cfg.stock_rs:
+        rel = _hist(rows, "rs_vs_sector__state")
+        n = sum(rel.get(k, 0) for k in (C.NO_SECTOR, C.SECTOR_VALUE_UNAVAILABLE, C.SECTOR_NOT_PIT_SAFE))
+        if n:
+            limit("sector_relative_unavailable", n, f"{n} rows have no sector-relative RS value (no_sector {rel.get(C.NO_SECTOR, 0)}, "
+                  f"sector_value_unavailable {rel.get(C.SECTOR_VALUE_UNAVAILABLE, 0)}, sector_not_pit_safe {rel.get(C.SECTOR_NOT_PIT_SAFE, 0)}): "
+                  "the candidate stays in the dataset, the value is NULL (never 0), and there is no market-relative substitute")
+        n = sum(rel.get(k, 0) for k in (C.SECTOR_STALE, C.SECTOR_UNCONFIRMED, C.SECTOR_IDENTITY_CONFLICT, C.SECTOR_UNKNOWN_PROVENANCE))
+        if n:
+            limit("sector_relative_value_masked", n, f"{n} rows had a stored sector-relative value that the dataset MASKED to NULL because the "
+                  "candidate's own sector evidence was stale / unconfirmed / conflicting / of unknown provenance at the decision point")
+        n = rel.get(C.UNSAFE_VALUE, 0)
+        if n:
+            limit("sector_relative_unsafe_value", n, f"{n} rows carry a NON-NULL sector-relative value that cannot be proved point-in-time safe "
+                  "(kept visible so readiness blocks it; never masked quietly)")
     for s, h in states.items():
         for st in (C.RECONSTRUCTED_EXCLUDED,):
             if h.get(st):
@@ -396,7 +464,8 @@ def _document(manifest: M.Manifest, cfg: C.DatasetConfig, raw: Mapping[str, Sequ
     nu = sum(r["catalyst_n_unknown_availability"] or 0 for r in rows)
     if nu:
         limit("unknown_availability_events", nu, f"{nu} events in look-back windows have unprovable availability (grade X) and were not used")
-    unavailable = {s: {k: v for k, v in h.items() if k in (C.UNAVAILABLE, C.ABSENT, C.NO_SECTOR, C.SECTOR_ASOF_AFTER_T0, C.SECTOR_NAME_LATE)} for s, h in states.items()}
+    unavailable = {s: {k: v for k, v in h.items() if k in (C.UNAVAILABLE, C.ABSENT, C.NO_SECTOR, C.SECTOR_ASOF_AFTER_T0, C.SECTOR_NAME_LATE,
+                                                           C.SECTOR_STALE, C.SECTOR_UNKNOWN_PROVENANCE)} for s, h in states.items()}
     unavailable = {s: h for s, h in unavailable.items() if h}
     if unavailable:
         limit("unavailable_features", sum(sum(h.values()) for h in unavailable.values()), "cells with no usable value (the cell is NULL, not zero)")
@@ -430,6 +499,7 @@ def _document(manifest: M.Manifest, cfg: C.DatasetConfig, raw: Mapping[str, Sequ
         "rows_outside_windows": drop.get(A.SPLIT_PREFIX + "outside", 0),
         "rows_excluded": {k: v for k, v in sorted(drop.items()) if not k.startswith(A.SPLIT_PREFIX)},
         "source_states": states,
+        "sector_relative_states": _hist(rows, "rs_vs_sector__state") if cfg.stock_rs else {},
     }
     fatal = f.fatal()
     document = {"schema": AUDIT_SCHEMA, "manifest_hash": manifest.manifest_hash, "verdict": "FAIL" if fatal else "PASS", "fatal": fatal,

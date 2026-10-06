@@ -288,17 +288,24 @@ def test_relative_strength_rows_from_two_different_runs_are_conflicting(senv, mo
     assert integ(doc, "stock_rs_sessions_with_multiple_runs")["count"] == 2 and "stock_rs_sessions_with_multiple_runs" in fail_ids(doc)
 
 
-def test_observed_relative_strength_cells_for_symbols_with_no_sector_are_flagged_and_fail_check_6(senv, monkeypatch, tmp_path):
+def test_observed_relative_strength_cells_for_symbols_with_no_sector_are_reported_but_do_not_fail_check_6(senv, monkeypatch, tmp_path):
+    """Option B: the cells are reported (informational) and check 6 passes; what still fails here is the SEPARATE sector-context coverage floor,
+    because one of the three symbols (33% of candidates) has no sector, far above the 10% the context check tolerates."""
     schema, connect = senv
     with connect() as conn:
         SW.healthy(conn, no_sector=("C",))
     doc = run_ok(monkeypatch, schema, tmp_path)
     f = integ(doc, "stock_rs_ok_cells_without_sector")
-    assert f["count"] > 0
+    assert f["count"] > 0 and f["severity"] == "info"
     c = doc["contract"]
-    assert c["evaluated"] is True and c["data_checks_all_pass"] is False
-    failing = [f["id"] for f in doc["readiness_failures"] if f["scope"] == "slice5_data_check"]
-    assert "relative_strength_sector_pit_safe" in failing
+    assert c["evaluated"] is True and c["sector_pit_unsafe_cells"] == 0
+    by_id = {x["id"]: x for x in c["data_checks"]}
+    assert by_id["relative_strength_sector_pit_safe"]["passed"] is True
+    failing = [x["id"] for x in doc["readiness_failures"] if x["scope"] == "slice5_data_check"]
+    assert "relative_strength_sector_pit_safe" not in failing
+    assert "observed_coverage_sufficient" in failing and c["data_checks_all_pass"] is False
+    sr = c["sector_relative"]
+    assert sr["threshold"] is None and sr["null_not_zero"] > 0 and 0 < sr["observed_sector_relative_rows"] < sr["rows"]
 
 
 def test_labels_stamped_before_their_horizon_are_flagged(senv, monkeypatch, tmp_path):

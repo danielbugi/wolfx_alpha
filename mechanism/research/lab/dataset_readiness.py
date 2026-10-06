@@ -21,7 +21,7 @@ from research.lab import dataset_contract as C
 from research.lab import manifest as M
 from research.lab.manifest import canonical_hash
 
-READINESS_SCHEMA = "lab_dataset_readiness_v1"
+READINESS_SCHEMA = "lab_dataset_readiness_v2"
 DISTINCTION = "reproducible != point-in-time correct != vendor correct != predictive edge"
 
 # Declared, fixed, and printed in every readiness document (not options).
@@ -79,6 +79,8 @@ def _source_coverage(name: str, prim: Sequence[Mapping[str, Any]]) -> Dict[str, 
         observed = [r for r in ok if r[pcol] == OBSERVED]
         reconstructed = [r for r in ok if r[pcol] == RECONSTRUCTED]
         other = len(ok) - len(observed) - len(reconstructed)
+        if name == "sector":
+            other += sum(1 for r in prim if r[scol] == C.SECTOR_UNKNOWN_PROVENANCE)      # a sector of unknown provenance is never quietly NULL
     else:
         scol, good = STATE_SOURCES[name]
         observed = [r for r in prim if r[scol] in good]
@@ -90,7 +92,7 @@ def _source_coverage(name: str, prim: Sequence[Mapping[str, Any]]) -> Dict[str, 
         "observed_fraction_by_split": by_split, "reconstructed_used": len(reconstructed), "unknown_provenance_used": other,
         "reconstructed_excluded": states.get(C.RECONSTRUCTED_EXCLUDED, 0),
         "late": states.get(C.LATE, 0) + states.get(C.SECTOR_NAME_LATE, 0),
-        "absent": states.get(C.ABSENT, 0) + states.get(C.NO_SECTOR, 0) + states.get(C.SECTOR_ASOF_AFTER_T0, 0),
+        "absent": states.get(C.ABSENT, 0) + states.get(C.NO_SECTOR, 0) + states.get(C.SECTOR_ASOF_AFTER_T0, 0) + states.get(C.SECTOR_STALE, 0),
         "unavailable": states.get(C.UNAVAILABLE, 0), "unknown_availability": states.get(C.UNKNOWN_AVAILABILITY, 0),
         "earliest_observed_session": _iso(min((r["t0_session"] for r in observed), default=None)),
         "latest_observed_session": _iso(max((r["t0_session"] for r in observed), default=None)),
@@ -154,6 +156,28 @@ def _labels(prim: Sequence[Mapping[str, Any]], maturity: str) -> Dict[str, Any]:
     return out
 
 
+def sector_relative_unsafe(r: Mapping[str, Any]) -> bool:
+    """True iff the row CARRIES a sector-relative RS value that is not backed by an observed, point-in-time-safe, sector-bearing RS row whose
+    sector-relative cell the contract accepted. Decided from the VALUE, never from a state label: a NULL value (no sector, stale, unconfirmed...)
+    can never be unsafe, and a non-NULL value is safe only in the single state 'ok'."""
+    if r["rs_vs_sector_pp"] is None:
+        return False
+    return not (r["rs__state"] == C.OK and r["rs_vs_sector__state"] == C.OK and r["rs_sector_pit_safe"] is True
+                and r["rs_sector"] is not None and r["rs__provenance"] == OBSERVED)
+
+
+def _sector_relative_summary(prim: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Informational only (NO threshold): how much of the primary-horizon dataset actually has an observed sector-relative value. A dataset in
+    which most symbols have no PIT-safe sector is ELIGIBLE under Option B -- its sector-relative feature is simply sparse, and this says how sparse."""
+    hist = _hist(prim, "rs_vs_sector__state")
+    ok = hist.get(C.OK, 0)
+    return {"rows": len(prim), "states": hist, "observed_sector_relative_rows": ok, "observed_sector_relative_fraction": _frac(ok, len(prim)),
+            "null_not_zero": sum(1 for r in prim if r["rs_vs_sector__state"] != C.OK and r["rs_vs_sector_pp"] is None),
+            "threshold": None,
+            "note": "Option B: a candidate with no point-in-time-safe sector stays in the dataset with a NULL sector-relative value (never 0, never "
+                    "market-relative). No minimum sector-relative coverage is enforced; consumers must treat the feature as sparse."}
+
+
 def _check(cid: str, passed: bool, detail: str) -> Dict[str, Any]:
     return {"id": cid, "passed": bool(passed), "detail": detail}
 
@@ -167,7 +191,8 @@ def assess_data(*, cfg: C.DatasetConfig, windows_train_end: str, maturity: str, 
     labels = _labels(prim, maturity)
     need = {s: max(MIN_FINAL_LABELS[s], cfg.min_sample) for s in M.SPLITS}
     sample = {s: {"final_labelled_rows": labels["by_split"][s]["final"], "required": need[s]} for s in M.SPLITS}
-    sector_unsafe = sum(1 for r in prim if r["rs__state"] == C.OK and r["rs_sector_pit_safe"] is False) if enabled.get("stock_rs") else 0
+    sector_unsafe = sum(1 for r in prim if sector_relative_unsafe(r)) if enabled.get("stock_rs") else 0
+    sector_rel = _sector_relative_summary(prim) if enabled.get("stock_rs") else None
 
     reconstructed_used = sum(c["reconstructed_used"] + c["unknown_provenance_used"] for c in cov.values())
     weak = {n: c["observed_fraction"] for n, c in cov.items() if n in PROVENANCE_SOURCES and (c["observed_fraction"] is None or c["observed_fraction"] < MIN_OBSERVED_COVERAGE)}
@@ -176,7 +201,9 @@ def assess_data(*, cfg: C.DatasetConfig, windows_train_end: str, maturity: str, 
     short = {s: v for s, v in sample.items() if v["final_labelled_rows"] < v["required"]}
     checks = [
         _check("no_reconstructed_value_in_dataset", reconstructed_used == 0, f"{reconstructed_used} cells carry a reconstructed or unknown-provenance value"),
-        _check("relative_strength_sector_pit_safe", sector_unsafe == 0, f"{sector_unsafe} relative-strength cells use a sector map that is not point-in-time safe"),
+        _check("relative_strength_sector_pit_safe", sector_unsafe == 0,
+               f"{sector_unsafe} sector-relative RS values are not backed by an observed, fresh, point-in-time-safe sector "
+               "(a NULL value for a candidate with no such sector is allowed: Option B)"),
         _check("observed_coverage_sufficient", not weak, f"observed-and-in-time coverage must be >= {MIN_OBSERVED_COVERAGE:.0%} per context source; "
                + ("all pass" if not weak else f"below: {weak}")),
         _check("trusted_pit_date_determined", earliest["all_sources"] is not None and earliest["all_sources"] <= windows_train_end,
@@ -189,7 +216,7 @@ def assess_data(*, cfg: C.DatasetConfig, windows_train_end: str, maturity: str, 
                + ", ".join(f"{s} {v['final_labelled_rows']}/{v['required']}" for s, v in sample.items())),
     ]
     return {"coverage": cov, "earliest": earliest, "labels": labels, "sample": sample, "checks": checks, "sector_unsafe_cells": sector_unsafe,
-            "missing_label_fraction": missing_fraction}
+            "sector_relative": sector_rel, "missing_label_fraction": missing_fraction}
 
 
 def assess(*, manifest: M.Manifest, cfg: C.DatasetConfig, rows: Sequence[Mapping[str, Any]], audit_document: Mapping[str, Any],
@@ -223,7 +250,7 @@ def assess(*, manifest: M.Manifest, cfg: C.DatasetConfig, rows: Sequence[Mapping
                      "code_check": dict(code_check), "label_version": doc["label_version"],
                      "label_methodology_version": doc["label_methodology_version"], "knowledge_cutoff_at": doc["knowledge_cutoff_at"]},
         "rows": {"primary_horizon_rows": len(prim), "all_horizon_rows": len(rows), "primary_horizon": cfg.primary_horizon},
-        "coverage": {"by_source": cov, "earliest_trustworthy_pit_date": earliest},
+        "coverage": {"by_source": cov, "earliest_trustworthy_pit_date": earliest, "sector_relative": data["sector_relative"]},
         "label_maturity": labels,
         "sample": sample,
         "pit_limitations": [x["note"] for x in audit_document.get("limitations", [])] + list(RESIDUAL_LIMITATIONS),
@@ -259,6 +286,11 @@ def render_text(d: Mapping[str, Any]) -> str:
         pct = "n/a" if c["observed_fraction"] is None else f"{c['observed_fraction']:.1%}"
         out.append(f"  {n:<10} {c['observed']:>9} {pct:>7} {c['reconstructed_used']:>10} {c['reconstructed_excluded']:>10} {c['late']:>6} "
                    f"{c['absent']:>7} {c['unavailable']:>8} {c['unknown_availability']:>9}  {c['earliest_observed_session']}")
+    sr = d["coverage"].get("sector_relative")
+    if sr:
+        frac = "n/a" if sr["observed_sector_relative_fraction"] is None else f"{sr['observed_sector_relative_fraction']:.1%}"
+        out.append(f"  sector-relative RS (informational, no threshold): observed {sr['observed_sector_relative_rows']}/{sr['rows']} ({frac}); "
+                   + ", ".join(f"{k}={v}" for k, v in sr["states"].items()))
     t = d["coverage"]["earliest_trustworthy_pit_date"]
     since = t["observed_fraction_since"]
     out += ["", f"EARLIEST TRUSTWORTHY PIT DATE: {t['all_sources'] or 'not determinable'}"

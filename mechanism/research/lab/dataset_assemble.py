@@ -282,6 +282,7 @@ def assemble(manifest: Manifest, cfg: C.DatasetConfig, raw: Mapping[str, Sequenc
                      "distance_to_channel_pct": _f(c["distance_to_channel_pct"]), "quality_grade": c["quality_grade"],
                      "alignment_score": _f(c["alignment_score"]), "candidate_available_at": c["captured_at"]})
         base.update({C.SOURCE_STATE_COLUMNS[s]: C.NOT_ENABLED for s in C.SOURCE_STATE_COLUMNS})
+        base["rs_vs_sector__state"] = C.NOT_ENABLED
         sector_name: Optional[str] = None
         mrow = None
         if cfg.market_feature_set_version:
@@ -300,15 +301,13 @@ def assemble(manifest: Manifest, cfg: C.DatasetConfig, raw: Mapping[str, Sequenc
                 b = _breadth(mrow["regime_components"])
                 base.update(b)
                 base["breadth__state"] = C.OK if any(v is not None for v in b.values()) else C.UNAVAILABLE
+        cand_ev = C.candidate_sector_evidence(c, t0, known)
         if cfg.sector_feature_set_version:
-            if c["fs_sector"] is None:
-                base["sector__state"] = C.NO_SECTOR
-            elif not known(c["fs_captured_at"]):
-                base["sector__state"] = C.SECTOR_NAME_LATE
-            elif c["fs_sector_asof"] is not None and c["fs_sector_asof"] > t0:
-                base["sector__state"] = C.SECTOR_ASOF_AFTER_T0
+            name_state = C.sector_name_state(cand_ev)
+            if name_state != C.OK:
+                base["sector__state"] = name_state
             else:
-                sector_name = c["fs_sector"]
+                sector_name = cand_ev.sector
                 base["sector"] = sector_name
                 base["sector_available_at"] = None
                 srow, sstate = _pick(sector_by.get((t0, sector_name), ()), known, cfg.reconstructed_policy, "captured_at")
@@ -331,11 +330,18 @@ def assemble(manifest: Manifest, cfg: C.DatasetConfig, raw: Mapping[str, Sequenc
                 base["rs_available_at"] = rrow["created_at"]
                 base["rs_sector_pit_safe"] = rrow["sector_pit_safe"]
                 if rrow["state"] == "ok":
+                    vs_sector = _f(rrow["vs_sector_pp"])
+                    cell, keep, exposed = C.relative_sector_cell(provenance=rrow["provenance"], rs_sector=rrow["sector"], value=vs_sector,
+                                                                 pit_safe=rrow["sector_pit_safe"], cand=cand_ev)
                     base.update({"rs_ret_pct": _f(rrow["ret_pct"]), "rs_vs_spx_pp": _f(rrow["vs_spx_pp"]),
-                                 "rs_vs_sector_pp": _f(rrow["vs_sector_pp"]), "rs_percentile": _f(rrow["rs_percentile"]),
-                                 "rs_n_universe": rrow["n_universe_valid"]})
+                                 "rs_vs_sector_pp": vs_sector if keep else None, "rs_percentile": _f(rrow["rs_percentile"]),
+                                 "rs_n_universe": rrow["n_universe_valid"], "rs_vs_sector__state": cell,
+                                 "rs_sector": exposed if cell in C.SECTOR_EXPOSED_STATES else None})
                 else:
                     base["rs__state"] = C.UNAVAILABLE
+                    base["rs_vs_sector__state"] = C.UNAVAILABLE
+            else:
+                base["rs_vs_sector__state"] = rstate
         if cfg.catalyst:
             base.update(_catalyst(events_by.get(c["symbol"], ()), cls_by_rev, t0, cfg, cutoff))
         if cfg.first_seen:
