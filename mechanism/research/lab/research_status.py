@@ -429,6 +429,9 @@ def build_status(inp: Mapping[str, Any]) -> Dict[str, Any]:
                          "earliest_trustworthy_pit_date": ct["earliest_trustworthy_pit_date"], "per_source_coverage": ct["coverage"],
                          "label_maturity": ct["label_maturity"], "sample": ct["sample"],
                          "sector_pit_unsafe_cells": ct["sector_unsafe_cells"], "sector_relative": ct["sector_relative"]})
+        if "sector_history" in ct:
+            contract["sector_history"] = {**ct["sector_history"], "note": "informational: the append-only history only tightens cells; reconstructed "
+                                          "values are never read here and never count as observed"}
         for c in ct["data_checks"]:
             if not c["passed"]:
                 failures.append({"id": c["id"], "scope": "slice5_data_check", "detail": c["detail"]})

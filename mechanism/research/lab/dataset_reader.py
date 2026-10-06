@@ -7,7 +7,7 @@ per observation what may be used.
 
 `read_only_session` makes the DATABASE enforce that (a write inside it fails), rather than relying on this file being well behaved.
 
-Each source returns dict rows with exactly the columns of `dataset_contract.SOURCE_COLUMNS[source]`, in a deterministic order.
+Each source returns dict rows with exactly the columns of `dataset_contract.source_columns(source)`, in a deterministic order.
 """
 from __future__ import annotations
 
@@ -146,8 +146,33 @@ def _read_first_seen(cur, m: Manifest, cfg: C.DatasetConfig, *, after: bool = Fa
     return out
 
 
+def _read_sector_history(cur, m: Manifest, cfg: C.DatasetConfig, *, after: bool = False) -> List[Dict[str, Any]]:
+    """The append-only sector history of the configured source: every observation (the whole chain prefix is needed to verify it, so there is no lower
+    bound) and every same-value `confirmed_head` poll, each bounded by the knowledge cutoff and by the manifest span's last session. Failed and
+    ambiguous polls are NOT read: they never change what the system believes, only its age, which the absence of a confirmation already expresses."""
+    _, hi = _span(m)
+    op = ">" if after else "<="
+    src = cfg.sector_history.source
+    syms = list(cfg.universe_members)
+    sql = (
+        "SELECT 'observation'::text, o.symbol, o.source, o.seq, o.sector, o.sector_raw, o.no_sector_reason, o.change_kind, o.captured_at, "
+        "o.effective_session, o.source_asof, o.provenance, o.raw_payload_hash, o.prev_value_hash, o.value_hash, o.run_id "
+        "FROM sector_observation o "
+        f"WHERE o.symbol = ANY(%s) AND o.source = %s AND o.effective_session <= %s AND o.captured_at {op} %s "
+        "UNION ALL "
+        "SELECT 'confirmation'::text, p.symbol, p.source, o.seq, o.sector, NULL::varchar, NULL::varchar, NULL::varchar, p.attempted_at, "
+        "(p.attempted_at AT TIME ZONE 'UTC')::date, NULL::timestamptz, NULL::varchar, NULL::char(64), NULL::char(64), o.value_hash, p.run_id "
+        "FROM sector_poll p JOIN sector_observation o ON o.id = p.observation_id "
+        f"WHERE p.chain_effect = 'confirmed_head' AND p.symbol = ANY(%s) AND p.source = %s "
+        f"AND (p.attempted_at AT TIME ZONE 'UTC')::date <= %s AND p.attempted_at {op} %s "
+        "ORDER BY 1, 2, 4, 9, 16")
+    c = _cutoff(m)
+    return _fetch(cur, sql, (syms, src, hi, c, syms, src, hi, c), C.HISTORY_COLUMNS)
+
+
 _READERS = {"candidates": _read_candidates, "labels": _read_labels, "market": _read_market, "sector": _read_sector, "stock_rs": _read_stock_rs,
-            "events": _read_events, "classifications": _read_classifications, "first_seen": _read_first_seen}
+            "events": _read_events, "classifications": _read_classifications, "first_seen": _read_first_seen,
+            C.HISTORY_SOURCE: _read_sector_history}
 
 
 def sources_for(cfg: C.DatasetConfig) -> Tuple[str, ...]:
@@ -157,14 +182,18 @@ def sources_for(cfg: C.DatasetConfig) -> Tuple[str, ...]:
 def read_raw(cur, manifest: Manifest, cfg: C.DatasetConfig) -> Dict[str, List[Dict[str, Any]]]:
     """Every source the config enables, cutoff-bounded. Sources the config disables are returned as empty lists (never read)."""
     wanted = set(sources_for(cfg))
-    return {s: (_READERS[s](cur, manifest, cfg) if s in wanted else []) for s in C.SOURCE_COLUMNS}
+    out = {s: (_READERS[s](cur, manifest, cfg) if s in wanted else []) for s in C.SOURCE_COLUMNS}
+    if C.HISTORY_SOURCE in wanted:                                  # present only when the config opts in
+        out[C.HISTORY_SOURCE] = _READERS[C.HISTORY_SOURCE](cur, manifest, cfg)
+    return out
 
 
 def post_cutoff_counts(cur, manifest: Manifest, cfg: C.DatasetConfig) -> Dict[str, int]:
     """How many in-scope rows per source arrived AFTER the knowledge cutoff. Run metadata only: it is deliberately outside the dataset, the
     report and every hash (a later append must not change them), but a run that sees appends can say so."""
     wanted = set(sources_for(cfg))
-    return {s: (len(_READERS[s](cur, manifest, cfg, after=True)) if s in wanted else 0) for s in sorted(C.SOURCE_COLUMNS)}
+    names = sorted(C.SOURCE_COLUMNS) + ([C.HISTORY_SOURCE] if C.HISTORY_SOURCE in wanted else [])
+    return {s: (len(_READERS[s](cur, manifest, cfg, after=True)) if s in wanted else 0) for s in names}
 
 
 def read_candidate_symbols(cur, strategy_key: str, strategy_version: str, lo: date, hi: date, cutoff: datetime) -> List[str]:

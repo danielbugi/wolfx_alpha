@@ -24,6 +24,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from research.lab import dataset_contract as C
+from research.lab import sector_history as SH
 from research.lab.manifest import LabError, Manifest, assign_split
 
 # dropped-row reasons
@@ -52,13 +53,17 @@ class Assembly:
     dropped: Tuple[Dropped, ...]
     labels_after_cutoff: int
     candidates_seen: int
+    sector_history: Optional[Dict[str, Any]] = None        # the sector cross-check diagnostics; None unless the config opts in (then outputs are unchanged)
 
     def to_json_counts(self) -> Dict[str, Any]:
         by: Dict[str, int] = {}
         for d in self.dropped:
             by[d.reason] = by.get(d.reason, 0) + 1
-        return {"rows": len(self.rows), "dropped_by_reason": dict(sorted(by.items())), "candidates_seen": self.candidates_seen,
-                "labels_ignored_after_cutoff": self.labels_after_cutoff}
+        out = {"rows": len(self.rows), "dropped_by_reason": dict(sorted(by.items())), "candidates_seen": self.candidates_seen,
+               "labels_ignored_after_cutoff": self.labels_after_cutoff}
+        if self.sector_history is not None:
+            out["sector_history"] = self.sector_history
+        return out
 
 
 def observation_key(strategy_key: str, symbol: str, session: date, direction: int) -> str:
@@ -86,7 +91,7 @@ def _check_columns(raw: Mapping[str, Sequence[Mapping[str, Any]]], cfg: C.Datase
         if src not in raw:
             p.append(f"raw source '{src}' is enabled by the manifest config but was not supplied")
             continue
-        want = set(C.SOURCE_COLUMNS[src])
+        want = set(C.source_columns(src))
         for r in raw[src][:1]:
             if set(r) != want:
                 p.append(f"raw source '{src}' columns differ from the contract: missing {sorted(want - set(r))}, extra {sorted(set(r) - want)}")
@@ -253,6 +258,11 @@ def assemble(manifest: Manifest, cfg: C.DatasetConfig, raw: Mapping[str, Sequenc
                     raise LabError(["duplicate classification for (revision, classifier, version)"])
                 cls_by_rev[k] = r
     fs_by = _group(raw["first_seen"], lambda r: (r["source"], r["dataset"], r["subject_id"])) if cfg.first_seen else {}
+    h_obs: Dict[str, List[Mapping[str, Any]]] = {}
+    h_conf: Dict[str, List[Mapping[str, Any]]] = {}
+    if cfg.sector_history is not None:
+        h_obs, h_conf = SH.group_history(raw[C.HISTORY_SOURCE], cfg.sector_history.source)
+    crosschecks: List[Tuple[str, SH.CrossCheck]] = []
 
     rows: List[Dict[str, Any]] = []
     dropped: List[Dropped] = []
@@ -302,6 +312,12 @@ def assemble(manifest: Manifest, cfg: C.DatasetConfig, raw: Mapping[str, Sequenc
                 base.update(b)
                 base["breadth__state"] = C.OK if any(v is not None for v in b.values()) else C.UNAVAILABLE
         cand_ev = C.candidate_sector_evidence(c, t0, known)
+        if cfg.sector_history is not None:
+            # dual-source cross-check: the append-only history may only TIGHTEN the candidate-bounded evidence (see sector_history.crosscheck)
+            sel = SH.select(h_obs.get(c["symbol"], ()), h_conf.get(c["symbol"], ()), t0=t0, grace_days=grace, cutoff=cutoff)
+            cc = SH.crosscheck(cand_ev, sel)
+            crosschecks.append((okey, cc))
+            cand_ev = cc.effective
         if cfg.sector_feature_set_version:
             name_state = C.sector_name_state(cand_ev)
             if name_state != C.OK:
@@ -380,4 +396,5 @@ def assemble(manifest: Manifest, cfg: C.DatasetConfig, raw: Mapping[str, Sequenc
             rows.append(row)
     rows.sort(key=C.row_sort_key)
     return Assembly(tuple(rows), tuple(sorted(dropped, key=lambda d: (d.t0_session, d.observation_key, d.horizon_sessions))),
-                    len(after_cutoff), len(cands))
+                    len(after_cutoff), len(cands),
+                    SH.summarise(crosschecks, source=cfg.sector_history.source) if cfg.sector_history is not None else None)

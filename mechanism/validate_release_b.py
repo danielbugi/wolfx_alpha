@@ -57,7 +57,9 @@ MARKET_INTELLIGENCE_TABLES = ("universe_snapshot", "market_snapshot", "sector_sn
                               "forward_return_label",
                               # migrations 27-30 (first-seen observations, catalyst classification, per-stock RS, dataset/experiment registry)
                               "source_observation", "source_poll", "catalyst_classification", "stock_relative_strength",
-                              "dataset_manifest", "experiment_registration", "experiment_result")
+                              "dataset_manifest", "experiment_registration", "experiment_result",
+                              # migration 31 (append-only forward sector observation history)
+                              "sector_observation", "sector_poll", "sector_reconstruction")
 CAPTURE_ENV_VAR = "RESEARCH_CAPTURE_ENABLED"
 
 GUARD_MODE_RE = re.compile(r"Universe guards mode: (INERT|ACTIVE)\b[^\n]*")

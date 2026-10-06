@@ -44,8 +44,10 @@ def test_step_order_and_dependencies_are_the_documented_ones():
 
 
 def test_every_source_has_an_explicit_collector_entry_and_catalyst_first_seen_have_none():
-    assert set(C.SOURCE_CONTRACT) == {"candidates", "market", "breadth", "sector", "stock_rs", "labels", "catalyst", "first_seen"}
+    assert set(C.SOURCE_CONTRACT) == {"candidates", "market", "breadth", "sector", "stock_rs", "labels", "catalyst", "first_seen",
+                                        "sector_history"}
     assert C.SOURCE_CONTRACT["catalyst"]["step"] is None and C.SOURCE_CONTRACT["first_seen"]["step"] is None
+    assert C.SOURCE_CONTRACT["sector_history"]["step"] is None            # written outside the collector, by the flag-gated recorder only
     assert C.SOURCE_CONTRACT["candidates"]["orchestrated"] is False and C.SOURCE_CONTRACT["candidates"]["catch_up"] is False
     assert C.SOURCE_CONTRACT["labels"]["catch_up"] is True
     assert not any(C.SOURCE_CONTRACT[s]["catch_up"] for s in ("market", "sector", "stock_rs", "candidates"))

@@ -30,6 +30,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 from research.lab import dataset_assemble as A
 from research.lab import dataset_contract as C
 from research.lab import manifest as M
+from research.lab import sector_history as SH
 from research.lab import sector_provenance as SP
 from research.lab.manifest import canonical_hash
 
@@ -37,7 +38,7 @@ AUDIT_SCHEMA = "lab_dataset_audit_v2"
 EXAMPLES = 5
 
 NOT_USED_STATES = (C.ABSENT, C.LATE, C.RECONSTRUCTED_EXCLUDED, C.NOT_ENABLED, C.NO_SECTOR, C.SECTOR_ASOF_AFTER_T0,
-                   C.SECTOR_NAME_LATE, C.SECTOR_STALE, C.SECTOR_UNKNOWN_PROVENANCE)
+                   C.SECTOR_NAME_LATE, C.SECTOR_STALE, C.SECTOR_UNKNOWN_PROVENANCE, C.SECTOR_UNCONFIRMED, C.SECTOR_IDENTITY_CONFLICT)
 # per source: the value columns that must be NULL whenever the source's state is not "used"
 VALUE_COLUMNS: Dict[str, Tuple[str, ...]] = {
     "market": ("regime_state", "regime_score", "regime_strength", "market__provenance", "market_available_at"),
@@ -137,8 +138,10 @@ def _cross_check(f: _Findings, label: str, key: str, raw_rows: Sequence[Mapping[
             f.add("selection_mismatch", f"{label} {key}: marked reconstructed_excluded but the raw rows do not say that")
 
 
-NAME_UNUSED = (C.NO_SECTOR, C.SECTOR_ASOF_AFTER_T0, C.SECTOR_NAME_LATE, C.SECTOR_STALE, C.SECTOR_UNKNOWN_PROVENANCE)
-_UNAVAILABLE_REASON_STATE = {SP.NO_SECTOR: C.NO_SECTOR, SP.NAME_LATE: C.SECTOR_NAME_LATE, SP.ASOF_AFTER_T0: C.SECTOR_ASOF_AFTER_T0}
+NAME_UNUSED = (C.NO_SECTOR, C.SECTOR_ASOF_AFTER_T0, C.SECTOR_NAME_LATE, C.SECTOR_STALE, C.SECTOR_UNKNOWN_PROVENANCE, C.SECTOR_UNCONFIRMED,
+               C.SECTOR_IDENTITY_CONFLICT)
+_UNAVAILABLE_REASON_STATE = {SP.NO_SECTOR: C.NO_SECTOR, SP.NAME_LATE: C.SECTOR_NAME_LATE, SP.ASOF_AFTER_T0: C.SECTOR_ASOF_AFTER_T0,
+                             SP.HISTORY_ABSENT: C.SECTOR_UNCONFIRMED, SP.IDENTITY_CONFLICT: C.SECTOR_IDENTITY_CONFLICT}
 
 
 def _candidate_evidence(c: Mapping[str, Any], t0: date, known) -> SP.SectorEvidence:
@@ -146,7 +149,18 @@ def _candidate_evidence(c: Mapping[str, Any], t0: date, known) -> SP.SectorEvide
                                        provenance="observed", available=known(c["fs_captured_at"]))
 
 
-def _sector_name_check(f, key, r, c, cfg, known, t0) -> None:
+def _effective_evidence(c: Mapping[str, Any], t0: date, known, cfg: C.DatasetConfig, hist, grace: int, cutoff: datetime):
+    """The sector evidence the dataset is allowed to act on for one candidate: the candidate's own snapshot (Slice 8), cross-checked against the
+    append-only history when the config opts in. Re-derived here from the RAW history rows with the pure selector, not from the assembler."""
+    cand = _candidate_evidence(c, t0, known)
+    if cfg.sector_history is None:
+        return cand, None
+    obs, conf = hist.get(c["symbol"], ((), ()))
+    cc = SH.crosscheck(cand, SH.select(obs, conf, t0=t0, grace_days=grace, cutoff=cutoff))
+    return cc.effective, cc
+
+
+def _sector_name_check(f, key, r, c, cfg, known, t0, ev=None) -> None:
     """The sector NAME is the candidate's own attribute (its feature snapshot), independent of whether a sector snapshot exists for it. It is
     usable only as an observed, fresh sector (SP.OBSERVED_FRESH); every other evidence class has its own state and no name."""
     if not cfg.sector_feature_set_version:
@@ -154,7 +168,7 @@ def _sector_name_check(f, key, r, c, cfg, known, t0) -> None:
     if c is None:
         f.add("selection_mismatch", f"{key}: no raw candidate row to check the sector name against")
         return
-    ev = _candidate_evidence(c, t0, known)
+    ev = ev if ev is not None else _candidate_evidence(c, t0, known)
     if ev.state == SP.OBSERVED_FRESH:
         expected = None
     elif ev.state == SP.OBSERVED_STALE:
@@ -184,6 +198,8 @@ def _expected_relative_cell(raw: Mapping[str, Any], ev: SP.SectorEvidence) -> Tu
         return (C.UNSAFE_VALUE, val, sec) if val is not None else (C.SECTOR_NOT_PIT_SAFE, None, None)
     blocked = {SP.UNKNOWN: C.SECTOR_UNKNOWN_PROVENANCE, SP.RECONSTRUCTED: C.SECTOR_RECONSTRUCTED, SP.UNAVAILABLE: C.SECTOR_UNCONFIRMED,
                SP.OBSERVED_STALE: C.SECTOR_STALE}
+    if ev.state == SP.UNAVAILABLE and ev.reason == SP.IDENTITY_CONFLICT:
+        return C.SECTOR_IDENTITY_CONFLICT, None, None
     if ev.state in blocked:
         return blocked[ev.state], None, None
     if ev.sector != sec:
@@ -191,7 +207,7 @@ def _expected_relative_cell(raw: Mapping[str, Any], ev: SP.SectorEvidence) -> Tu
     return (C.OK if val is not None else C.SECTOR_VALUE_UNAVAILABLE), val, sec
 
 
-def _rs_sector_check(f, key, r, raw_rs_rows, c, cfg, known, t0) -> None:
+def _rs_sector_check(f, key, r, raw_rs_rows, c, cfg, known, t0, ev=None) -> None:
     """The sector-relative RS cell: its state, its value and the sector tag it exposes must be exactly what the selected raw RS row and the
     candidate's own sector evidence imply. A sector-relative value is never carried without a fresh, observed, PIT-safe, agreeing sector."""
     state = r["rs_vs_sector__state"]
@@ -203,7 +219,7 @@ def _rs_sector_check(f, key, r, raw_rs_rows, c, cfg, known, t0) -> None:
     if len(match) != 1 or c is None:
         f.add("selection_mismatch", f"{key}: the sector-relative cell is not backed by exactly one known raw RS row and one candidate")
         return
-    want_state, want_val, want_sec = _expected_relative_cell(match[0], _candidate_evidence(c, t0, known))
+    want_state, want_val, want_sec = _expected_relative_cell(match[0], ev if ev is not None else _candidate_evidence(c, t0, known))
     want = (want_state, _num(want_val), want_sec if want_state in C.SECTOR_EXPOSED_STATES else None)
     got = (state, _num(r["rs_vs_sector_pp"]), r["rs_sector"])
     if got != want:
@@ -310,6 +326,11 @@ def audit(manifest: M.Manifest, cfg: C.DatasetConfig, raw: Mapping[str, Sequence
                     and r["horizon_sessions"] == rc.horizon_sessions:
                 idx_by_source["stock_rs"].setdefault((r["session_date"], r["symbol"]), []).append(r)
     cand_sector = {(r["symbol"], r["session_date"], r["direction"]): r for r in cands}
+    hist: Dict[str, Tuple[List[Mapping[str, Any]], List[Mapping[str, Any]]]] = {}
+    if cfg.sector_history is not None:
+        o, cf = SH.group_history(raw[C.HISTORY_SOURCE], cfg.sector_history.source)
+        hist = {s: (o.get(s, []), cf.get(s, [])) for s in set(o) | set(cf)}
+    checked: Dict[str, SH.CrossCheck] = {}
     events_by_symbol: Dict[str, List[Mapping[str, Any]]] = {}
     cls_by_rev: Dict[Tuple[str, int], Mapping[str, Any]] = {}
     if cfg.catalyst:
@@ -345,10 +366,13 @@ def audit(manifest: M.Manifest, cfg: C.DatasetConfig, raw: Mapping[str, Sequence
                     f.add("masked_value_leak", f"{key}: {source} is {st} but {leaked} are set")
         if cfg.catalyst:
             _catalyst_check(f, key, r, events_by_symbol.get(r["symbol"], ()), cls_by_rev, cfg, known, t0)
-        _sector_name_check(f, key, r, cand_sector.get((r["symbol"], t0, r["direction"])), cfg, known, t0)
+        cand_row = cand_sector.get((r["symbol"], t0, r["direction"]))
+        ev, cc = (_effective_evidence(cand_row, t0, known, cfg, hist, grace, cutoff) if cand_row is not None else (None, None))
+        if cc is not None:
+            checked[r["observation_key"]] = cc
+        _sector_name_check(f, key, r, cand_row, cfg, known, t0, ev)
         if cfg.stock_rs:
-            _rs_sector_check(f, key, r, idx_by_source["stock_rs"].get((t0, r["symbol"]), ()), cand_sector.get((r["symbol"], t0, r["direction"])),
-                             cfg, known, t0)
+            _rs_sector_check(f, key, r, idx_by_source["stock_rs"].get((t0, r["symbol"]), ()), cand_row, cfg, known, t0, ev)
         if cfg.reconstructed_policy == "exclude":
             for col in ("market__provenance", "sector__provenance", "rs__provenance"):
                 if r[col] == "reconstructed":
@@ -407,7 +431,7 @@ def audit(manifest: M.Manifest, cfg: C.DatasetConfig, raw: Mapping[str, Sequence
         if x in highs and y in lows and lows[y] - highs[x] < doc["embargo_sessions"] + 1:
             f.add("embargo_violation", f"{y} rows begin {lows[y] - highs[x]} sessions after the last {x} label ends (embargo {doc['embargo_sessions']})")
 
-    return _document(manifest, cfg, raw, assembly, verification, f, cands)
+    return _document(manifest, cfg, raw, assembly, verification, f, cands, checked)
 
 
 # ------------------------------------------------------------------ report assembly
@@ -419,7 +443,8 @@ def _hist(rows: Sequence[Mapping[str, Any]], col: str) -> Dict[str, int]:
 
 
 def _document(manifest: M.Manifest, cfg: C.DatasetConfig, raw: Mapping[str, Sequence[Mapping[str, Any]]], assembly: A.Assembly,
-              verification: C.InputVerification, f: _Findings, cands: Sequence[Mapping[str, Any]]) -> Audit:
+              verification: C.InputVerification, f: _Findings, cands: Sequence[Mapping[str, Any]],
+              checked: Mapping[str, SH.CrossCheck]) -> Audit:
     rows = assembly.rows
     doc = manifest.document
     drop: Dict[str, int] = {}
@@ -472,6 +497,24 @@ def _document(manifest: M.Manifest, cfg: C.DatasetConfig, raw: Mapping[str, Sequ
     if cfg.catalyst:
         limit("catalyst_absence_is_not_evidence", None,
               "'none_observed' means no usable classified event was found; it is not proof that no catalyst existed")
+    sector_history_counts = None
+    if cfg.sector_history is not None:
+        sector_history_counts = SH.summarise(sorted(checked.items()), source=cfg.sector_history.source)
+        if assembly.sector_history is not None:
+            # the assembler checked every candidate (also those whose rows were all dropped); the audit only the ones that reached the dataset
+            mine = sector_history_counts["by_relation"]
+            theirs = assembly.sector_history["by_relation"]
+            if any(mine.get(k, 0) > theirs.get(k, 0) for k in mine):
+                f.add("selection_mismatch", f"sector history cross-check relations differ: audit {mine} vs assembler {theirs}")
+        else:
+            f.add("selection_mismatch", "the config opts into sector_history but the assembly carries no cross-check diagnostics")
+        bad = sector_history_counts["chain_problems"]
+        if bad:
+            limit("sector_history_chain_broken", sum(bad.values()), f"the append-only sector history failed verification ({bad}): every affected "
+                  "cell was failed closed (sector_identity_conflict) rather than trusted")
+        limit("sector_history_crosscheck", sector_history_counts["candidates_checked"],
+              f"candidate-bounded sector evidence was cross-checked against the append-only history: {sector_history_counts['by_relation']}; "
+              "the history can only tighten a cell, the freshness window (30 days) is operational and not empirically validated")
     if cfg.sector_feature_set_version:
         limit("sector_history_reconstructed", None,
               "sector snapshots outside a live capture window are reconstructed from today's sector map and are never point-in-time safe")
@@ -486,7 +529,7 @@ def _document(manifest: M.Manifest, cfg: C.DatasetConfig, raw: Mapping[str, Sequ
               "(horizon sessions were re-verified against the manifest calendar)")
     for c in verification.by_kind("unverifiable"):
         limit("unverifiable_input", None, f"manifest input '{c.key}' is outside the verifiable vocabulary and was not checked")
-    trust = {s: C.AVAILABILITY_TRUST[s] for s in C.enabled_db_sources(cfg)}
+    trust = {s: C.source_trust(s) for s in C.enabled_db_sources(cfg)}
     wd = sorted(s for s, t in trust.items() if t == "writer_default")
     limit("availability_stamp_trust", None, f"availability stamps of {wd} are writer-settable defaults (not database-enforced); the others are trigger-stamped")
 
@@ -501,6 +544,8 @@ def _document(manifest: M.Manifest, cfg: C.DatasetConfig, raw: Mapping[str, Sequ
         "source_states": states,
         "sector_relative_states": _hist(rows, "rs_vs_sector__state") if cfg.stock_rs else {},
     }
+    if sector_history_counts is not None:
+        counts["sector_history"] = sector_history_counts
     fatal = f.fatal()
     document = {"schema": AUDIT_SCHEMA, "manifest_hash": manifest.manifest_hash, "verdict": "FAIL" if fatal else "PASS", "fatal": fatal,
                 "limitations": sorted(lim, key=lambda x: x["code"]), "counts": counts, "availability_trust": dict(sorted(trust.items())),

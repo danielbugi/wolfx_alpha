@@ -301,3 +301,16 @@ def roles(role_env):
         cur.execute(f'CREATE ROLE "{person}" LOGIN IN ROLE "{role_env.group}"')
     role_env.admin.commit()
     return role_env
+
+
+@pytest.fixture
+def sector_env():
+    """Migration 31 alone (the sector history carries no foreign key to any other table)."""
+    yield from _schema_env(["add_sector_history_tables.sql"])
+
+
+@pytest.fixture
+def sconn(sector_env):
+    with sector_env[1]() as c:
+        yield c
+        c.rollback()

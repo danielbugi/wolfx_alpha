@@ -92,7 +92,8 @@ def _source_coverage(name: str, prim: Sequence[Mapping[str, Any]]) -> Dict[str, 
         "observed_fraction_by_split": by_split, "reconstructed_used": len(reconstructed), "unknown_provenance_used": other,
         "reconstructed_excluded": states.get(C.RECONSTRUCTED_EXCLUDED, 0),
         "late": states.get(C.LATE, 0) + states.get(C.SECTOR_NAME_LATE, 0),
-        "absent": states.get(C.ABSENT, 0) + states.get(C.NO_SECTOR, 0) + states.get(C.SECTOR_ASOF_AFTER_T0, 0) + states.get(C.SECTOR_STALE, 0),
+        "absent": states.get(C.ABSENT, 0) + states.get(C.NO_SECTOR, 0) + states.get(C.SECTOR_ASOF_AFTER_T0, 0) + states.get(C.SECTOR_STALE, 0)
+        + states.get(C.SECTOR_UNCONFIRMED, 0) + states.get(C.SECTOR_IDENTITY_CONFLICT, 0),
         "unavailable": states.get(C.UNAVAILABLE, 0), "unknown_availability": states.get(C.UNKNOWN_AVAILABILITY, 0),
         "earliest_observed_session": _iso(min((r["t0_session"] for r in observed), default=None)),
         "latest_observed_session": _iso(max((r["t0_session"] for r in observed), default=None)),
@@ -240,6 +241,15 @@ def assess(*, manifest: M.Manifest, cfg: C.DatasetConfig, rows: Sequence[Mapping
         _check("test_split_unevaluated", not include_test, "the test split has not been revealed by this build" if not include_test
                else "this build revealed the test split: it is spent for any further model selection"),
     ]
+    sector_history = None
+    if cfg.sector_history is not None:
+        sector_history = audit_document.get("counts", {}).get("sector_history")
+        problems = None if sector_history is None else sector_history.get("chain_problems")
+        # fails closed: a missing cross-check summary, or any chain problem, blocks research eligibility (the affected cells are already masked)
+        checks.insert(len(checks) - 1, _check("sector_history_chain_intact", sector_history is not None and not problems,
+                                              "the append-only sector history verified for every candidate symbol the dataset used"
+                                              if sector_history is not None and not problems else
+                                              f"sector history verification: {'no cross-check summary in the audit' if sector_history is None else problems}"))
     eligible = all(c["passed"] for c in checks)
     out = {
         "schema": READINESS_SCHEMA,
@@ -261,6 +271,11 @@ def assess(*, manifest: M.Manifest, cfg: C.DatasetConfig, rows: Sequence[Mapping
                         "meaning": "eligible = this dataset's own hygiene does not block STARTING research on it; it is not evidence of an edge, "
                                    "of point-in-time correctness beyond what the audit proves, or of vendor correctness"},
     }
+    if sector_history is not None:
+        out["coverage"]["sector_history"] = {"by_relation": sector_history["by_relation"], "by_history_kind": sector_history["by_history_kind"],
+                                             "chain_problems": sector_history["chain_problems"],
+                                             "note": "informational: how the append-only history related to the candidate-bounded evidence; it only "
+                                                     "tightens cells and never counts a reconstructed value as observed"}
     out["readiness_hash"] = canonical_hash(out)
     return out
 

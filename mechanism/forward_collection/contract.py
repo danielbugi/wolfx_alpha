@@ -67,6 +67,10 @@ SOURCE_CONTRACT: Dict[str, Dict[str, Any]] = {
                  "why": "no live catalyst collector exists; a spec that enables it cannot accumulate history"},
     "first_seen": {"step": None, "writer": "none in the repository", "orchestrated": False, "catch_up": False,
                    "why": "no live first-seen collector exists; a spec that enables it cannot accumulate history"},
+    "sector_history": {"step": None, "writer": "the fundamentals updater's flag-gated sector recorder (outside this collector, default OFF)",
+                       "orchestrated": False, "catch_up": False,
+                       "why": "forward sector history can only be recorded at the moment the vendor answers, by the one authoritative writer; this "
+                              "collector can neither create nor back-fill it, and it stays blocked until the owner activates the recorder"},
 }
 
 

@@ -51,8 +51,9 @@ migrated and later preflights passed, but this audit did not re-query it.
 | 28 | add_catalyst_classification_table.sql | `catalyst_classification`, `research_classification_guard()`, `research_classification_consistency()`; **requires 25** | not applied (lab slice 3; dormant) |
 | 29 | add_stock_relative_strength_table.sql | `stock_relative_strength`, `research_rs_guard()`, `research_rs_stamp()`; independent | not applied (lab slice 3; written only under the runner's opt-in `--with-stock-rs`) |
 | 30 | add_dataset_experiment_registry_tables.sql | `dataset_manifest`, `experiment_registration`, `experiment_result`, `research_registry_guard()`/`_stamp()`/`_consistency()`; logically after 22/26, no FK | not applied (lab slice 3; dormant) |
+| 31 | add_sector_history_tables.sql | `sector_observation` (hash-chained PIT sector history), `sector_poll`, `sector_reconstruction` (separate, never read by the forward path), `research_sector_guard()`/`_enc()`/`_row_hash()`/`_obs_stamp()`/`_poll_stamp()`/`_recon_stamp()`; independent | not applied (lab slice 10; the recorder is behind a default-OFF flag, nothing else writes to it) |
 
-Next free number: **31**.
+Next free number: **32**.
 
 ## 3. Drift that already happened (do not repeat)
 
@@ -86,7 +87,7 @@ backfilled into `market_event`.
 
 ## 5. Recommendation: allocation rule and provisional order (nothing is assigned)
 
-Numbers 31+ are **not** reserved (26-30 were assigned by lab slices 2-3). A number is assigned only in the commit that adds the SQL file, its init-mount line, its row in section 2 and its
+Numbers 32+ are **not** reserved (26-31 were assigned by lab slices 2-3 and 10). A number is assigned only in the commit that adds the SQL file, its init-mount line, its row in section 2 and its
 roles/verify update together, and the registry test must pass in that commit. Two lanes can therefore never collide silently: the second to merge
 sees a failing test and renumbers.
 

@@ -64,7 +64,7 @@ CONTEXT_ARTIFACT = "run_context.json"      # run metadata (rows that arrived aft
 _SOURCE_TABLES = {"candidates": ("candidate_observation", "feature_snapshot", "strategies"), "labels": ("forward_return_label",),
                   "market": ("market_snapshot",), "sector": ("sector_snapshot",), "stock_rs": ("stock_relative_strength",),
                   "events": ("market_event", "market_event_revision"), "classifications": ("catalyst_classification",),
-                  "first_seen": ("source_observation",)}
+                  "first_seen": ("source_observation",), "sector_history": ("sector_observation", "sector_poll")}
 _REGISTRY_TABLES = ("dataset_manifest", "experiment_registration", "experiment_result")
 _CALENDAR_TABLES = ("stock_prices", "market_index_prices")
 

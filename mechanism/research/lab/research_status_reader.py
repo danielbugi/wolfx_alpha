@@ -160,7 +160,8 @@ def _contract(cur, authoring: AUTH.Authoring, calendar: Sequence[date], cal_sour
         manifest = M.build_manifest(spec, now=now)
         pcfg = C.config_for(manifest.document)
         raw = RD.read_raw(cur, manifest, pcfg)
-        rows = A.assemble(manifest, pcfg, raw).rows
+        assembly = A.assemble(manifest, pcfg, raw)
+        rows = assembly.rows
     except LabError as e:
         return {"evaluated": False, "reason": "a provisional dataset could not be assembled: " + "; ".join(e.problems)}
     prim = [r for r in rows if r["horizon_sessions"] == pcfg.primary_horizon]
@@ -168,9 +169,12 @@ def _contract(cur, authoring: AUTH.Authoring, calendar: Sequence[date], cal_sour
         return {"evaluated": False, "reason": "no primary-horizon dataset row exists yet (no observed candidate with a known context); nothing to evaluate"}
     doc = manifest.document
     d = READY.assess_data(cfg=pcfg, windows_train_end=doc["windows"]["train"][1], maturity=doc["label_maturity_session"], prim=prim)
-    return {"evaluated": True, "provisional_rows": len(prim), "data_checks": d["checks"], "earliest_trustworthy_pit_date": d["earliest"]["all_sources"],
-            "coverage": d["coverage"], "label_maturity": d["labels"], "sample": d["sample"], "sector_unsafe_cells": d["sector_unsafe_cells"],
-            "sector_relative": d["sector_relative"]}
+    out = {"evaluated": True, "provisional_rows": len(prim), "data_checks": d["checks"], "earliest_trustworthy_pit_date": d["earliest"]["all_sources"],
+           "coverage": d["coverage"], "label_maturity": d["labels"], "sample": d["sample"], "sector_unsafe_cells": d["sector_unsafe_cells"],
+           "sector_relative": d["sector_relative"]}
+    if assembly.sector_history is not None:
+        out["sector_history"] = assembly.sector_history
+    return out
 
 
 # ------------------------------------------------------------------ entry point

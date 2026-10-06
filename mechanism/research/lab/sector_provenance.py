@@ -47,6 +47,9 @@ ASOF_MISSING = "asof_missing"
 STALE = "stale"
 FRESH = "fresh"
 RECONSTRUCTED_REASON = "reconstructed"
+# reasons only the append-only history cross-check produces (Slice 10); a candidate-level classification never yields them
+HISTORY_ABSENT = "history_absent"            # the history holds no observation knowable at the decision point
+IDENTITY_CONFLICT = "identity_conflict"      # the two sources name different sectors, or the history chain is broken: fail closed
 
 
 def clean_sector(v: Any) -> Optional[str]:

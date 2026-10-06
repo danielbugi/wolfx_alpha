@@ -26,6 +26,7 @@ MIGRATIONS = [
     "add_signal_ledger_eval_flags.sql", "add_research_observation_tables.sql", "add_market_snapshot_tables.sql",
     "add_market_event_tables.sql", "add_forward_return_label_table.sql", "add_source_observation_tables.sql",
     "add_catalyst_classification_table.sql", "add_stock_relative_strength_table.sql", "add_dataset_experiment_registry_tables.sql",
+    "add_sector_history_tables.sql",
 ]
 STAMP_FUNCTIONS = ("research_rs_stamp", "research_observation_stamp", "research_market_event_stamp", "research_classification_consistency")
 

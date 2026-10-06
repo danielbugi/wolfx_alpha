@@ -140,7 +140,33 @@ QUERY_VERSIONS: Dict[str, str] = {k: "q1" for k in SOURCE_COLUMNS}
 CRYPTO_INPUTS = ("contract.dataset_schema", "calendar.sessions", "universe.members")
 DB_INPUTS: Dict[str, str] = {"candidates": "db.candidate_observation", "labels": "db.forward_return_label", "market": "db.market_snapshot",
                              "sector": "db.sector_snapshot", "stock_rs": "db.stock_relative_strength", "events": "db.market_event",
-                             "classifications": "db.catalyst_classification", "first_seen": "db.source_observation"}
+                             "classifications": "db.catalyst_classification", "first_seen": "db.source_observation",
+                             "sector_history": "db.sector_history"}
+
+# ------------------------------------------------------------------ append-only sector history (Slice 10, opt-in, outside the v1/v2 contract)
+# The history read is NOT part of SOURCE_COLUMNS / QUERY_VERSIONS: those two feed `schema_hash`, so adding the history there would silently change the
+# identity of every existing lab_dataset_v1 / v2 manifest. It is an opt-in config section (`sector_history`) with its own registry, query version and
+# input key (`db.sector_history`); a config without the section is read, assembled, audited and fingerprinted exactly as before.
+HISTORY_SOURCE = "sector_history"
+HISTORY_COLUMNS: Tuple[str, ...] = ("row_kind", "symbol", "source", "seq", "sector", "sector_raw", "no_sector_reason", "change_kind", "stamp",
+                                    "effective_session", "source_asof", "provenance", "raw_payload_hash", "prev_value_hash", "value_hash", "run_id")
+HISTORY_QUERY_VERSION = "h1"
+
+
+def source_columns(source: str) -> Tuple[str, ...]:
+    return HISTORY_COLUMNS if source == HISTORY_SOURCE else SOURCE_COLUMNS[source]
+
+
+def source_stamp(source: str) -> str:
+    return "stamp" if source == HISTORY_SOURCE else AVAILABILITY_FIELD[source]
+
+
+def source_trust(source: str) -> str:
+    return "db_stamped" if source == HISTORY_SOURCE else AVAILABILITY_TRUST[source]
+
+
+def source_query_version(source: str) -> str:
+    return HISTORY_QUERY_VERSION if source == HISTORY_SOURCE else QUERY_VERSIONS[source]
 
 
 # ------------------------------------------------------------------ config
@@ -166,6 +192,11 @@ class FirstSeenSpec:
 
 
 @dataclass(frozen=True)
+class SectorHistoryConfig:
+    source: str                     # the vendor/source label of the chain to read (a chain is per (symbol, source))
+
+
+@dataclass(frozen=True)
 class DatasetConfig:
     strategy_key: str
     strategy_version: str
@@ -180,11 +211,15 @@ class DatasetConfig:
     stock_rs: Optional[RsConfig]
     catalyst: Optional[CatalystConfig]
     first_seen: Tuple[FirstSeenSpec, ...]
+    sector_history: Optional[SectorHistoryConfig] = None
 
     def enabled(self) -> Dict[str, bool]:
-        return {"market": self.market_feature_set_version is not None, "breadth": self.market_feature_set_version is not None,
-                "sector": self.sector_feature_set_version is not None, "stock_rs": self.stock_rs is not None,
-                "catalyst": self.catalyst is not None, "first_seen": bool(self.first_seen)}
+        out = {"market": self.market_feature_set_version is not None, "breadth": self.market_feature_set_version is not None,
+               "sector": self.sector_feature_set_version is not None, "stock_rs": self.stock_rs is not None,
+               "catalyst": self.catalyst is not None, "first_seen": bool(self.first_seen)}
+        if self.sector_history is not None:                                # present only when opted in: existing specs see the same dict as before
+            out[HISTORY_SOURCE] = True
+        return out
 
 
 def _isint(v: Any) -> bool:
@@ -265,10 +300,19 @@ def parse_config(config: Mapping[str, Any], label_horizons: Sequence[int]) -> Da
     keys = [(f.source, f.dataset) for f in fs_specs]
     if len(set(keys)) != len(keys):
         p.append("config.first_seen lists a (source, dataset) twice")
+    hist = None
+    s = config.get("sector_history")
+    if s is not None:
+        if isinstance(s, Mapping) and _nonempty(s.get("source")) and set(s) == {"source"}:
+            hist = SectorHistoryConfig(s["source"].strip())
+        else:
+            p.append("config.sector_history needs exactly a non-empty source (or omit the section to keep the candidate-bounded sector evidence only)")
+        if sector is None and rs is None:
+            p.append("config.sector_history cross-checks the sector evidence of config.sector / config.stock_rs: enable at least one of them")
     if p:
         raise LabError(p)
     return DatasetConfig(strat["key"], strat["version"], config["universe_rule"], tuple(um), config["availability_grace_days"], config["min_sample"],
-                         ph, policy, market, sector, rs, cat, tuple(sorted(fs_specs, key=lambda f: (f.source, f.dataset))))
+                         ph, policy, market, sector, rs, cat, tuple(sorted(fs_specs, key=lambda f: (f.source, f.dataset))), hist)
 
 
 def config_for(doc: Mapping[str, Any]) -> DatasetConfig:
@@ -296,6 +340,8 @@ def required_input_keys(cfg: DatasetConfig) -> Tuple[str, ...]:
         keys += [DB_INPUTS["events"], DB_INPUTS["classifications"]]
     if cfg.first_seen:
         keys.append(DB_INPUTS["first_seen"])
+    if cfg.sector_history is not None:
+        keys.append(DB_INPUTS[HISTORY_SOURCE])
     return tuple(keys)
 
 
@@ -311,6 +357,8 @@ def enabled_db_sources(cfg: DatasetConfig) -> Tuple[str, ...]:
         out += ["events", "classifications"]
     if cfg.first_seen:
         out.append("first_seen")
+    if cfg.sector_history is not None:
+        out.append(HISTORY_SOURCE)
     return tuple(out)
 
 
@@ -374,7 +422,8 @@ def sector_name_state(ev: SP.SectorEvidence) -> str:
     if ev.state == SP.UNKNOWN:
         return SECTOR_UNKNOWN_PROVENANCE
     if ev.state == SP.UNAVAILABLE:
-        return {SP.NO_SECTOR: NO_SECTOR, SP.NAME_LATE: SECTOR_NAME_LATE, SP.ASOF_AFTER_T0: SECTOR_ASOF_AFTER_T0}[ev.reason]
+        return {SP.NO_SECTOR: NO_SECTOR, SP.NAME_LATE: SECTOR_NAME_LATE, SP.ASOF_AFTER_T0: SECTOR_ASOF_AFTER_T0,
+                SP.HISTORY_ABSENT: SECTOR_UNCONFIRMED, SP.IDENTITY_CONFLICT: SECTOR_IDENTITY_CONFLICT}[ev.reason]
     raise LabError([f"a candidate sector snapshot cannot be '{ev.state}'"])
 
 
@@ -399,7 +448,7 @@ def relative_sector_cell(*, provenance: Optional[str], rs_sector: Any, value: Op
     if cand.state == SP.RECONSTRUCTED:
         return SECTOR_RECONSTRUCTED, False, None
     if cand.state == SP.UNAVAILABLE:
-        return SECTOR_UNCONFIRMED, False, None
+        return (SECTOR_IDENTITY_CONFLICT if cand.reason == SP.IDENTITY_CONFLICT else SECTOR_UNCONFIRMED), False, None
     if cand.state == SP.OBSERVED_STALE:
         return SECTOR_STALE, False, None
     if cand.sector != sec:
@@ -537,12 +586,12 @@ def _fp_cell(v: Any) -> Any:
 
 def fingerprint(source: str, rows: Sequence[Mapping[str, Any]], cutoff: datetime) -> str:
     """Fingerprint of one database read: its name, query version, the cutoff, the ordered columns and every row (canonically ordered)."""
-    cols = SOURCE_COLUMNS[source]
-    stamp = AVAILABILITY_FIELD[source]
+    cols = source_columns(source)
+    stamp = source_stamp(source)
     cut = cutoff.astimezone(timezone.utc)
     enc = sorted(_dump([_fp_cell(r[c]) for c in cols]) for r in rows if r[stamp] is not None and r[stamp] <= cut)
     h = hashlib.sha256()
-    h.update(_dump({"input": DB_INPUTS.get(source, source), "query_version": QUERY_VERSIONS[source], "cutoff": iso_ts(cutoff),
+    h.update(_dump({"input": DB_INPUTS.get(source, source), "query_version": source_query_version(source), "cutoff": iso_ts(cutoff),
                     "columns": list(cols), "row_count": len(enc)}).encode())
     for e in enc:
         h.update(b"\n")

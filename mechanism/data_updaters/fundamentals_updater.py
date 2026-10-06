@@ -50,6 +50,10 @@ class FundamentalsUpdater:
         # min to ~25 min with no change to what gets fetched.
         self.rate_limit_delay = 0.5
 
+        # Forward sector history (migration 31): the vendor that answered the latest fetch, and the per-run recorder (None until first use).
+        self._sector_vendor = None
+        self._sector_recorder = None
+
         self.logger.info("Fundamentals Updater initialized with shared infrastructure")
 
     def safe_float(self, value):
@@ -237,12 +241,14 @@ class FundamentalsUpdater:
         dividend_yield come back None via Tiingo)."""
         if config.data_provider == 'tiingo':
             from shared.tiingo_client import get_fundamentals
+            self._sector_vendor = 'tiingo_meta'
             info = get_fundamentals(symbol)
             if info is not None:
                 self.logger.debug(f"Successfully fetched company info for {symbol} via Tiingo")
                 return info
             self.logger.debug(f"{symbol}: no fundamentals from Tiingo, falling back to yfinance")
 
+        self._sector_vendor = 'yfinance_info'
         try:
             self.logger.debug(f"Fetching company info for {symbol}")
 
@@ -448,13 +454,33 @@ class FundamentalsUpdater:
             self.logger.error(f"Error updating fundamentals for {fundamentals.get('symbol', 'unknown')}: {e}")
             return False
 
+    def _record_sector_history(self, symbol: str, company_info, fetch_error) -> None:
+        """Flag-gated (SECTOR_HISTORY_RECORDER_ENABLED, default OFF) forward sector history. Never raises: it must not affect ingestion."""
+        try:
+            from data_updaters import sector_history_recorder as shr
+            if not shr.enabled():
+                return
+            if self._sector_recorder is None:
+                self._sector_recorder = shr.SectorRecorder()
+            self._sector_recorder.record(symbol, self._sector_vendor or shr.SRC_YFINANCE, company_info, fetch_error)
+        except Exception as e:  # noqa: BLE001 - isolation boundary
+            self.logger.error(f"sector history recorder unavailable for {symbol}: {type(e).__name__}: {e}")
+
     def update_symbol(self, symbol: str) -> bool:
         """Update fundamentals for a single symbol"""
         try:
             self.logger.info(f"Starting fundamentals update for {symbol}")
 
-            # Fetch company info
-            company_info = self.fetch_company_info(symbol)
+            # Fetch company info (a fetch failure is remembered so the sector history can record the failed poll, then handled as before)
+            self._sector_vendor = None
+            company_info, fetch_error = None, None
+            try:
+                company_info = self.fetch_company_info(symbol)
+            except Exception as e:
+                fetch_error = e
+            self._record_sector_history(symbol, company_info, fetch_error)
+            if fetch_error is not None:
+                raise fetch_error
             if company_info is None:
                 self.logger.warning(f"No company info available for {symbol}")
                 return False
@@ -495,6 +521,7 @@ class FundamentalsUpdater:
 
         successful_updates = 0
         failed_updates = 0
+        self._sector_recorder = None   # one recorder (one run id) per run
 
         # Process symbols with longer delays (fundamentals are less time-sensitive)
         progress = ProgressBar(len(symbols), prefix="Fundamentals update", logger=self.logger)
@@ -534,7 +561,7 @@ class FundamentalsUpdater:
         📈 Success rate: {success_rate:.1f}%
         """)
 
-        return {
+        result = {
             'success': failed_updates == 0,
             'duration': duration.total_seconds(),
             'symbols_processed': len(symbols),
@@ -542,6 +569,10 @@ class FundamentalsUpdater:
             'symbols_failed': failed_updates,
             'success_rate': success_rate
         }
+        if self._sector_recorder is not None:
+            result['sector_history'] = dict(self._sector_recorder.counters, run_id=self._sector_recorder.run_id)
+            self.logger.info(f"sector history recorder: {result['sector_history']}")
+        return result
 
 
 def main():
