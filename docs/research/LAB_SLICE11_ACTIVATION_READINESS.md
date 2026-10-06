@@ -1,5 +1,9 @@
 # Lab Slice 11 — Production activation readiness and real-source validation (NO ACTIVATION)
 
+> **Slice 12 update (2026-10-06):** terminology corrected (a no-sector state is *inferred* from `quoteType`, never asserted by the vendor), the dotted-symbol
+> defect is fixed at the vendor boundary, the production `DATA_PROVIDER` is `tiingo`, and §7 is superseded by the evidence-updated runbook and the gate
+> classification in `LAB_SLICE12_PRODUCTION_READINESS.md`.
+
 Branch `lab/first-light-algo`, draft PR #1 (CI only, DO NOT MERGE). Nothing here was applied, enabled, installed, deployed or merged. Production and
 the S11 passive validation were not touched. No production read was made (see §10 for the reads that are *requested*, not performed).
 
@@ -35,19 +39,19 @@ world), **CODE_READ** (read from source, not exercised against the vendor).
 `admissible_for_forward_history`, `rejection_reason`, and `writes: False`. CLI: `python mechanism/data_updaters/sector_history_recorder.py --fixture <json>` (offline) or `--live-yfinance SYM,SYM` (read-only network call). `test_sector_dry_run_live_fixture_pure.py` replays the 40 live responses: 30 `sector`, 6 ETF + 2 MUTUALFUND `no_sector`, 2 sparse
 `invalid_response`; the dry-run outcome equals the production classifier on every case.
 
-**Findings that change policy** (all in code now): (1) yfinance has no explicit no-sector assertion, so the explicit no-sector is *inferred* and only from
+**Findings that change policy** (all in code now): (1) yfinance has no no-sector assertion, so the no-sector state is *inferred* by the recorder, and only from
 `quoteType ∈ {ETF, MUTUALFUND}`; anything else without a sector is a coded `invalid_response`, never a no-sector. (2) A sparse body is a vendor answer
 that supplies nothing — it counts as a *failure* for freshness verification (§4), not as accounted.
 
 ## 2. Authoritative source and fallback (Part 2)
 
 Three distinct states are never merged: **provider failed** (`request_failed`) ≠ **provider answered with no usable sector** (`invalid_response`, coded)
-≠ **provider explicitly asserts no sector** (`no_sector`, yfinance only, quoteType-evidenced).
+≠ **no-sector state inferred from an approved `quoteType`** (`no_sector`, yfinance only; the vendor asserts nothing).
 
 | Criterion | A: single authority, others diagnostic | B: ordered fallback | C: consensus, disagreement fails closed |
 |---|---|---|---|
 | PIT semantics | one chain, one taxonomy | a chain mixing vendors; a "change" may be a vendor switch, not a reclassification | needs both fresh every day |
-| Explicit no-sector | yfinance only; unambiguous | the fallback cannot express it → switching *manufactures* a sector or loses the no-sector | inherits the weaker source (Tiingo: never) |
+| Inferred no-sector | yfinance only (quoteType evidence) | the fallback cannot express it → switching *manufactures* a sector or loses the no-sector | inherits the weaker source (Tiingo: never) |
 | Outage | head ages; stale at 30 d; nothing invented | fills gaps, with identity from a different taxonomy | an outage of either source blocks everything |
 | Source switching / return-to-primary | n/a | primary returns and disagrees: reclassification or a vendor artefact? **Unresolvable from the data** | n/a |
 | Reproducibility | strongest: one vendor, one rule | depends on which vendor was up that day | strong but brittle |
@@ -60,7 +64,7 @@ ambiguity corrupts the one property the history exists to provide (a reclassific
 Enforced: the spec validator rejects any `sector_history.source` other than the authoritative one (`dataset_contract.AUTHORITATIVE_HISTORY_SOURCE`).
 
 ### The owner-mandated conflict rule (implemented)
-History says explicit `no_sector` **and** the candidate evidence says a sector (fresh or stale) → relation `sector_no_sector_conflict`, effective state
+History says (inferred) `no_sector` **and** the candidate evidence says a sector (fresh or stale) → relation `sector_no_sector_conflict`, effective state
 UNAVAILABLE, the candidate's sector *name* is kept for display only, and the sector-relative feature is unavailable until the discrepancy is explained.
 Neither source wins silently (`sector_history.R_NO_SECTOR_CONFLICT`; tested).
 
@@ -180,7 +184,7 @@ maintenance action (approved, begun ticket) and a last resort. Table removal is 
   mapping. Pre-existing; fixing it changes which symbol string the vendor sees, so it is flagged, not changed.
 * A fundamentals poll stamped after 00:00Z on the day after the session is *accounted* but not PIT-eligible for that session.
 * `SECTOR_MAX_AGE_DAYS=30` operational, unvalidated. The 90% accounted share is borrowed from the existing coverage floor.
-* yfinance has no `as-of`; `source_asof` stays `None`. The explicit no-sector rests on `quoteType`, a vendor classification that could change.
+* yfinance has no `as-of`; `source_asof` stays `None`. The no-sector state rests on `quoteType`, a vendor classification that could change.
 * Tiingo behaviour is CODE_READ only.
 * Corrections to Slice 10: its §7 "Explicit no-sector vs failure" bullet and §8 are **superseded** (banner added there).
 
@@ -192,7 +196,7 @@ maintenance action (approved, begun ticket) and a last resort. Table removal is 
 5. Tiingo live behaviour: needs credentials and cost approval; only needed if the owner wants the diagnostic comparison.
 
 ## 11. Answers to the five questions
-1. **Provider owning forward sector identity:** yfinance (`yfinance_info`): it is the only source that can express an explicit no-sector, it supplies
+1. **Provider owning forward sector identity:** yfinance (`yfinance_info`): it is the only source that supplies the structural evidence (`quoteType`) for an inferred no-sector, it supplies
    the 11-name taxonomy the dev history already uses, and one authoritative chain keeps reclassification meaningful. Tiingo is diagnostic.
 2. **Primary fails, fallback has a sector:** a `request_failed` poll on the yfinance chain; the head is not erased or refreshed; today's research uses the
    yfinance head while currency ≤ 30 days, then it goes stale; Tiingo's sector is never used.

@@ -1,0 +1,110 @@
+BEGIN
+SET
+== A3 universes
+latest_price_session|2026-10-05
+u_session_symbols|3066
+u_updater_symbols|3075
+inactive_symbols|39
+== A4 age of the latest fundamentals row (latest_price_session - row date): bucket|updater_set|session_universe
+0d|3073|3064
+11-30d|1|1
+no_row|1|1
+== A4b session universe coverage
+session_universe_with_row_on_latest_session|3064
+session_universe_with_row_within_4d|3064
+session_universe_with_row_within_30d|3065
+session_universe_with_NO_fundamentals_row|1
+== A5 sector availability on the LATEST row (session universe)
+available|3041
+no_row|1
+null|24
+== A6 sector EVIDENCE age = latest_price_session - date of the latest row with a real sector (session universe)
+<=4d|3041
+>30d(stale)|1
+never_had_a_sector|24
+sector evidence >30d or never (symbol|sector_date)
+AFGB|
+AFGC|
+AFGD|
+AFGE|
+BF.B|
+BRK.B|
+BRK/A|
+CCZ|
+DDT|
+DTB|
+DTG|
+DTW|
+DUKB|
+EAI|
+ELC|
+EMP|
+ENJ|
+ENO|
+FISV|
+GJS|
+KMPB|
+NIQ|
+RZC|
+SI|
+PINC|2025-08-21
+== A7 distinct latest sector values (session universe)
+Financial Services|610
+Healthcare|508
+Industrials|433
+Technology|427
+Consumer Cyclical|314
+Real Estate|178
+Basic Materials|133
+Energy|127
+Consumer Defensive|121
+Communication Services|115
+Utilities|75
+|24
+== A8 symbols whose LATEST row has NULL/blank sector (session universe): symbol|latest_row_date
+AFGB|2026-10-05
+AFGC|2026-10-05
+AFGD|2026-10-05
+AFGE|2026-10-05
+BF.B|2026-09-23
+BRK.B|2026-10-05
+BRK/A|
+CCZ|2026-10-05
+DDT|2026-10-05
+DTB|2026-10-05
+DTG|2026-10-05
+DTW|2026-10-05
+DUKB|2026-10-05
+EAI|2026-10-05
+ELC|2026-10-05
+EMP|2026-10-05
+ENJ|2026-10-05
+ENO|2026-10-05
+FISV|2026-10-05
+GJS|2026-10-05
+KMPB|2026-10-05
+NIQ|2026-10-05
+PINC|2026-10-05
+RZC|2026-10-05
+SI|2026-10-05
+== A9 rows stamped on the latest date created_at after 00:00Z next day? (cadence vs PIT window): hour-of-day (UTC) of created_at for the latest 3 dates
+2026-10-05|2026-10-05 19:13:49.532552|2026-10-05 20:05:16.229138
+2026-10-02|2026-10-02 19:13:25.003611|2026-10-02 20:05:34.118424
+== A10 trading-day gaps: stock_prices dates in the last 21 days vs fundamentals dates
+2026-10-05|3073
+2026-10-02|3073
+2026-10-01|3073
+2026-09-30|0
+2026-09-29|0
+2026-09-28|3073
+2026-09-25|0
+2026-09-24|3073
+2026-09-23|3074
+2026-09-22|3074
+2026-09-21|3074
+2026-09-18|0
+2026-09-17|0
+2026-09-16|0
+2026-09-15|0
+2026-09-14|972
+ROLLBACK

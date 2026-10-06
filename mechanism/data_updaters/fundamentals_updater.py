@@ -30,6 +30,8 @@ except ImportError as e:
     print(f"Import error: {e}")
     sys.exit(1)
 
+from data_updaters import vendor_symbols  # noqa: E402  (stdlib-only; needs the mechanism root on sys.path, set above)
+
 warnings.filterwarnings('ignore')
 
 
@@ -246,8 +248,12 @@ class FundamentalsUpdater:
         # worker thread instead -- guaranteed to work regardless of
         # what's hanging underneath. One stuck symbol now costs at most
         # COMPANY_INFO_TIMEOUT_SECONDS, not the rest of the run.
+        # The CANONICAL symbol never changes: only the symbol on this request is translated (BRK.B -> BRK-B), at the vendor call, by the one shared
+        # translation. An unsupported format raises here, before any request: nothing is guessed (data_updaters/vendor_symbols.py).
+        request_symbol = vendor_symbols.to_yfinance(symbol).request
+
         def _fetch():
-            ticker = yf.Ticker(symbol)
+            ticker = yf.Ticker(request_symbol)
             return ticker.info
 
         # NOT a `with` block: ThreadPoolExecutor.__exit__ calls

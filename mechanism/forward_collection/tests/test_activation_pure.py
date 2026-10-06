@@ -116,3 +116,40 @@ def test_the_module_never_writes_and_never_names_a_history_table():
 @pytest.mark.parametrize("name", sorted(A.GATES))
 def test_every_gate_has_a_human_meaning(name):
     assert len(A.GATES[name]) > 30
+
+
+def test_the_real_request_sites_use_the_one_vendor_symbol_translation():
+    c = by_id(A.architecture_checks(spec(), env={}))["sector_vendor_requests_use_the_translation"]
+    assert c["ok"] and c["blocking"] and c["detail"]["problems"] == [] and c["detail"]["evidenced"]["BRK.B"] == "BRK-B"
+
+
+def test_a_code_root_without_the_translated_request_sites_is_a_blocker(tmp_path):
+    ok, detail = A.vendor_symbol_check(tmp_path)
+    assert not ok and detail["sites"] == [] and detail["problems"]
+
+
+def test_a_naive_dot_to_dash_replacement_is_a_blocker(monkeypatch):
+    from data_updaters import vendor_symbols as V
+    real = V.to_yfinance
+    monkeypatch.setattr(V, "to_yfinance", lambda s: V.VendorSymbol(s, s.replace(".", "-").replace("/", "-"), V.TRANSLATED, "naive"))
+    ok, detail = A.vendor_symbol_check()
+    assert not ok and any("was not refused" in p for p in detail["problems"])
+    monkeypatch.setattr(V, "to_yfinance", real)
+    assert A.vendor_symbol_check()[0]
+
+
+def test_a_translation_that_does_not_reproduce_the_evidenced_forms_is_a_blocker(monkeypatch):
+    from data_updaters import vendor_symbols as V
+    monkeypatch.setattr(V, "to_yfinance", lambda s: V.VendorSymbol(s, s, V.UNCHANGED, "identity"))
+    ok, detail = A.vendor_symbol_check()
+    assert not ok and any("BRK.B" in p for p in detail["problems"])
+
+
+def test_a_request_site_that_bypasses_the_translation_is_a_blocker(tmp_path):
+    d = tmp_path / "data_updaters"
+    d.mkdir()
+    (d / "fundamentals_updater.py").write_text("request_symbol = vendor_symbols.to_yfinance(s).request\nyf.Ticker(request_symbol)\n")
+    (d / "other_probe.py").write_text("x = vendor_symbols.to_yfinance(s)\nyf.Ticker(symbol)\n")
+    ok, detail = A.vendor_symbol_check(tmp_path)
+    assert not ok and detail["sites"] == ["fundamentals_updater.py", "other_probe.py"]
+    assert any("other_probe.py" in p for p in detail["problems"])

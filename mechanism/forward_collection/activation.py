@@ -75,6 +75,44 @@ def migration_catalog(repo_root: Path = REPO_ROOT) -> Dict[int, Dict[str, List[s
 
 
 # ------------------------------------------------------------------ architecture layer (no database)
+EVIDENCED_VENDOR_SYMBOLS = {"BRK.B": "BRK-B", "BF.B": "BF-B", "BRK/A": "BRK-A"}      # probed from the production VPS network, 2026-10-06 (Slice 12)
+REFUSED_VENDOR_SYMBOLS = ("XYZ.U", "ABC.WS", "brk.b")
+CODE_ROOT = Path(__file__).resolve().parents[1]                                        # the mechanism/ directory this package runs from
+WRITER_REQUEST_SITE = "fundamentals_updater.py"
+MIN_REQUEST_SITES = 2                                                                  # the writer's vendor call and the dry-run probe
+
+
+def vendor_symbol_check(code_root: Path = CODE_ROOT) -> Tuple[bool, Dict[str, Any]]:
+    """The yfinance request symbol is translated ONCE, at the vendor call, and by one function: behaviour of that function on the evidenced production
+    share classes, its refusals, and that EVERY request site under data_updaters/ that uses it (the writer and the dry-run probe) takes its symbol from
+    it. Sites are discovered, not listed: a file that imports the translation must route every `yf.Ticker(...)` through it."""
+    from data_updaters import vendor_symbols as V
+    problems: List[str] = []
+    for canonical, want in EVIDENCED_VENDOR_SYMBOLS.items():
+        got = V.to_yfinance(canonical).request
+        if got != want:
+            problems.append(f"{canonical} -> {got!r}, expected {want!r}")
+    for bad in REFUSED_VENDOR_SYMBOLS:
+        try:
+            V.to_yfinance(bad)
+            problems.append(f"{bad!r} was not refused")
+        except V.UnsupportedSymbolFormat:
+            pass
+    sites: List[str] = []
+    updaters = code_root / "data_updaters"
+    for path in sorted(updaters.glob("*.py")) if updaters.is_dir() else []:
+        text = path.read_text(encoding="utf-8")
+        if "vendor_symbols.to_yfinance(" not in text:
+            continue
+        sites.append(path.name)
+        if re.findall(r"yf\.Ticker\((\w+)\)", text) != ["request_symbol"] or not re.search(r"request_symbol\s*=\s*vendor_symbols\.to_yfinance\(", text):
+            problems.append(f"{path.name}: a yfinance request does not take its symbol from vendor_symbols.to_yfinance")
+    if len(sites) < MIN_REQUEST_SITES or WRITER_REQUEST_SITE not in sites:
+        problems.append(f"expected at least {MIN_REQUEST_SITES} translated request sites including {WRITER_REQUEST_SITE}; found {sites}")
+    return not problems, {"problems": problems, "evidenced": EVIDENCED_VENDOR_SYMBOLS, "refused": list(REFUSED_VENDOR_SYMBOLS), "sites": sites,
+                          "canonical_identity": "never translated: only the outbound request symbol is"}
+
+
 def architecture_checks(spec: Mapping[str, Any], *, repo_root: Path = REPO_ROOT, env: Optional[Mapping[str, str]] = None) -> List[Dict[str, Any]]:
     from research.lab import dataset_authoring as AUTH
     from research.lab import research_status_reader as SR
@@ -105,6 +143,8 @@ def architecture_checks(spec: Mapping[str, Any], *, repo_root: Path = REPO_ROOT,
                                                               "command": C.SCHEDULER_DESIGN.get("command")}))
     out.append(_chk("scheduler_command_verifies_sector_history", "--with-sector-history-check" in str(C.SCHEDULER_DESIGN.get("command")),
                     {"command": C.SCHEDULER_DESIGN.get("command")}))
+    ok_symbols, symbols_detail = vendor_symbol_check()
+    out.append(_chk("sector_vendor_requests_use_the_translation", ok_symbols, symbols_detail))
     out.append(_chk("no_sector_policy_resolved", C.no_sector_policy_resolved(), {"policy": C.NO_SECTOR_POLICY}))
     out.append(_chk("sector_writer_flag_reported", True,
                     {"note": "informational: the flag is read in the fundamentals updater's own process, so this preflight can only report its own "

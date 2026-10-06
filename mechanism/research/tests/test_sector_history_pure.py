@@ -68,7 +68,7 @@ def meta(qt, n=6):
 @pytest.mark.parametrize("qt", ["ETF", "MUTUALFUND"])
 @pytest.mark.parametrize("raw,state,reason", [(None, "no_sector", "vendor_null"), ("", "no_sector", "vendor_blank"), ("   ", "no_sector", "vendor_blank"),
                                               ("Unknown", "no_sector", "vendor_unknown_label"), (" unknown ", "no_sector", "vendor_unknown_label")])
-def test_yfinance_can_say_explicit_no_sector_only_with_non_operating_quote_type_evidence(raw, state, reason, qt):
+def test_yfinance_can_say_inferred_no_sector_only_with_non_operating_quote_type_evidence(raw, state, reason, qt):
     o = R.classify("yfinance_info", yf(raw), meta=meta(qt))
     assert (o.response_state, o.no_sector_reason, o.sector, o.failure_reason, o.quote_type) == (state, reason, None, None, qt) and o.payload_hash
 
@@ -76,7 +76,7 @@ def test_yfinance_can_say_explicit_no_sector_only_with_non_operating_quote_type_
 @pytest.mark.parametrize("m,why", [(None, "quote_type_evidence_missing"), (meta(None), "quote_type_missing"), (meta("EQUITY"), "operating_company_sector_absent"),
                                    (meta("CRYPTOCURRENCY"), "quote_type_unrecognised"), (meta("etf-ish"), "quote_type_unrecognised")])
 @pytest.mark.parametrize("raw", [None, "", " ", "Unknown"])
-def test_a_missing_sector_without_non_operating_evidence_is_responded_but_unusable_never_an_explicit_no_sector(raw, m, why):
+def test_a_missing_sector_without_non_operating_evidence_is_responded_but_unusable_never_an_inferred_no_sector(raw, m, why):
     o = R.classify("yfinance_info", yf(raw), meta=m)
     assert (o.response_state, o.failure_reason, o.no_sector_reason, o.sector) == ("invalid_response", why, None, None)
     d = R.decide(None, o, "r1")
@@ -152,7 +152,7 @@ def test_the_source_policy_is_one_authoritative_vendor_and_the_research_side_agr
 
 
 @pytest.mark.parametrize("raw", [None, "", "Unknown"])
-def test_a_tiingo_none_is_ambiguous_never_an_explicit_no_sector(raw):
+def test_a_tiingo_none_is_ambiguous_never_an_inferred_no_sector(raw):
     o = R.classify("tiingo_meta", {"symbol": "AAA", "sector": raw})
     assert (o.response_state, o.failure_reason, o.no_sector_reason, o.sector) == ("invalid_response", "ambiguous_source_none", None, None)
 
@@ -321,15 +321,15 @@ def test_vendor_failure_cannot_extend_freshness_and_never_erases_the_last_sector
     assert [ages[d].evidence.age_days for d in (1, 2, 3, 35)] == [1, 2, 3, 35]            # and keeps aging
 
 
-def test_explicit_no_sector_is_meaningful_and_differs_from_no_history():
+def test_inferred_no_sector_is_meaningful_and_differs_from_no_history():
     o = chain(("Tech", at(D0)), (None, at(D0 + timedelta(days=5))))
     s = sel(o, t0=D0 + timedelta(days=6))
-    assert s.kind == SH.K_EXPLICIT_NO_SECTOR and s.sector is None and s.evidence.reason == SP.NO_SECTOR and s.head_seq == 2
+    assert s.kind == SH.K_INFERRED_NO_SECTOR and s.sector is None and s.evidence.reason == SP.NO_SECTOR and s.head_seq == 2
     assert sel(o, t0=D0 + timedelta(days=4)).kind == SH.K_OBSERVED                         # before the vendor said none, Tech was still believed
     assert s.kind != sel([]).kind and s.evidence.reason != sel([]).evidence.reason
 
 
-def test_an_explicit_no_sector_that_becomes_a_sector_again_is_a_new_chained_row():
+def test_an_inferred_no_sector_that_becomes_a_sector_again_is_a_new_chained_row():
     o = chain(("Tech", at(D0)), (None, at(D0 + timedelta(days=5))), ("Tech", at(D0 + timedelta(days=9))))
     assert [r["change_kind"] for r in o] == ["first", "became_none", "became_set"] and SH.verify_chain(o) == []
     assert sel(o, t0=D0 + timedelta(days=9)).sector == "Tech"
@@ -389,9 +389,9 @@ def test_a_sector_identity_disagreement_fails_closed():
     assert cc.relation == SH.R_IDENTITY_CONFLICT and cc.effective.state == SP.UNAVAILABLE and cc.effective.reason == SP.IDENTITY_CONFLICT
 
 
-def test_an_explicit_no_sector_history_against_a_candidate_sector_is_a_conflict_not_a_winner():
-    """Owner rule (Slice 11): history says explicit no_sector, candidate says Tech for the same decision point -> neither silently wins."""
-    nos = SH.HistorySelection(SH.K_EXPLICIT_NO_SECTOR, ev(SP.UNAVAILABLE, None, "no_sector"), None, 2, None, None, 0, ())
+def test_an_inferred_no_sector_history_against_a_candidate_sector_is_a_conflict_not_a_winner():
+    """Owner rule (Slice 11): history says (inferred) no_sector, candidate says Tech for the same decision point -> neither silently wins."""
+    nos = SH.HistorySelection(SH.K_INFERRED_NO_SECTOR, ev(SP.UNAVAILABLE, None, "no_sector"), None, 2, None, None, 0, ())
     for cand in (SP.OBSERVED_FRESH, SP.OBSERVED_STALE):
         cc = SH.crosscheck(ev(cand, "Tech"), nos)
         assert cc.relation == SH.R_NO_SECTOR_CONFLICT and cc.effective.state == SP.UNAVAILABLE and cc.effective.reason == SP.IDENTITY_CONFLICT

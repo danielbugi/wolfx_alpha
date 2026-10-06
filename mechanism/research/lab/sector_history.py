@@ -40,7 +40,7 @@ OBSERVATION, CONFIRMATION = "observation", "confirmation"
 HISTORY_COLUMNS = C.HISTORY_COLUMNS
 
 # selection kinds
-K_OBSERVED, K_EXPLICIT_NO_SECTOR, K_NO_HISTORY, K_BROKEN = "observed", "explicit_no_sector", "no_history", "broken"
+K_OBSERVED, K_INFERRED_NO_SECTOR, K_NO_HISTORY, K_BROKEN = "observed", "inferred_no_sector", "no_history", "broken"
 
 # cross-check relations
 R_AGREE, R_AGREE_UNUSABLE = "agree", "agree_unusable"
@@ -131,8 +131,8 @@ def verify_chain(chain: Sequence[Mapping[str, Any]]) -> List[str]:
 # ------------------------------------------------------------------ the point-in-time selector
 @dataclass(frozen=True)
 class HistorySelection:
-    kind: str                                  # observed | explicit_no_sector | no_history | broken
-    evidence: SP.SectorEvidence                # derived at read time; UNAVAILABLE for no_history / explicit no-sector, see `kind` for which
+    kind: str                                  # observed | inferred_no_sector | no_history | broken
+    evidence: SP.SectorEvidence                # derived at read time; UNAVAILABLE for no_history / inferred no-sector, see `kind` for which
     sector: Optional[str]
     head_seq: Optional[int]
     head_captured_at: Optional[datetime]
@@ -167,7 +167,7 @@ def select(obs: Sequence[Mapping[str, Any]], confirmations: Sequence[Mapping[str
                                 head["stamp"], None, 0, ("confirmation_before_head",))
     currency = max([head["stamp"]] + [c["stamp"] for c in confs])
     if head["sector"] is None:
-        return HistorySelection(K_EXPLICIT_NO_SECTOR, _ev(SP.UNAVAILABLE, SP.NO_SECTOR, None), None, head["seq"], head["stamp"],
+        return HistorySelection(K_INFERRED_NO_SECTOR, _ev(SP.UNAVAILABLE, SP.NO_SECTOR, None), None, head["seq"], head["stamp"],
                                 currency, len(confs), ())
     ev = SP.classify_sector_evidence(sector=head["sector"], source=head["source"], asof=_utc_date(currency), t0=t0, provenance="observed",
                                      available=True, max_age_days=max_age_days)
@@ -214,7 +214,7 @@ def crosscheck(cand: SP.SectorEvidence, hist: HistorySelection) -> CrossCheck:
         if cand.sector == h.sector:
             return CrossCheck(cand, R_AGREE, cand.state, hist.kind, h.state, ())
         return CrossCheck(_ev(SP.UNAVAILABLE, SP.IDENTITY_CONFLICT, cand.sector), R_IDENTITY_CONFLICT, cand.state, hist.kind, h.state, ())
-    if hist.kind == K_EXPLICIT_NO_SECTOR and cand.state in (SP.OBSERVED_FRESH, SP.OBSERVED_STALE):
+    if hist.kind == K_INFERRED_NO_SECTOR and cand.state in (SP.OBSERVED_FRESH, SP.OBSERVED_STALE):
         return CrossCheck(_ev(SP.UNAVAILABLE, SP.IDENTITY_CONFLICT, cand.sector), R_NO_SECTOR_CONFLICT, cand.state, hist.kind, h.state, ())
     rc, rh = _RANK[cand.state], _RANK[h.state]
     if rh > rc:

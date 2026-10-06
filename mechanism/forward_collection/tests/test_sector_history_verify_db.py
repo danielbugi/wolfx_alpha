@@ -132,7 +132,7 @@ def test_option_b_legitimate_no_sector_symbols_are_accounted_and_never_fail_the_
     poll(sworld, sworld.syms[60:], kind="etf", run_id="run-2")
     r = step(sworld, before_deadline(sworld))
     assert r.outcome == C.ALREADY and r.detail["accounted"] == N
-    assert r.detail["history_by_kind"] == {"explicit_no_sector": N - 60, "observed": 60}
+    assert r.detail["history_by_kind"] == {"inferred_no_sector": N - 60, "observed": 60}
 
 
 def test_a_vendor_that_failed_for_the_whole_universe_is_vendor_failure_not_a_missing_refresh(sworld):

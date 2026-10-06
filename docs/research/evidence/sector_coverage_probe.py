@@ -118,7 +118,7 @@ def live_vs_frozen(env_path):
         elif o["response_state"] == "sector":
             rel = ("agree" if (s or "").strip() == o["sector"] else ("frozen_has_no_sector_live_has_one" if classify_stored(s) != "available" else "DISAGREE"))
         elif o["response_state"] == "no_sector":
-            rel = "both_no_sector" if classify_stored(s) != "available" else "LIVE_EXPLICIT_NO_SECTOR_vs_FROZEN_SECTOR"
+            rel = "both_no_sector" if classify_stored(s) != "available" else "LIVE_INFERRED_NO_SECTOR_vs_FROZEN_SECTOR"
         else:
             rel = "live_" + o["response_state"]
         out[rel] += 1
@@ -139,7 +139,7 @@ def synthetic_matrix():
     cands = {"cand_Tech_fresh": ev(SP.OBSERVED_FRESH, "Technology"), "cand_Tech_stale": ev(SP.OBSERVED_STALE, "Technology"),
              "cand_no_sector": ev(SP.UNAVAILABLE, None), "cand_Energy_fresh": ev(SP.OBSERVED_FRESH, "Energy")}
     hists = {"hist_Tech_fresh": hs(SH.K_OBSERVED, SP.OBSERVED_FRESH, "Technology"), "hist_Tech_stale": hs(SH.K_OBSERVED, SP.OBSERVED_STALE, "Technology"),
-             "hist_explicit_no_sector": hs(SH.K_EXPLICIT_NO_SECTOR, SP.UNAVAILABLE, None), "hist_no_history": hs(SH.K_NO_HISTORY, SP.UNAVAILABLE, None)}
+             "hist_inferred_no_sector": hs(SH.K_INFERRED_NO_SECTOR, SP.UNAVAILABLE, None), "hist_no_history": hs(SH.K_NO_HISTORY, SP.UNAVAILABLE, None)}
     rows = []
     for cn, c in cands.items():
         for hn, h in hists.items():

@@ -6,8 +6,10 @@ than exactly "1" means off). Nothing else in the repository may write these tabl
 What it records, per refresh attempt, in ONE transaction on its OWN connection (never the fundamentals upsert's) inside a SAVEPOINT:
   * the vendor answered with a sector equal to the chain head      -> a `confirmed_head` poll only (no duplicate observation);
   * the vendor answered with a different sector / the first one    -> a chained observation, then a `created_observation` poll;
-  * the vendor explicitly answered "no sector" (yfinance only, and only when the response is STRUCTURALLY a no-sector instrument -- an ETF or a
-    mutual fund; see `NON_OPERATING_QUOTE_TYPES`)                  -> the same, with the sector NULL and a coded reason;
+  * the answer has no sector AND is structurally a no-sector instrument (yfinance only: quoteType ETF / MUTUALFUND, see `NON_OPERATING_QUOTE_TYPES`)
+    -> a `no_sector` row: the sector NULL, `no_sector_reason` coded. This is an INFERENCE by this recorder from the vendor's own `quoteType`; the
+    vendor does not assert "no sector" (it simply omits the key), and `no_sector_reason` (vendor_null / vendor_blank / vendor_unknown_label) only
+    describes what the sector field looked like;
   * the request failed or the answer could not be validated        -> a poll with chain_effect = none (the head is neither changed nor confirmed).
 A failure of any of this rolls back to the savepoint, is logged with the symbol and reason, is counted, and is NEVER raised into the fundamentals
 ingestion. The vendor's own validity time is never invented: `source_asof` stays NULL (yfinance and Tiingo meta supply the CURRENT classification
@@ -23,6 +25,8 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Mapping, Optional
+
+from data_updaters import vendor_symbols
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +45,10 @@ DIAGNOSTIC_SOURCES = (SRC_TIINGO,)
 
 # yfinance has no field that ASSERTS "no sector": the key is simply absent for ETFs and mutual funds (probed live 2026-10-06) but it is ALSO absent
 # from a partial or degraded answer for an operating company. The only structural evidence that the absence is meaningful is `quoteType`. Only the
-# values actually observed to carry no sector are listed; any other quoteType (or none) is "responded, no usable sector", never an explicit no-sector.
+# values actually observed to carry no sector are listed; any other quoteType (or none) is "responded, no usable sector", never a no-sector state.
+# `no_sector` therefore means "no sector, INFERRED from an approved quoteType" -- never "the vendor asserted it". The stored enum keeps its name:
+# renaming it would need a schema change, and the meaning is carried by this note and `no_sector_basis` in the dry run.
+NO_SECTOR_BASIS = "inferred_from_quote_type"
 NON_OPERATING_QUOTE_TYPES = ("ETF", "MUTUALFUND")
 OPERATING_QUOTE_TYPES = ("EQUITY",)
 
@@ -64,7 +71,7 @@ class Outcome:
     no_sector_reason: Optional[str] = None
     failure_reason: Optional[str] = None
     payload_hash: Optional[str] = None
-    quote_type: Optional[str] = None     # the structural evidence behind an explicit no-sector (yfinance only); part of the hashed projection
+    quote_type: Optional[str] = None     # the structural evidence behind an INFERRED no-sector (yfinance only); part of the hashed projection
 
 
 def projection(raw: Any, quote_type: Optional[str] = None) -> Dict[str, Any]:
@@ -103,7 +110,7 @@ def _fail(source: str, state: str, reason: str, raw: Any = None, with_hash: bool
 
 def _no_usable_yfinance_sector(reason: str, raw: Any, meta: Optional[Mapping[str, Any]]) -> Outcome:
     """yfinance gave no usable sector. Two DIFFERENT meanings, never merged:
-       * the response's quoteType is a verified non-operating type -> an explicit no-sector (the structural fact is the evidence);
+       * the response's quoteType is a verified non-operating type -> a no-sector state INFERRED from that type (the vendor asserts nothing);
        * anything else (an operating company, an unknown type, no evidence) -> `invalid_response`: it RESPONDED but supplied no usable sector and
          nothing proves the absence is meaningful. That never creates an observation, so it can never contradict a candidate's sector."""
     if meta is None:
@@ -126,10 +133,15 @@ def classify(source: str, info: Optional[Mapping[str, Any]], error: Optional[Bas
     no_sector (it answered AND the answer is structurally a no-sector instrument)  /  sector.
 
     A Tiingo answer with no sector is AMBIGUOUS (a swallowed meta failure and the Power-plan placeholder are both turned into None upstream), so it
-    is recorded as an invalid response, never as an explicit "no sector". A yfinance answer can say "no sector" explicitly ONLY with non-operating
-    quoteType evidence (Slice 11): a bare absent / null / blank / "Unknown" sector is not an assertion.
+    is recorded as an invalid response, never as a no-sector state. A yfinance answer is classified `no_sector` ONLY with non-operating quoteType
+    evidence (Slice 11): a bare absent / null / blank / "Unknown" sector is not evidence, and the vendor never asserts "no sector" itself.
+
+    A request that was REFUSED before it was made (`UnsupportedSymbolFormat`: no vendor symbol could be derived without guessing) is `request_failed`
+    with the coded reason `unsupported_symbol_format`: no information was obtained, so it is neither an answer nor a vendor failure.
     """
     if error is not None:
+        if isinstance(error, vendor_symbols.UnsupportedSymbolFormat):
+            return _fail(source, "request_failed", "unsupported_symbol_format")
         return _fail(source, "request_failed", "timeout" if isinstance(error, TimeoutError) else "request_error")
     if info is None:
         if meta is not None and meta.get("n_keys", 0) > 0:             # it answered, with too little to use (e.g. a 404 body)
@@ -172,7 +184,7 @@ def decide(head: Optional[tuple], o: Outcome, run_id: str) -> Decision:
     """Pure: the chain decision for one outcome. The ONE place the same-value / new-observation rule lives (the writer and the dry run share it)."""
     if o.response_state not in ("sector", "no_sector"):
         return Decision("none")
-    if head is not None and head[3] == o.sector:                       # same effective sector (both NULL = same explicit no-sector)
+    if head is not None and head[3] == o.sector:                       # same effective sector (both NULL = the same inferred no-sector)
         if head[4] == run_id:                                          # a retry whose observation already committed: the poll that created it
             return Decision("created_observation", observation_id=head[0])
         return Decision("confirmed_head", observation_id=head[0])
@@ -294,12 +306,20 @@ def dry_run(symbol: str, source: str, *, raw: Optional[Mapping[str, Any]] = None
     `Ticker.info` dict; for Tiingo the flattened company-info dict); `error` is `timeout` / `request_error` / None; `head` is the chain head the
     interaction would be recorded against (`{"seq", "value_hash", "sector", "run_id"}`) or None for a new chain."""
     meta = None
+    vendor_symbol = None
+    exc = _ERRORS[error]("dry run: simulated " + error) if error else None
     if source == SRC_YFINANCE:
+        # The SAME translation the writer applies before its request (`FundamentalsUpdater._fetch_yfinance_raw`). A refused symbol means the writer would
+        # never have asked the vendor, so whatever `raw` / `error` were supplied is irrelevant: the interaction is the refusal.
+        try:
+            vendor_symbol = vendor_symbols.to_yfinance(symbol).as_dict()
+        except vendor_symbols.UnsupportedSymbolFormat as refusal:
+            vendor_symbol = {"canonical": symbol, "request": None, "status": "refused", "rule": None, "refusal_reason": refusal.reason}
+            exc, raw = refusal, None
         meta = yfinance_meta(raw)
         info = yfinance_company_info(raw)
     else:
         info = None if raw is None else dict(raw)
-    exc = _ERRORS[error]("dry run: simulated " + error) if error else None
     o = classify(source, info, exc, meta)
     head_t = None if head is None else (0, head.get("seq", 1), head.get("value_hash"), head.get("sector"), head.get("run_id"))
     d = decide(head_t, o, run_id)
@@ -317,6 +337,8 @@ def dry_run(symbol: str, source: str, *, raw: Optional[Mapping[str, Any]] = None
                        "prev_value_hash": d.prev_value_hash}
     return {
         "symbol": symbol, "source": source, "source_identity": identity,
+        "vendor_symbol": vendor_symbol,                 # canonical -> request; only the request is translated, the stored identity is `symbol`
+        "no_sector_basis": NO_SECTOR_BASIS if o.response_state == "no_sector" else None,
         "outcome": {"response_state": o.response_state, "sector": o.sector, "sector_raw": o.sector_raw, "no_sector_reason": o.no_sector_reason,
                     "failure_reason": o.failure_reason, "quote_type": o.quote_type},
         "proposed_poll": {"response_state": o.response_state, "chain_effect": d.chain_effect},
@@ -334,8 +356,9 @@ def fetch_yfinance_raw(symbol: str, timeout: float = 20.0) -> Optional[Dict[str,
     """READ-ONLY live probe used only by the dry-run CLI: one yfinance `Ticker.info` request with a hard wall-clock timeout. Raises TimeoutError."""
     import concurrent.futures
     import yfinance as yf
+    request_symbol = vendor_symbols.to_yfinance(symbol).request      # the writer's translation; raises UnsupportedSymbolFormat before any request
     ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-    fut = ex.submit(lambda: yf.Ticker(symbol).info)
+    fut = ex.submit(lambda: yf.Ticker(request_symbol).info)
     try:
         return fut.result(timeout=timeout)
     except concurrent.futures.TimeoutError:
@@ -348,20 +371,34 @@ def main(argv=None) -> int:
     import argparse
     ap = argparse.ArgumentParser(description="Non-mutating dry run of the forward sector-history normalization (writes nothing, needs no database).")
     ap.add_argument("--fixture", help="JSON list of {symbol, source, raw, error, head}")
-    ap.add_argument("--live-yfinance", default="", help="comma-separated symbols probed LIVE against yfinance (read-only; network)")
+    ap.add_argument("--live-yfinance", default="", help="comma-separated CANONICAL symbols (BRK.B, not BRK-B) probed LIVE against yfinance after the writer's "
+                    "vendor-symbol translation (read-only; network)")
     args = ap.parse_args(argv)
+    import time
     cases = []
     if args.fixture:
         with open(args.fixture, encoding="utf-8") as fh:
             cases += json.load(fh)
-    for sym in [s.strip().upper() for s in args.live_yfinance.split(",") if s.strip()]:
+    # Symbols are taken exactly as given (no upper-casing): a malformed canonical symbol must be REFUSED by the translation, not silently repaired.
+    for sym in [s.strip() for s in args.live_yfinance.split(",") if s.strip()]:
+        case = {"symbol": sym, "source": SRC_YFINANCE}
+        started = time.monotonic()
         try:
-            cases.append({"symbol": sym, "source": SRC_YFINANCE, "raw": fetch_yfinance_raw(sym)})
+            case["raw"] = fetch_yfinance_raw(sym)
+        except vendor_symbols.UnsupportedSymbolFormat:                  # `dry_run` reports the refusal itself; no request was made
+            pass
         except TimeoutError:
-            cases.append({"symbol": sym, "source": SRC_YFINANCE, "error": "timeout"})
-        except Exception:                                               # noqa: BLE001 - a probe failure is a result, not a crash
-            cases.append({"symbol": sym, "source": SRC_YFINANCE, "error": "request_error"})
-    out = [dry_run(c["symbol"], c["source"], raw=c.get("raw"), error=c.get("error"), head=c.get("head")) for c in cases]
+            case["error"] = "timeout"
+        except Exception as exc:                                        # noqa: BLE001 - a probe failure is a result, not a crash
+            case["error"], case["error_type"] = "request_error", type(exc).__name__
+        case["latency_ms"] = round((time.monotonic() - started) * 1000)
+        cases.append(case)
+    out = []
+    for c in cases:
+        r = dry_run(c["symbol"], c["source"], raw=c.get("raw"), error=c.get("error"), head=c.get("head"))
+        if "latency_ms" in c:
+            r["probe"] = {"latency_ms": c["latency_ms"], "error_type": c.get("error_type"), "n_keys": len(c["raw"]) if c.get("raw") else 0}
+        out.append(r)
     print(json.dumps(out, indent=2, sort_keys=True, ensure_ascii=False))
     return 0
 

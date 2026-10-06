@@ -13,12 +13,12 @@ What it distinguishes (they are different facts and are never merged):
 * it ran for only PART of the universe (`partial_refresh`: too many symbols never polled);
 * a symbol's chain is BROKEN (`chain_broken`: a tamper/regression signal, never repairable by a re-run).
 
-A symbol is ACCOUNTED when the authoritative source gave a non-`request_failed` answer in the window: a usable sector, an explicit no-sector, or a
+A symbol is ACCOUNTED when the authoritative source gave a non-`request_failed` answer in the window: a usable sector, an inferred no-sector (ETF / mutual fund), or a
 responded-but-unusable answer all prove the vendor was asked and answered, so a legitimate no-sector symbol (owner Option B) never fails a session.
 The ONE exception is a SPARSE body (`invalid_response / response_too_sparse`, the live shape of an unknown symbol's 404): it describes nothing, so it
 counts like a failure. That keeps a degraded vendor that answers with near-empty bodies from looking like a healthy refresh, while the 10 % tolerance
 absorbs the handful of genuinely unknown symbols.
-Per-symbol availability (fresh / stale / explicit no-sector / no history) is reported but never gates the session: an unavailable sector makes the
+Per-symbol availability (fresh / stale / inferred no-sector / no history) is reported but never gates the session: an unavailable sector makes the
 sector-relative cell unavailable downstream, not the session incomplete.
 
 The only threshold is the existing readiness floor (`MIN_OBSERVED_COVERAGE`, 90 %) applied to the accounted share; the refresh-gap window is

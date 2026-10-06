@@ -56,7 +56,7 @@ def test_an_operating_company_records_its_vendor_sector_and_is_admissible(symbol
 
 
 @pytest.mark.parametrize("symbol", ["SPY", "QQQ", "GLD", "IWM", "XLK", "TLT", "VTSAX", "VFIAX"])
-def test_a_fund_is_an_explicit_no_sector_only_because_the_vendor_says_what_it_is(symbol):
+def test_a_fund_is_an_inferred_no_sector_only_because_the_vendor_says_what_it_is(symbol):
     r = run(symbol)
     assert r["outcome"]["response_state"] == "no_sector" and r["outcome"]["sector"] is None
     assert r["outcome"]["quote_type"] in ("ETF", "MUTUALFUND") and r["admissible_for_forward_history"]

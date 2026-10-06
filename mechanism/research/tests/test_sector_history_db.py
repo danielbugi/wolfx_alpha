@@ -222,7 +222,7 @@ def test_a_changed_value_is_a_chained_row_and_the_old_one_stays(sconn):
     assert rows[1]["prev_value_hash"] == rows[0]["value_hash"] and SH.verify_chain(rows) == []
 
 
-def test_explicit_no_sector_is_an_observation_and_is_not_a_vendor_failure(sconn):
+def test_inferred_no_sector_is_an_observation_and_is_not_a_vendor_failure(sconn):
     R.record_poll(sconn, SECTOR_OUTCOME("Tech"), run_id="r1", symbol="AAA")
     assert R.record_poll(sconn, NONE_OUTCOME(), run_id="r2", symbol="AAA") == "created_observation"
     assert R.record_poll(sconn, NONE_OUTCOME(), run_id="r3", symbol="AAA") == "confirmed_head"             # still no sector: a confirmation

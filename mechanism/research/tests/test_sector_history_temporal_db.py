@@ -9,7 +9,7 @@ What is proven here, from running code:
   learn-later            an observation that arrives later changes NO row decided before it (also when it arrives the next calendar day, inside the
                          grace window);  reclassification  Tech then Health Care: a decision sees what was knowable then, nothing is rewritten;
   same-value refresh     freshness is extended by a LATER same-value poll and by nothing else;  vendor failure  a failed poll never erases or refreshes
-                         anything: the last known sector keeps aging and goes stale after 30 days;  explicit no-sector  is not a vendor failure;
+                         anything: the last known sector keeps aging and goes stale after 30 days;  an inferred no-sector is not a vendor failure;
   conflict / broken chain  fail closed, per cell, and never repaired by a later observation;
   reconstruction         sector_reconstruction rows are never read: they cannot make a cell observed, fresh or PIT-safe.
 """
@@ -356,14 +356,14 @@ def test_vendor_failures_neither_erase_nor_refresh_the_last_known_sector_and_it_
     assert ages == {True, False}                                                                    # both sides of the boundary are exercised
 
 
-# ================================================================== EXPLICIT NO-SECTOR vs FAILURE
-def test_an_explicit_no_sector_answer_is_not_a_vendor_failure(denv):
+# ================================================================== INFERRED NO-SECTOR vs FAILURE
+def test_an_inferred_no_sector_answer_is_not_a_vendor_failure(denv):
     d = CAL[250]
     nosec = make(denv, {"A": [("obs", dt(d, 6), "Tech"), *daily(251, 289), ("obs", dt(CAL[290], 6), None), *daily(291, 345)]}, "nosector")
     failed = make(denv, {"A": [("obs", dt(d, 6), "Tech"), *daily(251, 289),
                                *[("fail", dt(CAL[i], 7), "request_failed", "timeout") for i in range(290, 346)]]}, "failure")
     s_none, s_fail = nosec.select("A", T_MID), failed.select("A", T_MID)
-    assert (s_none.kind, s_none.sector, s_none.evidence.reason) == (SH.K_EXPLICIT_NO_SECTOR, None, "no_sector")
+    assert (s_none.kind, s_none.sector, s_none.evidence.reason) == (SH.K_INFERRED_NO_SECTOR, None, "no_sector")
     assert (s_fail.kind, s_fail.sector, s_fail.evidence.state) == (SH.K_OBSERVED, "Tech", "observed_fresh")      # a failure keeps believing Tech
     row_none, row_fail = nosec.rows[("A", T_MID, PRIMARY)], failed.rows[("A", T_MID, PRIMARY)]
     # owner rule (Slice 11): the history ASSERTS no sector while the candidate evidence still says Tech -> neither silently wins, both cells conflict
@@ -378,8 +378,8 @@ def test_an_explicit_no_sector_answer_is_not_a_vendor_failure(denv):
     assert row_fail["sector"] == "Tech" and row_fail["sector__state"] == C.OK
     # the decision before the explicit "no sector" is untouched by it
     same(a_rows(nosec.rows, before=CAL[290]), a_rows(failed.rows, before=CAL[290]))
-    # an explicit no-sector does not age into "stale": it stays an explicit no-sector (not a sector, not a failure) however long it is polled
-    assert nosec.select("A", CAL[290] + timedelta(days=80)).kind == SH.K_EXPLICIT_NO_SECTOR
+    # an inferred no-sector does not age into "stale": it stays an inferred no-sector (not a sector, not a failure) however long it is polled
+    assert nosec.select("A", CAL[290] + timedelta(days=80)).kind == SH.K_INFERRED_NO_SECTOR
     assert nosec.build.audit.ok
 
 

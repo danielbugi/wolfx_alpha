@@ -2,7 +2,7 @@
 schema). Only the fundamentals UPSERT (`update_daily_fundamentals`) and the vendor call are stubbed: the recorder, its SAVEPOINT and the triggers are real.
 
 Proven: flag OFF is a no-op; flag ON records; a failing history write never fails ingestion and is logged + counted; the history is recorded
-independently of the upsert's outcome; duplicate / retry is idempotent; a vendor failure is a poll that never touches the chain; explicit no-sector
+independently of the upsert's outcome; duplicate / retry is idempotent; a vendor failure is a poll that never touches the chain; inferred no-sector
 (yfinance only) vs the ambiguous Tiingo None; same value = poll only; changed value = chained row."""
 from contextlib import contextmanager
 
@@ -216,7 +216,7 @@ def test_a_vendor_failure_is_a_poll_that_never_touches_the_chain(h, sector_env):
     assert len(h.upserts) == 1                                                                      # no upsert for a failed fetch
 
 
-def test_explicit_no_sector_is_recorded_for_yfinance_with_evidence_but_never_for_the_ambiguous_tiingo_none(h, sector_env):
+def test_inferred_no_sector_is_recorded_for_yfinance_with_evidence_but_never_for_the_ambiguous_tiingo_none(h, sector_env):
     h.recorder("run-1")
     h.fetch, h.meta = (lambda s: INFO(None)), ETF_META
     assert h.u.update_symbol("YF") is True
@@ -231,7 +231,7 @@ def test_explicit_no_sector_is_recorded_for_yfinance_with_evidence_but_never_for
     assert [p for p in polls(sector_env, "TG") if p[1:] == ("invalid_response", "none", "ambiguous_source_none")] == [("run-2", "invalid_response", "none", "ambiguous_source_none")]
 
 
-def test_an_operating_company_with_no_sector_is_not_an_explicit_no_sector(h, sector_env):
+def test_an_operating_company_with_no_sector_is_not_an_inferred_no_sector(h, sector_env):
     h.recorder("run-1")
     h.fetch, h.meta = (lambda s: INFO(None)), {"quote_type": "EQUITY", "n_keys": 6, "sector_key_present": False}
     assert h.u.update_symbol("EQ") is True
@@ -272,7 +272,7 @@ def test_the_vendor_tag_follows_the_real_fetch_path(monkeypatch, sector_env):
 
 def test_the_real_yfinance_fetch_path_captures_the_evidence_a_flattened_info_loses(monkeypatch, sector_env):
     """The real `fetch_company_info` (yfinance configured): an ETF answer has NO `sector` key; the structural evidence (quoteType) is captured from the
-    RAW answer before it is flattened, so the explicit no-sector is recorded with that evidence; an operating company with the same gap is not."""
+    RAW answer before it is flattened, so the inferred no-sector is recorded with that evidence; an operating company with the same gap is not."""
     raw = {"symbol": "SPY", "quoteType": "ETF", "longName": "x", "exchange": "PCX", "currency": "USD", "market": "us_market"}
     h = Harness(monkeypatch, sector_env[1])
     h.u.fetch_company_info = FU.FundamentalsUpdater.fetch_company_info.__get__(h.u)

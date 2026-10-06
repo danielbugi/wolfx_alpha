@@ -74,7 +74,7 @@ def test_the_ninety_percent_boundary_is_inclusive(accounted, ok):
     assert d["satisfied"] is ok and d["accounted"] == accounted
 
 
-def test_a_legitimate_explicit_no_sector_symbol_is_accounted_so_it_never_fails_the_session_option_b():
+def test_a_legitimate_inferred_no_sector_symbol_is_accounted_so_it_never_fails_the_session_option_b():
     a = [act(s, "sector") for s in SYMS[:80]] + [act(s, "no_sector") for s in SYMS[80:]]          # 20 ETFs: vendor answered "no sector"
     d = ev(activity=a)
     assert d["satisfied"] is True and d["accounted"] == 100
@@ -95,14 +95,14 @@ def test_stale_or_missing_per_symbol_history_never_gates_it_is_only_reported():
     assert d["satisfied"] is True and d["history_by_kind"] == {SH.K_NO_HISTORY: 100} and d["observed_by_evidence_state"] == {}
 
 
-def test_observed_sectors_are_reported_by_their_evidence_state_and_explicit_no_sector_by_kind():
+def test_observed_sectors_are_reported_by_their_evidence_state_and_inferred_no_sector_by_kind():
     rows = []
     for s in SYMS[:3]:
         c = chain(("Technology", at(date(2026, 3, 3))), symbol=s)
         rows += c
     c = chain((None, at(date(2026, 3, 3))), symbol="S010")
     d = ev(activity=full_refresh(), rows=rows + c)
-    assert d["history_by_kind"][SH.K_OBSERVED] == 3 and d["history_by_kind"][SH.K_EXPLICIT_NO_SECTOR] == 1
+    assert d["history_by_kind"][SH.K_OBSERVED] == 3 and d["history_by_kind"][SH.K_INFERRED_NO_SECTOR] == 1
     assert sum(d["observed_by_evidence_state"].values()) == 3
 
 
