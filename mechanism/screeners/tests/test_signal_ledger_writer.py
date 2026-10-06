@@ -22,6 +22,11 @@ def _db():
         from dotenv import load_dotenv
         load_dotenv(os.path.join(ROOT, ".env"))
         from shared import db
+        # shared.database builds its singleton pool once, at import; a single transient connect failure (seen: Postgres
+        # 'out of memory' under host memory pressure) leaves sync_pool None for the whole process, so retry once here
+        # instead of letting every DB-backed test in the run skip.
+        if db.sync_pool is None:
+            db.initialize_sync_pool()
         db.execute_dict_query("SELECT 1 FROM signal_ledger LIMIT 1")
         return db
     except Exception as e:  # noqa: BLE001
