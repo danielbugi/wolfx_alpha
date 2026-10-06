@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # DRAFT -- NOT INSTALLED, NOT REFERENCED BY ANY UNIT IN deploy/. Would live at /opt/donchian/scripts/run_forward_collection.sh.
 #
-# One-shot `docker compose run --rm channel-sender -m forward_collection run --latest-completed --apply --code-ref <sha>` at the mechanism
+# One-shot `docker compose run --rm channel-sender -m forward_collection run --latest-completed --apply --with-sector-history-check --code-ref <sha>` at the mechanism
 # image pinned in CURRENT_MECHANISM_SHA. Same shape as run_channel_sender.sh (flock, pinned image, one log line per run), but the target is a
 # module, not a script path, so it needs PYTHONPATH=/app/mechanism (the channel-sender entrypoint is `python`).
+#
+# `--with-sector-history-check` makes the collector VERIFY (read-only) that the fundamentals updater's sector recorder refreshed the session's universe
+# in time. It is part of the command from day one: a timer installed before the recorder is enabled would report INCOMPLETE/MISSED -- the intended
+# activation order (recorder first, timers last) is in docs/research/LAB_SLICE11_ACTIVATION_READINESS.md.
 #
 # Exit statuses are the collector's own (forward_collection.contract): 0 complete | 2 incomplete | 3 another run holds the lock | 4 missed
 # (the session can no longer be observed) | 5 refused (no trustworthy calendar / bad arguments). The unit's OnFailure= alert fires for 2/4/5;
@@ -38,7 +42,7 @@ dc() {
 
 log "forward-collection starting (mechanism sha=$T)"
 set +e
-dc run --rm -e PYTHONPATH=/app/mechanism channel-sender -m forward_collection run --latest-completed --apply --code-ref "$T" 2>&1 | tee -a "$LOG"
+dc run --rm -e PYTHONPATH=/app/mechanism channel-sender -m forward_collection run --latest-completed --apply --with-sector-history-check --code-ref "$T" 2>&1 | tee -a "$LOG"
 rc=${PIPESTATUS[0]}
 set -e
 log "forward-collection finished: exit $rc (mechanism sha=$T)"

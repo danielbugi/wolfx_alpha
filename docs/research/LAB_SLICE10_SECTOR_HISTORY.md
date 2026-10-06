@@ -81,6 +81,11 @@ along a chain. The pure verifier (`sector_history.verify_chain`) recomputes ever
 
 ### Same-value refresh, reclassification, vendor failure, explicit no-sector
 
+> **SUPERSEDED by Slice 11 (the "Explicit no-sector vs failure" bullet below and section 8's dual-source rule).** yfinance has no explicit no-sector
+> assertion: it is inferred only from `quoteType` ETF/MUTUALFUND; any other sector-less body is a coded `invalid_response`. `yfinance_info` is the sole
+> authority and Tiingo is diagnostic. History saying explicit no-sector against a candidate naming a sector is now `sector_no_sector_conflict`
+> (effective UNAVAILABLE). See `LAB_SLICE11_ACTIVATION_READINESS.md` sections 1-2.
+
 * **Same-value refresh**: no new observation (`value_hash` unique); a `confirmed_head` poll is recorded and extends freshness only from its own
   capture time. Re-seeing the value does not rewrite the past.
 * **Reclassification** A→B: a new chained observation at its own `captured_at`; days before it still resolve to A, days after to B. A→B→A is three rows.

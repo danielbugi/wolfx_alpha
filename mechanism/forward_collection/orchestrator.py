@@ -22,7 +22,9 @@ from research.lab.dataset_contract import decision_deadline
 from . import contract as C
 
 LOCK_KEY = int.from_bytes(hashlib.sha256(b"forward_collection_v1").digest()[:8], "big", signed=True)
-DEPENDS_ON: Dict[str, tuple] = {C.STEP_CAPTURE: (), C.STEP_OBSERVE: (), C.STEP_LABELS: (), C.STEP_VERIFY: (C.STEP_OBSERVE,)}
+# the sector-history verification is independent: it never gates (or is gated by) the market/sector/RS write -- Option B keeps a symbol with no
+# sector in the session, and the verdict still needs every REQUIRED step, so a failed refresh can never be hidden by a successful observe
+DEPENDS_ON: Dict[str, tuple] = {C.STEP_CAPTURE: (), C.STEP_SECTOR_HISTORY: (), C.STEP_OBSERVE: (), C.STEP_LABELS: (), C.STEP_VERIFY: (C.STEP_OBSERVE,)}
 TRANSIENT = (psycopg2.OperationalError, psycopg2.InterfaceError)
 
 
@@ -35,6 +37,7 @@ class Ctx:
     grace_days: int
     deadline: datetime
     results: Dict[str, C.StepResult]
+    clock: Optional[Callable[[], datetime]] = None      # the run's clock (the database's unless a test injects one)
 
 
 StepFn = Callable[[Ctx], C.StepResult]
@@ -118,7 +121,7 @@ def run_session(connect: Callable[[], Any], session: date, steps: Mapping[str, S
         if lock and not _acquire(stack, connect):
             v, miss, nxt = C.classify(session, [], apply=apply, locked=True, grace_days=grace_days, require_capture=False)
             return C.SessionReport(session, v, [], miss, nxt, apply, grace_days, deadline)
-        ctx = Ctx(connect, session, apply, code_ref, grace_days, deadline, {})
+        ctx = Ctx(connect, session, apply, code_ref, grace_days, deadline, {}, clock)
         results = []
         for name in need:
             blocked = [d for d in DEPENDS_ON[name] if d in steps and not _satisfied(ctx.results[d])]

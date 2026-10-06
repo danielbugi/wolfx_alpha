@@ -6,7 +6,8 @@ than exactly "1" means off). Nothing else in the repository may write these tabl
 What it records, per refresh attempt, in ONE transaction on its OWN connection (never the fundamentals upsert's) inside a SAVEPOINT:
   * the vendor answered with a sector equal to the chain head      -> a `confirmed_head` poll only (no duplicate observation);
   * the vendor answered with a different sector / the first one    -> a chained observation, then a `created_observation` poll;
-  * the vendor explicitly answered "no sector" (yfinance only)     -> the same, with the sector NULL and a coded reason;
+  * the vendor explicitly answered "no sector" (yfinance only, and only when the response is STRUCTURALLY a no-sector instrument -- an ETF or a
+    mutual fund; see `NON_OPERATING_QUOTE_TYPES`)                  -> the same, with the sector NULL and a coded reason;
   * the request failed or the answer could not be validated        -> a poll with chain_effect = none (the head is neither changed nor confirmed).
 A failure of any of this rolls back to the savepoint, is logged with the symbol and reason, is counted, and is NEVER raised into the fundamentals
 ingestion. The vendor's own validity time is never invented: `source_asof` stays NULL (yfinance and Tiingo meta supply the CURRENT classification
@@ -32,6 +33,18 @@ CODE_REF = "mechanism/data_updaters/sector_history_recorder.py#record_poll@v1"
 SRC_TIINGO, SRC_YFINANCE = "tiingo_meta", "yfinance_info"
 SECTOR_MAX, RAW_MAX, MIN_YF_KEYS = 100, 200, 5
 
+# SOURCE IDENTITY (Slice 11, policy A): ONE vendor owns the forward sector identity. The other is recorded as its own DIAGNOSTIC chain (evidence
+# for cross-source disagreement) and can never stand in for the authoritative one: there is no fallback identity, so a provider outage can never
+# splice two vendors into one chain. `research.lab.sector_history.AUTHORITATIVE_SOURCE` pins the same value (a test keeps them equal).
+AUTHORITATIVE_SOURCE = SRC_YFINANCE
+DIAGNOSTIC_SOURCES = (SRC_TIINGO,)
+
+# yfinance has no field that ASSERTS "no sector": the key is simply absent for ETFs and mutual funds (probed live 2026-10-06) but it is ALSO absent
+# from a partial or degraded answer for an operating company. The only structural evidence that the absence is meaningful is `quoteType`. Only the
+# values actually observed to carry no sector are listed; any other quoteType (or none) is "responded, no usable sector", never an explicit no-sector.
+NON_OPERATING_QUOTE_TYPES = ("ETF", "MUTUALFUND")
+OPERATING_QUOTE_TYPES = ("EQUITY",)
+
 
 def enabled() -> bool:
     return os.getenv(FLAG_ENV, "") == "1"
@@ -51,31 +64,76 @@ class Outcome:
     no_sector_reason: Optional[str] = None
     failure_reason: Optional[str] = None
     payload_hash: Optional[str] = None
+    quote_type: Optional[str] = None     # the structural evidence behind an explicit no-sector (yfinance only); part of the hashed projection
 
 
-def payload_hash(raw: Any) -> str:
-    body = json.dumps({"sector": raw}, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+def projection(raw: Any, quote_type: Optional[str] = None) -> Dict[str, Any]:
+    """The minimal projection of the vendor response that is hashed and stored (never a full vendor payload)."""
+    out: Dict[str, Any] = {"sector": raw}
+    if quote_type is not None:
+        out["quote_type"] = quote_type
+    return out
+
+
+def payload_hash(raw: Any, quote_type: Optional[str] = None) -> str:
+    body = json.dumps(projection(raw, quote_type), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(body.encode("utf-8")).hexdigest()
 
 
-def projection(raw: Any) -> Dict[str, Any]:
-    return {"sector": raw}
+def yfinance_meta(raw: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+    """The structural evidence of ONE raw yfinance `Ticker.info` dict, taken BEFORE `fetch_company_info` flattens it (`info.get('sector')` turns an
+    absent key and an explicit null into the same None). The updater and the dry run both call this one function."""
+    raw = raw or {}
+    qt = raw.get("quoteType")
+    return {"quote_type": qt.strip().upper() if isinstance(qt, str) and qt.strip() else None, "n_keys": len(raw),
+            "sector_key_present": "sector" in raw}
+
+
+def yfinance_company_info(raw: Optional[Mapping[str, Any]]) -> Optional[Dict[str, Any]]:
+    """The sector-relevant view of a raw yfinance answer, exactly as `FundamentalsUpdater.fetch_company_info` flattens it: no/short answer -> None
+    (the updater's `len(info) < 5` gate), else `{'sector': info.get('sector')}`. The dry run uses this so it never carries a second parser."""
+    if not raw or len(raw) < MIN_YF_KEYS:
+        return None
+    return {"sector": raw.get("sector")}
 
 
 def _fail(source: str, state: str, reason: str, raw: Any = None, with_hash: bool = False) -> Outcome:
     return Outcome(source=source, response_state=state, failure_reason=reason, payload_hash=payload_hash(raw) if with_hash else None)
 
 
-def classify(source: str, info: Optional[Mapping[str, Any]], error: Optional[BaseException] = None) -> Outcome:
-    """Pure: what one vendor interaction means for the chain. `info` is the dict `fetch_company_info` returned (or None), `error` what it raised.
+def _no_usable_yfinance_sector(reason: str, raw: Any, meta: Optional[Mapping[str, Any]]) -> Outcome:
+    """yfinance gave no usable sector. Two DIFFERENT meanings, never merged:
+       * the response's quoteType is a verified non-operating type -> an explicit no-sector (the structural fact is the evidence);
+       * anything else (an operating company, an unknown type, no evidence) -> `invalid_response`: it RESPONDED but supplied no usable sector and
+         nothing proves the absence is meaningful. That never creates an observation, so it can never contradict a candidate's sector."""
+    if meta is None:
+        return _fail(SRC_YFINANCE, "invalid_response", "quote_type_evidence_missing", raw, True)
+    qt = meta.get("quote_type")
+    if qt in NON_OPERATING_QUOTE_TYPES:
+        return Outcome(source=SRC_YFINANCE, response_state="no_sector", sector_raw=raw if isinstance(raw, str) else None, no_sector_reason=reason,
+                       payload_hash=payload_hash(raw, qt), quote_type=qt)
+    if qt in OPERATING_QUOTE_TYPES:
+        return _fail(SRC_YFINANCE, "invalid_response", "operating_company_sector_absent", raw, True)
+    return _fail(SRC_YFINANCE, "invalid_response", "quote_type_missing" if qt is None else "quote_type_unrecognised", raw, True)
+
+
+def classify(source: str, info: Optional[Mapping[str, Any]], error: Optional[BaseException] = None,
+             meta: Optional[Mapping[str, Any]] = None) -> Outcome:
+    """Pure: what one vendor interaction means for the chain. `info` is the dict `fetch_company_info` returned (or None), `error` what it raised,
+    `meta` the `yfinance_meta` evidence of the raw response (yfinance only; None when unavailable).
+
+    Four states, kept distinct:  request_failed (the vendor did not answer)  /  invalid_response (it answered but supplied no usable sector)  /
+    no_sector (it answered AND the answer is structurally a no-sector instrument)  /  sector.
 
     A Tiingo answer with no sector is AMBIGUOUS (a swallowed meta failure and the Power-plan placeholder are both turned into None upstream), so it
-    is recorded as an invalid response, never as an explicit "no sector". Only yfinance's `info` (already required to carry >= 5 fields) can say
-    "no sector" explicitly.
+    is recorded as an invalid response, never as an explicit "no sector". A yfinance answer can say "no sector" explicitly ONLY with non-operating
+    quoteType evidence (Slice 11): a bare absent / null / blank / "Unknown" sector is not an assertion.
     """
     if error is not None:
         return _fail(source, "request_failed", "timeout" if isinstance(error, TimeoutError) else "request_error")
     if info is None:
+        if meta is not None and meta.get("n_keys", 0) > 0:             # it answered, with too little to use (e.g. a 404 body)
+            return _fail(source, "invalid_response", "response_too_sparse")
         return _fail(source, "request_failed", "no_company_info")
     if "sector" not in info:
         return _fail(source, "invalid_response", "sector_field_missing")
@@ -83,22 +141,45 @@ def classify(source: str, info: Optional[Mapping[str, Any]], error: Optional[Bas
     if raw is None:
         if source == SRC_TIINGO:
             return _fail(source, "invalid_response", "ambiguous_source_none", None, True)
-        return Outcome(source=source, response_state="no_sector", no_sector_reason="vendor_null", payload_hash=payload_hash(None))
+        return _no_usable_yfinance_sector("vendor_null", None, meta)
     if not isinstance(raw, str):
         return _fail(source, "invalid_response", "non_string_sector", str(raw), True)
     stripped = raw.strip()
     if not stripped:
         if source == SRC_TIINGO:
             return _fail(source, "invalid_response", "ambiguous_source_none", raw, True)
-        return Outcome(source=source, response_state="no_sector", sector_raw=raw, no_sector_reason="vendor_blank", payload_hash=payload_hash(raw))
+        return _no_usable_yfinance_sector("vendor_blank", raw, meta)
     if stripped.lower() == "unknown":
         if source == SRC_TIINGO:
             return _fail(source, "invalid_response", "ambiguous_source_none", raw, True)
-        return Outcome(source=source, response_state="no_sector", sector_raw=raw, no_sector_reason="vendor_unknown_label",
-                       payload_hash=payload_hash(raw))
+        return _no_usable_yfinance_sector("vendor_unknown_label", raw, meta)
     if len(stripped) > SECTOR_MAX or len(raw) > RAW_MAX:
         return _fail(source, "invalid_response", "oversized_sector", raw, True)
     return Outcome(source=source, response_state="sector", sector=stripped, sector_raw=raw, payload_hash=payload_hash(raw))
+
+
+@dataclass(frozen=True)
+class Decision:
+    """What recording one answered poll against a chain head does. `head` is `(id, seq, value_hash, sector, run_id)` or None."""
+    chain_effect: str                    # created_observation | confirmed_head | none
+    change_kind: Optional[str] = None    # first | changed | became_none | became_set (only when a NEW observation is proposed)
+    seq: Optional[int] = None
+    prev_value_hash: Optional[str] = None
+    observation_id: Optional[int] = None  # the existing observation a poll points at (confirmed head, or a retry's own observation)
+
+
+def decide(head: Optional[tuple], o: Outcome, run_id: str) -> Decision:
+    """Pure: the chain decision for one outcome. The ONE place the same-value / new-observation rule lives (the writer and the dry run share it)."""
+    if o.response_state not in ("sector", "no_sector"):
+        return Decision("none")
+    if head is not None and head[3] == o.sector:                       # same effective sector (both NULL = same explicit no-sector)
+        if head[4] == run_id:                                          # a retry whose observation already committed: the poll that created it
+            return Decision("created_observation", observation_id=head[0])
+        return Decision("confirmed_head", observation_id=head[0])
+    if head is None:
+        return Decision("created_observation", "first", 1, None)
+    kind = "became_set" if head[3] is None else ("became_none" if o.sector is None else "changed")
+    return Decision("created_observation", kind, head[1] + 1, head[2])
 
 
 def _lock(cur, symbol: str, source: str) -> None:
@@ -138,27 +219,16 @@ def _record_answer(cur, o: Outcome, run_id: str, symbol: str) -> str:
     cur.execute("SELECT id, seq, value_hash, sector, run_id FROM sector_observation WHERE symbol = %s AND source = %s ORDER BY seq DESC LIMIT 1",
                 (symbol, o.source))
     head = cur.fetchone()
-    if head is not None and head[3] == o.sector:                       # same effective sector (both NULL = same explicit no-sector)
-        head_id, head_run = head[0], head[4]
-        if head_run == run_id:                                         # a retry whose observation already committed: the poll that created it
-            _insert_poll(cur, o, run_id, symbol, "created_observation", head_id)
-            return "created_observation"
-        _insert_poll(cur, o, run_id, symbol, "confirmed_head", head_id)
-        return "confirmed_head"
-    seq, prev = (1, None) if head is None else (head[1] + 1, head[2])
-    if head is None:
-        kind = "first"
-    elif head[3] is None:
-        kind = "became_set"
-    elif o.sector is None:
-        kind = "became_none"
-    else:
-        kind = "changed"
+    d = decide(head, o, run_id)
+    if d.observation_id is not None:                                   # confirmed head, or a retry whose observation already committed
+        _insert_poll(cur, o, run_id, symbol, d.chain_effect, d.observation_id)
+        return d.chain_effect
+    seq, prev, kind = d.seq, d.prev_value_hash, d.change_kind
     cur.execute(
         "INSERT INTO sector_observation (symbol, source, seq, sector, sector_raw, no_sector_reason, change_kind, source_asof, provenance, "
         "raw_payload_hash, raw_payload, run_id, writer, code_ref, prev_value_hash) "
         "VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, 'observed_forward', %s, %s::jsonb, %s, %s, %s, %s) RETURNING id",
-        (symbol, o.source, seq, o.sector, o.sector_raw, o.no_sector_reason, kind, o.payload_hash, json.dumps(projection(o.sector_raw)),
+        (symbol, o.source, seq, o.sector, o.sector_raw, o.no_sector_reason, kind, o.payload_hash, json.dumps(projection(o.sector_raw, o.quote_type)),
          run_id, WRITER, CODE_REF, prev))
     obs_id = cur.fetchone()[0]
     _insert_poll(cur, o, run_id, symbol, "created_observation", obs_id)
@@ -189,13 +259,14 @@ class SectorRecorder:
         from shared import db
         return db.get_sync_connection()
 
-    def record(self, symbol: str, source: str, info: Optional[Mapping[str, Any]], error: Optional[BaseException] = None) -> Optional[str]:
+    def record(self, symbol: str, source: str, info: Optional[Mapping[str, Any]], error: Optional[BaseException] = None,
+               meta: Optional[Mapping[str, Any]] = None) -> Optional[str]:
         """Record one poll; NEVER raises. Returns the chain effect, or None when disabled or when recording failed (counted + logged)."""
         if not self._enabled():
             return None
         self.counters["attempted"] += 1
         try:
-            outcome = classify(source, info, error)
+            outcome = classify(source, info, error, meta)
             with self._conn() as conn:
                 effect = record_poll(conn, outcome, run_id=self.run_id, symbol=symbol)
             self.counters["duplicate" if effect == "duplicate_poll" else "recorded"] += 1
@@ -204,3 +275,96 @@ class SectorRecorder:
             self.counters["failed"] += 1
             logger.error("sector history NOT recorded for %s (%s, run %s): %s: %s", symbol, source, self.run_id, type(e).__name__, e)
             return None
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------------------
+# NON-MUTATING DRY RUN (Slice 11). Reuses `classify` / `decide` / `payload_hash` / `yfinance_meta` / `yfinance_company_info` verbatim: there is no second
+# parser. It takes NO connection and writes NOTHING (it cannot: it has no handle to a database); `writes` is always False in its output.
+# ---------------------------------------------------------------------------------------------------------------------------------------------
+_ERRORS = {"timeout": TimeoutError, "request_error": RuntimeError}
+
+
+def source_identity(source: str) -> str:
+    return "authoritative" if source == AUTHORITATIVE_SOURCE else ("diagnostic" if source in DIAGNOSTIC_SOURCES else "unknown")
+
+
+def dry_run(symbol: str, source: str, *, raw: Optional[Mapping[str, Any]] = None, error: Optional[str] = None,
+            head: Optional[Mapping[str, Any]] = None, run_id: str = "dry-run") -> Dict[str, Any]:
+    """What ONE vendor interaction would do, without doing it. `raw` is the vendor answer as the updater sees it for that source (for yfinance the raw
+    `Ticker.info` dict; for Tiingo the flattened company-info dict); `error` is `timeout` / `request_error` / None; `head` is the chain head the
+    interaction would be recorded against (`{"seq", "value_hash", "sector", "run_id"}`) or None for a new chain."""
+    meta = None
+    if source == SRC_YFINANCE:
+        meta = yfinance_meta(raw)
+        info = yfinance_company_info(raw)
+    else:
+        info = None if raw is None else dict(raw)
+    exc = _ERRORS[error]("dry run: simulated " + error) if error else None
+    o = classify(source, info, exc, meta)
+    head_t = None if head is None else (0, head.get("seq", 1), head.get("value_hash"), head.get("sector"), head.get("run_id"))
+    d = decide(head_t, o, run_id)
+    identity = source_identity(source)
+    answered = o.response_state in ("sector", "no_sector")
+    if identity != "authoritative":
+        reason = "diagnostic_source_is_not_identity" if identity == "diagnostic" else "unknown_source"
+    elif not answered:
+        reason = f"{o.response_state}:{o.failure_reason}"
+    else:
+        reason = None
+    observation = None
+    if d.chain_effect == "created_observation" and d.seq is not None:
+        observation = {"seq": d.seq, "change_kind": d.change_kind, "sector": o.sector, "no_sector_reason": o.no_sector_reason,
+                       "prev_value_hash": d.prev_value_hash}
+    return {
+        "symbol": symbol, "source": source, "source_identity": identity,
+        "outcome": {"response_state": o.response_state, "sector": o.sector, "sector_raw": o.sector_raw, "no_sector_reason": o.no_sector_reason,
+                    "failure_reason": o.failure_reason, "quote_type": o.quote_type},
+        "proposed_poll": {"response_state": o.response_state, "chain_effect": d.chain_effect},
+        "proposed_observation": observation,
+        "source_asof": None,
+        "raw_payload_hash": o.payload_hash,
+        "recorded_on_own_chain": answered,
+        "admissible_for_forward_history": identity == "authoritative" and answered,
+        "rejection_reason": reason,
+        "writes": False,
+    }
+
+
+def fetch_yfinance_raw(symbol: str, timeout: float = 20.0) -> Optional[Dict[str, Any]]:
+    """READ-ONLY live probe used only by the dry-run CLI: one yfinance `Ticker.info` request with a hard wall-clock timeout. Raises TimeoutError."""
+    import concurrent.futures
+    import yfinance as yf
+    ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    fut = ex.submit(lambda: yf.Ticker(symbol).info)
+    try:
+        return fut.result(timeout=timeout)
+    except concurrent.futures.TimeoutError:
+        raise TimeoutError(f"yfinance probe timed out for {symbol}")
+    finally:
+        ex.shutdown(wait=False)
+
+
+def main(argv=None) -> int:
+    import argparse
+    ap = argparse.ArgumentParser(description="Non-mutating dry run of the forward sector-history normalization (writes nothing, needs no database).")
+    ap.add_argument("--fixture", help="JSON list of {symbol, source, raw, error, head}")
+    ap.add_argument("--live-yfinance", default="", help="comma-separated symbols probed LIVE against yfinance (read-only; network)")
+    args = ap.parse_args(argv)
+    cases = []
+    if args.fixture:
+        with open(args.fixture, encoding="utf-8") as fh:
+            cases += json.load(fh)
+    for sym in [s.strip().upper() for s in args.live_yfinance.split(",") if s.strip()]:
+        try:
+            cases.append({"symbol": sym, "source": SRC_YFINANCE, "raw": fetch_yfinance_raw(sym)})
+        except TimeoutError:
+            cases.append({"symbol": sym, "source": SRC_YFINANCE, "error": "timeout"})
+        except Exception:                                               # noqa: BLE001 - a probe failure is a result, not a crash
+            cases.append({"symbol": sym, "source": SRC_YFINANCE, "error": "request_error"})
+    out = [dry_run(c["symbol"], c["source"], raw=c.get("raw"), error=c.get("error"), head=c.get("head")) for c in cases]
+    print(json.dumps(out, indent=2, sort_keys=True, ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

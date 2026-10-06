@@ -15,6 +15,8 @@ from data_updaters import sector_history_recorder as R
 
 INFO = lambda sector: {"sector": sector, "industry": "x", "a": 1, "b": 2, "c": 3, "market_cap": 5}   # noqa: E731  (>= 5 keys: a real yfinance info)
 YF, TG = R.SRC_YFINANCE, R.SRC_TIINGO
+ETF_META = {"quote_type": "ETF", "n_keys": 6, "sector_key_present": False}
+RAW_EQUITY = lambda sector: {"sector": sector, "quoteType": "EQUITY", "industry": "x", "a": 1, "b": 2, "c": 3}   # noqa: E731
 
 
 class Harness:
@@ -27,6 +29,9 @@ class Harness:
         self.upsert_result = True
         self.fetch = lambda symbol: INFO("Technology")
         self.vendor = YF
+        self.meta = None                                                                            # the raw-answer evidence `fetch_company_info` would capture
+        self.yf_probe = lambda symbol: RAW_EQUITY("Technology")                                     # the authoritative probe made when Tiingo served the symbol
+        self.u._fetch_yfinance_raw = lambda symbol: self.yf_probe(symbol)
         self.u.update_daily_fundamentals = self._upsert
         self.u.fetch_company_info = self._fetch
 
@@ -38,6 +43,7 @@ class Harness:
 
     def _fetch(self, symbol):
         self.u._sector_vendor = self.vendor
+        self.u._sector_meta = self.meta
         return self.fetch(symbol)
 
     def recorder(self, run_id="run-1", connect=None):
@@ -210,18 +216,27 @@ def test_a_vendor_failure_is_a_poll_that_never_touches_the_chain(h, sector_env):
     assert len(h.upserts) == 1                                                                      # no upsert for a failed fetch
 
 
-def test_explicit_no_sector_is_recorded_for_yfinance_but_never_for_the_ambiguous_tiingo_none(h, sector_env):
+def test_explicit_no_sector_is_recorded_for_yfinance_with_evidence_but_never_for_the_ambiguous_tiingo_none(h, sector_env):
     h.recorder("run-1")
-    h.fetch = lambda s: INFO(None)
+    h.fetch, h.meta = (lambda s: INFO(None)), ETF_META
     assert h.u.update_symbol("YF") is True
-    h.vendor = TG
+    h.vendor, h.meta = TG, None
     h.recorder("run-2")
     h.fetch = lambda s: {"sector": None, "industry": None}
+    h.yf_probe = lambda s: None                                                                     # the authoritative probe also finds nothing usable
     assert h.u.update_symbol("TG") is True                                                          # ingestion proceeds as before
     assert obs(sector_env, "YF") == [(1, None, "first", YF, "run-1", R.WRITER)]
     assert polls(sector_env, "YF") == [("run-1", "no_sector", "created_observation", None)]
     assert obs(sector_env, "TG") == []                                                              # Tiingo's None is ambiguous: no observation ...
-    assert polls(sector_env, "TG") == [("run-2", "invalid_response", "none", "ambiguous_source_none")]   # ... only the poll that says why
+    assert [p for p in polls(sector_env, "TG") if p[1:] == ("invalid_response", "none", "ambiguous_source_none")] == [("run-2", "invalid_response", "none", "ambiguous_source_none")]
+
+
+def test_an_operating_company_with_no_sector_is_not_an_explicit_no_sector(h, sector_env):
+    h.recorder("run-1")
+    h.fetch, h.meta = (lambda s: INFO(None)), {"quote_type": "EQUITY", "n_keys": 6, "sector_key_present": False}
+    assert h.u.update_symbol("EQ") is True
+    assert obs(sector_env, "EQ") == []
+    assert polls(sector_env, "EQ") == [("run-1", "invalid_response", "none", "operating_company_sector_absent")]
 
 
 def test_a_same_value_refresh_is_a_poll_and_no_second_observation(h, sector_env):
@@ -253,6 +268,42 @@ def test_the_vendor_tag_follows_the_real_fetch_path(monkeypatch, sector_env):
     h.recorder()
     assert h.u.update_symbol("AAA") is True
     assert obs(sector_env)[0][3] == TG and h.u._sector_vendor == TG
+
+
+def test_the_real_yfinance_fetch_path_captures_the_evidence_a_flattened_info_loses(monkeypatch, sector_env):
+    """The real `fetch_company_info` (yfinance configured): an ETF answer has NO `sector` key; the structural evidence (quoteType) is captured from the
+    RAW answer before it is flattened, so the explicit no-sector is recorded with that evidence; an operating company with the same gap is not."""
+    raw = {"symbol": "SPY", "quoteType": "ETF", "longName": "x", "exchange": "PCX", "currency": "USD", "market": "us_market"}
+    h = Harness(monkeypatch, sector_env[1])
+    h.u.fetch_company_info = FU.FundamentalsUpdater.fetch_company_info.__get__(h.u)
+    del h.u._fetch_yfinance_raw
+    monkeypatch.setattr(FU.config, "data_provider", "yfinance", raising=False)
+    answers = {"SPY": raw, "EQ": dict(raw, symbol="EQ", quoteType="EQUITY")}
+    monkeypatch.setattr(FU.FundamentalsUpdater, "_fetch_yfinance_raw", lambda self, symbol: answers[symbol])
+    h.recorder()
+    assert h.u.update_symbol("SPY") is True and h.u.update_symbol("EQ") is True
+    assert obs(sector_env, "SPY") == [(1, None, "first", YF, "run-1", R.WRITER)]
+    assert rows(sector_env, "SELECT no_sector_reason, raw_payload FROM sector_observation WHERE symbol = 'SPY'") == [("vendor_null", {"sector": None, "quote_type": "ETF"})]
+    assert obs(sector_env, "EQ") == [] and polls(sector_env, "EQ") == [("run-1", "invalid_response", "none", "operating_company_sector_absent")]
+
+
+def test_when_tiingo_serves_the_symbol_the_authoritative_chain_is_probed_separately_and_the_two_never_mix(monkeypatch, sector_env):
+    import shared.tiingo_client as T
+    h = Harness(monkeypatch, sector_env[1])
+    h.u.fetch_company_info = FU.FundamentalsUpdater.fetch_company_info.__get__(h.u)
+    monkeypatch.setattr(FU.config, "data_provider", "tiingo", raising=False)
+    monkeypatch.setattr(T, "get_fundamentals", lambda symbol: {"sector": "Technology", "industry": "x"})
+    h.yf_probe = lambda s: RAW_EQUITY("Information Technology")                                    # a different taxonomy from Tiingo's
+    h.recorder()
+    assert h.u.update_symbol("AAA") is True
+    assert {(o[3], o[1]) for o in obs(sector_env)} == {(TG, "Technology"), (YF, "Information Technology")}   # two chains, neither contaminates the other
+    assert h.upserts[0]["sector"] == "Technology"                                                   # the ingestion value is unchanged by the probe
+    h.recorder("run-2")
+    h.yf_probe = lambda s: (_ for _ in ()).throw(TimeoutError("probe"))                            # the authoritative probe fails the next day
+    assert h.u.update_symbol("AAA") is True
+    got = rows(sector_env, "SELECT run_id, source, response_state, chain_effect, failure_reason FROM sector_poll WHERE run_id = 'run-2' ORDER BY source")
+    assert got == [("run-2", TG, "sector", "confirmed_head", None), ("run-2", YF, "request_failed", "none", "timeout")]
+    assert [o[1] for o in obs(sector_env) if o[3] == YF] == ["Information Technology"]            # the failure neither erased the head nor borrowed Tiingo's sector
 
 
 def test_the_run_result_exposes_the_recorder_counters(monkeypatch, sector_env):

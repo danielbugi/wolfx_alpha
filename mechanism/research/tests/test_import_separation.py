@@ -97,7 +97,7 @@ def test_activation_table_is_only_read_by_runtime_code():
                             "mechanism/check_research_migration_preflight.py",
                             "mechanism/research/schema_fingerprint.py", "mechanism/validate_release_b.py",
                             "mechanism/research/lab/research_status_reader.py",
-                            "mechanism/forward_collection/preflight.py"}
+                            "mechanism/forward_collection/preflight.py", "mechanism/forward_collection/activation.py"}
 
 
 def test_no_runtime_python_writes_any_research_table_except_through_the_capture_repository():

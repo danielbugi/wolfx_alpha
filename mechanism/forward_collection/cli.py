@@ -1,4 +1,4 @@
-"""python -m forward_collection run|verify|preflight   (dry-run by default; --apply needs --code-ref; nothing here schedules anything)."""
+"""python -m forward_collection run|verify|verify-sector-history|preflight|activation   (dry-run by default; --apply needs --code-ref; nothing here schedules anything)."""
 from __future__ import annotations
 
 import argparse
@@ -31,8 +31,20 @@ def _parser() -> argparse.ArgumentParser:
             s.add_argument("--apply", action="store_true")
             s.add_argument("--code-ref")
             s.add_argument("--with-capture-check", action="store_true", help="also require a complete candidate capture run for the session")
+            s.add_argument("--with-sector-history-check", action="store_true",
+                           help="also require the authoritative sector history to have been refreshed for the session's universe (read-only verification)")
+    s = sub.add_parser("verify-sector-history", help="read-only: was the authoritative sector history refreshed for the session? (exit 0/2/4)")
+    g = s.add_mutually_exclusive_group(required=True)
+    g.add_argument("--session", type=date.fromisoformat)
+    g.add_argument("--latest-completed", action="store_true")
+    s.add_argument("--grace-days", type=int, default=1)
     s = sub.add_parser("preflight")
     s.add_argument("--spec", required=True)
+    s = sub.add_parser("activation", help="read-only: the complete activation preflight (architecture / environment / activation layers)")
+    s.add_argument("--spec", required=True)
+    s.add_argument("--runtime-role", default="donchian_app")
+    s.add_argument("--gate", action="append", default=[], metavar="NAME=yes",
+                   help="an owner/operational gate the caller attests to (repeatable); a gate that is not supplied is NO")
     return p
 
 
@@ -56,6 +68,13 @@ def main(argv: Optional[Sequence[str]] = None, *, connect: Optional[Callable[[],
                 rep = preflight.run_preflight(connect, json.load(fh))
             out(json.dumps(rep, sort_keys=True, default=str))
             return C.EXIT_COMPLETE if rep["collector_stack_ready_for_activation"] == "YES" else C.EXIT_INCOMPLETE
+        if args.cmd == "activation":
+            from . import activation
+            gates = dict(g.split("=", 1) for g in args.gate if "=" in g)
+            with open(args.spec, encoding="utf-8") as fh:
+                rep = activation.run_activation_preflight(connect, json.load(fh), gates=gates, runtime_role=args.runtime_role)
+            out(json.dumps(rep, sort_keys=True, default=str))
+            return C.EXIT_COMPLETE if rep["forward_research_collection_ready_for_activation"] == "YES" else C.EXIT_INCOMPLETE
         from shared import market_calendar as mc
         clock = clock or O.db_clock(connect)
         sessions_provider = sessions_provider or _default_sessions
@@ -75,7 +94,13 @@ def main(argv: Optional[Sequence[str]] = None, *, connect: Optional[Callable[[],
             r = S.make_verify(args.feature_set_version)(ctx)
             out(json.dumps({"schema": C.SCHEMA, "session": day.isoformat(), "how": how, **r.to_dict()}, sort_keys=True, default=str))
             return C.EXIT_COMPLETE if r.ok() else (C.EXIT_MISSED if r.detail.get("permanent_problems") else C.EXIT_INCOMPLETE)
-        steps = S.make_steps(feature_set_version=args.feature_set_version, with_capture=args.with_capture_check)
+        if args.cmd == "verify-sector-history":
+            ctx = O.Ctx(connect, day, False, None, args.grace_days, O.decision_deadline(day, args.grace_days), {}, clock)
+            r = S.make_sector_history_verify()(ctx)
+            out(json.dumps({"schema": C.SCHEMA, "session": day.isoformat(), "how": how, **r.to_dict()}, sort_keys=True, default=str))
+            return C.EXIT_COMPLETE if r.ok() else (C.EXIT_MISSED if r.detail.get("permanent_problems") else C.EXIT_INCOMPLETE)
+        steps = S.make_steps(feature_set_version=args.feature_set_version, with_capture=args.with_capture_check,
+                             with_sector_history=args.with_sector_history_check)
         rep = O.run_session(connect, day, steps, apply=args.apply, grace_days=args.grace_days, code_ref=args.code_ref, clock=clock)
         out(json.dumps({**rep.to_dict(), "session_resolution": how}, sort_keys=True, default=str))
         return rep.exit_code()

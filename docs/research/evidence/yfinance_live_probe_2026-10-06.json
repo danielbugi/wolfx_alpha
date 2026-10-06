@@ -1,0 +1,574 @@
+{
+ "cases": [
+  {
+   "n_keys": 183,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NMS",
+    "industry": "Consumer Electronics",
+    "longName": "Apple Inc.",
+    "quoteType": "EQUITY",
+    "sector": "Technology",
+    "shortName": "Apple Inc.",
+    "symbol": "AAPL"
+   },
+   "symbol": "AAPL"
+  },
+  {
+   "n_keys": 183,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NMS",
+    "industry": "Software - Infrastructure",
+    "longName": "Microsoft Corporation",
+    "quoteType": "EQUITY",
+    "sector": "Technology",
+    "shortName": "Microsoft Corporation",
+    "symbol": "MSFT"
+   },
+   "symbol": "MSFT"
+  },
+  {
+   "n_keys": 185,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NMS",
+    "industry": "Semiconductors",
+    "longName": "NVIDIA Corporation",
+    "quoteType": "EQUITY",
+    "sector": "Technology",
+    "shortName": "NVIDIA Corporation",
+    "symbol": "NVDA"
+   },
+   "symbol": "NVDA"
+  },
+  {
+   "n_keys": 177,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NYQ",
+    "industry": "Banks - Diversified",
+    "longName": "JPMorgan Chase & Co.",
+    "quoteType": "EQUITY",
+    "sector": "Financial Services",
+    "shortName": "JP Morgan Chase & Co.",
+    "symbol": "JPM"
+   },
+   "symbol": "JPM"
+  },
+  {
+   "n_keys": 184,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NYQ",
+    "industry": "Oil & Gas Integrated",
+    "longName": "ExxonMobil Holdings Corporation",
+    "quoteType": "EQUITY",
+    "sector": "Energy",
+    "shortName": "ExxonMobil Holdings Corporation",
+    "symbol": "XOM"
+   },
+   "symbol": "XOM"
+  },
+  {
+   "n_keys": 182,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NYQ",
+    "industry": "Drug Manufacturers - General",
+    "longName": "Johnson & Johnson",
+    "quoteType": "EQUITY",
+    "sector": "Healthcare",
+    "shortName": "Johnson & Johnson",
+    "symbol": "JNJ"
+   },
+   "symbol": "JNJ"
+  },
+  {
+   "n_keys": 183,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NYQ",
+    "industry": "Household & Personal Products",
+    "longName": "The Procter & Gamble Company",
+    "quoteType": "EQUITY",
+    "sector": "Consumer Defensive",
+    "shortName": "Procter & Gamble Company (The)",
+    "symbol": "PG"
+   },
+   "symbol": "PG"
+  },
+  {
+   "n_keys": 183,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NYQ",
+    "industry": "Beverages - Non-Alcoholic",
+    "longName": "The Coca-Cola Company",
+    "quoteType": "EQUITY",
+    "sector": "Consumer Defensive",
+    "shortName": "Coca-Cola Company (The)",
+    "symbol": "KO"
+   },
+   "symbol": "KO"
+  },
+  {
+   "n_keys": 174,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NYQ",
+    "industry": "Insurance - Diversified",
+    "longName": "Berkshire Hathaway Inc.",
+    "quoteType": "EQUITY",
+    "sector": "Financial Services",
+    "shortName": "Berkshire Hathaway Inc. New",
+    "symbol": "BRK-B"
+   },
+   "symbol": "BRK-B"
+  },
+  {
+   "n_keys": 177,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NMS",
+    "industry": "Internet Retail",
+    "longName": "Amazon.com, Inc.",
+    "quoteType": "EQUITY",
+    "sector": "Consumer Cyclical",
+    "shortName": "Amazon.com, Inc.",
+    "symbol": "AMZN"
+   },
+   "symbol": "AMZN"
+  },
+  {
+   "n_keys": 176,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NMS",
+    "industry": "Auto Manufacturers",
+    "longName": "Tesla, Inc.",
+    "quoteType": "EQUITY",
+    "sector": "Consumer Cyclical",
+    "shortName": "Tesla, Inc.",
+    "symbol": "TSLA"
+   },
+   "symbol": "TSLA"
+  },
+  {
+   "n_keys": 176,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NMS",
+    "industry": "Software - Infrastructure",
+    "longName": "Palantir Technologies Inc.",
+    "quoteType": "EQUITY",
+    "sector": "Technology",
+    "shortName": "Palantir Technologies Inc.",
+    "symbol": "PLTR"
+   },
+   "symbol": "PLTR"
+  },
+  {
+   "n_keys": 174,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NMS",
+    "industry": "Credit Services",
+    "longName": "SoFi Technologies, Inc.",
+    "quoteType": "EQUITY",
+    "sector": "Financial Services",
+    "shortName": "SoFi Technologies, Inc.",
+    "symbol": "SOFI"
+   },
+   "symbol": "SOFI"
+  },
+  {
+   "n_keys": 181,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NYQ",
+    "industry": "Auto Manufacturers",
+    "longName": "Ford Motor Company",
+    "quoteType": "EQUITY",
+    "sector": "Consumer Cyclical",
+    "shortName": "Ford Motor Company",
+    "symbol": "F"
+   },
+   "symbol": "F"
+  },
+  {
+   "n_keys": 183,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NYQ",
+    "industry": "Telecom Services",
+    "longName": "AT&T Inc.",
+    "quoteType": "EQUITY",
+    "sector": "Communication Services",
+    "shortName": "AT&T Inc.",
+    "symbol": "T"
+   },
+   "symbol": "T"
+  },
+  {
+   "n_keys": 184,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NYQ",
+    "industry": "REIT - Retail",
+    "longName": "Realty Income Corporation",
+    "quoteType": "EQUITY",
+    "sector": "Real Estate",
+    "shortName": "Realty Income Corporation",
+    "symbol": "O"
+   },
+   "symbol": "O"
+  },
+  {
+   "n_keys": 182,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NYQ",
+    "industry": "REIT - Industrial",
+    "longName": "Prologis, Inc.",
+    "quoteType": "EQUITY",
+    "sector": "Real Estate",
+    "shortName": "Prologis, Inc.",
+    "symbol": "PLD"
+   },
+   "symbol": "PLD"
+  },
+  {
+   "n_keys": 182,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NYQ",
+    "industry": "Utilities - Regulated Electric",
+    "longName": "NextEra Energy, Inc.",
+    "quoteType": "EQUITY",
+    "sector": "Utilities",
+    "shortName": "NextEra Energy, Inc.",
+    "symbol": "NEE"
+   },
+   "symbol": "NEE"
+  },
+  {
+   "n_keys": 182,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NYQ",
+    "industry": "Healthcare Plans",
+    "longName": "UnitedHealth Group Incorporated",
+    "quoteType": "EQUITY",
+    "sector": "Healthcare",
+    "shortName": "UnitedHealth Group Incorporated",
+    "symbol": "UNH"
+   },
+   "symbol": "UNH"
+  },
+  {
+   "n_keys": 185,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NYQ",
+    "industry": "Farm & Heavy Construction Machinery",
+    "longName": "Caterpillar Inc.",
+    "quoteType": "EQUITY",
+    "sector": "Industrials",
+    "shortName": "Caterpillar, Inc.",
+    "symbol": "CAT"
+   },
+   "symbol": "CAT"
+  },
+  {
+   "n_keys": 100,
+   "raw": {
+    "currency": "USD",
+    "exchange": "PCX",
+    "longName": "State Street SPDR S&P 500 ETF Trust",
+    "quoteType": "ETF",
+    "shortName": "State Street SPDR S&P 500 ETF T",
+    "symbol": "SPY"
+   },
+   "symbol": "SPY"
+  },
+  {
+   "n_keys": 99,
+   "raw": {
+    "currency": "USD",
+    "exchange": "NGM",
+    "longName": "Invesco QQQ Trust",
+    "quoteType": "ETF",
+    "shortName": "Invesco QQQ Trust, Series 1",
+    "symbol": "QQQ"
+   },
+   "symbol": "QQQ"
+  },
+  {
+   "n_keys": 98,
+   "raw": {
+    "currency": "USD",
+    "exchange": "PCX",
+    "longName": "SPDR Gold Shares",
+    "quoteType": "ETF",
+    "shortName": "SPDR Gold Shares",
+    "symbol": "GLD"
+   },
+   "symbol": "GLD"
+  },
+  {
+   "n_keys": 100,
+   "raw": {
+    "currency": "USD",
+    "exchange": "PCX",
+    "longName": "iShares Russell 2000 ETF",
+    "quoteType": "ETF",
+    "shortName": "iShares Russell 2000 Index Fund",
+    "symbol": "IWM"
+   },
+   "symbol": "IWM"
+  },
+  {
+   "n_keys": 100,
+   "raw": {
+    "currency": "USD",
+    "exchange": "PCX",
+    "longName": "State Street Technology Select Sector SPDR ETF",
+    "quoteType": "ETF",
+    "shortName": "State Street Technology Select ",
+    "symbol": "XLK"
+   },
+   "symbol": "XLK"
+  },
+  {
+   "n_keys": 103,
+   "raw": {
+    "currency": "USD",
+    "exchange": "NGM",
+    "longName": "iShares 20+ Year Treasury Bond ETF",
+    "quoteType": "ETF",
+    "shortName": "iShares 20+ Year Treasury Bond ",
+    "symbol": "TLT"
+   },
+   "symbol": "TLT"
+  },
+  {
+   "n_keys": 91,
+   "raw": {
+    "currency": "USD",
+    "exchange": "NAS",
+    "longName": "Vanguard MStar Total Stk Mkt Idx Admiral",
+    "quoteType": "MUTUALFUND",
+    "shortName": "Vanguard Total Stock Market Ind",
+    "symbol": "VTSAX"
+   },
+   "symbol": "VTSAX"
+  },
+  {
+   "n_keys": 89,
+   "raw": {
+    "currency": "USD",
+    "exchange": "NAS",
+    "longName": "Vanguard 500 Index Admiral",
+    "quoteType": "MUTUALFUND",
+    "shortName": "Vanguard 500 Index Fd Admiral S",
+    "symbol": "VFIAX"
+   },
+   "symbol": "VFIAX"
+  },
+  {
+   "n_keys": 174,
+   "raw": {
+    "country": "China",
+    "currency": "USD",
+    "exchange": "NYQ",
+    "industry": "Internet Retail",
+    "longName": "Alibaba Group Holding Limited",
+    "quoteType": "EQUITY",
+    "sector": "Consumer Cyclical",
+    "shortName": "Alibaba Group Holding Limited",
+    "symbol": "BABA"
+   },
+   "symbol": "BABA"
+  },
+  {
+   "n_keys": 178,
+   "raw": {
+    "country": "Taiwan",
+    "currency": "USD",
+    "exchange": "NYQ",
+    "industry": "Semiconductors",
+    "longName": "Taiwan Semiconductor Manufacturing Company Limited",
+    "quoteType": "EQUITY",
+    "sector": "Technology",
+    "shortName": "Taiwan Semiconductor Manufactur",
+    "symbol": "TSM"
+   },
+   "symbol": "TSM"
+  },
+  {
+   "n_keys": 176,
+   "raw": {
+    "country": "Denmark",
+    "currency": "USD",
+    "exchange": "NYQ",
+    "industry": "Drug Manufacturers - General",
+    "longName": "Novo Nordisk A/S",
+    "quoteType": "EQUITY",
+    "sector": "Healthcare",
+    "shortName": "Novo Nordisk A/S",
+    "symbol": "NVO"
+   },
+   "symbol": "NVO"
+  },
+  {
+   "n_keys": 178,
+   "raw": {
+    "country": "Canada",
+    "currency": "USD",
+    "exchange": "NMS",
+    "industry": "Software - Application",
+    "longName": "Shopify Inc.",
+    "quoteType": "EQUITY",
+    "sector": "Technology",
+    "shortName": "Shopify Inc.",
+    "symbol": "SHOP"
+   },
+   "symbol": "SHOP"
+  },
+  {
+   "n_keys": 170,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NMS",
+    "industry": "Auto Manufacturers",
+    "longName": "Rivian Automotive, Inc.",
+    "quoteType": "EQUITY",
+    "sector": "Consumer Cyclical",
+    "shortName": "Rivian Automotive, Inc.",
+    "symbol": "RIVN"
+   },
+   "symbol": "RIVN"
+  },
+  {
+   "n_keys": 172,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NMS",
+    "industry": "Auto Manufacturers",
+    "longName": "Lucid Group, Inc.",
+    "quoteType": "EQUITY",
+    "sector": "Consumer Cyclical",
+    "shortName": "Lucid Group, Inc.",
+    "symbol": "LCID"
+   },
+   "symbol": "LCID"
+  },
+  {
+   "n_keys": 173,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NYQ",
+    "industry": "Specialty Retail",
+    "longName": "GameStop Corp.",
+    "quoteType": "EQUITY",
+    "sector": "Consumer Cyclical",
+    "shortName": "GameStop Corporation",
+    "symbol": "GME"
+   },
+   "symbol": "GME"
+  },
+  {
+   "n_keys": 175,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NYQ",
+    "industry": "Entertainment",
+    "longName": "AMC Entertainment Holdings, Inc.",
+    "quoteType": "EQUITY",
+    "sector": "Communication Services",
+    "shortName": "AMC Entertainment Holdings, Inc",
+    "symbol": "AMC"
+   },
+   "symbol": "AMC"
+  },
+  {
+   "n_keys": 180,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NMS",
+    "industry": "Travel Services",
+    "longName": "Booking Holdings Inc.",
+    "quoteType": "EQUITY",
+    "sector": "Consumer Cyclical",
+    "shortName": "Booking Holdings Inc. Common St",
+    "symbol": "BKNG"
+   },
+   "symbol": "BKNG"
+  },
+  {
+   "n_keys": 175,
+   "raw": {
+    "country": "United States",
+    "currency": "USD",
+    "exchange": "NMS",
+    "industry": "Software - Infrastructure",
+    "longName": "CrowdStrike Holdings, Inc.",
+    "quoteType": "EQUITY",
+    "sector": "Technology",
+    "shortName": "CrowdStrike Holdings, Inc.",
+    "symbol": "CRWD"
+   },
+   "symbol": "CRWD"
+  },
+  {
+   "n_keys": 1,
+   "raw": {},
+   "symbol": "ZZZZXQ"
+  },
+  {
+   "n_keys": 1,
+   "raw": {},
+   "symbol": "QQQQQQ9"
+  }
+ ],
+ "note": "raw is trimmed to those keys; n_keys is the ORIGINAL key count (the sparse-response rule counts keys, so tests pad back to it). No credentials involved; Ticker.info is unauthenticated.",
+ "probed_at_utc": "2026-10-06T15:57:44Z",
+ "provenance": "LIVE VENDOR (yfinance Ticker.info), one request per symbol, probed read-only from a dev PC",
+ "trimmed_keys": [
+  "quoteType",
+  "sector",
+  "industry",
+  "exchange",
+  "currency",
+  "shortName",
+  "longName",
+  "symbol",
+  "country"
+ ]
+}

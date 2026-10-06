@@ -151,9 +151,13 @@ def _read_sector_history(cur, m: Manifest, cfg: C.DatasetConfig, *, after: bool 
     bound) and every same-value `confirmed_head` poll, each bounded by the knowledge cutoff and by the manifest span's last session. Failed and
     ambiguous polls are NOT read: they never change what the system believes, only its age, which the absence of a confirmation already expresses."""
     _, hi = _span(m)
+    return history_rows(cur, list(cfg.universe_members), cfg.sector_history.source, hi, _cutoff(m), after=after)
+
+
+def history_rows(cur, syms: Sequence[str], src: str, hi: date, cutoff: datetime, *, after: bool = False) -> List[Dict[str, Any]]:
+    """The one query behind the dataset's `sector_history` source AND the collector's read-only verification of it (so the two can never read the
+    history differently): observations + same-value confirmations of ONE source for `syms`, known by `cutoff`, effective by session `hi`."""
     op = ">" if after else "<="
-    src = cfg.sector_history.source
-    syms = list(cfg.universe_members)
     sql = (
         "SELECT 'observation'::text, o.symbol, o.source, o.seq, o.sector, o.sector_raw, o.no_sector_reason, o.change_kind, o.captured_at, "
         "o.effective_session, o.source_asof, o.provenance, o.raw_payload_hash, o.prev_value_hash, o.value_hash, o.run_id "
@@ -166,8 +170,25 @@ def _read_sector_history(cur, m: Manifest, cfg: C.DatasetConfig, *, after: bool 
         f"WHERE p.chain_effect = 'confirmed_head' AND p.symbol = ANY(%s) AND p.source = %s "
         f"AND (p.attempted_at AT TIME ZONE 'UTC')::date <= %s AND p.attempted_at {op} %s "
         "ORDER BY 1, 2, 4, 9, 16")
-    c = _cutoff(m)
-    return _fetch(cur, sql, (syms, src, hi, c, syms, src, hi, c), C.HISTORY_COLUMNS)
+    syms = list(syms)
+    return _fetch(cur, sql, (syms, src, hi, cutoff, syms, src, hi, cutoff), C.HISTORY_COLUMNS)
+
+
+def sector_history_tables_present(cur) -> bool:
+    cur.execute("SELECT to_regclass('sector_observation') IS NOT NULL AND to_regclass('sector_poll') IS NOT NULL")
+    return bool(cur.fetchone()[0])
+
+
+POLL_ACTIVITY_COLUMNS = ("symbol", "response_state", "failure_reason", "polls", "last_attempted_at")
+
+
+def poll_activity(cur, syms: Sequence[str], src: str, window_start: datetime, window_end: datetime) -> List[Dict[str, Any]]:
+    """How the authoritative vendor was asked about `syms` inside [window_start, window_end): per symbol and response state, the number of polls and
+    the latest attempt. Failed and ambiguous polls never change what the history believes, but they are the only evidence that a refresh RAN, so the
+    collector's verification reads them here (and only here)."""
+    return _fetch(cur, "SELECT symbol, response_state, failure_reason, count(*), max(attempted_at) FROM sector_poll WHERE source = %s AND symbol = ANY(%s) "
+                       "AND attempted_at >= %s AND attempted_at < %s GROUP BY symbol, response_state, failure_reason ORDER BY symbol, response_state, failure_reason",
+                  (src, list(syms), window_start, window_end), POLL_ACTIVITY_COLUMNS)
 
 
 _READERS = {"candidates": _read_candidates, "labels": _read_labels, "market": _read_market, "sector": _read_sector, "stock_rs": _read_stock_rs,

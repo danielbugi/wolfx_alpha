@@ -148,6 +148,7 @@ DB_INPUTS: Dict[str, str] = {"candidates": "db.candidate_observation", "labels":
 # identity of every existing lab_dataset_v1 / v2 manifest. It is an opt-in config section (`sector_history`) with its own registry, query version and
 # input key (`db.sector_history`); a config without the section is read, assembled, audited and fingerprinted exactly as before.
 HISTORY_SOURCE = "sector_history"
+AUTHORITATIVE_HISTORY_SOURCE = "yfinance_info"   # the only source that may carry forward sector IDENTITY (policy A, Slice 11); the diagnostic chain never can
 HISTORY_COLUMNS: Tuple[str, ...] = ("row_kind", "symbol", "source", "seq", "sector", "sector_raw", "no_sector_reason", "change_kind", "stamp",
                                     "effective_session", "source_asof", "provenance", "raw_payload_hash", "prev_value_hash", "value_hash", "run_id")
 HISTORY_QUERY_VERSION = "h1"
@@ -305,6 +306,8 @@ def parse_config(config: Mapping[str, Any], label_horizons: Sequence[int]) -> Da
     if s is not None:
         if isinstance(s, Mapping) and _nonempty(s.get("source")) and set(s) == {"source"}:
             hist = SectorHistoryConfig(s["source"].strip())
+            if hist.source != AUTHORITATIVE_HISTORY_SOURCE:
+                p.append(f"config.sector_history.source must be the authoritative source {AUTHORITATIVE_HISTORY_SOURCE!r}: a diagnostic or unknown source never carries sector identity")
         else:
             p.append("config.sector_history needs exactly a non-empty source (or omit the section to keep the candidate-bounded sector evidence only)")
         if sector is None and rs is None:

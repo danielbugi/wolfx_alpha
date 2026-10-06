@@ -52,6 +52,7 @@ class FundamentalsUpdater:
 
         # Forward sector history (migration 31): the vendor that answered the latest fetch, and the per-run recorder (None until first use).
         self._sector_vendor = None
+        self._sector_meta = None
         self._sector_recorder = None
 
         self.logger.info("Fundamentals Updater initialized with shared infrastructure")
@@ -232,6 +233,53 @@ class FundamentalsUpdater:
             self.logger.error(f"Error getting symbols: {e}")
             return []
 
+    def _fetch_yfinance_raw(self, symbol: str):
+        """The raw yfinance `Ticker.info` dict, with a hard wall-clock timeout (raises TimeoutError). Shared by `fetch_company_info` and the sector
+        history's authoritative-source probe, so there is exactly one yfinance request path."""
+        # yfinance's ticker.info has no timeout of its own -- confirmed
+        # 2026-09-14: a single symbol (IRM) hung on a stalled network
+        # call for 7.6 hours (eventually surfacing "curl: (6)", a DNS
+        # failure) before the whole 1005-symbol fundamentals run could
+        # continue. yfinance 1.x uses curl_cffi internally, whose
+        # session/timeout config isn't straightforward to reach from
+        # here, so this enforces a hard wall-clock timeout with a
+        # worker thread instead -- guaranteed to work regardless of
+        # what's hanging underneath. One stuck symbol now costs at most
+        # COMPANY_INFO_TIMEOUT_SECONDS, not the rest of the run.
+        def _fetch():
+            ticker = yf.Ticker(symbol)
+            return ticker.info
+
+        # NOT a `with` block: ThreadPoolExecutor.__exit__ calls
+        # shutdown(wait=True) by default, which would block on the
+        # still-running worker thread even after future.result()
+        # already timed out -- exactly defeating the point. shutdown
+        # (wait=False) lets this function return on schedule; the
+        # orphaned worker thread is left to finish (or stay stuck) on
+        # its own in the background, which is an acceptable trade for
+        # "never block the whole run again."
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(_fetch)
+        try:
+            info = future.result(timeout=COMPANY_INFO_TIMEOUT_SECONDS)
+        except concurrent.futures.TimeoutError:
+            self.logger.error(
+                f"Timed out after {COMPANY_INFO_TIMEOUT_SECONDS}s fetching company info for {symbol}"
+            )
+            raise TimeoutError(f"fetch_company_info timed out for {symbol}")
+        finally:
+            executor.shutdown(wait=False)
+        return info
+
+    @staticmethod
+    def _yfinance_sector_meta(raw):
+        """Structural evidence of the raw yfinance answer for the sector history (None if the recorder module cannot be imported)."""
+        try:
+            from data_updaters import sector_history_recorder as shr
+            return shr.yfinance_meta(raw)
+        except Exception:  # noqa: BLE001 - never affects ingestion
+            return None
+
     @retry_on_failure(max_retries=3, delay=2.0)
     def fetch_company_info(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Fetch company information from the configured provider (Tiingo
@@ -252,39 +300,8 @@ class FundamentalsUpdater:
         try:
             self.logger.debug(f"Fetching company info for {symbol}")
 
-            # yfinance's ticker.info has no timeout of its own -- confirmed
-            # 2026-09-14: a single symbol (IRM) hung on a stalled network
-            # call for 7.6 hours (eventually surfacing "curl: (6)", a DNS
-            # failure) before the whole 1005-symbol fundamentals run could
-            # continue. yfinance 1.x uses curl_cffi internally, whose
-            # session/timeout config isn't straightforward to reach from
-            # here, so this enforces a hard wall-clock timeout with a
-            # worker thread instead -- guaranteed to work regardless of
-            # what's hanging underneath. One stuck symbol now costs at most
-            # COMPANY_INFO_TIMEOUT_SECONDS, not the rest of the run.
-            def _fetch():
-                ticker = yf.Ticker(symbol)
-                return ticker.info
-
-            # NOT a `with` block: ThreadPoolExecutor.__exit__ calls
-            # shutdown(wait=True) by default, which would block on the
-            # still-running worker thread even after future.result()
-            # already timed out -- exactly defeating the point. shutdown
-            # (wait=False) lets this function return on schedule; the
-            # orphaned worker thread is left to finish (or stay stuck) on
-            # its own in the background, which is an acceptable trade for
-            # "never block the whole run again."
-            executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-            future = executor.submit(_fetch)
-            try:
-                info = future.result(timeout=COMPANY_INFO_TIMEOUT_SECONDS)
-            except concurrent.futures.TimeoutError:
-                self.logger.error(
-                    f"Timed out after {COMPANY_INFO_TIMEOUT_SECONDS}s fetching company info for {symbol}"
-                )
-                raise TimeoutError(f"fetch_company_info timed out for {symbol}")
-            finally:
-                executor.shutdown(wait=False)
+            info = self._fetch_yfinance_raw(symbol)
+            self._sector_meta = self._yfinance_sector_meta(info)
 
             if not info or len(info) < 5:  # Basic check for valid data
                 self.logger.warning(f"No company info returned for {symbol}")
@@ -454,15 +471,29 @@ class FundamentalsUpdater:
             self.logger.error(f"Error updating fundamentals for {fundamentals.get('symbol', 'unknown')}: {e}")
             return False
 
+    def _probe_authoritative_sector(self, symbol: str, shr):
+        """When Tiingo served the symbol, the authoritative sector identity (yfinance) is probed separately: one single-attempt request."""
+        try:
+            raw = self._fetch_yfinance_raw(symbol)
+        except Exception as e:  # noqa: BLE001 - recorded as a failed poll on the authoritative chain
+            return (shr.AUTHORITATIVE_SOURCE, None, e, None)
+        return (shr.AUTHORITATIVE_SOURCE, shr.yfinance_company_info(raw), None, shr.yfinance_meta(raw))
+
     def _record_sector_history(self, symbol: str, company_info, fetch_error) -> None:
-        """Flag-gated (SECTOR_HISTORY_RECORDER_ENABLED, default OFF) forward sector history. Never raises: it must not affect ingestion."""
+        """Flag-gated (SECTOR_HISTORY_RECORDER_ENABLED, default OFF) forward sector history. Never raises: it must not affect ingestion.
+
+        The authoritative source (yfinance) owns the identity; a Tiingo answer is recorded as its own diagnostic chain and never substitutes for it."""
         try:
             from data_updaters import sector_history_recorder as shr
             if not shr.enabled():
                 return
             if self._sector_recorder is None:
                 self._sector_recorder = shr.SectorRecorder()
-            self._sector_recorder.record(symbol, self._sector_vendor or shr.SRC_YFINANCE, company_info, fetch_error)
+            polls = [(self._sector_vendor or shr.SRC_YFINANCE, company_info, fetch_error, self._sector_meta)]
+            if polls[0][0] != shr.AUTHORITATIVE_SOURCE:
+                polls.append(self._probe_authoritative_sector(symbol, shr))
+            for source, info, error, meta in polls:
+                self._sector_recorder.record(symbol, source, info, error, meta)
         except Exception as e:  # noqa: BLE001 - isolation boundary
             self.logger.error(f"sector history recorder unavailable for {symbol}: {type(e).__name__}: {e}")
 
@@ -473,6 +504,7 @@ class FundamentalsUpdater:
 
             # Fetch company info (a fetch failure is remembered so the sector history can record the failed poll, then handled as before)
             self._sector_vendor = None
+            self._sector_meta = None
             company_info, fetch_error = None, None
             try:
                 company_info = self.fetch_company_info(symbol)

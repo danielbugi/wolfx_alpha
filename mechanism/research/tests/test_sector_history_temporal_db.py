@@ -36,6 +36,24 @@ T_NEXT = CAL[303]
 SRC_CTR = {"n": 0}
 
 
+class _AnySource(str):
+    """Each scenario owns a private, uniquely named chain so scenarios cannot see one another; the spec validator pins the real source to
+    `yfinance_info` (Slice 11), which would make every scenario share one chain. Only this module widens that pin, and only while it runs."""
+
+    def __ne__(self, other):
+        return False
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _scenario_sources_are_private_chains():
+    real = C.AUTHORITATIVE_HISTORY_SOURCE
+    C.AUTHORITATIVE_HISTORY_SOURCE = _AnySource(real)
+    try:
+        yield
+    finally:
+        C.AUTHORITATIVE_HISTORY_SOURCE = real
+
+
 def dt(d, hour=6):
     return datetime(d.year, d.month, d.day, hour, tzinfo=timezone.utc)
 
@@ -348,13 +366,14 @@ def test_an_explicit_no_sector_answer_is_not_a_vendor_failure(denv):
     assert (s_none.kind, s_none.sector, s_none.evidence.reason) == (SH.K_EXPLICIT_NO_SECTOR, None, "no_sector")
     assert (s_fail.kind, s_fail.sector, s_fail.evidence.state) == (SH.K_OBSERVED, "Tech", "observed_fresh")      # a failure keeps believing Tech
     row_none, row_fail = nosec.rows[("A", T_MID, PRIMARY)], failed.rows[("A", T_MID, PRIMARY)]
-    assert row_none["sector"] is None and row_none["sector__state"] == C.NO_SECTOR and row_none["rs_vs_sector_pp"] is None
+    # owner rule (Slice 11): the history ASSERTS no sector while the candidate evidence still says Tech -> neither silently wins, both cells conflict
+    assert row_none["sector"] is None and row_none["sector__state"] == C.SECTOR_IDENTITY_CONFLICT and row_none["rs_vs_sector_pp"] is None
     win = [k for k in prim(a_rows(nosec.rows, from_=CAL[290])) if k[1] <= CAL[345] and nosec.rows[k]["rs__state"] == C.OK]
     assert win                                                                                       # the symbol stays; market-relative RS stays
     for k in win:
         v = nosec.rows[k]
-        # the history says "no sector"; the stored RS row still names Tech, which the history cannot confirm: the sector-relative cell fails closed
-        assert v["sector"] is None and v["sector__state"] == C.NO_SECTOR and v["rs_vs_sector__state"] == C.SECTOR_UNCONFIRMED
+        # the history says "no sector"; the candidate and the stored RS row still name Tech: a CONFLICT (not a quiet no_sector, not a quiet Tech)
+        assert v["sector"] is None and v["sector__state"] == C.SECTOR_IDENTITY_CONFLICT and v["rs_vs_sector__state"] == C.SECTOR_IDENTITY_CONFLICT
         assert v["rs_vs_sector_pp"] is None and v["rs_ret_pct"] is not None
     assert row_fail["sector"] == "Tech" and row_fail["sector__state"] == C.OK
     # the decision before the explicit "no sector" is untouched by it
@@ -433,7 +452,7 @@ def test_reconstructed_sector_history_can_never_satisfy_observed_coverage(denv):
 
 def test_the_history_reader_cannot_touch_the_reconstruction_table():
     import inspect
-    src = inspect.getsource(RD._read_sector_history)
+    src = "".join(inspect.getsource(f) for f in (RD._read_sector_history, RD.history_rows, RD.poll_activity))
     assert "sector_reconstruction" not in src and "daily_fundamentals" not in src
     assert "sector_observation" in src and "sector_poll" in src
 

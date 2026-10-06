@@ -20,10 +20,11 @@ SCHEMA = "forward_collection_v1"
 
 # ------------------------------------------------------------------ steps, outcomes, verdicts
 STEP_CAPTURE = "capture_verify"      # read-only: did the screener's capture hook record this session? (candidates are written INSIDE the screener)
+STEP_SECTOR_HISTORY = "sector_history_verify"   # read-only: did the ONE authoritative sector writer (the fundamentals updater) refresh the session's universe in time?
 STEP_OBSERVE = "observe"             # market + sector + per-stock relative strength, atomically, via the Market Intelligence runner
 STEP_LABELS = "labels"               # fwd_v1 labels for every candidate whose horizon has matured (catches up by itself)
 STEP_VERIFY = "verify"               # read-only read-back: the rows exist, are complete, and were stamped before the decision deadline
-STEP_ORDER: Tuple[str, ...] = (STEP_CAPTURE, STEP_OBSERVE, STEP_LABELS, STEP_VERIFY)
+STEP_ORDER: Tuple[str, ...] = (STEP_CAPTURE, STEP_SECTOR_HISTORY, STEP_OBSERVE, STEP_LABELS, STEP_VERIFY)
 
 OK, ALREADY, FAILED, SKIPPED, REFUSED, DRY = "ok", "already_present", "failed", "skipped_dependency", "refused", "dry_run"
 OUTCOMES = (OK, ALREADY, FAILED, SKIPPED, REFUSED, DRY)
@@ -67,10 +68,11 @@ SOURCE_CONTRACT: Dict[str, Dict[str, Any]] = {
                  "why": "no live catalyst collector exists; a spec that enables it cannot accumulate history"},
     "first_seen": {"step": None, "writer": "none in the repository", "orchestrated": False, "catch_up": False,
                    "why": "no live first-seen collector exists; a spec that enables it cannot accumulate history"},
-    "sector_history": {"step": None, "writer": "the fundamentals updater's flag-gated sector recorder (outside this collector, default OFF)",
-                       "orchestrated": False, "catch_up": False,
+    "sector_history": {"step": STEP_SECTOR_HISTORY, "writer": "the fundamentals updater's flag-gated sector recorder (outside this collector, default OFF)",
+                       "orchestrated": False, "catch_up": False, "verified_by_collector": True,
                        "why": "forward sector history can only be recorded at the moment the vendor answers, by the one authoritative writer; this "
-                              "collector can neither create nor back-fill it, and it stays blocked until the owner activates the recorder"},
+                              "collector VERIFIES that the writer refreshed the session's universe in time (it can neither create nor back-fill the "
+                              "history), so a dataset that enables the source has a dependency that can fail visibly instead of a blocker"},
 }
 
 
@@ -195,6 +197,8 @@ class SessionReport:
 
 NEXT_ACTIONS = {
     STEP_CAPTURE: "none by this collector: candidates are written only by the screener of that session; the gap stays visible in the research status",
+    STEP_SECTOR_HISTORY: "none by this collector: only the fundamentals updater (recorder flag ON) writes the history. Make it run (a full-universe "
+                         "refresh) before the session's decision deadline; the next fire re-checks. After the deadline the gap is permanent for this session",
     STEP_OBSERVE: "run the SAME session again before its decision deadline (the write is atomic: nothing partial exists, a re-run is idempotent)",
     STEP_LABELS: "run again: labels are idempotent and a later run catches up every matured horizon",
     STEP_VERIFY: "investigate the listed problems; a re-run of the same session repairs a missing relative-strength row, nothing else is repaired",
@@ -215,6 +219,11 @@ def classify(session: date, results: Sequence[StepResult], *, apply: bool, locke
     permanent = [r for r in results if r.outcome == REFUSED and r.detail.get("reason") == REASON_PAST_DEADLINE] + \
                 [r for r in results if r.name == STEP_VERIFY and r.detail.get("permanent_problems")] + \
                 [r for r in results if r.name == STEP_OBSERVE and r.outcome == FAILED and r.detail.get("reason") == REASON_NOT_LATEST]
+    sector_gap = [r for r in results if r.name == STEP_SECTOR_HISTORY and r.detail.get("permanent_problems")]
+    if sector_gap and not permanent:
+        return MISSED, missing, ("the sector history for this session can no longer be completed (the refresh did not happen before the decision "
+                                 f"deadline {decision_deadline(session, grace_days).isoformat()}, or a chain is broken). The market/sector/relative-strength "
+                                 "rows, if verified, stay valid; research marks the affected sector-relative cells unavailable. Never backfilled.")
     if permanent:
         return MISSED, missing, ("the session can no longer be observed: its decision deadline "
                                  f"({decision_deadline(session, grace_days).isoformat()}) has passed, or a newer session's prices are already loaded. "
@@ -227,7 +236,7 @@ def classify(session: date, results: Sequence[StepResult], *, apply: bool, locke
 # ------------------------------------------------------------------ the declared scheduler design (documented and validated, NEVER installed)
 SCHEDULER_DESIGN: Dict[str, Any] = {
     "unit": "donchian-forward-collection.{service,timer} (one pair; drafts under docs/research/, installed by nobody)",
-    "command": "python -m forward_collection run --latest-completed --apply --code-ref <mechanism image tag>",
+    "command": "python -m forward_collection run --latest-completed --apply --with-sector-history-check --code-ref <mechanism image tag>",
     "wrapper": "run_channel_sender.sh-style one-shot `docker compose run --rm` at CURRENT_MECHANISM_SHA, flock'ed",
     "timezone": "Asia/Jerusalem",
     "fires_local": ("03:15", "08:15"),

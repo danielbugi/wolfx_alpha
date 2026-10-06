@@ -1,0 +1,315 @@
+{
+ "frozen_dev": {
+  "distinct_sector_values": 11,
+  "last_loaded_price_session": "2026-09-23",
+  "latest_stored_sector_by_class": {
+   "available": 3043,
+   "no_fundamentals_row": 1,
+   "null": 24
+  },
+  "of_those_without_an_available_stored_sector": [
+   "BF.B",
+   "BRK.B",
+   "BRK/A"
+  ],
+  "provenance": "FROZEN_DEV (read-only SELECT on the frozen Windows development database; NOT production)",
+  "reclass_examples": [
+   "AFRM",
+   "DV",
+   "MDU",
+   "PARA"
+  ],
+  "stale_measured_against": "the dev DB's own last price session, not the wall clock",
+  "stale_threshold_days": 30,
+  "symbols_whose_history_mixes_set_and_missing": 1,
+  "symbols_with_more_than_one_distinct_sector_in_history": 4,
+  "top_values": [
+   [
+    "Financial Services",
+    611
+   ],
+   [
+    "Healthcare",
+    508
+   ],
+   [
+    "Industrials",
+    433
+   ],
+   [
+    "Technology",
+    427
+   ],
+   [
+    "Consumer Cyclical",
+    315
+   ],
+   [
+    "Real Estate",
+    178
+   ],
+   [
+    "Basic Materials",
+    133
+   ],
+   [
+    "Energy",
+    127
+   ],
+   [
+    "Consumer Defensive",
+    121
+   ],
+   [
+    "Communication Services",
+    115
+   ],
+   [
+    "Utilities",
+    75
+   ]
+  ],
+  "unavailable_examples": {
+   "no_fundamentals_row": [
+    "BRK/A"
+   ],
+   "null": [
+    "AFGB",
+    "AFGC",
+    "AFGD",
+    "AFGE",
+    "BF.B",
+    "BRK.B",
+    "CCZ",
+    "DDT",
+    "DTB",
+    "DTG",
+    "DTW",
+    "DUKB"
+   ]
+  },
+  "universe_symbols": 3068,
+  "universe_symbols_with_a_dot_or_slash": [
+   "BF.B",
+   "BRK.B",
+   "BRK/A"
+  ],
+  "values_outside_the_yfinance_taxonomy": {}
+ },
+ "generated_at_utc": "2026-10-06T16:04:12Z",
+ "live_vs_frozen": {
+  "disagreements": [
+   {
+    "frozen": null,
+    "live": "Financial Services",
+    "relation": "not_in_frozen_dev",
+    "symbol": "BRK-B"
+   },
+   {
+    "frozen": null,
+    "live": "no_sector",
+    "relation": "not_in_frozen_dev",
+    "symbol": "SPY"
+   },
+   {
+    "frozen": null,
+    "live": "no_sector",
+    "relation": "not_in_frozen_dev",
+    "symbol": "QQQ"
+   },
+   {
+    "frozen": null,
+    "live": "no_sector",
+    "relation": "not_in_frozen_dev",
+    "symbol": "GLD"
+   },
+   {
+    "frozen": null,
+    "live": "no_sector",
+    "relation": "not_in_frozen_dev",
+    "symbol": "IWM"
+   },
+   {
+    "frozen": null,
+    "live": "no_sector",
+    "relation": "not_in_frozen_dev",
+    "symbol": "XLK"
+   },
+   {
+    "frozen": null,
+    "live": "no_sector",
+    "relation": "not_in_frozen_dev",
+    "symbol": "TLT"
+   },
+   {
+    "frozen": null,
+    "live": "no_sector",
+    "relation": "not_in_frozen_dev",
+    "symbol": "VTSAX"
+   },
+   {
+    "frozen": null,
+    "live": "no_sector",
+    "relation": "not_in_frozen_dev",
+    "symbol": "VFIAX"
+   },
+   {
+    "frozen": null,
+    "live": "Consumer Cyclical",
+    "relation": "not_in_frozen_dev",
+    "symbol": "BABA"
+   },
+   {
+    "frozen": null,
+    "live": "Technology",
+    "relation": "not_in_frozen_dev",
+    "symbol": "TSM"
+   },
+   {
+    "frozen": null,
+    "live": "Healthcare",
+    "relation": "not_in_frozen_dev",
+    "symbol": "NVO"
+   },
+   {
+    "frozen": null,
+    "live": "invalid_response",
+    "relation": "not_in_frozen_dev",
+    "symbol": "ZZZZXQ"
+   },
+   {
+    "frozen": null,
+    "live": "invalid_response",
+    "relation": "not_in_frozen_dev",
+    "symbol": "QQQQQQ9"
+   }
+  ],
+  "provenance": "LIVE_VENDOR (yfinance 2026-10-06, 40 symbols) compared with FROZEN_DEV daily_fundamentals",
+  "tally": {
+   "agree": 26,
+   "not_in_frozen_dev": 14
+  }
+ },
+ "not_measurable_here": [
+  "yfinance-only vs Tiingo-only vs both-agree vs both-disagree on the SAME symbols (needs live Tiingo access; not performed)",
+  "the 'frozen_dev' sector has no per-row vendor label, so a vendor-vs-vendor split cannot be derived from it"
+ ],
+ "synthetic": {
+  "pairs": [
+   {
+    "candidate": "cand_Tech_fresh",
+    "effective_state": "observed_fresh",
+    "history": "hist_Tech_fresh",
+    "relation": "agree",
+    "usable": true
+   },
+   {
+    "candidate": "cand_Tech_fresh",
+    "effective_state": "observed_stale",
+    "history": "hist_Tech_stale",
+    "relation": "history_tightened",
+    "usable": false
+   },
+   {
+    "candidate": "cand_Tech_fresh",
+    "effective_state": "unavailable",
+    "history": "hist_explicit_no_sector",
+    "relation": "no_sector_conflict",
+    "usable": false
+   },
+   {
+    "candidate": "cand_Tech_fresh",
+    "effective_state": "unavailable",
+    "history": "hist_no_history",
+    "relation": "history_tightened",
+    "usable": false
+   },
+   {
+    "candidate": "cand_Tech_stale",
+    "effective_state": "observed_stale",
+    "history": "hist_Tech_fresh",
+    "relation": "history_ahead",
+    "usable": false
+   },
+   {
+    "candidate": "cand_Tech_stale",
+    "effective_state": "observed_stale",
+    "history": "hist_Tech_stale",
+    "relation": "agree_unusable",
+    "usable": false
+   },
+   {
+    "candidate": "cand_Tech_stale",
+    "effective_state": "unavailable",
+    "history": "hist_explicit_no_sector",
+    "relation": "no_sector_conflict",
+    "usable": false
+   },
+   {
+    "candidate": "cand_Tech_stale",
+    "effective_state": "unavailable",
+    "history": "hist_no_history",
+    "relation": "history_tightened",
+    "usable": false
+   },
+   {
+    "candidate": "cand_no_sector",
+    "effective_state": "unavailable",
+    "history": "hist_Tech_fresh",
+    "relation": "history_ahead",
+    "usable": false
+   },
+   {
+    "candidate": "cand_no_sector",
+    "effective_state": "unavailable",
+    "history": "hist_Tech_stale",
+    "relation": "history_ahead",
+    "usable": false
+   },
+   {
+    "candidate": "cand_no_sector",
+    "effective_state": "unavailable",
+    "history": "hist_explicit_no_sector",
+    "relation": "agree_unusable",
+    "usable": false
+   },
+   {
+    "candidate": "cand_no_sector",
+    "effective_state": "unavailable",
+    "history": "hist_no_history",
+    "relation": "agree_unusable",
+    "usable": false
+   },
+   {
+    "candidate": "cand_Energy_fresh",
+    "effective_state": "unavailable",
+    "history": "hist_Tech_fresh",
+    "relation": "identity_conflict",
+    "usable": false
+   },
+   {
+    "candidate": "cand_Energy_fresh",
+    "effective_state": "observed_stale",
+    "history": "hist_Tech_stale",
+    "relation": "history_tightened",
+    "usable": false
+   },
+   {
+    "candidate": "cand_Energy_fresh",
+    "effective_state": "unavailable",
+    "history": "hist_explicit_no_sector",
+    "relation": "no_sector_conflict",
+    "usable": false
+   },
+   {
+    "candidate": "cand_Energy_fresh",
+    "effective_state": "unavailable",
+    "history": "hist_no_history",
+    "relation": "history_tightened",
+    "usable": false
+   }
+  ],
+  "provenance": "SYNTHETIC (real SH.crosscheck over hand-built pairs)",
+  "t0": "2026-03-10"
+ }
+}

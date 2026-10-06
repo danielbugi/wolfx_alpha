@@ -39,18 +39,27 @@ def all_ok():
 
 # ------------------------------------------------------------------ vocabulary / contract
 def test_step_order_and_dependencies_are_the_documented_ones():
-    assert C.STEP_ORDER == ("capture_verify", "observe", "labels", "verify")
+    assert C.STEP_ORDER == ("capture_verify", "sector_history_verify", "observe", "labels", "verify")
     assert O.DEPENDS_ON["verify"] == ("observe",) and O.DEPENDS_ON["labels"] == () and O.DEPENDS_ON["observe"] == ()
+    assert O.DEPENDS_ON["sector_history_verify"] == ()          # independent: neither gates nor is gated by the market/sector/RS write
 
 
 def test_every_source_has_an_explicit_collector_entry_and_catalyst_first_seen_have_none():
     assert set(C.SOURCE_CONTRACT) == {"candidates", "market", "breadth", "sector", "stock_rs", "labels", "catalyst", "first_seen",
                                         "sector_history"}
     assert C.SOURCE_CONTRACT["catalyst"]["step"] is None and C.SOURCE_CONTRACT["first_seen"]["step"] is None
-    assert C.SOURCE_CONTRACT["sector_history"]["step"] is None            # written outside the collector, by the flag-gated recorder only
+    # written outside the collector (the flag-gated recorder is the ONLY writer) but VERIFIED by it: a real step, so the source is no longer a blocker
+    assert C.SOURCE_CONTRACT["sector_history"]["step"] == C.STEP_SECTOR_HISTORY and C.SOURCE_CONTRACT["sector_history"]["orchestrated"] is False
+    assert C.SOURCE_CONTRACT["sector_history"]["catch_up"] is False and C.SOURCE_CONTRACT["sector_history"]["verified_by_collector"] is True
     assert C.SOURCE_CONTRACT["candidates"]["orchestrated"] is False and C.SOURCE_CONTRACT["candidates"]["catch_up"] is False
     assert C.SOURCE_CONTRACT["labels"]["catch_up"] is True
     assert not any(C.SOURCE_CONTRACT[s]["catch_up"] for s in ("market", "sector", "stock_rs", "candidates"))
+
+
+def test_an_enabled_sector_history_source_has_a_collector_dependency_not_a_blocker():
+    en = {"market": True, "breadth": True, "sector": True, "stock_rs": True, "catalyst": False, "first_seen": False, "sector_history": True}
+    assert C.spec_source_blockers(en) == []
+    assert C.spec_source_blockers({**en, "sector_history": False}) == []
 
 
 def test_an_enabled_source_without_a_collector_is_a_blocker_never_silently_optional():
@@ -322,3 +331,39 @@ def test_a_plain_observe_failure_is_incomplete_not_missed():
         return C.StepResult(C.STEP_OBSERVE, C.FAILED, {"reason": "something_else"}, "boom")
     rep = run({**all_ok(), C.STEP_OBSERVE: boom})
     assert rep.verdict == C.INCOMPLETE and C.STEP_OBSERVE in rep.missing
+
+
+# ------------------------------------------------------------------ the sector-history verification step (stub, no database)
+def sector_step(*, permanent, reason="refresh_absent"):
+    detail = {"reason": reason, "problems": [reason], "permanent_problems": [reason] if permanent else []}
+    return lambda ctx: C.StepResult(C.STEP_SECTOR_HISTORY, C.FAILED, detail, reason)
+
+
+def test_a_failed_sector_history_dependency_is_incomplete_while_repairable_and_missed_once_it_cannot_be():
+    steps = {**all_ok(), C.STEP_SECTOR_HISTORY: sector_step(permanent=False)}
+    rep = run(steps)
+    assert rep.verdict == C.INCOMPLETE and rep.exit_code() == C.EXIT_INCOMPLETE and C.STEP_SECTOR_HISTORY in rep.missing
+    assert "fundamentals updater" in C.NEXT_ACTIONS[C.STEP_SECTOR_HISTORY]
+    late = run({**all_ok(), C.STEP_SECTOR_HISTORY: sector_step(permanent=True)})
+    assert late.verdict == C.MISSED and late.exit_code() == C.EXIT_MISSED and "sector history" in late.next_action
+    assert "never backfilled" in late.next_action.lower() or "never backfilled" in late.next_action
+
+
+def test_the_sector_dependency_neither_blocks_the_market_write_nor_is_blocked_by_it():
+    ran = []
+    steps = {C.STEP_OBSERVE: boom, C.STEP_LABELS: lambda ctx: ok(C.STEP_LABELS), C.STEP_VERIFY: lambda ctx: ok(C.STEP_VERIFY),
+             C.STEP_SECTOR_HISTORY: lambda ctx: (ran.append(1), ok(C.STEP_SECTOR_HISTORY))[1]}
+    rep = run(steps)
+    assert ran == [1] and rep.verdict == C.INCOMPLETE
+
+
+def test_a_satisfied_sector_dependency_does_not_change_the_other_steps_verdict():
+    assert run({**all_ok(), C.STEP_SECTOR_HISTORY: lambda ctx: ok(C.STEP_SECTOR_HISTORY)}).verdict == C.COMPLETE
+
+
+def test_the_sector_step_runs_between_capture_and_observe_in_step_order():
+    order = []
+    names = (C.STEP_VERIFY, C.STEP_SECTOR_HISTORY, C.STEP_LABELS, C.STEP_OBSERVE)
+    steps = {n: (lambda n: lambda ctx: (order.append(n), ok(n))[1])(n) for n in names}
+    run(steps)
+    assert order == [C.STEP_SECTOR_HISTORY, C.STEP_OBSERVE, C.STEP_LABELS, C.STEP_VERIFY]

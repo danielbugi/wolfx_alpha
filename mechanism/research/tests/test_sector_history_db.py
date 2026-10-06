@@ -20,7 +20,8 @@ MIG = "add_sector_history_tables.sql"
 SRC = "yfinance_info"
 INTEGRITY = (psycopg2.IntegrityError, psycopg2.errors.IntegrityConstraintViolation)   # a CHECK or a trigger refusal
 SECTOR_OUTCOME = lambda s, src=SRC: R.classify(src, {"sector": s, "a": 1, "b": 2, "c": 3, "d": 4, "e": 5})   # noqa: E731
-NONE_OUTCOME = lambda src=SRC: R.classify(src, {"sector": None, "a": 1, "b": 2, "c": 3, "d": 4, "e": 5})        # noqa: E731
+NONE_OUTCOME = lambda src=SRC: R.classify(src, {"sector": None, "a": 1, "b": 2, "c": 3, "d": 4, "e": 5},
+                                          meta={"quote_type": "ETF", "n_keys": 6, "sector_key_present": False})  # noqa: E731  (non-operating evidence)
 
 
 def _sql():

@@ -11,11 +11,14 @@ from typing import Any, Dict, Optional
 from market_intelligence import inputs as mi_inputs
 from market_intelligence import runner as mi_runner
 from market_intelligence.relative_strength import MODEL_VERSION as RS_MODEL_VERSION
+from research.lab import dataset_reader as reader
+from research.lab import sector_history as SH
+from research.lab import sector_history_verification as SHV
 from research.labels import fwd_v1
 from research.labels import runner as label_runner
 
 from . import contract as C
-from .orchestrator import Ctx
+from .orchestrator import Ctx, db_clock
 
 RS_HORIZONS = C.COLLECTOR_VERSIONS["stock_rs"]["horizons"]
 FEATURE_SET_VERSION = mi_runner.FEATURE_SET_VERSION
@@ -55,6 +58,40 @@ def capture_verify(ctx: Ctx) -> C.StepResult:
         return C.StepResult(C.STEP_CAPTURE, C.FAILED, {**detail, "reason": "capture_not_complete"},
                             f"capture run status is {sorted({r[1] for r in bad})} (only 'complete' counts)")
     return C.StepResult(C.STEP_CAPTURE, C.ALREADY, detail)
+
+
+# ------------------------------------------------------------------ sector_history_verify (read-only: verifies the one authoritative writer)
+def make_sector_history_verify(source: str = SH.AUTHORITATIVE_SOURCE):
+    """The collector never writes the sector history (the fundamentals updater's recorder is its ONLY writer); it VERIFIES, for the explicit session,
+    that the authoritative source was polled for the session's universe inside the cadence window and that no chain is broken. A symbol the vendor
+    legitimately has no sector for is ACCOUNTED (Option B), so it never fails the session; per-symbol availability is reported, not gated."""
+    def sector_history_verify(ctx: Ctx) -> C.StepResult:
+        lo, hi = SHV.window(ctx.session, ctx.grace_days)
+        now = (ctx.clock or db_clock(ctx.connect))()
+        with ctx.connect() as conn:
+            cur = conn.cursor()
+            present = reader.sector_history_tables_present(cur)
+            conn.rollback()
+            if not present:
+                doc = {"session": ctx.session.isoformat(), "source": source, "reasons": [SHV.TABLES_ABSENT], "meaning": {SHV.TABLES_ABSENT: SHV.MEANING[SHV.TABLES_ABSENT]}}
+            else:
+                with reader.read_only_session(conn):
+                    cur = conn.cursor()
+                    cur.execute("SELECT DISTINCT symbol FROM stock_prices WHERE date = %s", (ctx.session,))
+                    universe = sorted(r[0] for r in cur.fetchall())
+                    activity = reader.poll_activity(cur, universe, source, lo, hi)
+                    rows = reader.history_rows(cur, universe, source, ctx.session, hi)
+                doc = SHV.evaluate(session=ctx.session, grace_days=ctx.grace_days, universe=universe, activity=activity, history_rows=rows,
+                                   source=source, cutoff=hi)
+        reasons = doc["reasons"]
+        if not reasons:
+            return C.StepResult(C.STEP_SECTOR_HISTORY, C.ALREADY, doc)
+        past = now >= hi
+        permanent = [r for r in reasons if past or r in SHV.PERMANENT_ALWAYS]
+        detail = {**doc, "reason": reasons[0], "problems": list(reasons), "permanent_problems": permanent, "checked_at": now.isoformat(),
+                  "past_decision_deadline": past}
+        return C.StepResult(C.STEP_SECTOR_HISTORY, C.FAILED, detail, "; ".join(reasons))
+    return sector_history_verify
 
 
 # ------------------------------------------------------------------ observe: market + sector + stock RS, one transaction
@@ -152,10 +189,12 @@ def make_verify(feature_set_version: str = FEATURE_SET_VERSION):
     return verify
 
 
-def make_steps(*, feature_set_version: str = FEATURE_SET_VERSION, with_capture: bool = False) -> Dict[str, Any]:
+def make_steps(*, feature_set_version: str = FEATURE_SET_VERSION, with_capture: bool = False, with_sector_history: bool = False) -> Dict[str, Any]:
     out = {C.STEP_OBSERVE: make_observe(feature_set_version), C.STEP_LABELS: labels, C.STEP_VERIFY: make_verify(feature_set_version)}
     if with_capture:
         out[C.STEP_CAPTURE] = capture_verify
+    if with_sector_history:
+        out[C.STEP_SECTOR_HISTORY] = make_sector_history_verify()
     return out
 
 

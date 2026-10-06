@@ -61,11 +61,94 @@ def yf(sector, n=6):
     return {"symbol": "AAA", "sector": sector, "a": 1, "b": 2, "c": 3, "d": 4, "e": 5, "f": 6}
 
 
+def meta(qt, n=6):
+    return {"quote_type": qt, "n_keys": n, "sector_key_present": False}
+
+
+@pytest.mark.parametrize("qt", ["ETF", "MUTUALFUND"])
 @pytest.mark.parametrize("raw,state,reason", [(None, "no_sector", "vendor_null"), ("", "no_sector", "vendor_blank"), ("   ", "no_sector", "vendor_blank"),
                                               ("Unknown", "no_sector", "vendor_unknown_label"), (" unknown ", "no_sector", "vendor_unknown_label")])
-def test_yfinance_can_say_explicit_no_sector(raw, state, reason):
-    o = R.classify("yfinance_info", yf(raw))
-    assert (o.response_state, o.no_sector_reason, o.sector, o.failure_reason) == (state, reason, None, None) and o.payload_hash
+def test_yfinance_can_say_explicit_no_sector_only_with_non_operating_quote_type_evidence(raw, state, reason, qt):
+    o = R.classify("yfinance_info", yf(raw), meta=meta(qt))
+    assert (o.response_state, o.no_sector_reason, o.sector, o.failure_reason, o.quote_type) == (state, reason, None, None, qt) and o.payload_hash
+
+
+@pytest.mark.parametrize("m,why", [(None, "quote_type_evidence_missing"), (meta(None), "quote_type_missing"), (meta("EQUITY"), "operating_company_sector_absent"),
+                                   (meta("CRYPTOCURRENCY"), "quote_type_unrecognised"), (meta("etf-ish"), "quote_type_unrecognised")])
+@pytest.mark.parametrize("raw", [None, "", " ", "Unknown"])
+def test_a_missing_sector_without_non_operating_evidence_is_responded_but_unusable_never_an_explicit_no_sector(raw, m, why):
+    o = R.classify("yfinance_info", yf(raw), meta=m)
+    assert (o.response_state, o.failure_reason, o.no_sector_reason, o.sector) == ("invalid_response", why, None, None)
+    d = R.decide(None, o, "r1")
+    assert d.chain_effect == "none" and d.seq is None                                  # it can never become an observation
+
+
+def test_a_sparse_answer_is_responded_but_unusable_and_an_empty_one_is_a_request_failure():
+    o = R.classify("yfinance_info", None, meta=meta(None, 1))                           # e.g. the 404 body (one key)
+    assert (o.response_state, o.failure_reason) == ("invalid_response", "response_too_sparse")
+    assert R.classify("yfinance_info", None, meta=meta(None, 0)).response_state == "request_failed"
+    assert R.classify("yfinance_info", None).failure_reason == "no_company_info"
+
+
+def test_yfinance_meta_and_company_info_are_the_single_reading_of_a_raw_answer():
+    raw = {"quoteType": " etf ", "symbol": "SPY", "a": 1, "b": 2, "c": 3}
+    assert R.yfinance_meta(raw) == {"quote_type": "ETF", "n_keys": 5, "sector_key_present": False}
+    assert R.yfinance_meta({"sector": "Technology", "quoteType": "EQUITY"})["sector_key_present"] is True
+    assert R.yfinance_meta(None) == {"quote_type": None, "n_keys": 0, "sector_key_present": False}
+    assert R.yfinance_company_info(raw) == {"sector": None}                              # absent key -> None: exactly the flattening that erases the distinction
+    assert R.yfinance_company_info({"a": 1}) is None and R.yfinance_company_info(None) is None
+    assert R.MIN_YF_KEYS == 5
+
+
+def test_the_payload_hash_carries_the_evidence_only_when_there_is_some():
+    assert R.payload_hash("Tech") == R.payload_hash("Tech", None)
+    assert R.payload_hash(None, "ETF") != R.payload_hash(None, "MUTUALFUND") != R.payload_hash(None)
+    assert R.projection(None) == {"sector": None} and R.projection(None, "ETF") == {"sector": None, "quote_type": "ETF"}
+
+
+def test_decide_is_the_one_chain_rule():
+    sec = lambda s: R.classify("yfinance_info", yf(s))                                  # noqa: E731
+    nosec = R.classify("yfinance_info", yf(None), meta=meta("ETF"))
+    assert R.decide(None, sec("Tech"), "r1") == R.Decision("created_observation", "first", 1, None, None)
+    head = (7, 3, "h3", "Tech", "r0")
+    assert R.decide(head, sec("Tech"), "r1") == R.Decision("confirmed_head", observation_id=7)
+    assert R.decide(head, sec("Tech"), "r0") == R.Decision("created_observation", observation_id=7)         # a retry of the run that created it
+    assert R.decide(head, sec("Energy"), "r1") == R.Decision("created_observation", "changed", 4, "h3")
+    assert R.decide(head, nosec, "r1") == R.Decision("created_observation", "became_none", 4, "h3")
+    assert R.decide((7, 3, "h3", None, "r0"), sec("Tech"), "r1") == R.Decision("created_observation", "became_set", 4, "h3")
+    assert R.decide((7, 3, "h3", None, "r0"), nosec, "r1") == R.Decision("confirmed_head", observation_id=7)
+    for o in (R.classify("yfinance_info", None, TimeoutError()), R.classify("tiingo_meta", {"sector": None})):
+        assert R.decide(head, o, "r1") == R.Decision("none")
+
+
+def _tiingo(row):
+    row = dict(row, source="tiingo_meta")
+    row["value_hash"] = SH.row_hash(row)
+    return row
+
+
+def test_a_primary_outage_never_lets_the_diagnostic_vendors_sector_stand_in():
+    """Policy A, answer 2: yfinance (authoritative) says Tech then fails for 40 days; Tiingo says Energy. The research reads ONLY the authoritative chain:
+    its head is still Tech (stale after 30 days), never Energy, and the failed polls neither refresh nor erase it."""
+    head = chain(("Tech", at(D0 - timedelta(days=60))))[0]
+    rows = [head, _tiingo(obs(1, "Energy", at(D0 - timedelta(days=5))))]
+    o, c = SH.group_history(rows, R.AUTHORITATIVE_SOURCE)
+    s = SH.select(o["AAA"], c.get("AAA", []), t0=D0, grace_days=GRACE, cutoff=CUTOFF)
+    assert (s.kind, s.sector, s.evidence.state) == (SH.K_OBSERVED, "Tech", SP.OBSERVED_STALE)
+    od, cd = SH.group_history(rows, "tiingo_meta")                                       # the diagnostic chain is its own, intact, never merged
+    assert SH.select(od["AAA"], cd.get("AAA", []), t0=D0, grace_days=GRACE, cutoff=CUTOFF).sector == "Energy"
+
+
+def test_a_primary_that_returns_with_a_different_sector_is_an_ordinary_reclassification_not_a_reconciliation():
+    """Answer 3: there is no fallback record in the authoritative chain, so nothing needs reconciling; Tech -> Energy is a normal `changed` row."""
+    d = R.decide((7, 1, "h1", "Tech", "r0"), R.classify("yfinance_info", yf("Energy")), "r9")
+    assert (d.chain_effect, d.change_kind, d.seq) == ("created_observation", "changed", 2)
+
+
+def test_the_source_policy_is_one_authoritative_vendor_and_the_research_side_agrees():
+    assert R.AUTHORITATIVE_SOURCE == SH.AUTHORITATIVE_SOURCE == "yfinance_info"
+    assert tuple(R.DIAGNOSTIC_SOURCES) == tuple(SH.DIAGNOSTIC_SOURCES) == ("tiingo_meta",)
+    assert set(R.DIAGNOSTIC_SOURCES).isdisjoint({R.AUTHORITATIVE_SOURCE})
 
 
 @pytest.mark.parametrize("raw", [None, "", "Unknown"])
@@ -304,6 +387,23 @@ def test_agreement_proceeds_unchanged():
 def test_a_sector_identity_disagreement_fails_closed():
     cc = SH.crosscheck(ev(SP.OBSERVED_FRESH, "Tech"), hist(sector="Health Care"))
     assert cc.relation == SH.R_IDENTITY_CONFLICT and cc.effective.state == SP.UNAVAILABLE and cc.effective.reason == SP.IDENTITY_CONFLICT
+
+
+def test_an_explicit_no_sector_history_against_a_candidate_sector_is_a_conflict_not_a_winner():
+    """Owner rule (Slice 11): history says explicit no_sector, candidate says Tech for the same decision point -> neither silently wins."""
+    nos = SH.HistorySelection(SH.K_EXPLICIT_NO_SECTOR, ev(SP.UNAVAILABLE, None, "no_sector"), None, 2, None, None, 0, ())
+    for cand in (SP.OBSERVED_FRESH, SP.OBSERVED_STALE):
+        cc = SH.crosscheck(ev(cand, "Tech"), nos)
+        assert cc.relation == SH.R_NO_SECTOR_CONFLICT and cc.effective.state == SP.UNAVAILABLE and cc.effective.reason == SP.IDENTITY_CONFLICT
+        assert cc.effective.sector == "Tech"                                                        # the disputed name stays visible for diagnosis
+    # a candidate that is itself "no sector" (an absence, not an assertion) is NOT a conflict
+    for cand in (SP.UNAVAILABLE,):
+        assert SH.crosscheck(ev(cand, None), nos).relation != SH.R_NO_SECTOR_CONFLICT
+    # reconstructed / unknown candidates keep their own (never-loosened) classification
+    for bad in (SP.RECONSTRUCTED, SP.UNKNOWN):
+        assert SH.crosscheck(ev(bad), nos).relation != SH.R_NO_SECTOR_CONFLICT
+    # an OBSERVED history sector is unaffected by this rule
+    assert SH.crosscheck(ev(SP.OBSERVED_FRESH, "Tech"), hist()).relation == SH.R_AGREE
 
 
 def test_history_can_only_tighten():

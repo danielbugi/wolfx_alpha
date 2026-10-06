@@ -46,7 +46,13 @@ K_OBSERVED, K_EXPLICIT_NO_SECTOR, K_NO_HISTORY, K_BROKEN = "observed", "explicit
 R_AGREE, R_AGREE_UNUSABLE = "agree", "agree_unusable"
 R_HISTORY_TIGHTENED, R_HISTORY_AHEAD = "history_tightened", "history_ahead"
 R_IDENTITY_CONFLICT, R_CHAIN_BROKEN = "identity_conflict", "chain_broken"
-RELATIONS = (R_AGREE, R_AGREE_UNUSABLE, R_HISTORY_TIGHTENED, R_HISTORY_AHEAD, R_IDENTITY_CONFLICT, R_CHAIN_BROKEN)
+R_NO_SECTOR_CONFLICT = "no_sector_conflict"        # the history ASSERTS no sector while the candidate names one (Slice 11 owner rule: neither wins)
+RELATIONS = (R_AGREE, R_AGREE_UNUSABLE, R_HISTORY_TIGHTENED, R_HISTORY_AHEAD, R_IDENTITY_CONFLICT, R_CHAIN_BROKEN, R_NO_SECTOR_CONFLICT)
+
+# Source identity (Slice 11, policy A): ONE vendor owns the forward sector identity; every other vendor is diagnostic / cross-check only and can
+# never stand in for it. The recorder pins the same value (a test keeps the two equal): the lab layer cannot import the writer.
+AUTHORITATIVE_SOURCE = C.AUTHORITATIVE_HISTORY_SOURCE
+DIAGNOSTIC_SOURCES = ("tiingo_meta",)
 
 # how unsafe an evidence state is: the cross-check keeps the HIGHER one (the safer source wins), ties keep the candidate's own evidence
 _RANK = {SP.OBSERVED_FRESH: 0, SP.OBSERVED_STALE: 1, SP.UNAVAILABLE: 2, SP.RECONSTRUCTED: 3, SP.UNKNOWN: 4}
@@ -193,6 +199,9 @@ def crosscheck(cand: SP.SectorEvidence, hist: HistorySelection) -> CrossCheck:
     """Combine the candidate-bounded evidence (Slice 8, unchanged) with the append-only history for ONE decision point.
 
     * a broken history chain, or two FRESH observed sources naming different sectors  -> identity conflict, fail closed;
+    * the history ASSERTS "no sector" (explicit, vendor-evidenced) while the candidate names one (fresh or stale)  -> `no_sector_conflict`, the same
+      fail-closed mask: neither source silently wins, the sector-relative feature stays unavailable until the discrepancy is explained (owner
+      rule, Slice 11). A candidate that is itself "no sector" is an absence, not an assertion, so that pair stays a plain tightening/agreement;
     * otherwise the SAFER source wins (higher `_RANK`; ties keep the candidate's own evidence), so history can only tighten a cell;
     * the history being ahead of weaker candidate evidence changes nothing (recorded as `history_ahead`), and reconstructed / unknown provenance in
       either source can never be loosened by the other;
@@ -205,6 +214,8 @@ def crosscheck(cand: SP.SectorEvidence, hist: HistorySelection) -> CrossCheck:
         if cand.sector == h.sector:
             return CrossCheck(cand, R_AGREE, cand.state, hist.kind, h.state, ())
         return CrossCheck(_ev(SP.UNAVAILABLE, SP.IDENTITY_CONFLICT, cand.sector), R_IDENTITY_CONFLICT, cand.state, hist.kind, h.state, ())
+    if hist.kind == K_EXPLICIT_NO_SECTOR and cand.state in (SP.OBSERVED_FRESH, SP.OBSERVED_STALE):
+        return CrossCheck(_ev(SP.UNAVAILABLE, SP.IDENTITY_CONFLICT, cand.sector), R_NO_SECTOR_CONFLICT, cand.state, hist.kind, h.state, ())
     rc, rh = _RANK[cand.state], _RANK[h.state]
     if rh > rc:
         return CrossCheck(h, R_HISTORY_TIGHTENED, cand.state, hist.kind, h.state, ())
