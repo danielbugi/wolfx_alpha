@@ -1,0 +1,89 @@
+#### eval errors 2026-10-03T10:00:00Z 2026-10-04T20:00:00Z
+JRN|unit=donchian-signal-ledger-eval.service preset=errors since=2026-10-03T10:00:00Z until=2026-10-04T20:00:00Z
+JRN|unit_lines_in_window=12
+JRN|end
+#### notice-evening errors 2026-10-03T10:00:00Z 2026-10-04T20:00:00Z
+JRN|unit=donchian-notice-evening.service preset=errors since=2026-10-03T10:00:00Z until=2026-10-04T20:00:00Z
+JRN|unit_lines_in_window=34
+JRN|end
+#### notice-midday errors 2026-10-03T10:00:00Z 2026-10-04T20:00:00Z
+JRN|unit=donchian-notice-midday.service preset=errors since=2026-10-03T10:00:00Z until=2026-10-04T20:00:00Z
+JRN|unit_lines_in_window=22
+JRN|end
+#### earnings-today errors 2026-10-03T10:00:00Z 2026-10-04T20:00:00Z
+JRN|unit=donchian-earnings-today.service preset=errors since=2026-10-03T10:00:00Z until=2026-10-04T20:00:00Z
+JRN|unit_lines_in_window=11
+JRN|end
+#### postmarket-retry errors 2026-10-03T10:00:00Z 2026-10-04T20:00:00Z
+JRN|unit=donchian-postmarket-retry.service preset=errors since=2026-10-03T10:00:00Z until=2026-10-04T20:00:00Z
+JRN|unit_lines_in_window=2940
+JRN|end
+#### eval errors 2026-10-04T20:00:00Z 2026-10-06T06:00:00Z
+JRN|unit=donchian-signal-ledger-eval.service preset=errors since=2026-10-04T20:00:00Z until=2026-10-06T06:00:00Z
+JRN|unit_lines_in_window=24
+JRN|end
+#### notice-evening errors 2026-10-04T20:00:00Z 2026-10-06T06:00:00Z
+JRN|unit=donchian-notice-evening.service preset=errors since=2026-10-04T20:00:00Z until=2026-10-06T06:00:00Z
+JRN|unit_lines_in_window=17
+JRN|end
+#### notice-midday errors 2026-10-04T20:00:00Z 2026-10-06T06:00:00Z
+JRN|unit=donchian-notice-midday.service preset=errors since=2026-10-04T20:00:00Z until=2026-10-06T06:00:00Z
+JRN|unit_lines_in_window=22
+JRN|end
+#### earnings-today errors 2026-10-04T20:00:00Z 2026-10-06T06:00:00Z
+JRN|unit=donchian-earnings-today.service preset=errors since=2026-10-04T20:00:00Z until=2026-10-06T06:00:00Z
+JRN|unit_lines_in_window=11
+JRN|end
+#### postmarket-retry errors 2026-10-04T20:00:00Z 2026-10-06T06:00:00Z
+JRN|unit=donchian-postmarket-retry.service preset=errors since=2026-10-04T20:00:00Z until=2026-10-06T06:00:00Z
+JRN|unit_lines_in_window=15164
+JRN|2026-10-05T21:28:46+00:00 ubuntu-8gb-nbg1-2 run_postmarket_retry.sh[3280521]: Database connection error: numeric field overflow
+JRN|2026-10-05T21:28:46+00:00 ubuntu-8gb-nbg1-2 run_postmarket_retry.sh[3280521]: 2026-10-05 21:28:46,029 - ERROR - Failed to bulk update technical indicators for MCHB: numeric field overflow
+JRN|end
+#### eval errors 2026-10-06T06:00:00Z 2026-10-07T04:00:00Z
+JRN|unit=donchian-signal-ledger-eval.service preset=errors since=2026-10-06T06:00:00Z until=2026-10-07T04:00:00Z
+JRN|unit_lines_in_window=12
+JRN|end
+#### notice-evening errors 2026-10-06T06:00:00Z 2026-10-07T04:00:00Z
+JRN|unit=donchian-notice-evening.service preset=errors since=2026-10-06T06:00:00Z until=2026-10-07T04:00:00Z
+JRN|unit_lines_in_window=17
+JRN|end
+#### notice-midday errors 2026-10-06T06:00:00Z 2026-10-07T04:00:00Z
+JRN|unit=donchian-notice-midday.service preset=errors since=2026-10-06T06:00:00Z until=2026-10-07T04:00:00Z
+JRN|unit_lines_in_window=22
+JRN|end
+#### earnings-today errors 2026-10-06T06:00:00Z 2026-10-07T04:00:00Z
+JRN|unit=donchian-earnings-today.service preset=errors since=2026-10-06T06:00:00Z until=2026-10-07T04:00:00Z
+JRN|unit_lines_in_window=34
+JRN|end
+#### postmarket-retry errors 2026-10-06T06:00:00Z 2026-10-07T04:00:00Z
+JRN|unit=donchian-postmarket-retry.service preset=errors since=2026-10-06T06:00:00Z until=2026-10-07T04:00:00Z
+JRN|unit_lines_in_window=12277
+JRN|2026-10-06T21:08:51+00:00 ubuntu-8gb-nbg1-2 run_postmarket_retry.sh[3556160]: 2026-10-06 21:08:51,609 - ERROR - Failed to bulk update technical indicators for MCHB: numeric field overflow
+JRN|end
+#### eval lifecycle 2026-10-05T00:00:00Z 2026-10-06T06:00:00Z
+JRN|unit=donchian-signal-ledger-eval.service preset=lifecycle since=2026-10-05T00:00:00Z until=2026-10-06T06:00:00Z
+JRN|unit_lines_in_window=24
+JRN|2026-10-05T00:30:56+00:00 ubuntu-8gb-nbg1-2 systemd[1]: donchian-signal-ledger-eval.service: Deactivated successfully.
+JRN|2026-10-05T00:30:56+00:00 ubuntu-8gb-nbg1-2 systemd[1]: Finished donchian-signal-ledger-eval.service - First Light: signal ledger outcome evaluator (walks open signal_ledger rows forward).
+JRN|2026-10-06T00:30:57+00:00 ubuntu-8gb-nbg1-2 systemd[1]: donchian-signal-ledger-eval.service: Deactivated successfully.
+JRN|2026-10-06T00:30:57+00:00 ubuntu-8gb-nbg1-2 systemd[1]: Finished donchian-signal-ledger-eval.service - First Light: signal ledger outcome evaluator (walks open signal_ledger rows forward).
+JRN|end
+#### notice-evening lifecycle 2026-10-05T00:00:00Z 2026-10-06T06:00:00Z
+JRN|unit=donchian-notice-evening.service preset=lifecycle since=2026-10-05T00:00:00Z until=2026-10-06T06:00:00Z
+JRN|unit_lines_in_window=17
+JRN|2026-10-05T17:00:19+00:00 ubuntu-8gb-nbg1-2 systemd[1]: donchian-notice-evening.service: Deactivated successfully.
+JRN|2026-10-05T17:00:19+00:00 ubuntu-8gb-nbg1-2 systemd[1]: Finished donchian-notice-evening.service - First Light: evening channel notice, slot 2 (matches the disabled Windows FirstLight-4-Notices-Evening task).
+JRN|end
+#### notice-midday lifecycle 2026-10-05T00:00:00Z 2026-10-06T06:00:00Z
+JRN|unit=donchian-notice-midday.service preset=lifecycle since=2026-10-05T00:00:00Z until=2026-10-06T06:00:00Z
+JRN|unit_lines_in_window=22
+JRN|2026-10-05T09:01:32+00:00 ubuntu-8gb-nbg1-2 systemd[1]: donchian-notice-midday.service: Deactivated successfully.
+JRN|2026-10-05T09:01:32+00:00 ubuntu-8gb-nbg1-2 systemd[1]: Finished donchian-notice-midday.service - First Light: midday channel notice, slot 1 (matches the disabled Windows FirstLight-3-Notices-Midday task).
+JRN|end
+#### earnings-today lifecycle 2026-10-05T00:00:00Z 2026-10-06T06:00:00Z
+JRN|unit=donchian-earnings-today.service preset=lifecycle since=2026-10-05T00:00:00Z until=2026-10-06T06:00:00Z
+JRN|unit_lines_in_window=11
+JRN|2026-10-05T07:00:30+00:00 ubuntu-8gb-nbg1-2 systemd[1]: donchian-earnings-today.service: Deactivated successfully.
+JRN|2026-10-05T07:00:30+00:00 ubuntu-8gb-nbg1-2 systemd[1]: Finished donchian-earnings-today.service - First Light: pre-market earnings-today post (matches the disabled Windows FirstLight-5-EarningsToday task).
+JRN|end

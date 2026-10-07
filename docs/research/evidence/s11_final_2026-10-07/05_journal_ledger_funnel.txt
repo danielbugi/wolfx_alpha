@@ -1,0 +1,41 @@
+#### pipeline ledger 2026-10-05T23:16:00Z 2026-10-05T23:17:00Z
+JRN|unit=donchian-pipeline.service preset=ledger since=2026-10-05T23:16:00Z until=2026-10-05T23:17:00Z
+JRN|unit_lines_in_window=51
+JRN|2026-10-05T23:16:21+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 23:16:21,717 - INFO - Screener behaviour mode: NEW (universe_guards, combined_score_ranking, ml_unprocessed_fallback, ledger_integrity_refusals)
+JRN|end
+#### pipeline ledger 2026-10-06T23:19:00Z 2026-10-06T23:20:30Z
+JRN|unit=donchian-pipeline.service preset=ledger since=2026-10-06T23:19:00Z until=2026-10-06T23:20:30Z
+JRN|unit_lines_in_window=53
+JRN|2026-10-06T23:19:37+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 23:19:37,954 - INFO - Screener behaviour mode: NEW (universe_guards, combined_score_ranking, ml_unprocessed_fallback, ledger_integrity_refusals)
+JRN|end
+#### pipeline funnel 2026-10-06T23:18:30Z 2026-10-06T23:19:45Z
+JRN|unit=donchian-pipeline.service preset=funnel since=2026-10-06T23:18:30Z until=2026-10-06T23:19:45Z
+JRN|unit_lines_in_window=85
+JRN|2026-10-06T23:18:39+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: Step 9/13: Running multi-timeframe screener...
+JRN|2026-10-06T23:18:40+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 23:18:40,084 - INFO - Combined Donchian Screener with ML Enhancement - ALL BUGS FIXED
+JRN|2026-10-06T23:18:40+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 23:18:40,085 - WARNING - No ML models found - running without ML enhancement
+JRN|2026-10-06T23:18:40+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 23:18:40,085 - WARNING - WARNING: ML model not available - will run without ML enhancement
+JRN|2026-10-06T23:18:40+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 23:18:40,085 - INFO - CombinedDonchianScreener ML Enhancement initialized
+JRN|2026-10-06T23:18:40+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 23:18:40,085 - INFO - Multi-Timeframe ML Screener initialized
+JRN|2026-10-06T23:18:40+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 23:18:40,086 - INFO - Executing FIXED query for daily breakout signals (session 2026-10-06)...
+JRN|2026-10-06T23:18:40+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 23:18:40,518 - INFO - Found 1366 daily breakout signals
+JRN|2026-10-06T23:18:40+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 23:18:40,518 - INFO - Signal breakdown: {'bullish_breakout': 102, 'near_bearish': 707, 'near_bullish': 434, 'bearish_breakout': 123}
+JRN|2026-10-06T23:18:40+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 23:18:40,520 - INFO - Found 1366 daily breakout signals
+JRN|2026-10-06T23:18:42+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 23:18:42,182 - INFO - Universe guards mode: ACTIVE (session 2026-10-06 >= GUARDS_EFFECTIVE_FROM=2026-10-02)
+JRN|2026-10-06T23:19:36+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 23:19:36,490 - INFO - Universe guards: dropped 78/1366 symbols (illiquid, too little history, or a price discontinuity)
+JRN|2026-10-06T23:19:36+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 23:19:36,491 - INFO - Applying ML enhancement to high-quality signals...
+JRN|2026-10-06T23:19:37+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 23:19:37,954 - INFO - ML enhancement completed: 812 signals processed
+JRN|2026-10-06T23:19:37+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 23:19:37,954 - INFO - Screener behaviour mode: NEW (universe_guards, combined_score_ranking, ml_unprocessed_fallback, ledger_integrity_refusals)
+JRN|2026-10-06T23:19:38+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 23:19:38,312 - INFO - Results saved to breakout_results/multi_timeframe_ml_enhanced_20261006_231937.json
+JRN|2026-10-06T23:19:38+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: ML Enhancement (CombinedDonchianScreener) imported from: /app/mechanism/ml_enhancement
+JRN|2026-10-06T23:19:38+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: Bullish Breakouts: 101.0
+JRN|2026-10-06T23:19:38+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: Bearish Breakouts: 117.0
+JRN|2026-10-06T23:19:38+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: Near Bullish: 401.0
+JRN|2026-10-06T23:19:38+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: Near Bearish: 669.0
+JRN|2026-10-06T23:19:38+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]:  1.   ACRS | Bearish Breakout at $3.70 | Alignment: 100% (A) | ML: N/A
+JRN|2026-10-06T23:19:38+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]:  2.   ALXO | Bearish Breakout at $1.11 | Alignment: 100% (A) | ML: N/A
+JRN|2026-10-06T23:19:38+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]:  3.    AMD | Bullish Breakout at $649.42 | Alignment: 100% (A) | ML: N/A
+JRN|2026-10-06T23:19:38+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]:  4.   ANET | Bullish Breakout at $215.36 | Alignment: 100% (A) | ML: N/A
+JRN|2026-10-06T23:19:38+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]:  5.    APH | Bullish Breakout at $88.62 | Alignment: 100% (A) | ML: N/A
+JRN|2026-10-06T23:19:38+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: SUCCESS: multi-timeframe screener completed
+JRN|end

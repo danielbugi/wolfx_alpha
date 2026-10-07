@@ -4,6 +4,12 @@ Branch `lab/first-light-algo`, draft PR #1 (CI only, DO NOT MERGE). Four owner-a
 defect, at the vendor boundary), and the evidence-updated activation runbook and gate. Nothing was applied, enabled, installed, restarted, deployed or
 merged; no production data or configuration was modified; S11 was not touched; no Tiingo call was made; no model was trained.
 
+> **Status update 2026-10-07 (final pre-activation work, after the owner accepted this slice).** Of the six NO-GO blockers below: (1) **S11 now has its final report: PASS**
+> (`docs/research/evidence/s11_final_2026-10-07/S11_REPORT.md`); (2) the `model_version` fix already existed on the branch (commit `604642c`) and was audited, tested end to end and documented
+> (`MODEL_VERSION_SEMANTICS_AND_HISTORICAL_ROWS.md`); no migration is needed; (3) migrations 24-31, (4) the image and (6) the backup/approval are runbook steps, not code; (5) the scheduler units are
+> now committed as dormant (`deploy/vps/`), proven inert by tests. The runbook of section 4 below is **superseded** by `docs/operations/FORWARD_RESEARCH_ACTIVATION_RUNBOOK.md`
+> (the exact 20-step sequence, with a rollback for every step). Activation is still **NO** until the owner states each gate.
+
 Evidence classes: **LIVE_PRODUCTION_READ** (read-only queries on the production database / host, 2026-10-06), **LIVE_VENDOR** (yfinance from the production
 VPS network), **FROZEN_DEV**, **SYNTHETIC**, **CODE_READ**. Raw outputs: `docs/research/evidence/production_readiness_2026-10-06/` (README there lists target,
 time, identity). No secret appears in any of it.

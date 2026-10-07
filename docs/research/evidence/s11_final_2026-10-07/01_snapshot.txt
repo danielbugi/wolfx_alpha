@@ -1,0 +1,33 @@
+SNAP|utc=2026-10-07T04:07:42Z
+TIMER|NEXT                            LEFT LAST                              PASSED UNIT                              ACTIVATES
+TIMER|Wed 2026-10-07 07:00:38 UTC 2h 52min Tue 2026-10-06 07:00:28 UTC      21h ago donchian-earnings-today.timer     donchian-earnings-today.service
+TIMER|Wed 2026-10-07 09:00:42 UTC 4h 53min Tue 2026-10-06 09:00:54 UTC      19h ago donchian-notice-midday.timer      donchian-notice-midday.service
+TIMER|Wed 2026-10-07 17:00:23 UTC      12h Tue 2026-10-06 17:00:54 UTC      11h ago donchian-notice-evening.timer     donchian-notice-evening.service
+TIMER|Wed 2026-10-07 20:45:20 UTC      16h Tue 2026-10-06 22:00:54 UTC       6h ago donchian-pipeline.timer           donchian-pipeline.service
+TIMER|Wed 2026-10-07 20:45:29 UTC      16h Wed 2026-10-07 03:00:28 UTC  1h 7min ago donchian-postmarket-retry.timer   donchian-postmarket-retry.service
+TIMER|Wed 2026-10-07 23:31:10 UTC      19h Tue 2026-10-06 23:30:28 UTC 4h 37min ago donchian-nightly-backup.timer     donchian-nightly-backup.service
+TIMER|Thu 2026-10-08 00:30:44 UTC      20h Wed 2026-10-07 00:30:54 UTC 3h 36min ago donchian-signal-ledger-eval.timer donchian-signal-ledger-eval.service
+TIMER|Thu 2026-10-08 02:00:51 UTC      21h Wed 2026-10-07 02:00:55 UTC  2h 6min ago donchian-firstlight1-prices.timer donchian-firstlight1-prices.service
+SNAP|running_oneshot_compose_run=0
+CONT|/donchian-screener-postgres-1|id=612ed92b2e00|started=2026-09-28T17:00:06.36849367Z|restarts=0|image=postgres:16-alpine|health=healthy
+CONT|/donchian-screener-backend-1|id=02a190501663|started=2026-10-03T09:46:00.379062342Z|restarts=0|image=ghcr.io/danielbugi/wolfx_alpha-backend:963ab19318b7|health=healthy
+CONT|/donchian-screener-bot-1|id=db7d6a57b6c3|started=2026-10-03T09:46:18.205748267Z|restarts=0|image=ghcr.io/danielbugi/wolfx_alpha-mechanism:e3feb64d3e86|health=nohealth
+CONT|/donchian-screener-reverse-proxy-1|id=7e5fd6008ea3|started=2026-09-24T21:22:46.79171936Z|restarts=0|image=caddy:2-alpine|health=nohealth
+PIN|CURRENT_SHA=963ab19318b7 CURRENT_MECHANISM_SHA=cfd83f72f960 bot_tag=e3feb64d3e86 PREVIOUS_GOOD_SHA=e0991c4dc19d
+ENV|sha256=8600faea4f009eac5c2f58fe9215c02b3ea6d5ef7850cf7ccc4178b92ce0439a GUARDS_EFFECTIVE_FROM=2026-10-02 RESEARCH_CAPTURE_ENABLED_keys=0
+CONN|from=backend(172.18.0.3)|user=donchian_app|app=-|n=10
+CONN|from=bot(172.18.0.5)|user=donchian_app|app=-|n=2
+CONN|total_by_user=donchian_app=12
+LEDGER|count_and_immutable_fp|1247|2e0f41d02477c679253d29e36773f5db
+LEDGER|mutable_fp|328e357df06d8cd0cecfc951c58b4d76
+LEDGER|last5_signal_dates|2026-10-06:99, 2026-10-05:126, 2026-10-02:169, 2026-10-01:363, 2026-09-28:490
+SESSION|max_stock_prices_date|2026-10-06
+SESSION|max_ledger_signal_date|2026-10-06
+DELIVERY|last6|2026-10-06/market_health/prod/sent/att1 ; 2026-10-06/top_gainers/prod/sent/att1 ; 2026-10-06/momentum_board/prod/sent/att1 ; 2026-10-06/daily_digest/prod/sent/att1 ; 2026-10-05/market_health/prod/sent/att1 ; 2026-10-05/top_gainers/prod/sent/att1
+DELIVERY|count_rowhash|36|4f83a38c89987248e0c58d44ec35ec67
+CAPTURE|run/obs/snap/registry/activation|0/0/0/0/0
+CAPTURE|ledger_rows_with_observation_id|0
+SCHEMA|migration24_25_tables|none
+STATS|table ins/upd/del|candidate_capture_run=0/0/0, candidate_observation=0/0/0, feature_set_registry=0/0/0, feature_snapshot=0/0/0, research_capture_activation=0/0/0, signal_ledger=1247/4129/0, telegram_post_delivery=36/36/0
+HEALTH|disk=21% backend_api=200 public_api=200
+HEALTH|oom_kernel_lines_24h=0

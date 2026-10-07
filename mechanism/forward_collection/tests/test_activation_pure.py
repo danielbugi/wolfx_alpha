@@ -95,9 +95,11 @@ def test_the_scheduler_units_gate_needs_both_a_committed_service_and_timer(tmp_p
     assert by_id(A.gate_checks({}, tmp_path))["gate:scheduler_units_committed"]["ok"]
 
 
-def test_the_real_repo_has_no_committed_collector_units_so_the_activation_layer_is_no_by_design():
+def test_the_real_repo_has_the_committed_dormant_units_but_every_owner_gate_still_defaults_to_no():
+    c = by_id(A.gate_checks({}, A.REPO_ROOT))
+    assert c["gate:scheduler_units_committed"]["ok"] and not any(c[f"gate:{k}"]["ok"] for k in A.GATES)
     c = by_id(A.gate_checks({k: "yes" for k in A.GATES}, A.REPO_ROOT))
-    assert not c["gate:scheduler_units_committed"]["ok"] and all(c[f"gate:{k}"]["ok"] for k in A.GATES)
+    assert c["gate:scheduler_units_committed"]["ok"] and all(c[f"gate:{k}"]["ok"] for k in A.GATES)
 
 
 def test_the_gate_list_names_the_s11_and_model_version_blockers():

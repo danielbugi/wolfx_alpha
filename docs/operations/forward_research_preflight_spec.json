@@ -1,0 +1,66 @@
+{
+ "calendar": {
+  "file": "calendar.txt"
+ },
+ "config": {
+  "availability_grace_days": 1,
+  "market": {
+   "feature_set_version": "mi_v2"
+  },
+  "min_sample": 10,
+  "primary_horizon": 20,
+  "reconstructed_policy": "exclude",
+  "schema": "lab_dataset_config_v1",
+  "sector": {
+   "feature_set_version": "mi_v2"
+  },
+  "sector_history": {
+   "source": "yfinance_info"
+  },
+  "stock_rs": {
+   "feature_set_version": "mi_v2",
+   "horizon_sessions": 20,
+   "model_version": "rs_v1"
+  },
+  "strategy": {
+   "key": "donchian_breakout",
+   "version": "v1"
+  },
+  "universe_rule": "rule"
+ },
+ "dataset_name": "forward_ds",
+ "dataset_version": "v1",
+ "embargo_sessions": 60,
+ "feature_versions": {
+  "mi_v2": "1"
+ },
+ "knowledge_cutoff_at": "2026-03-20T06:00:00+00:00",
+ "label_horizons": [
+  5,
+  20,
+  60
+ ],
+ "label_maturity_session": "2026-03-04",
+ "label_methodology_version": "fwd_v1.m1",
+ "label_version": "fwd_v1",
+ "purge_sessions": 0,
+ "schema": "lab_authoring_spec_v1",
+ "universe": {
+  "from_db": true
+ },
+ "universe_id": "u",
+ "windows": {
+  "test": [
+   "2026-03-03",
+   "2026-03-04"
+  ],
+  "train": [
+   "2026-02-25",
+   "2026-02-26"
+  ],
+  "validation": [
+   "2026-02-27",
+   "2026-03-02"
+  ]
+ }
+}

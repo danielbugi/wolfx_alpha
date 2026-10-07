@@ -1,5 +1,6 @@
-# DRAFT -- NOT INSTALLED. Would live at /etc/systemd/system/donchian-forward-collection.service (and be committed to deploy/vps/ at activation,
-# together with a deliberate amendment of the "no deploy unit references the collector" guard test).
+# COMMITTED BUT DORMANT. Installed by nobody: copying it to /etc/systemd/system, `systemctl daemon-reload` and `systemctl enable --now` on the paired timer are
+# manual administrator steps (docs/operations/FORWARD_RESEARCH_ACTIVATION_RUNBOOK.md); no script, workflow or CD path does any of them. Even once enabled, the
+# wrapper refuses (exit 5) without its arming file. A service unit does nothing until something starts it.
 [Unit]
 Description=First Light: forward collection (market + sector + relative strength + labels) for the latest completed session
 After=docker.service

@@ -235,7 +235,7 @@ def classify(session: date, results: Sequence[StepResult], *, apply: bool, locke
 
 # ------------------------------------------------------------------ the declared scheduler design (documented and validated, NEVER installed)
 SCHEDULER_DESIGN: Dict[str, Any] = {
-    "unit": "donchian-forward-collection.{service,timer} (one pair; drafts under docs/research/, installed by nobody)",
+    "unit": "donchian-forward-collection.{service,timer} (one pair, committed under deploy/vps but DORMANT: installed by an administrator only, and the wrapper refuses without its arming file)",
     "command": "python -m forward_collection run --latest-completed --apply --with-sector-history-check --code-ref <mechanism image tag>",
     "wrapper": "run_channel_sender.sh-style one-shot `docker compose run --rm` at CURRENT_MECHANISM_SHA, flock'ed",
     "timezone": "Asia/Jerusalem",

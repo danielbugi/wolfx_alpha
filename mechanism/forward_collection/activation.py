@@ -82,6 +82,48 @@ WRITER_REQUEST_SITE = "fundamentals_updater.py"
 MIN_REQUEST_SITES = 2                                                                  # the writer's vendor call and the dry-run probe
 
 
+UNIT_SERVICE, UNIT_TIMER, UNIT_ALERT, UNIT_WRAPPER = ("donchian-forward-collection.service", "donchian-forward-collection.timer",
+                                                      "donchian-forward-collection-alert.service", "run_forward_collection.sh")
+UNIT_FILES = (UNIT_SERVICE, UNIT_TIMER, UNIT_ALERT, UNIT_WRAPPER)
+ONCALENDAR = re.compile(r"^OnCalendar=\*-\*-\* (\d\d:\d\d):00 (\S+)\s*$", re.M)
+
+
+def scheduler_units_check(repo_root: Path) -> Tuple[bool, Dict[str, Any]]:
+    """The collector's service, timer, alert unit and wrapper are committed under deploy/vps, agree with the scheduler design in the contract, and are
+    DORMANT: the wrapper needs its arming file, and no other committed unit orders itself after, wants or requires the collector. Reading files only:
+    whether a host has them installed is a runtime fact this preflight cannot see (an activation step)."""
+    vps = repo_root / "deploy" / "vps"
+    problems: List[str] = []
+    texts: Dict[str, str] = {}
+    for name in UNIT_FILES:
+        p = vps / name
+        if p.is_file():
+            texts[name] = p.read_text(encoding="utf-8")
+        else:
+            problems.append(f"{name}: not committed under deploy/vps")
+    service, timer, wrapper = texts.get(UNIT_SERVICE, ""), texts.get(UNIT_TIMER, ""), texts.get(UNIT_WRAPPER, "")
+    if service and "ExecStart=/opt/donchian/scripts/" + UNIT_WRAPPER not in service:
+        problems.append(f"{UNIT_SERVICE}: ExecStart is not the tracked wrapper")
+    if service and "OnFailure=" + UNIT_ALERT not in service:
+        problems.append(f"{UNIT_SERVICE}: no OnFailure alert")
+    if timer:
+        want = [(h, C.SCHEDULER_DESIGN["timezone"]) for h in C.SCHEDULER_DESIGN["fires_local"]]
+        if ONCALENDAR.findall(timer) != want:
+            problems.append(f"{UNIT_TIMER}: OnCalendar lines are not the contract's fires {want}")
+    if wrapper:
+        for needle, why in (("--with-sector-history-check", "the sector-history verification"), ("--apply", "the apply flag the contract design names"),
+                            ("FORWARD_COLLECTION_ARMED", "the arming file that keeps it inert until activation")):
+            if needle not in wrapper:
+                problems.append(f"{UNIT_WRAPPER}: missing {why}")
+    approved = set(UNIT_FILES)
+    if vps.is_dir():
+        for p in sorted(vps.glob("*.service")) + sorted(vps.glob("*.timer")):
+            if p.name not in approved and "forward-collection" in p.read_text(encoding="utf-8"):
+                problems.append(f"{p.name}: another unit references the collector (it must stand alone)")
+    return not problems, {"problems": problems, "committed": sorted(texts), "fires_local": list(C.SCHEDULER_DESIGN["fires_local"]),
+                          "dormancy": "installed only by an administrator; the wrapper refuses without FORWARD_COLLECTION_ARMED"}
+
+
 def vendor_symbol_check(code_root: Path = CODE_ROOT) -> Tuple[bool, Dict[str, Any]]:
     """The yfinance request symbol is translated ONCE, at the vendor call, and by one function: behaviour of that function on the evidenced production
     share classes, its refusals, and that EVERY request site under data_updaters/ that uses it (the writer and the dry-run probe) takes its symbol from
@@ -150,10 +192,8 @@ def architecture_checks(spec: Mapping[str, Any], *, repo_root: Path = REPO_ROOT,
                     {"note": "informational: the flag is read in the fundamentals updater's own process, so this preflight can only report its own "
                              "environment. Turning it on is an activation step, not a precondition",
                      "preflight_process_value_is_on": str(env.get(SECTOR_FLAG_ENV, "")) == "1"}, blocking=False))
-    drafts = repo_root / "docs" / "research" / "scheduler_drafts"
-    names = sorted(p.name for p in drafts.glob("*")) if drafts.is_dir() else []
-    out.append(_chk("scheduler_drafts_present", bool(names) and all(n.endswith(".proposed") for n in names),
-                    {"drafts": names, "note": "drafts only: installing them is an activation action"}))
+    ok_units, units_detail = scheduler_units_check(repo_root)
+    out.append(_chk("scheduler_units_committed_and_dormant", ok_units, units_detail))
     return out
 
 
@@ -256,8 +296,8 @@ def gate_checks(gates: Optional[Mapping[str, str]], repo_root: Path = REPO_ROOT)
     has_service = any(n.endswith(".service") for n in units)
     has_timer = any(n.endswith(".timer") for n in units)
     out.append(_chk(f"gate:{AUTO_GATE_UNITS}", has_service and has_timer,
-                    {"units": units, "means": "the collector's systemd service and timer are committed under deploy/vps (an activation step: today they "
-                                              "exist only as .proposed drafts under docs/research/scheduler_drafts)"}))
+                    {"units": units, "means": "the collector's systemd service and timer are committed under deploy/vps. Committed is not installed: "
+                                              "installing them on the host is a manual administrator step in the activation runbook"}))
     return out
 
 

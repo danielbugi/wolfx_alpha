@@ -1,4 +1,5 @@
-# DRAFT -- NOT INSTALLED.
+# COMMITTED BUT DORMANT. A timer only fires after an administrator installs it and runs `systemctl enable --now donchian-forward-collection.timer`; merely
+# being in this directory (or in the mechanism image) does nothing. The wrapper it triggers also refuses without its arming file.
 #
 # Two fires per session day, both on the calendar day AFTER the session, in Jerusalem time (the tag every other production timer uses):
 #   03:15  first attempt: after the 23:45 pipeline and its 01:00 retry (a full run takes ~87 min, so the retry finishes by ~02:30; margin 45 min)

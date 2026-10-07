@@ -513,3 +513,44 @@ def test_inert_guards_mean_not_evaluated_never_passed(mts, monkeypatch):
     out = s._apply_universe_guards([sig("GOOD")])
     assert [x["symbol"] for x in out] == ["GOOD"] and s.guards_evaluated is False and s.guard_decisions == {}
     assert db.calls == []
+
+# ------------------------------------------------------------------ the S11-observed shape, screener -> real ledger writer
+class CaptureLedgerDB:
+    """Just enough database for `signal_ledger_writer.write_signals`: no open position anywhere; every insert is captured."""
+
+    def __init__(self):
+        self.inserted = []
+
+    def execute_dict_query(self, query, params=None):
+        return []
+
+    def execute_insert(self, query, params=None):
+        self.inserted.append(params)
+        return 1
+
+
+def _through_screener_and_writer(mts, monkeypatch, scored_symbols):
+    from screeners import signal_ledger_writer as W
+    s, _ = screener(mts, monkeypatch, [])
+    monkeypatch.setattr(mts, "PREDICTION_LOGGING_AVAILABLE", False)
+    s.ml_enhancer = ScoringStub(scored_symbols=scored_symbols)
+    inputs = [{**_enhance_input(f"S{g}"), "alignment_grade": g, "quality_grade": g, "atr_14": 1.5} for g in "ABCDF"]
+    out = s.enhance_signals_with_ml(inputs)
+    db = CaptureLedgerDB()
+    W.write_signals(db, out, SESSION, W.StrategyRef(1, "donchian_breakout", "v1"), strict=True)
+    return {p["symbol"]: p for p in db.inserted}
+
+
+def test_with_no_validated_model_every_grade_reaches_the_ledger_with_a_null_model_version(mts, monkeypatch):
+    """Production 2026-10-05/06 (S11): with no validated model 222 of 225 new ledger rows carried 'unknown', across grades A-F. The same shape through the
+    real screener merge and the real ledger writer must store NULL for every grade."""
+    rows = _through_screener_and_writer(mts, monkeypatch, [])
+    assert sorted(rows) == ["SA", "SB", "SC", "SD", "SF"]
+    assert all(r["model_version"] is None for r in rows.values())
+    assert {sym: r["quality_grade"] for sym, r in rows.items()} == {"SA": "A", "SB": "B", "SC": "C", "SD": "D", "SF": "F"}
+
+
+def test_only_the_scored_signal_reaches_the_ledger_with_a_model_version(mts, monkeypatch):
+    rows = _through_screener_and_writer(mts, monkeypatch, ["SB"])
+    assert rows["SB"]["model_version"] == "momentum_test_v1"
+    assert all(r["model_version"] is None for sym, r in rows.items() if sym != "SB")

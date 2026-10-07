@@ -30,17 +30,16 @@ def env():
 
 @pytest.fixture(scope="module")
 def repo(tmp_path_factory):
-    """A tmp repo root: the real compose list + migration files + scheduler drafts, plus committed collector units (the activation step)."""
+    """A tmp repo root: the real compose list + migration files + the REAL committed (dormant) collector units and wrapper."""
     r = tmp_path_factory.mktemp("repo")
     shutil.copy(FE.ROOT + "/docker-compose.yml", r / "docker-compose.yml")
     (r / "mechanism").mkdir()
     for f in FE.init_files():
         shutil.copy(f, r / "mechanism" / f.replace("\\", "/").rsplit("/", 1)[1])
-    shutil.copytree(FE.ROOT + "/docs/research/scheduler_drafts", r / "docs" / "research" / "scheduler_drafts")
     vps = r / "deploy" / "vps"
     vps.mkdir(parents=True)
-    (vps / "donchian-forward-collection.service").write_text("[Service]\n")
-    (vps / "donchian-forward-collection.timer").write_text("[Timer]\n")
+    for name in A.UNIT_FILES:
+        shutil.copy(FE.ROOT + "/deploy/vps/" + name, vps / name)
     return r
 
 
@@ -119,10 +118,12 @@ def test_the_same_database_is_equally_ready_when_asked_by_an_administrator(env, 
 
 
 def test_the_real_repo_is_architecture_and_environment_ready_but_not_activation_ready_with_no_gates(env):
+    """Committing the units satisfied the one automatic gate; every owner gate still defaults to NO, so committing changes nothing about activation."""
     rep = run(env, A.REPO_ROOT, gates={})
     assert rep["architecture_ready"] == "YES" and rep["environment_ready"] == "YES"
     assert rep["activation_ready"] == "NO" and rep["forward_research_collection_ready_for_activation"] == "NO"
-    assert sorted(rep["blockers"]["activation"]) == sorted([f"gate:{k}" for k in A.GATES] + ["gate:scheduler_units_committed"])
+    assert sorted(rep["blockers"]["activation"]) == sorted(f"gate:{k}" for k in A.GATES)
+    assert by_id(rep)["gate:scheduler_units_committed"]["ok"] is True
 
 
 @pytest.mark.parametrize("gate", sorted(A.GATES))
@@ -259,6 +260,11 @@ def test_the_activation_command_prints_the_layers_and_exits_nonzero_unless_every
     rc = CLI.main(["activation", "--spec", str(path), "--runtime-role", env.app, *gates], connect=readonly(env.app_connect_factory()), out=out.append)
     doc = json.loads(out[-1])
     assert doc["schema"] == "forward_collection_activation_v1" and doc["read_only"] is True
-    assert doc["architecture_ready"] == doc["environment_ready"] == "YES"                  # the real repo has no committed collector units: by design NO
-    assert doc["blockers"]["activation"] == ["gate:scheduler_units_committed"] and rc == C.EXIT_INCOMPLETE
-    assert doc["forward_research_collection_ready_for_activation"] == "NO"
+    assert doc["architecture_ready"] == doc["environment_ready"] == doc["activation_ready"] == "YES"      # every gate the TEST supplied, on a faithful throwaway database
+    assert doc["blockers"]["activation"] == [] and rc == C.EXIT_COMPLETE
+    assert doc["forward_research_collection_ready_for_activation"] == "YES"
+    out2 = []
+    some = [a for k in A.GATES if k != "s11_passed" for a in ("--gate", f"{k}=yes")]
+    rc2 = CLI.main(["activation", "--spec", str(path), "--runtime-role", env.app, *some], connect=readonly(env.app_connect_factory()), out=out2.append)
+    doc2 = json.loads(out2[-1])
+    assert doc2["blockers"]["activation"] == ["gate:s11_passed"] and rc2 == C.EXIT_INCOMPLETE and doc2["forward_research_collection_ready_for_activation"] == "NO"

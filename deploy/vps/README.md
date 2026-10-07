@@ -14,12 +14,22 @@ administrator (root SSH) — the GitHub Actions key cannot change them.
 | `run_postmarket_retry.sh` | `/opt/donchian/scripts/run_postmarket_retry.sh` | root, 755 | `ExecStart` of `donchian-postmarket-retry.service` — the bounded post-market-only retry |
 | `run_channel_sender.sh` | `/opt/donchian/scripts/run_channel_sender.sh` | root, 755 | `ExecStart` of `donchian-earnings-today.service` and both `donchian-notice-*.service` units — a generic one-shot `channel-sender` runner, `<script.py> [args...]` |
 | `firstlight1_updateonly.sh` | `/opt/donchian/scripts/firstlight1_updateonly.sh` | root, 755 | `ExecStart` of `donchian-firstlight1-prices.service` — calls `run_channel_sender.sh` 3 times |
+| `run_forward_collection.sh` | `/opt/donchian/scripts/run_forward_collection.sh` | root, 755 | **COMMITTED BUT DORMANT, NOT INSTALLED.** `ExecStart` of `donchian-forward-collection.service`: the forward research collector, refusing (exit 5) unless `/opt/donchian/FORWARD_COLLECTION_ARMED` holds exactly the pinned image tag |
 
 **Added 2026-09-25 (Phase 4A)**: the four scripts above were retrieved read-only from the live VPS,
 inspected for secrets/credentials/staging references (none found), confirmed byte-identical via
 SHA-256, and committed verbatim — until this pass, every tracked systemd unit except
 `donchian-docker-firewall.service` pointed at a script that existed only on the VPS. Every tracked
 production systemd unit now resolves to a tracked wrapper/entrypoint in this repo.
+
+## Committed but dormant: the forward research collector (NOT installed anywhere)
+
+`donchian-forward-collection.service`, `donchian-forward-collection.timer`, `donchian-forward-collection-alert.service` and `run_forward_collection.sh` are committed here so the
+activation is reviewable, but **nothing installs, enables or starts them**: this README's rule applies (an administrator copies them with root SSH; the CI/CD key cannot), no deploy script
+touches units, the units order against nothing else, only the timer has an `[Install]` section, and the wrapper refuses before touching a container or the database unless the
+arming file `/opt/donchian/FORWARD_COLLECTION_ARMED` (created by hand) contains exactly the tag in `CURRENT_MECHANISM_SHA`. Re-pinning the image disarms it. The proof is executable:
+`mechanism/forward_collection/tests/test_dormant_units.py`. The install sequence is in `docs/operations/FORWARD_RESEARCH_ACTIVATION_RUNBOOK.md`; the timer is 03:15 and 08:15
+Asia/Jerusalem, Tue-Sat (the day after a session).
 
 ## Scheduling (systemd timers)
 
