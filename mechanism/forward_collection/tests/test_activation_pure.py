@@ -70,7 +70,7 @@ def test_the_catalog_is_derived_from_the_compose_list_and_the_sql_files_not_hand
     assert {"sector_observation", "sector_poll", "sector_reconstruction"} == set(cat[31]["tables"])
     assert "research_sector_guard" in cat[31]["functions"]
     assert {"candidate_observation", "candidate_capture_run", "research_capture_activation"} <= set(cat[22]["tables"])
-    for n in range(24, 32):
+    for n in range(24, 33):
         assert cat[n]["tables"], n
 
 

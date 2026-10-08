@@ -242,7 +242,7 @@ run_step 9 "multi-timeframe screener" mechanism/screeners/multi_timeframe_screen
 # exits non-zero on an actual data problem (e.g. an empty dataset) -- see run_step's normal failure
 # handling below, which is intentionally NOT bypassed here. --replace does a full rebuild (~5 min for
 # ~595k rows), not an incremental one -- see ml_training/data_preparation/build_dataset.py.
-run_step 10 "ML dataset rebuild" ml_training/data_preparation/build_dataset.py --replace
+run_step 10 "ML dataset rebuild" ml_training/data_preparation/build_dataset.py --replace "${SESSION_ARGS[@]}"
 run_step 11 "ML training (momentum target)" ml_training/models/momentum_predictor.py --target momentum
 run_step 12 "ML training (plan_profit target)" ml_training/models/momentum_predictor.py --target plan_profit
 

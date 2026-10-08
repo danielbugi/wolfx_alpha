@@ -122,6 +122,9 @@ def compute_session(conn, session_date: date, *, provenance: str, sector_rule: s
             problems.append(f"{late_disc} price discontinuities were detected after the session")
         if untrusted_disc:
             problems.append(f"{untrusted_disc} price discontinuities have no trustworthy detection time")
+        scan = inputs.discontinuity_scan_evidence(conn, session_date)
+        if not scan["ok"]:
+            problems.append(f"no complete price-discontinuity scan is evidence for this session ({scan['reason']})")
         if problems:
             raise ProvenanceRefused("observed refused: " + "; ".join(problems))
     else:

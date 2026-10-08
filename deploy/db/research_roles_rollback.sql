@@ -45,7 +45,7 @@ BEGIN
     -- Market Intelligence objects (migrations 24 / 25), when present: tables, their sequences and the two trigger functions
     FOREACH t IN ARRAY ARRAY['universe_snapshot', 'market_snapshot', 'sector_snapshot', 'market_event', 'market_event_revision',
                              'forward_return_label',
-                             'source_observation', 'source_poll', 'catalyst_classification', 'stock_relative_strength', 'dataset_manifest', 'experiment_registration', 'experiment_result', 'sector_observation', 'sector_poll', 'sector_reconstruction'] LOOP
+                             'source_observation', 'source_poll', 'catalyst_classification', 'stock_relative_strength', 'dataset_manifest', 'experiment_registration', 'experiment_result', 'sector_observation', 'sector_poll', 'sector_reconstruction', 'price_discontinuity_scan'] LOOP
         IF to_regclass(t) IS NOT NULL THEN
             EXECUTE format('ALTER TABLE %I OWNER TO %I', t, orig);
             EXECUTE format('ALTER SEQUENCE %s OWNER TO %I',
@@ -54,7 +54,7 @@ BEGIN
     END LOOP;
     FOREACH f IN ARRAY ARRAY['research_market_guard()', 'research_market_event_stamp()', 'research_label_guard()',
                              'research_label_consistency()',
-                             'research_observation_guard()', 'research_observation_stamp()', 'research_poll_stamp()', 'research_classification_guard()', 'research_classification_consistency()', 'research_rs_guard()', 'research_rs_stamp()', 'research_registry_guard()', 'research_registry_stamp()', 'research_registry_consistency()', 'research_sector_guard()', 'research_sector_enc(text)', 'research_sector_row_hash(text,text,integer,text,text,text,timestamptz,text,text,text)', 'research_sector_obs_stamp()', 'research_sector_poll_stamp()', 'research_sector_recon_stamp()'] LOOP
+                             'research_observation_guard()', 'research_observation_stamp()', 'research_poll_stamp()', 'research_classification_guard()', 'research_classification_consistency()', 'research_rs_guard()', 'research_rs_stamp()', 'research_registry_guard()', 'research_registry_stamp()', 'research_registry_consistency()', 'research_sector_guard()', 'research_sector_enc(text)', 'research_sector_row_hash(text,text,integer,text,text,text,timestamptz,text,text,text)', 'research_sector_obs_stamp()', 'research_sector_poll_stamp()', 'research_sector_recon_stamp()', 'research_discontinuity_scan_guard()', 'research_discontinuity_scan_stamp()', 'research_price_input_fingerprint(date)', 'research_discontinuity_result_fingerprint()'] LOOP
         IF to_regprocedure(f) IS NOT NULL THEN
             EXECUTE format('ALTER FUNCTION %s OWNER TO %I', f, orig);
         END IF;

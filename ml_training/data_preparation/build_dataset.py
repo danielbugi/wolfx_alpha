@@ -18,6 +18,7 @@ import os
 import sys
 import time
 import warnings
+from datetime import date, timezone
 
 import numpy as np
 import pandas as pd
@@ -136,6 +137,40 @@ def save(conn, ds: pd.DataFrame, disc: pd.DataFrame):
     conn.commit()
 
 
+SCAN_WRITER = "build_dataset"
+SCAN_CODE_REF = "ml_training/data_preparation/build_dataset.py#scan@v1"
+
+
+def record_failed_scan(session, started_at, reason, run_id):
+    """Best effort, on its own connection (the scan's own transaction may be unusable). A failed scan claims no fingerprint, so it can never satisfy a reader."""
+    try:
+        c = psycopg2.connect(**ml_config.db_config)
+        c.cursor().execute(
+            "INSERT INTO price_discontinuity_scan (session_date, status, failure_reason, started_at, run_id, writer, code_ref) "
+            "VALUES (%s, 'failed', %s, %s, %s, %s, %s)", (session, reason, started_at, run_id, SCAN_WRITER, SCAN_CODE_REF))
+        c.commit()
+        c.close()
+    except Exception as e:  # noqa: BLE001
+        print(f"WARNING: could not record the failed scan ({reason}): {type(e).__name__}", file=sys.stderr)
+
+
+def finish_scan(cur, session, started_at, run_id, input_claim):
+    """The last step of a COMPLETE --replace run, inside the caller's transaction (the prune is already done): claim the price input fingerprinted at the START of
+    the run and the discontinuity table as it is now. The database recomputes both and refuses the row if either differs (prices changed during the run, wrong
+    session, wrong claim). A retry with an identical input and result is a no-op (ON CONFLICT DO NOTHING keeps the first completion time).
+    Returns the new row's id, or None when an identical scan already existed."""
+    cur.execute("SELECT n_rows, fingerprint FROM research_discontinuity_result_fingerprint()")
+    n_found, result_fp = cur.fetchone()
+    newest, n_symbols, n_rows, input_fp = input_claim
+    cur.execute(
+        "INSERT INTO price_discontinuity_scan (session_date, status, newest_bar, n_symbols, n_price_rows, input_fingerprint, n_discontinuities, result_fingerprint, "
+        "started_at, run_id, writer, code_ref) VALUES (%s, 'complete', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        "ON CONFLICT (session_date, input_fingerprint, result_fingerprint) WHERE status = 'complete' DO NOTHING RETURNING id",
+        (session, newest, n_symbols, n_rows, input_fp, n_found, result_fp, started_at, run_id, SCAN_WRITER, SCAN_CODE_REF))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
 def main():
     ap = argparse.ArgumentParser(description="Build ml_breakout_dataset_v2 from stock_prices only")
     ap.add_argument("--test", nargs="+", help="only these symbols")
@@ -144,10 +179,57 @@ def main():
     ap.add_argument("--replace", action="store_true",
                     help="delete existing ml_breakout_dataset_v2 rows first and, after a complete run, drop discontinuities no longer detected "
                          "(rows still detected keep their first-detected timestamp)")
+    ap.add_argument("--session", help="the US market session this run scans (YYYY-MM-DD). With a complete --replace run it records the append-only "
+                                      "price_discontinuity_scan evidence the collector requires; without it no evidence is recorded (a manual rebuild)")
     args = ap.parse_args()
 
     conn = psycopg2.connect(**ml_config.db_config)
     cur = conn.cursor()
+    complete_run = bool(args.replace and not args.test and not args.limit)
+    session = date.fromisoformat(args.session) if args.session else None
+    if session is not None and not complete_run:
+        print("NOTE: --session is only used by a complete --replace run (no --test / --limit); no scan evidence will be recorded")
+        session = None
+    scan = None                                          # (started_at, run_id, input_claim) once the scan is open
+    if complete_run and session is None:
+        print("NOTE: no --session given: price_discontinuity_scan evidence will NOT be recorded for this run")
+    if complete_run and session is not None:
+        cur.execute("SELECT clock_timestamp()")
+        started_at = cur.fetchone()[0]
+        run_id = f"dsc-{session.isoformat()}-{started_at.astimezone(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')}"
+        cur.execute("SELECT newest_bar, n_symbols, n_price_rows, fingerprint FROM research_price_input_fingerprint(%s)", (session,))
+        claim = cur.fetchone()
+        cur.execute("SELECT max(date) FROM stock_prices")                       # the detector reads the whole table, so the session's bar must be the newest in it
+        newest_all = cur.fetchone()[0]
+        conn.commit()
+        if claim[0] != session or newest_all != session:
+            print(f"FATAL: the newest stored price bar is {newest_all}, not the scan session {session}: refusing to scan "
+                  f"(the session is not loaded, or a later bar is mixed in)", file=sys.stderr)
+            record_failed_scan(session, started_at, "price_data_not_at_session", run_id)
+            sys.exit(3)
+        scan = (started_at, run_id, claim)
+        print(f"Scan {run_id}: session {session}, {claim[2]} price rows, {claim[1]} symbols, input fingerprint {claim[3][:16]}")
+    try:
+        _build(args, conn, cur, scan, session)
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        try:
+            conn.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        if scan is not None:
+            record_failed_scan(session, scan[0], "scan_exception", scan[1])
+        print(f"FATAL: {type(e).__name__}: {e}", file=sys.stderr)
+        raise
+    finally:
+        try:
+            conn.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _build(args, conn, cur, scan, session):
     if args.test:
         symbols = sorted(args.test)
     else:
@@ -181,10 +263,21 @@ def main():
         print(f"  {n_sym}/{len(symbols)} symbols | {n_rows} samples | {n_disc} discontinuities | {time.time() - t0:.0f}s", flush=True)
     if args.replace and not args.test and not args.limit:
         pruned = prune_discontinuities(cur, seen)
-        conn.commit()
         print(f"Pruned {pruned} discontinuities no longer detected; {len(seen)} detected rows kept their first-detected timestamp")
+        if scan is not None:
+            started_at, run_id, claim = scan
+            try:
+                wrote = finish_scan(cur, session, started_at, run_id, claim)
+                conn.commit()                                   # the prune and the scan evidence become visible together, or not at all
+            except psycopg2.Error as e:
+                conn.rollback()
+                print(f"FATAL: the scan evidence was REFUSED by the database ({getattr(e, 'pgcode', None)}): {str(e).splitlines()[0]}", file=sys.stderr)
+                record_failed_scan(session, started_at, "input_changed_during_scan", run_id)
+                sys.exit(1)
+            print(f"Scan evidence {'recorded' if wrote is not None else 'already recorded for this exact input and result (no new row)'}: session {session}")
+        else:
+            conn.commit()
     print(f"Done: {n_rows} samples, {n_disc} discontinuities recorded, feature_set={pf.FEATURE_SET_VERSION}")
-    conn.close()
 
 
 if __name__ == "__main__":

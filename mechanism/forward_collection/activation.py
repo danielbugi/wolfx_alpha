@@ -5,7 +5,7 @@ It wraps the unchanged `preflight.run_preflight` (v2) and adds the rest of the s
   ARCHITECTURE-ready  the code and the declared design are coherent: every enabled dataset source has a collector step (the sector history has the
                       read-only verification step, not `None`), writer versions match, the scheduler design is self-consistent, the sector writer is
                       default-OFF. Needs no database.
-  ENVIRONMENT-ready   the target database/process has what the stack needs: migrations 22 and 24-31 by catalog (derived from the compose init list
+  ENVIRONMENT-ready   the target database/process has what the stack needs: migrations 22 and 24-32 by catalog (derived from the compose init list
                       and the SQL files themselves, never a second hand-kept list), every research table guarded by an ENABLE ALWAYS trigger, the
                       runtime role proven least-privilege (SELECT+INSERT on append-only history, no UPDATE/DELETE/TRUNCATE, cannot change the capture
                       boundary), a derivable trading calendar and a fresh-enough fundamentals refresh.
@@ -35,8 +35,9 @@ RUNTIME_ROLE = "donchian_app"
 SECTOR_FLAG_ENV = "SECTOR_HISTORY_RECORDER_ENABLED"
 
 # the research migrations activation depends on (23 only adds ml_models columns and is checked by the Release B validator)
-ACTIVATION_MIGRATIONS: Tuple[int, ...] = (22, 24, 25, 26, 27, 28, 29, 30, 31)
-APPEND_ONLY_FROM = 24                      # migrations 24-31 create the append-only research tables
+ACTIVATION_MIGRATIONS: Tuple[int, ...] = (22, 24, 25, 26, 27, 28, 29, 30, 31, 32)
+SCAN_EVIDENCE_FUNCTIONS = ("research_price_input_fingerprint(date)", "research_discontinuity_result_fingerprint()")   # migration 32
+APPEND_ONLY_FROM = 24                      # migrations 24-32 create the append-only research / evidence tables
 CAPTURE_TABLES_WITH_INSERT = ("candidate_observation", "feature_snapshot")
 CAPTURE_BOUNDARY_TABLE = "research_capture_activation"
 
@@ -225,7 +226,7 @@ def environment_checks(connect, repo_root: Path = REPO_ROOT, *, runtime_role: st
                 fm = [f for f in v["functions"] if not _scalar(cur, "SELECT EXISTS (SELECT 1 FROM pg_proc WHERE proname = %s)", (f,))]
                 if tm or fm:
                     missing[str(n)] = {"tables": tm, "functions": fm}
-            out.append(_chk("migrations_22_and_24_to_31_applied", not missing,
+            out.append(_chk("migrations_22_and_24_to_32_applied", not missing,
                             {"checked": {str(n): {"tables": len(v["tables"]), "functions": len(v["functions"])} for n, v in cat.items()},
                              "missing_by_migration": missing}))
             conn.rollback()
@@ -265,6 +266,10 @@ def environment_checks(connect, repo_root: Path = REPO_ROOT, *, runtime_role: st
                         problems.append(f"{t}: lacks INSERT")
                     forbidden = ("UPDATE", "DELETE", "TRUNCATE") + (() if writable else ("INSERT",))
                     problems += [f"{t}: has {p}" for p in forbidden if priv(t, p)]
+                for fn in SCAN_EVIDENCE_FUNCTIONS:
+                    if _scalar(cur, "SELECT to_regprocedure(%s) IS NOT NULL", (fn,)) and not _scalar(
+                            cur, "SELECT has_function_privilege(%s, %s, 'EXECUTE')", (runtime_role, fn)):
+                        problems.append(f"{fn}: the runtime role cannot EXECUTE it (the scan-evidence trigger and readers call it)")
             conn.rollback()
             out.append(_chk("runtime_role_is_least_privilege_on_research_tables", bool(row) and not problems,
                             {"role": runtime_role, "problems": problems,

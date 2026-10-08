@@ -59,7 +59,8 @@ def test_a_known_discontinuity_rebuilt_every_night_no_longer_blocks_the_collecti
     put(world, sym, s - timedelta(days=8), first_seen)
     for _ in range(3):                                                                              # the nightly rebuilds of the previous nights
         rebuild(world, [(sym, s - timedelta(days=8), "jump_up", 100.0, 150.0, 1.5)])
-    world.load_session(0)
+    world.load_session(0, scan=False)
+    world.record_scan(0)                    # the builder's last step, after the discontinuity table is as it will be read
     rep = collect(world, steps, 0)
     assert observe_outcome(rep).outcome in C.SUCCESS, rep.to_dict()
     assert world.count("market_snapshot") == 1
@@ -69,7 +70,8 @@ def test_a_discontinuity_first_detected_after_the_session_cutoff_is_refused_and_
     strat, steps = FW.start_world(world, with_capture=False)
     s = world.sessions[0]
     put(world, "S0001", s - timedelta(days=8), inputs.knowledge_cutoff(s) + timedelta(hours=1))
-    world.load_session(0)
+    world.load_session(0, scan=False)
+    world.record_scan(0)                    # the builder's last step, after the discontinuity table is as it will be read
     rep = collect(world, steps, 0)
     o = observe_outcome(rep)
     assert o.outcome == C.FAILED and "detected after the session" in (o.error or ""), rep.to_dict()
@@ -82,13 +84,15 @@ def test_rebuilding_after_the_cutoff_cannot_launder_a_late_discontinuity_into_an
     put(world, "S0001", s - timedelta(days=8), inputs.knowledge_cutoff(s) + timedelta(hours=1))
     for _ in range(3):
         rebuild(world, [("S0001", s - timedelta(days=8), "jump_up", 100.0, 150.0, 1.5)])
-    world.load_session(0)
+    world.load_session(0, scan=False)
+    world.record_scan(0)                    # the builder's last step, after the discontinuity table is as it will be read
     assert observe_outcome(collect(world, steps, 0)).outcome == C.FAILED
 
 
 def test_a_future_dated_stamp_fails_closed(world):
     strat, steps = FW.start_world(world, with_capture=False)
     put(world, "S0001", world.sessions[0] - timedelta(days=8), datetime.now(UTC) + timedelta(days=3))
-    world.load_session(0)
+    world.load_session(0, scan=False)
+    world.record_scan(0)                    # the builder's last step, after the discontinuity table is as it will be read
     o = observe_outcome(collect(world, steps, 0))
     assert o.outcome == C.FAILED and "trustworthy detection time" in (o.error or "")

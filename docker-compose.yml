@@ -83,6 +83,7 @@ services:
       - ./mechanism/add_stock_relative_strength_table.sql:/docker-entrypoint-initdb.d/29_add_stock_relative_strength_table.sql:ro
       - ./mechanism/add_dataset_experiment_registry_tables.sql:/docker-entrypoint-initdb.d/30_add_dataset_experiment_registry_tables.sql:ro
       - ./mechanism/add_sector_history_tables.sql:/docker-entrypoint-initdb.d/31_add_sector_history_tables.sql:ro
+      - ./mechanism/add_price_discontinuity_scan.sql:/docker-entrypoint-initdb.d/32_add_price_discontinuity_scan.sql:ro
     networks: [app_net]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_BOOTSTRAP_USER:-${DB_USER:-trading_user}} -d ${DB_NAME:-donchian_docker_dev}"]

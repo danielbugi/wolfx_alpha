@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 import mi_fixtures  # noqa: F401  (path setup)
-from mi_runner_fixtures import EARLY, ROOT, T, runner_env  # noqa: F401
+from mi_runner_fixtures import EARLY, ROOT, T, record_scan_on, runner_env  # noqa: F401
 from market_intelligence import inputs, runner
 
 sys.path.insert(0, ROOT)
@@ -89,6 +89,9 @@ def test_a_discontinuity_found_in_the_overnight_cycle_that_loaded_the_session_wa
         _put(c, "S0002", date(2026, 9, 10), "jump_down", datetime(2026, 9, 14, 1, 0, tzinfo=UTC))
         c.commit()
     assert _classify(clean) == (0, 0)
+    with clean.connect() as c:                                                              # the builder's scan evidence for the table as it now is
+        record_scan_on(c.cursor(), T)
+        c.commit()
     assert _observed(clean).applied is False                                              # not refused
 
 
@@ -263,7 +266,28 @@ def test_prune_removes_only_rows_a_complete_rebuild_no_longer_detects_and_a_reap
 
 
 def test_main_prunes_only_after_a_complete_replace_and_no_longer_deletes_the_table_up_front():
-    src = inspect.getsource(bd.main)
+    src = inspect.getsource(bd.main) + inspect.getsource(bd._build)
     assert "if args.replace and not args.test and not args.limit:" in src and "prune_discontinuities" in src
     assert 'DELETE FROM price_discontinuities"' not in src                                  # the up-front delete that destroyed provenance is gone
     assert "NOW()" not in inspect.getsource(bd.upsert_discontinuities) and "detected_at=NOW()" not in inspect.getsource(bd)
+
+
+def test_the_pipelines_worst_observed_finish_and_every_retry_are_inside_the_cutoff_in_every_regime():
+    """The scan is written by pipeline step 10, so its completion is bounded by the pipeline's slowest observed finish (03:15 Asia/Jerusalem on the 14-day earnings
+    re-fetch night) and by the collector's recovery fire; the first attempt (23:45) and retry (01:00) start before it. All of that is before
+    the cutoff in the winter, summer and both mismatch windows, so a delayed-but-normal run still qualifies and a run a whole cycle late does not."""
+    jer = ZoneInfo("Asia/Jerusalem")
+    hh, mm = 3, 15                  # forward_collection.contract.SCHEDULER_DESIGN['pipeline_worst_finish_local'] (not imported: the Market Intelligence tests never import the collector)
+    for s in [date(2026, 3, 16), date(2026, 7, 6), date(2026, 10, 26), date(2026, 12, 7)]:
+        cut = inputs.knowledge_cutoff(s)
+        nxt = s + timedelta(days=1)
+        assert datetime.combine(nxt, time(hh, mm), jer).astimezone(UTC) < cut - timedelta(hours=5), s          # at least five hours of margin on the slowest night seen
+        assert datetime.combine(nxt, time(1, 0), jer).astimezone(UTC) < cut, s                                 # the 01:00 retry starts inside the window
+        assert datetime.combine(nxt, time(23, 45), jer).astimezone(UTC) > cut, s                               # the NEXT cycle starts after it: its scan is for the next session
+
+
+def test_the_nightly_pipeline_passes_the_session_to_the_dataset_step_so_a_scan_is_recorded():
+    text = open(os.path.join(ROOT, "automation_pipeline.sh"), encoding="utf-8").read()
+    step10 = [ln for ln in text.splitlines() if ln.startswith("run_step 10 ")]
+    assert len(step10) == 1 and 'build_dataset.py --replace "${SESSION_ARGS[@]}"' in step10[0]
+    assert 'SESSION_ARGS=(--session "$SESSION_DATE")' in text

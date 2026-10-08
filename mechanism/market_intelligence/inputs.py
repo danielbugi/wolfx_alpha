@@ -98,6 +98,69 @@ def load_discontinuities(conn, session_date: date) -> Tuple[Dict[str, List[date]
     return out, late, untrusted
 
 
+# Reasons an `observed` run can be refused for lack of scan evidence (migration 32). Each is a distinct, coded fact; none is ever downgraded to success.
+SCAN_OK = "ok"
+SCAN_UNAVAILABLE = "scan_evidence_unavailable"        # migration 32 (table / fingerprint functions) not applied: no evidence can exist
+SCAN_PRICES_NOT_AT_SESSION = "price_data_not_at_session"
+SCAN_MISSING = "scan_missing"                         # no scan row for this session at all (the step was skipped, or the pipeline did not pass --session)
+SCAN_FAILED = "scan_failed"                           # only failed scans exist for this session
+SCAN_INPUT_MISMATCH = "scan_input_mismatch"           # prices differ from the input of every completed scan (changed after it, or another price version)
+SCAN_RESULT_MISMATCH = "scan_result_mismatch"         # price_discontinuities is no longer what the matching scan produced
+SCAN_AFTER_CUTOFF = "scan_after_cutoff"               # the matching scan completed after the session's knowledge cutoff
+
+
+def discontinuity_scan_evidence(conn, session_date: date) -> Dict[str, Any]:
+    """Read-only. Does the database hold a COMPLETE price-discontinuity scan that is evidence for an `observed` run of `session_date`?
+
+    All of these must hold at once: the session's own bar is the newest stored price bar; a complete scan exists FOR THIS SESSION whose price-input fingerprint equals
+    the fingerprint of the prices as stored NOW (so a scan of another session, of an earlier price version, or of a partial load never counts); the scan's
+    result fingerprint equals the price_discontinuities table as stored NOW; and the earliest such scan completed (database clock) no later than
+    `knowledge_cutoff(session)`. Returns {'ok', 'reason', 'detail'}; `reason` is one of the SCAN_* codes."""
+    cutoff = knowledge_cutoff(session_date)
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT newest_bar, n_symbols, n_price_rows, fingerprint FROM research_price_input_fingerprint(%s)", (session_date,))
+        newest, n_symbols, n_rows, input_fp = cur.fetchone()
+        cur.execute("SELECT n_rows, fingerprint FROM research_discontinuity_result_fingerprint()")
+        n_found, result_fp = cur.fetchone()
+        cur.execute("SELECT max(date) FROM stock_prices")                          # the detector reads the whole table: a later bar means the scan is not of this session
+        newest = cur.fetchone()[0]
+        cur.execute("SELECT id, status, failure_reason, input_fingerprint, result_fingerprint, finished_at FROM price_discontinuity_scan "
+                    "WHERE session_date = %s ORDER BY id", (session_date,))
+        scans = cur.fetchall()
+        conn.commit()
+    except Exception as e:  # noqa: BLE001
+        conn.rollback()
+        if getattr(e, "pgcode", None) in ("42P01", "42883"):                      # undefined_table / undefined_function
+            return {"ok": False, "reason": SCAN_UNAVAILABLE, "detail": {"hint": "migration 32 is not applied"}}
+        raise
+    detail: Dict[str, Any] = {"session": session_date.isoformat(), "cutoff": cutoff.isoformat(), "newest_price_bar": newest.isoformat() if newest else None,
+                              "current_input_fingerprint": input_fp, "current_result_fingerprint": result_fp, "scans_for_session": len(scans)}
+
+    def verdict(reason: str, **extra: Any) -> Dict[str, Any]:
+        for key, value in extra.items():
+            detail[key] = value
+        return {"ok": reason == SCAN_OK, "reason": reason, "detail": detail}
+
+    if newest != session_date:
+        return verdict(SCAN_PRICES_NOT_AT_SESSION)
+    if not scans:
+        return verdict(SCAN_MISSING)
+    complete = [r for r in scans if r[1] == "complete"]
+    if not complete:
+        return verdict(SCAN_FAILED, failure_reasons=sorted({r[2] for r in scans if r[2]}))
+    same_input = [r for r in complete if r[3] == input_fp]
+    if not same_input:
+        return verdict(SCAN_INPUT_MISMATCH, scan_input_fingerprints=sorted({r[3] for r in complete}))
+    matching = [r for r in same_input if r[4] == result_fp]
+    if not matching:
+        return verdict(SCAN_RESULT_MISMATCH, scan_result_fingerprints=sorted({r[4] for r in same_input}))
+    first = min(matching, key=lambda r: (r[5], r[0]))
+    if first[5] > cutoff:
+        return verdict(SCAN_AFTER_CUTOFF, scan_id=first[0], scan_finished_at=first[5].isoformat())
+    return verdict(SCAN_OK, scan_id=first[0], scan_finished_at=first[5].isoformat(), n_discontinuities=n_found, n_symbols=n_symbols, n_price_rows=n_rows)
+
+
 def load_sector_map(conn, session_date: date, rule: str) -> Tuple[Dict[str, Optional[str]], Dict[str, Any]]:
     if rule not in RULES:
         raise ValueError(f"rule must be one of {RULES}")

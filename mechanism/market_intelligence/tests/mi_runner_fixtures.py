@@ -17,9 +17,11 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")
 sys.path.insert(0, os.path.join(ROOT, "mechanism"))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(ROOT, "ml_training", "config"))
 
 MIGRATIONS = ["create_trading_schema.sql", "add_market_data_tables.sql", "add_ml_dataset_tables.sql",
-              "add_market_snapshot_tables.sql", "add_market_event_tables.sql", "add_stock_relative_strength_table.sql"]
+              "add_market_snapshot_tables.sql", "add_market_event_tables.sql", "add_stock_relative_strength_table.sql",
+              "add_price_discontinuity_scan.sql"]
 T = date(2026, 9, 30)
 EARLY = date(2026, 9, 25)          # a real session earlier than the newest one
 N_DAYS, N_STOCKS = 260, 1100
@@ -75,6 +77,30 @@ def _seed(cur):
     execute_values(cur, "INSERT INTO daily_fundamentals (symbol, date, sector, created_at, updated_at) VALUES %s", fund)
 
 
+SCAN_TRIGGERS = ("price_discontinuity_scan_immutable_row", "price_discontinuity_scan_immutable_truncate", "price_discontinuity_scan_stamp")
+
+
+def record_scan_on(cur, session, *, finished=None, run_id="test-scan"):
+    """The nightly builder's last step, for real (build_dataset.finish_scan: the database recomputes both fingerprints and refuses a false claim). TESTS ONLY, in a
+    disposable schema: the database stamps completion with ITS clock, which in a simulated past would be 'after the cutoff', so the new row's stamp is moved to
+    `finished` (default: three hours before the session's knowledge cutoff, i.e. inside the overnight cycle) with the triggers briefly off and then ENABLE ALWAYS again."""
+    from datetime import timedelta
+    from market_intelligence import inputs
+    from ml_training.data_preparation import build_dataset as bd
+    cur.execute("SELECT clock_timestamp()")
+    started = cur.fetchone()[0]
+    cur.execute("SELECT newest_bar, n_symbols, n_price_rows, fingerprint FROM research_price_input_fingerprint(%s)", (session,))
+    claim = cur.fetchone()
+    scan_id = bd.finish_scan(cur, session, started, run_id, claim)
+    if scan_id is not None:
+        when = finished if finished is not None else inputs.knowledge_cutoff(session) - timedelta(hours=3)
+        cur.execute("ALTER TABLE price_discontinuity_scan DISABLE TRIGGER USER")
+        cur.execute("UPDATE price_discontinuity_scan SET finished_at = %s WHERE id = %s", (when, scan_id))
+        for name in SCAN_TRIGGERS:
+            cur.execute(f'ALTER TABLE price_discontinuity_scan ENABLE ALWAYS TRIGGER "{name}"')
+    return scan_id
+
+
 @pytest.fixture(scope="module")
 def runner_env():
     import psycopg2
@@ -92,6 +118,7 @@ def runner_env():
             with open(os.path.join(ROOT, "mechanism", name), encoding="utf-8") as fh:
                 cur.execute(fh.read())
         _seed(cur)
+        record_scan_on(cur, T)      # the nightly builder's evidence for the newest session, completed inside its overnight cycle
         admin.commit()
     except Exception:
         admin.rollback()

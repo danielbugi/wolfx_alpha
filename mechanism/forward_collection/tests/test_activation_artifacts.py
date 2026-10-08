@@ -27,8 +27,8 @@ BACKUP = REPO / "deploy" / "db" / "pre_activation_backup.sh"
 EXPECTED_MANIFEST = {
     *(f"mechanism/{n}.sql" for n in ("add_market_snapshot_tables", "add_market_event_tables", "add_forward_return_label_table", "add_source_observation_tables",
                                      "add_catalyst_classification_table", "add_stock_relative_strength_table", "add_dataset_experiment_registry_tables",
-                                     "add_sector_history_tables")),
-    "deploy/db/research_roles.sql", "deploy/db/research_roles_verify.sql", "deploy/db/research_roles_rollback.sql", "deploy/db/rollback_24_31.sql",
+                                     "add_sector_history_tables", "add_price_discontinuity_scan")),
+    "deploy/db/research_roles.sql", "deploy/db/research_roles_verify.sql", "deploy/db/research_roles_rollback.sql", "deploy/db/rollback_24_31.sql", "deploy/db/rollback_32.sql",
     "deploy/db/pre_activation_backup.sh", "deploy/vps/run_forward_collection.sh", "deploy/vps/donchian-forward-collection.service",
     "deploy/vps/donchian-forward-collection.timer", "deploy/vps/donchian-forward-collection-alert.service", "docs/operations/forward_research_preflight_spec.json",
 }

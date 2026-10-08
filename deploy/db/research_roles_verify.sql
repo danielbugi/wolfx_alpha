@@ -46,12 +46,12 @@ BEGIN
     -- Market Intelligence tables (migrations 24 / 25) are included when present: append-only, runtime INSERT/SELECT, admin SELECT only.
     mi := ARRAY(SELECT x FROM unnest(ARRAY['universe_snapshot', 'market_snapshot', 'sector_snapshot', 'market_event',
                                            'market_event_revision', 'forward_return_label',
-                                           'source_observation', 'source_poll', 'catalyst_classification', 'stock_relative_strength', 'dataset_manifest', 'experiment_registration', 'experiment_result', 'sector_observation', 'sector_poll', 'sector_reconstruction']) x WHERE to_regclass(x) IS NOT NULL);
+                                           'source_observation', 'source_poll', 'catalyst_classification', 'stock_relative_strength', 'dataset_manifest', 'experiment_registration', 'experiment_result', 'sector_observation', 'sector_poll', 'sector_reconstruction', 'price_discontinuity_scan']) x WHERE to_regclass(x) IS NOT NULL);
     allt := allt || mi;
     imm := imm || mi;
     fns := fns || ARRAY(SELECT x FROM unnest(ARRAY['research_market_guard()', 'research_market_event_stamp()', 'research_label_guard()',
                                            'research_label_consistency()',
-                                           'research_observation_guard()', 'research_observation_stamp()', 'research_poll_stamp()', 'research_classification_guard()', 'research_classification_consistency()', 'research_rs_guard()', 'research_rs_stamp()', 'research_registry_guard()', 'research_registry_stamp()', 'research_registry_consistency()', 'research_sector_guard()', 'research_sector_enc(text)', 'research_sector_row_hash(text,text,integer,text,text,text,timestamptz,text,text,text)', 'research_sector_obs_stamp()', 'research_sector_poll_stamp()', 'research_sector_recon_stamp()']) x
+                                           'research_observation_guard()', 'research_observation_stamp()', 'research_poll_stamp()', 'research_classification_guard()', 'research_classification_consistency()', 'research_rs_guard()', 'research_rs_stamp()', 'research_registry_guard()', 'research_registry_stamp()', 'research_registry_consistency()', 'research_sector_guard()', 'research_sector_enc(text)', 'research_sector_row_hash(text,text,integer,text,text,text,timestamptz,text,text,text)', 'research_sector_obs_stamp()', 'research_sector_poll_stamp()', 'research_sector_recon_stamp()', 'research_discontinuity_scan_guard()', 'research_discontinuity_scan_stamp()', 'research_price_input_fingerprint(date)', 'research_discontinuity_result_fingerprint()']) x
                         WHERE to_regprocedure(x) IS NOT NULL);
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'donchian_owner' AND rolcanlogin) THEN
         RAISE EXCEPTION 'FAIL donchian_owner must be NOLOGIN';
@@ -132,6 +132,15 @@ BEGIN
         END IF;
         IF NOT has_function_privilege('donchian_research_admin', f, 'EXECUTE') THEN
             RAISE EXCEPTION 'FAIL donchian_research_admin cannot EXECUTE %', f;
+        END IF;
+    END LOOP;
+    FOREACH f IN ARRAY ARRAY['research_price_input_fingerprint(date)', 'research_discontinuity_result_fingerprint()'] LOOP
+        IF to_regprocedure(f) IS NULL THEN CONTINUE; END IF;                         -- migration 32 not applied: nothing to check
+        IF has_function_privilege('public', f, 'EXECUTE') THEN
+            RAISE EXCEPTION 'FAIL PUBLIC may EXECUTE %', f;
+        END IF;
+        IF NOT has_function_privilege('donchian_app', f, 'EXECUTE') OR NOT has_function_privilege('donchian_research_admin', f, 'EXECUTE') THEN
+            RAISE EXCEPTION 'FAIL the runtime role and the admin group must EXECUTE % (the scan-evidence trigger and the readers call it)', f;
         END IF;
     END LOOP;
     IF NOT has_column_privilege('donchian_app', 'candidate_capture_run', 'status', 'UPDATE') THEN
@@ -227,7 +236,7 @@ BEGIN
     END LOOP;
     FOREACH t IN ARRAY ARRAY['universe_snapshot', 'market_snapshot', 'sector_snapshot', 'market_event', 'market_event_revision',
                              'forward_return_label',
-                             'source_observation', 'source_poll', 'catalyst_classification', 'stock_relative_strength', 'dataset_manifest', 'experiment_registration', 'experiment_result', 'sector_observation', 'sector_poll', 'sector_reconstruction'] LOOP
+                             'source_observation', 'source_poll', 'catalyst_classification', 'stock_relative_strength', 'dataset_manifest', 'experiment_registration', 'experiment_result', 'sector_observation', 'sector_poll', 'sector_reconstruction', 'price_discontinuity_scan'] LOOP
         IF to_regclass(t) IS NULL THEN CONTINUE; END IF;
         expected := expected + 3;
         SELECT attname INTO mc FROM pg_attribute WHERE attrelid = to_regclass(t) AND attnum > 0 AND NOT attisdropped ORDER BY attnum LIMIT 1;

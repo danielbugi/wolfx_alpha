@@ -1,7 +1,7 @@
 """The complete activation preflight against a REAL production-shaped database: a throwaway database bootstrapped from the compose init list,
 the real role script under throwaway names, and the preflight connecting as the LEAST-PRIVILEGE runtime role in a read-only session.
 
-There is no monkeypatched YES: the one YES case is a database that really has migrations 22 and 24-31, guarded tables, a least-privilege runtime role,
+There is no monkeypatched YES: the one YES case is a database that really has migrations 22 and 24-32, guarded tables, a least-privilege runtime role,
 a derivable calendar, fresh fundamentals, a tmp repo carrying the committed scheduler units and every owner gate supplied. Every NO case breaks exactly
 one real thing in the database (and restores it through the real SQL), so each blocker is proven to bite."""
 import shutil
@@ -108,7 +108,7 @@ def test_every_layer_is_yes_when_the_environment_really_is_ready_and_the_preflig
     assert counts(env) == before                                          # it read, nothing else
     c = by_id(rep)
     assert c["runtime_role_is_least_privilege_on_research_tables"]["detail"]["problems"] == []
-    assert c["migrations_22_and_24_to_31_applied"]["detail"]["missing_by_migration"] == {}
+    assert c["migrations_22_and_24_to_32_applied"]["detail"]["missing_by_migration"] == {}
     assert c["fundamentals_refresh_is_recent"]["detail"]["gap_days"] == 0
 
 
@@ -138,14 +138,14 @@ def test_a_missing_sector_history_migration_is_an_environment_blocker_and_names_
     rep = run(env, repo, as_app=False)
     assert rep["environment_ready"] == "NO" and rep["forward_research_collection_ready_for_activation"] == "NO"
     assert rep["architecture_ready"] == "YES"
-    assert by_id(rep)["migrations_22_and_24_to_31_applied"]["detail"]["missing_by_migration"]["31"]["tables"] == ["sector_reconstruction"]
+    assert by_id(rep)["migrations_22_and_24_to_32_applied"]["detail"]["missing_by_migration"]["31"]["tables"] == ["sector_reconstruction"]
 
 
 def test_a_missing_relative_strength_migration_is_an_environment_blocker(env, repo, repaired):
     env.exec_admin("DROP TABLE stock_relative_strength")
     rep = run(env, repo, as_app=False)
-    assert "migrations_22_and_24_to_31_applied" in rep["blockers"]["environment"]
-    assert by_id(rep)["migrations_22_and_24_to_31_applied"]["detail"]["missing_by_migration"]["29"]["tables"] == ["stock_relative_strength"]
+    assert "migrations_22_and_24_to_32_applied" in rep["blockers"]["environment"]
+    assert by_id(rep)["migrations_22_and_24_to_32_applied"]["detail"]["missing_by_migration"]["29"]["tables"] == ["stock_relative_strength"]
 
 
 def test_a_runtime_role_that_can_rewrite_history_is_an_environment_blocker(env, repo, repaired):
@@ -225,7 +225,7 @@ def test_an_empty_market_means_the_calendar_and_freshness_blockers(env, repo):
         c = by_id(rep)
         assert not c["trading_calendar_derivable"]["ok"] and not c["fundamentals_refresh_is_recent"]["ok"]
         assert rep["forward_research_collection_ready_for_activation"] == "NO"
-        assert c["migrations_22_and_24_to_31_applied"]["ok"]                  # migrations are present even though no data was loaded
+        assert c["migrations_22_and_24_to_32_applied"]["ok"]                  # migrations are present even though no data was loaded
     finally:
         teardown()
 
