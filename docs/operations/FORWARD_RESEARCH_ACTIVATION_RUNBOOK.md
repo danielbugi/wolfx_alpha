@@ -208,19 +208,20 @@ for u in donchian-forward-collection.service donchian-forward-collection.timer d
 $R 'systemd-analyze verify /etc/systemd/system/donchian-forward-collection.service /etc/systemd/system/donchian-forward-collection.timer && systemctl daemon-reload'
 ```
 **Expected:** no output from `verify`. **Verify:** `$R 'systemctl is-enabled donchian-forward-collection.timer; systemctl list-timers --all | grep -c forward'` → `disabled` and `0`. **Rollback:** `$R 'rm -f /etc/systemd/system/donchian-forward-collection* /opt/donchian/scripts/run_forward_collection.sh && systemctl daemon-reload'`.
+**Why 04:00 and not 03:15.** The pipeline normally ends about 02:25 local, but on the 14-day earnings-calendar re-fetch night it ended 03:13:43 (2026-10-07), 77 seconds before a 03:15 fire. 04:00 leaves 46 minutes after that slowest observed night and runs after the 03:30 ledger evaluator; 08:15 stays as the recovery attempt (and follows the 05:00 price safety net). The first fire is not trusted to mean "the pipeline is done": the collector resolves the session from the US calendar and then checks the session's own price bar, the written snapshots, the sector-history polls and (from the capture boundary on) a COMPLETE capture run, so a late, failed or partial pipeline gives INCOMPLETE (exit 2, an alert state) and the 08:15 attempt completes it idempotently. Proven by `test_schedule_timing_pure.py` and `test_schedule_dependencies_db.py`.
 **14b Action (read-only dry run through the production wrapper path, identity `donchian_app`):**
-`$D "cd /opt/donchian/compose && IMAGE_TAG=$TAG docker compose --project-directory /opt/donchian/compose -f docker-compose.yml -f docker-compose.prod.yml --env-file $ENVF run --rm -e PYTHONPATH=/app/mechanism channel-sender -m forward_collection run --latest-completed --with-sector-history-check" </dev/null`
+`$D "cd /opt/donchian/compose && IMAGE_TAG=$TAG docker compose --project-directory /opt/donchian/compose -f docker-compose.yml -f docker-compose.prod.yml --env-file $ENVF run --rm -e PYTHONPATH=/app/mechanism channel-sender -m forward_collection run --latest-completed --with-sector-history-check --with-capture-check" </dev/null`
 **Expected:** verdict `DRY_RUN`, exit 0, no failed step (without `--apply` nothing is written). Also confirm the refusal: `$R /opt/donchian/scripts/run_forward_collection.sh; echo $?` → `5` ("not armed").
 **14c Action (arm and enable):** `$R "printf '%s' $TAG > /opt/donchian/FORWARD_COLLECTION_ARMED && systemctl enable --now donchian-forward-collection.timer"`
-**Expected:** a `timers.target.wants` symlink is created; the next fire is 03:15 or 08:15 Asia/Jerusalem. **Rollback / disable:** `$R 'systemctl disable --now donchian-forward-collection.timer; rm -f /opt/donchian/FORWARD_COLLECTION_ARMED'`. **Reversible:** yes (evidence already written is not).
+**Expected:** a `timers.target.wants` symlink is created; the next fire is 04:00 or 08:15 Asia/Jerusalem. **Rollback / disable:** `$R 'systemctl disable --now donchian-forward-collection.timer; rm -f /opt/donchian/FORWARD_COLLECTION_ARMED'`. **Reversible:** yes (evidence already written is not).
 
 ### 15. Verify service and timer state (RO)
 `$R 'systemctl list-timers --all --no-pager | grep -E "forward|pipeline"; systemctl is-enabled donchian-forward-collection.timer; systemctl --failed --no-pager'` → the forward timer `enabled` with a next elapse; no failed unit; every existing timer unchanged (compare with the step 1 snapshot).
 **Rollback:** none (read-only observation; it changes nothing). **Reversible:** n/a. Any unexpected result stops the activation: apply section 3-A.
 
 ### 16. Observe the first real forward session
-The first forward-observed session is the first session `S ≥ E` whose pipeline run happened with the recorder on, capture armed, then collected by the timer's next fire (03:15 Asia/Jerusalem the day after). Do not run anything by hand. After the 22:00Z pipeline success:
-`$D 'cd /home/deploy/release-b-s11 && bash s11_ro.sh snap && bash s11_ro.sh recon <S>' </dev/null` (ledger rows written with lineage ids for the session; `observation_id_not_null` equals the ledger rows). After the 03:15 fire:
+The first forward-observed session is the first session `S ≥ E` whose pipeline run happened with the recorder on, capture armed, then collected by the timer's next fire (04:00 Asia/Jerusalem the day after). Do not run anything by hand. After the 22:00Z pipeline success:
+`$D 'cd /home/deploy/release-b-s11 && bash s11_ro.sh snap && bash s11_ro.sh recon <S>' </dev/null` (ledger rows written with lineage ids for the session; `observation_id_not_null` equals the ledger rows). After the 04:00 fire:
 `$D 'tail -n 6 /opt/donchian/logs/forward_collection_runs.log'` → `forward-collection finished: exit 0`.
 **Rollback:** none (read-only observation; it changes nothing). **Reversible:** n/a. Any unexpected result stops the activation: apply section 3-A.
 
@@ -292,9 +293,9 @@ ea141858ef105b20800adc665dd3bcc1fa3bcfcf602add78472692061c7c66e9  deploy/db/rese
 713202f3a3e7354a6bde42be90e4a4dc100df23981e3f11e4af1643855217796  deploy/db/research_roles_rollback.sql
 0a1f3a27d525051d776e93dc4f700e2ef8e51164f0b53e9a59310c9aee1f72d5  deploy/db/rollback_24_31.sql
 e147ae29a396264330cd5b1ccc5e4e8d664b8cdd5b9a8028c15121e9b9ce00d1  deploy/db/pre_activation_backup.sh
-903d808fd377887599d0db28159fe133bd5bb2f5d906673c59ed809e1213cd35  deploy/vps/run_forward_collection.sh
+7f927df3e2590292cf14b397d660458aea7f01d8f40f5b7c6de74fe54ef21905  deploy/vps/run_forward_collection.sh
 d024b112623c9093fa41775ba707a2d9ddb5eb7c4184f8591a98dfea21fb50df  deploy/vps/donchian-forward-collection.service
-c4f7415eb05f97ba002dec05e85660e0b94fb7114b466826ac88dfd413f2e368  deploy/vps/donchian-forward-collection.timer
+c98c5e250aec3b12124860752f066b939e7782089b221b70d2aba926475eacf7  deploy/vps/donchian-forward-collection.timer
 39f2c9baeedda1eb7ca3a72aefc1f1b1bcf47cae04f07d832701983836667185  deploy/vps/donchian-forward-collection-alert.service
 f579ff201446158552d175bdab73c94bf81a3943f3ab4146947d08ed22ce1f10  docs/operations/forward_research_preflight_spec.json
 ```

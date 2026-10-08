@@ -130,7 +130,7 @@ collection the next morning, as the scheduler design says. Production defaults (
 |---|---|
 | Command | `python -m forward_collection run --latest-completed --apply --code-ref <mechanism image tag>` (via `run_forward_collection.sh.proposed`: `docker compose run --rm` at `CURRENT_MECHANISM_SHA`, `PYTHONPATH=/app/mechanism`) |
 | Timing / timezone | 03:15 and 08:15 `Asia/Jerusalem`, every day (the latest completed session is what is collected; on non-session days the first fire is a verified no-op) |
-| Why 03:15 | the 01:00 retry of the 23:45 pipeline finishes ~02:30 (87-minute run); the evaluator is 03:30; margin ≥ 30 min. Both fires are **before** the decision deadline of the session (grace 1 ⇒ deadline = 00:00 UTC of session+2) |
+| Why 03:15 (SUPERSEDED: the first fire is now 04:00, see `deploy/vps/donchian-forward-collection.timer`; the 14-day earnings re-fetch night ended 03:13:43) | the 01:00 retry of the 23:45 pipeline finishes ~02:30 (87-minute run); the evaluator is 03:30; margin ≥ 30 min. Both fires are **before** the decision deadline of the session (grace 1 ⇒ deadline = 00:00 UTC of session+2) |
 | Ordering | after the screener's price load + capture (hard requirement: observe needs the session's own bars as the newest bar) |
 | Lock | `flock` in the wrapper + the Postgres advisory lock in the orchestrator |
 | Timeout | 45 minutes (`TimeoutStartSec`) |

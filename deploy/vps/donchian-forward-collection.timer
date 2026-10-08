@@ -2,13 +2,16 @@
 # being in this directory (or in the mechanism image) does nothing. The wrapper it triggers also refuses without its arming file.
 #
 # Two fires per session day, both on the calendar day AFTER the session, in Jerusalem time (the tag every other production timer uses):
-#   03:15  first attempt: after the 23:45 pipeline and its 01:00 retry (a full run takes ~87 min, so the retry finishes by ~02:30; margin 45 min)
-#   08:15  the retry: the same session again (idempotent; a lock refusal exits 3, which is not an alert)
+#   04:00  first attempt. The pipeline normally ends ~02:25 and, on the 14-day earnings-calendar re-fetch night, ~03:14 (observed 2026-10-08 03:13:43), so
+#          04:00 leaves 46 minutes after the slowest observed night and runs after the 03:30 ledger evaluator. It is NOT trusted to mean "the pipeline is done":
+#          the collector verifies the session's own price bar, its written snapshots, the sector-history polls and (once capture is enabled) a COMPLETE capture
+#          run, so a late, failed or partial pipeline yields INCOMPLETE (exit 2, an alert state), never COMPLETE.
+#   08:15  the recovery attempt: the same session again (idempotent; a lock refusal exits 3, which is not an alert). Also after the 05:00 price safety net.
 # The second fire's worst case (08:15 + 45 min timeout + 60 s) is still before 00:00 UTC of session+2, so with availability_grace_days=1 every
 # observation this schedule can write is known before its decision deadline (contract.required_grace_days() computes this over every weekday of
 # both daylight-saving offsets; a test pins it). The weekend fires find nothing new to do and exit 0 ("latest completed session" is unchanged).
 [Timer]
-OnCalendar=*-*-* 03:15:00 Asia/Jerusalem
+OnCalendar=*-*-* 04:00:00 Asia/Jerusalem
 OnCalendar=*-*-* 08:15:00 Asia/Jerusalem
 Persistent=true
 RandomizedDelaySec=60

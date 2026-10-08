@@ -111,7 +111,8 @@ def scheduler_units_check(repo_root: Path) -> Tuple[bool, Dict[str, Any]]:
         if ONCALENDAR.findall(timer) != want:
             problems.append(f"{UNIT_TIMER}: OnCalendar lines are not the contract's fires {want}")
     if wrapper:
-        for needle, why in (("--with-sector-history-check", "the sector-history verification"), ("--apply", "the apply flag the contract design names"),
+        for needle, why in (("--with-sector-history-check", "the sector-history verification"), ("--with-capture-check", "the candidate-capture verification"),
+                            ("--apply", "the apply flag the contract design names"),
                             ("FORWARD_COLLECTION_ARMED", "the arming file that keeps it inert until activation")):
             if needle not in wrapper:
                 problems.append(f"{UNIT_WRAPPER}: missing {why}")
@@ -185,6 +186,9 @@ def architecture_checks(spec: Mapping[str, Any], *, repo_root: Path = REPO_ROOT,
                                                               "command": C.SCHEDULER_DESIGN.get("command")}))
     out.append(_chk("scheduler_command_verifies_sector_history", "--with-sector-history-check" in str(C.SCHEDULER_DESIGN.get("command")),
                     {"command": C.SCHEDULER_DESIGN.get("command")}))
+    out.append(_chk("scheduler_command_verifies_capture", "--with-capture-check" in str(C.SCHEDULER_DESIGN.get("command")),
+                    {"command": C.SCHEDULER_DESIGN.get("command"),
+                     "note": "the capture check is boundary-aware: a session before the activation boundary is not a failure, one at or after it without a complete run is"}))
     ok_symbols, symbols_detail = vendor_symbol_check()
     out.append(_chk("sector_vendor_requests_use_the_translation", ok_symbols, symbols_detail))
     out.append(_chk("no_sector_policy_resolved", C.no_sector_policy_resolved(), {"policy": C.NO_SECTOR_POLICY}))

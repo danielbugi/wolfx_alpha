@@ -38,20 +38,33 @@ def _iso(v: Optional[datetime]) -> Optional[str]:
 # ------------------------------------------------------------------ capture_verify (read-only)
 def capture_verify(ctx: Ctx) -> C.StepResult:
     """Candidates are written inside the screener of their own session. This only checks that the capture hook recorded a COMPLETE run for the
-    session; it cannot create a missing capture and says so."""
+    session; it cannot create a missing capture and says so.
+
+    It applies only to a session for which capture was ENABLED (the same rule the screener's hook uses: the latest `research_capture_activation`
+    row with effective_from_session <= session says 'enabled'). A session before the boundary was never meant to be captured, so it is not a
+    failure; a session AT or AFTER the boundary with no complete run is, whatever the clock says (a late or failed pipeline stays INCOMPLETE)."""
     with ctx.connect() as conn:
         cur = conn.cursor()
+        cur.execute("SELECT strategy_id FROM (SELECT DISTINCT ON (strategy_id) strategy_id, state FROM research_capture_activation "
+                    "WHERE effective_from_session <= %s ORDER BY strategy_id, effective_from_session DESC) a WHERE state = 'enabled'", (ctx.session,))
+        enabled = sorted(r[0] for r in cur.fetchall())
+        if not enabled:
+            conn.rollback()
+            return C.StepResult(C.STEP_CAPTURE, C.ALREADY, {"applicable": False, "reason": "capture_not_enabled_for_session",
+                                                           "meaning": "no strategy has an 'enabled' activation row effective on or before this session"})
         cur.execute("SELECT DISTINCT ON (strategy_id) strategy_id, status, captured, already_captured, candidates, run_finished_at "
-                    "FROM candidate_capture_run WHERE session_date = %s ORDER BY strategy_id, id DESC", (ctx.session,))
+                    "FROM candidate_capture_run WHERE session_date = %s AND strategy_id = ANY(%s) ORDER BY strategy_id, id DESC", (ctx.session, enabled))
         runs = cur.fetchall()
         cur.execute("SELECT count(*), count(*) FILTER (WHERE fs.sector IS NULL) FROM candidate_observation co "
                     "JOIN feature_snapshot fs ON fs.id = co.snapshot_id WHERE co.session_date = %s", (ctx.session,))
         n_cand, n_nosec = cur.fetchone()
         conn.rollback()
-    detail = {"runs": [{"strategy_id": r[0], "status": r[1], "candidates": r[4], "captured": r[2], "already_captured": r[3]} for r in runs],
+    detail = {"applicable": True, "enabled_strategies": enabled,
+              "runs": [{"strategy_id": r[0], "status": r[1], "candidates": r[4], "captured": r[2], "already_captured": r[3]} for r in runs],
               "candidate_rows": n_cand, "candidate_rows_without_sector": n_nosec}
-    if not runs:
-        return C.StepResult(C.STEP_CAPTURE, C.FAILED, {**detail, "reason": "no_capture_run_for_session"},
+    missing_runs = sorted(set(enabled) - {r[0] for r in runs})
+    if missing_runs:
+        return C.StepResult(C.STEP_CAPTURE, C.FAILED, {**detail, "reason": "no_capture_run_for_session", "strategies_without_a_run": missing_runs},
                             "no candidate_capture_run exists for the session: the screener did not capture it (this collector cannot)")
     bad = [r for r in runs if r[1] != "complete"]
     if bad:

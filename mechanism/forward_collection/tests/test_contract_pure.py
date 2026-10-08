@@ -100,7 +100,7 @@ def test_the_declared_schedule_needs_exactly_one_grace_day_across_both_dst_offse
     assert C.required_grace_days() == 1
     assert C.required_grace_days(year=2027) == 1
     assert C.validate_design(1) == []
-    assert C.validate_design(0)                                  # grace 0: the 03:15 local fire is after the deadline
+    assert C.validate_design(0)                                  # grace 0: the first local fire is after the deadline
     assert C.validate_design(2) == []
 
 
@@ -108,10 +108,10 @@ def test_fire_times_follow_the_local_timezone_and_the_pipeline_finishes_before_t
     summer, winter = date(2026, 7, 6), date(2026, 12, 7)        # Mondays
     s0, s1 = C.fire_instants_utc(summer)
     w0, w1 = C.fire_instants_utc(winter)
-    assert (s0.hour, s0.minute) == (0, 15) and (w0.hour, w0.minute) == (1, 15)       # +03:00 vs +02:00
+    assert (s0.hour, s0.minute) == (1, 0) and (w0.hour, w0.minute) == (2, 0)         # 04:00 local at +03:00 vs +02:00
     assert (s1.hour, s1.minute) == (5, 15) and (w1.hour, w1.minute) == (6, 15)
     assert s0.date() == date(2026, 7, 7)                                              # the calendar day AFTER the session
-    assert all(f > datetime(2026, 7, 7, 2, 30, tzinfo=ZONE_JER) for f in (s0, s1)) is False or True
+    assert s0 > datetime(2026, 7, 7, 3, 15, tzinfo=ZONE_JER) + timedelta(minutes=30)      # after the slowest observed pipeline finish plus the margin
     assert C.worst_case_finish_utc(date(2026, 10, 5)) < C.decision_deadline(date(2026, 10, 5), 1)
 
 

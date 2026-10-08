@@ -236,14 +236,14 @@ def classify(session: date, results: Sequence[StepResult], *, apply: bool, locke
 # ------------------------------------------------------------------ the declared scheduler design (documented and validated, NEVER installed)
 SCHEDULER_DESIGN: Dict[str, Any] = {
     "unit": "donchian-forward-collection.{service,timer} (one pair, committed under deploy/vps but DORMANT: installed by an administrator only, and the wrapper refuses without its arming file)",
-    "command": "python -m forward_collection run --latest-completed --apply --with-sector-history-check --code-ref <mechanism image tag>",
+    "command": "python -m forward_collection run --latest-completed --apply --with-sector-history-check --with-capture-check --code-ref <mechanism image tag>",
     "wrapper": "run_channel_sender.sh-style one-shot `docker compose run --rm` at CURRENT_MECHANISM_SHA, flock'ed",
     "timezone": "Asia/Jerusalem",
-    "fires_local": ("03:15", "08:15"),
+    "fires_local": ("04:00", "08:15"),
     "fires_on": "the calendar day AFTER the session (Tue..Sat for Mon..Fri sessions)",
     "timeout_minutes": 45,
     "persistent": True,
-    "pipeline_worst_finish_local": "02:30",     # the 01:00 retry of the 23:45 pipeline: a full run takes ~87 minutes
+    "pipeline_worst_finish_local": "03:15",     # OBSERVED worst case: the 14-day earnings-calendar re-fetch night (2026-10-07) finished 03:13:43 local; a normal night ends ~02:25
     "first_fire_margin_minutes": 30,
     "evaluator_local": "03:30",
     "lock": "systemd/flock (one process) + a Postgres advisory lock (two processes anywhere)",
