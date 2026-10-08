@@ -86,14 +86,19 @@ def process_symbol(symbol, px, sector, start_date):
 # A discontinuity is a fact with two times: `date` (when it happened) and `detected_at` (the first time THIS SYSTEM saw it). Only the second says what a
 # live run could have known, so a rebuild must never move it for a row it merely re-detects. It moves only when the row is genuinely NEW (a fresh insert)
 # or MATERIALLY CHANGED (the provider restated the bar: a different fact is known from now on). The adjusted-price jitter of ordinary dividends leaves
-# the ratio of two adjacent closes unchanged to ~1e-12, so the tolerance below cannot be tripped by it. See docs/research/LAB_DISCONTINUITY_PROVENANCE.md.
+# the ratio of two adjacent closes unchanged to ~1e-12, so the tolerance below cannot be tripped by it. A ratio that is not a finite number (Infinity when the
+# previous close is 0, NaN) is compared FIRST by equality: numeric NaN/Infinity make the tolerance arithmetic NaN, which compares as 'greater' and would re-stamp the
+# row on every rebuild (found by the production-data rehearsal: 64 of the 1,040 legacy rows have an Infinity ratio). See docs/research/LAB_DISCONTINUITY_PROVENANCE.md.
 RATIO_RELATIVE_TOLERANCE = 1e-4
 _UPSERT_DISCONTINUITIES = f"""
     INSERT INTO price_discontinuities (symbol, date, kind, prev_close, close, ratio, detected_at) VALUES %s
     ON CONFLICT (symbol, date, kind) DO UPDATE SET prev_close = EXCLUDED.prev_close, close = EXCLUDED.close, ratio = EXCLUDED.ratio,
-        detected_at = CASE WHEN (price_discontinuities.ratio IS NULL) <> (EXCLUDED.ratio IS NULL)
-                             OR abs(EXCLUDED.ratio - price_discontinuities.ratio) > {RATIO_RELATIVE_TOLERANCE} * greatest(abs(price_discontinuities.ratio), 1e-12)
-                           THEN clock_timestamp() ELSE price_discontinuities.detected_at END"""
+        detected_at = CASE
+            WHEN price_discontinuities.ratio IS NOT DISTINCT FROM EXCLUDED.ratio THEN price_discontinuities.detected_at     -- the same fact, NULL / NaN / +-Infinity included
+            WHEN price_discontinuities.ratio IS NULL OR EXCLUDED.ratio IS NULL THEN clock_timestamp()
+            WHEN price_discontinuities.ratio IN ('NaN', 'Infinity', '-Infinity') OR EXCLUDED.ratio IN ('NaN', 'Infinity', '-Infinity') THEN clock_timestamp()
+            WHEN abs(EXCLUDED.ratio - price_discontinuities.ratio) > {RATIO_RELATIVE_TOLERANCE} * greatest(abs(price_discontinuities.ratio), 1e-12) THEN clock_timestamp()
+            ELSE price_discontinuities.detected_at END"""
 
 
 def upsert_discontinuities(cur, rows):

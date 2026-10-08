@@ -291,3 +291,39 @@ def test_the_nightly_pipeline_passes_the_session_to_the_dataset_step_so_a_scan_i
     step10 = [ln for ln in text.splitlines() if ln.startswith("run_step 10 ")]
     assert len(step10) == 1 and 'build_dataset.py --replace "${SESSION_ARGS[@]}"' in step10[0]
     assert 'SESSION_ARGS=(--session "$SESSION_DATE")' in text
+
+
+# ---------------------------------------------------------------------------------------------------- non-finite ratios (found on production data)
+INF, NAN = float("inf"), float("nan")
+
+
+def _legacy_nonfinite(c, symbol, ratio, kind="jump_up"):
+    c.cursor().execute(
+        "INSERT INTO price_discontinuities (symbol, date, kind, prev_close, close, ratio, detected_at) "
+        "VALUES (%s, %s, %s, 0, 0.0001, %s, (%s::timestamptz AT TIME ZONE current_setting('TimeZone')))",
+        (symbol, date(2026, 9, 10), kind, ratio, datetime(2026, 9, 21, 1, 0, tzinfo=UTC)))
+
+
+@pytest.mark.parametrize("ratio,kind", [(INF, "jump_up"), (INF, "nonpositive"), (-INF, "jump_down"), (NAN, "nonpositive")])
+def test_a_non_finite_ratio_that_is_unchanged_keeps_its_first_detected_stamp_across_rebuilds(clean, ratio, kind):
+    """Production has 64 legacy rows whose ratio is Infinity (previous close 0). numeric NaN/Infinity made the tolerance test 'greater', which re-stamped them nightly."""
+    with clean.connect() as c:
+        _legacy_nonfinite(c, "S0001", ratio, kind)
+        c.commit()
+        original = _stamp(c, "S0001", date(2026, 9, 10), kind)
+    for _ in range(3):
+        _upsert(clean, [("S0001", date(2026, 9, 10), kind, 0.0, 0.0001, ratio)])
+    with clean.connect() as c:
+        assert _stamp(c, "S0001", date(2026, 9, 10), kind) == original
+
+
+@pytest.mark.parametrize("old,new", [(INF, 1.5), (1.5, INF), (NAN, 1.5), (1.5, NAN), (INF, NAN), (INF, -INF), (INF, None), (None, INF)])
+def test_a_change_between_a_finite_value_and_a_non_finite_one_is_a_new_fact(clean, old, new):
+    with clean.connect() as c:
+        _legacy_nonfinite(c, "S0001", old)
+        c.commit()
+        original = _stamp(c, "S0001", date(2026, 9, 10), "jump_up")
+    before = _db_now(clean)
+    _upsert(clean, [("S0001", date(2026, 9, 10), "jump_up", 0.0, 0.0001, new)])
+    with clean.connect() as c:
+        assert _stamp(c, "S0001", date(2026, 9, 10), "jump_up") >= before > original
