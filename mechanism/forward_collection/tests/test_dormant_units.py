@@ -169,7 +169,7 @@ def test_only_a_wrapper_armed_for_exactly_the_pinned_image_reaches_docker_and_it
     r = run_wrapper(base, log)
     assert r.returncode == 0, r.stderr
     called = log.read_text()
-    assert "forward_collection run --latest-completed --apply --with-sector-history-check --code-ref 0123456789ab" in called
+    assert "forward_collection run --latest-completed --apply --with-sector-history-check --with-capture-check --code-ref 0123456789ab" in called
 
 
 def test_the_arming_file_is_never_committed_or_created_by_any_repository_file():
