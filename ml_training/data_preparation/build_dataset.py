@@ -82,6 +82,36 @@ def process_symbol(symbol, px, sector, start_date):
     return out, disc
 
 
+# A discontinuity is a fact with two times: `date` (when it happened) and `detected_at` (the first time THIS SYSTEM saw it). Only the second says what a
+# live run could have known, so a rebuild must never move it for a row it merely re-detects. It moves only when the row is genuinely NEW (a fresh insert)
+# or MATERIALLY CHANGED (the provider restated the bar: a different fact is known from now on). The adjusted-price jitter of ordinary dividends leaves
+# the ratio of two adjacent closes unchanged to ~1e-12, so the tolerance below cannot be tripped by it. See docs/research/LAB_DISCONTINUITY_PROVENANCE.md.
+RATIO_RELATIVE_TOLERANCE = 1e-4
+_UPSERT_DISCONTINUITIES = f"""
+    INSERT INTO price_discontinuities (symbol, date, kind, prev_close, close, ratio, detected_at) VALUES %s
+    ON CONFLICT (symbol, date, kind) DO UPDATE SET prev_close = EXCLUDED.prev_close, close = EXCLUDED.close, ratio = EXCLUDED.ratio,
+        detected_at = CASE WHEN (price_discontinuities.ratio IS NULL) <> (EXCLUDED.ratio IS NULL)
+                             OR abs(EXCLUDED.ratio - price_discontinuities.ratio) > {RATIO_RELATIVE_TOLERANCE} * greatest(abs(price_discontinuities.ratio), 1e-12)
+                           THEN clock_timestamp() ELSE price_discontinuities.detected_at END"""
+
+
+def upsert_discontinuities(cur, rows):
+    """rows: (symbol, date, kind, prev_close, close, ratio). A new row is stamped with the real detection instant (clock_timestamp(), not the
+    transaction start, which can precede the detection); an existing row keeps its stamp unless materially changed."""
+    execute_values(cur, _UPSERT_DISCONTINUITIES, rows, template="(%s, %s, %s, %s, %s, %s, clock_timestamp())")
+
+
+def prune_discontinuities(cur, seen):
+    """Delete the rows a COMPLETE rebuild no longer detects (the provider restated them away). A later re-appearance is a new fact with a new stamp.
+    Never called for a partial run (--test / --limit) or before every chunk succeeded."""
+    cur.execute("CREATE TEMP TABLE _disc_seen (symbol VARCHAR(20), date DATE, kind VARCHAR(20)) ON COMMIT DROP")
+    if seen:
+        execute_values(cur, "INSERT INTO _disc_seen VALUES %s", sorted(seen))
+    cur.execute("DELETE FROM price_discontinuities d WHERE NOT EXISTS "
+                "(SELECT 1 FROM _disc_seen s WHERE s.symbol = d.symbol AND s.date = d.date AND s.kind = d.kind)")
+    return cur.rowcount
+
+
 def save(conn, ds: pd.DataFrame, disc: pd.DataFrame):
     cur = conn.cursor()
     nn = lambda v: None if pd.isna(v) else v  # noqa: E731
@@ -102,10 +132,7 @@ def save(conn, ds: pd.DataFrame, disc: pd.DataFrame):
     if len(disc):
         rows = [(r.symbol, pd.Timestamp(r.date).date(), r.kind, nn(r.prev_close), nn(r.close), nn(r.ratio))
                 for r in disc.itertuples()]
-        execute_values(cur, """
-            INSERT INTO price_discontinuities (symbol, date, kind, prev_close, close, ratio) VALUES %s
-            ON CONFLICT (symbol, date, kind) DO UPDATE SET prev_close=EXCLUDED.prev_close,
-                close=EXCLUDED.close, ratio=EXCLUDED.ratio, detected_at=NOW()""", rows)
+        upsert_discontinuities(cur, rows)
     conn.commit()
 
 
@@ -115,7 +142,8 @@ def main():
     ap.add_argument("--limit", type=int, help="first N symbols (debug)")
     ap.add_argument("--start-date", default="2018-01-01", help="earliest breakout date to include")
     ap.add_argument("--replace", action="store_true",
-                    help="delete existing ml_breakout_dataset_v2 rows (and re-detect discontinuities) first")
+                    help="delete existing ml_breakout_dataset_v2 rows first and, after a complete run, drop discontinuities no longer detected "
+                         "(rows still detected keep their first-detected timestamp)")
     args = ap.parse_args()
 
     conn = psycopg2.connect(**ml_config.db_config)
@@ -129,12 +157,12 @@ def main():
             symbols = symbols[:args.limit]
     if args.replace and not args.test:
         cur.execute("DELETE FROM ml_breakout_dataset_v2")
-        cur.execute("DELETE FROM price_discontinuities")
         conn.commit()
-        print("Cleared ml_breakout_dataset_v2 and price_discontinuities (own tables) for full rebuild")
+        print("Cleared ml_breakout_dataset_v2 for full rebuild (price_discontinuities is NOT cleared: it keeps first-detection provenance)")
     sectors = load_sectors(conn)
     start = pd.Timestamp(args.start_date)
     t0, n_rows, n_disc, n_sym = time.time(), 0, 0, 0
+    seen = set()
     for i in range(0, len(symbols), 150):
         chunk = symbols[i:i + 150]
         prices = load_prices(conn, chunk)
@@ -148,8 +176,13 @@ def main():
         ds_all = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
         disc_all = pd.concat(discs, ignore_index=True) if discs else pd.DataFrame()
         save(conn, ds_all, disc_all)
+        seen.update((r.symbol, pd.Timestamp(r.date).date(), r.kind) for r in disc_all.itertuples())
         n_rows += len(ds_all); n_disc += len(disc_all); n_sym += len(chunk)
         print(f"  {n_sym}/{len(symbols)} symbols | {n_rows} samples | {n_disc} discontinuities | {time.time() - t0:.0f}s", flush=True)
+    if args.replace and not args.test and not args.limit:
+        pruned = prune_discontinuities(cur, seen)
+        conn.commit()
+        print(f"Pruned {pruned} discontinuities no longer detected; {len(seen)} detected rows kept their first-detected timestamp")
     print(f"Done: {n_rows} samples, {n_disc} discontinuities recorded, feature_set={pf.FEATURE_SET_VERSION}")
     conn.close()
 

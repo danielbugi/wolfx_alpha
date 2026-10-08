@@ -15,11 +15,13 @@ before the session carry evidence of what was known by it. Two rules are therefo
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 import pandas as pd
 
+NY = ZoneInfo("America/New_York")
 LOOKBACK_CALENDAR_DAYS = 420        # 252 sessions + the 200-bar minimum + holidays, with margin
 INDEX_SYMBOLS = ("^GSPC", "^VIX", "^RUT")
 RULE_PIT_EVIDENCED, RULE_PROJECTED = "pit_evidenced", "projected"
@@ -60,20 +62,40 @@ def load_index_closes(conn, session_date: date, symbols: Iterable[str] = INDEX_S
     return {s: pd.Series({d: c for d, c in sorted(v)}, dtype=float) for s, v in out.items()}
 
 
-def load_discontinuities(conn, session_date: date) -> Tuple[Dict[str, List[date]], int]:
-    """({symbol: [dates]}, number of those rows detected AFTER the session). The second number is retroactive information a live run
-    cannot have had; a non-zero value on a run claimed as observed is a contradiction the runner refuses."""
+def knowledge_cutoff(session_date: date) -> datetime:
+    """The instant after which a discontinuity detection is retroactive information for an `observed` run of `session_date`: noon New York time on the
+    calendar day AFTER the session (an aware datetime). The overnight cycle that loads the session (pipeline, ML dataset rebuild, both collector fires) is
+    over by then, and the next cycle starts hours later (>= 20:45 UTC), so a detection stamped inside that window was known to the run that wrote the
+    observation, and anything stamped after it was not. The cutoff is derived from the session only; it never reads a clock."""
+    return datetime.combine(session_date + timedelta(days=1), time(12, 0), NY).astimezone(timezone.utc)
+
+
+def load_discontinuities(conn, session_date: date) -> Tuple[Dict[str, List[date]], int, int]:
+    """({symbol: [event dates]}, late, untrusted).
+
+    `price_discontinuities.date` is when the discontinuity HAPPENED; `detected_at` is the first time THIS SYSTEM saw it (the dataset builder keeps it
+    across rebuilds and only moves it for a genuinely new or materially changed row). Only `detected_at` says what a live run could have known:
+      late       rows detected after `knowledge_cutoff(session)`: retroactive information a live run cannot have had.
+      untrusted  rows whose detection time cannot be believed: missing, or in the future of the database clock. They count against an `observed` run.
+    A stamp is never EARLIER than the true first detection (rebuilds before the provenance fix re-stamped every row at the rebuild, which is a late
+    UPPER bound on it, not a fabricated earlier time), so a row that passes the cutoff test is genuinely known by then; an ambiguous legacy row can only err toward 'late'.
+    The naive `detected_at` is read in the database session's own TimeZone, exactly how the writer's `clock_timestamp()` stored it."""
     cur = conn.cursor()
-    cur.execute("SELECT symbol, date, (detected_at::date > %s) FROM price_discontinuities WHERE date BETWEEN %s AND %s",
-                (session_date, window_start(session_date), session_date))
+    cur.execute(
+        "SELECT symbol, date, CASE WHEN detected_at IS NULL THEN 'untrusted' "
+        "WHEN (detected_at AT TIME ZONE current_setting('TimeZone')) > clock_timestamp() THEN 'untrusted' "
+        "WHEN (detected_at AT TIME ZONE current_setting('TimeZone')) > %s THEN 'late' ELSE 'ok' END "
+        "FROM price_discontinuities WHERE date BETWEEN %s AND %s",
+        (knowledge_cutoff(session_date), window_start(session_date), session_date))
     rows = cur.fetchall()
     conn.commit()
     out: Dict[str, List[date]] = {}
-    late = 0
-    for sym, d, after in rows:
+    late = untrusted = 0
+    for sym, d, verdict in rows:
         out.setdefault(sym, []).append(d)
-        late += bool(after)
-    return out, late
+        late += verdict == "late"
+        untrusted += verdict == "untrusted"
+    return out, late, untrusted
 
 
 def load_sector_map(conn, session_date: date, rule: str) -> Tuple[Dict[str, Optional[str]], Dict[str, Any]]:

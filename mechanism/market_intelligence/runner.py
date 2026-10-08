@@ -105,7 +105,7 @@ def compute_session(conn, session_date: date, *, provenance: str, sector_rule: s
     if len(real) == 0 or real.index[-1] != pd.Timestamp(session_date):
         raise SessionNotAvailable(f"{session_date} is not a real session of the stock panel (no or partial load): refusing to write a row")
     idx = inputs.load_index_closes(conn, session_date)
-    disc, late_disc = inputs.load_discontinuities(conn, session_date)
+    disc, late_disc, untrusted_disc = inputs.load_discontinuities(conn, session_date)
     smap, audit = inputs.load_sector_map(conn, session_date, sector_rule)
     warnings: List[str] = []
 
@@ -120,10 +120,15 @@ def compute_session(conn, session_date: date, *, provenance: str, sector_rule: s
             problems.append("index bars exist after the session")
         if late_disc:
             problems.append(f"{late_disc} price discontinuities were detected after the session")
+        if untrusted_disc:
+            problems.append(f"{untrusted_disc} price discontinuities have no trustworthy detection time")
         if problems:
             raise ProvenanceRefused("observed refused: " + "; ".join(problems))
-    elif late_disc:
-        warnings.append(f"{late_disc} discontinuity rows were detected after the session (retroactive information)")
+    else:
+        if late_disc:
+            warnings.append(f"{late_disc} discontinuity rows were detected after the session (retroactive information)")
+        if untrusted_disc:
+            warnings.append(f"{untrusted_disc} discontinuity rows have no trustworthy detection time")
 
     regime = rr.compute(session_date, idx, close, high, low)
     rel = rs_mod.compute(session_date, close, smap, idx, disc, sector_provenance=provenance)
@@ -191,7 +196,7 @@ def stock_relative_strength(connect: Callable[[], AbstractContextManager], sessi
         if real is None or len(real) == 0 or real.index[-1] != pd.Timestamp(session_date):
             raise SessionNotAvailable(f"{session_date} is not a real session of the stock panel")
         idx = inputs.load_index_closes(conn, session_date)
-        disc, _ = inputs.load_discontinuities(conn, session_date)
+        disc, _, _ = inputs.load_discontinuities(conn, session_date)
         smap, _ = inputs.load_sector_map(conn, session_date, sector_rule)
         conn.rollback()
     out = rs_mod.compute(session_date, close, smap, idx, disc, sector_provenance="reconstructed").stocks
