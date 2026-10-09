@@ -143,6 +143,39 @@ BEGIN
             RAISE EXCEPTION 'FAIL the runtime role and the admin group must EXECUTE % (the scan-evidence trigger and the readers call it)', f;
         END IF;
     END LOOP;
+    FOREACH f IN ARRAY ARRAY['research_sector_enc(text)', 'research_sector_row_hash(text,text,integer,text,text,text,timestamptz,text,text,text)'] LOOP
+        IF to_regprocedure(f) IS NULL THEN CONTINUE; END IF;                         -- migration 31 not applied: nothing to check
+        IF has_function_privilege('public', f, 'EXECUTE') THEN
+            RAISE EXCEPTION 'FAIL PUBLIC may EXECUTE %', f;
+        END IF;
+        IF has_function_privilege('donchian_research_admin', f, 'EXECUTE') THEN
+            RAISE EXCEPTION 'FAIL the admin group may EXECUTE % (the grant is for the runtime role only)', f;
+        END IF;
+        IF NOT has_function_privilege('donchian_app', f, 'EXECUTE') THEN
+            RAISE EXCEPTION 'FAIL the runtime role cannot EXECUTE % (research_sector_obs_stamp() calls it as the inserting role: every sector_observation insert would fail)', f;
+        END IF;
+    END LOOP;
+    -- Generic dependency audit: every research_* function that a research trigger function CALLS (directly or through other research_* functions) must be executable by
+    -- the runtime role, because the trigger runs with the inserting role's privileges. (The trigger function's own EXECUTE right is not needed.)
+    FOR obj IN
+        WITH RECURSIVE trg AS (
+            SELECT DISTINCT p.oid FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid JOIN pg_class c ON c.oid = t.tgrelid
+            WHERE NOT t.tgisinternal AND c.relnamespace = to_regnamespace(sch) AND p.proname LIKE 'research\_%'),
+        helpers AS (SELECT p.oid, p.proname FROM pg_proc p WHERE p.pronamespace = to_regnamespace(sch) AND p.proname LIKE 'research\_%'),
+        chain(root, fn, depth) AS (
+            SELECT oid, oid, 0 FROM trg
+            UNION
+            SELECT ch.root, h.oid, ch.depth + 1 FROM chain ch JOIN pg_proc src ON src.oid = ch.fn
+            JOIN helpers h ON h.oid <> ch.fn AND src.prosrc ILIKE '%' || h.proname || '(%' WHERE ch.depth < 8)
+        SELECT DISTINCT fn::regprocedure::text AS sig, fn FROM chain WHERE depth > 0
+    LOOP
+        IF NOT has_function_privilege('donchian_app', obj.fn, 'EXECUTE') THEN
+            RAISE EXCEPTION 'FAIL a research trigger calls % but the runtime role cannot EXECUTE it (every insert that fires that trigger would fail)', obj.sig;
+        END IF;
+        IF has_function_privilege('public', obj.fn, 'EXECUTE') THEN
+            RAISE EXCEPTION 'FAIL PUBLIC may EXECUTE trigger helper %', obj.sig;
+        END IF;
+    END LOOP;
     IF NOT has_column_privilege('donchian_app', 'candidate_capture_run', 'status', 'UPDATE') THEN
         RAISE EXCEPTION 'FAIL donchian_app cannot finalise a capture run (status UPDATE)';
     END IF;

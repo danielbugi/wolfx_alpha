@@ -245,5 +245,15 @@ BEGIN
             EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO donchian_app, donchian_research_admin', f);
         END IF;
     END LOOP;
+    -- migration 31: research_sector_obs_stamp() fires AS THE INSERTING RUNTIME ROLE and calls research_sector_row_hash(), which calls research_sector_enc().
+    -- A trigger function's own EXECUTE right is not checked when it fires, but the functions it CALLS are: without these two grants every sector_observation
+    -- insert fails with "permission denied for function research_sector_row_hash" (found in production on 2026-10-09; the nightly recorder recorded nothing).
+    -- Runtime role ONLY: PUBLIC and the admin group stay denied (both functions are pure; the admin group never inserts observations).
+    FOREACH f IN ARRAY ARRAY['research_sector_enc(text)',
+                             'research_sector_row_hash(text,text,integer,text,text,text,timestamptz,text,text,text)'] LOOP
+        IF to_regprocedure(f) IS NOT NULL THEN
+            EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO donchian_app', f);
+        END IF;
+    END LOOP;
 END;
 $mi$;

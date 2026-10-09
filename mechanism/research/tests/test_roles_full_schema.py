@@ -470,3 +470,93 @@ def test_rollback_hands_the_mi_objects_back(full):
     finally:
         full.run_script(ROLES_SQL)
         full.run_script(ROLES_VERIFY_SQL)
+
+
+# ------------------------------------------------------------------------------------------------ sector-history helper chain (found in production 2026-10-09)
+SECTOR_HELPERS = ("research_sector_enc(text)", "research_sector_row_hash(text,text,integer,text,text,text,timestamptz,text,text,text)")
+
+
+def _insert_observation(cur, symbol, run_id, seq=1, sector="Technology", prev=None):
+    cur.execute(
+        "INSERT INTO sector_observation (symbol, source, seq, sector, sector_raw, no_sector_reason, change_kind, source_asof, provenance, raw_payload_hash, "
+        "raw_payload, run_id, writer, code_ref, prev_value_hash) VALUES (%s, 'yfinance_info', %s, %s, %s, NULL, %s, NULL, 'observed_forward', %s, NULL, %s, "
+        "'fundamentals_updater.sector_recorder', 'pytest', %s) RETURNING id, value_hash, captured_at, effective_session",
+        (symbol, seq, sector, sector, "first" if seq == 1 else "changed", "a" * 64, run_id, prev))
+    return cur.fetchone()
+
+
+def test_the_runtime_role_can_insert_a_sector_observation_and_poll_through_the_trigger_chain(full):
+    """The production defect: research_sector_obs_stamp() fires as the inserting role and calls research_sector_row_hash() -> research_sector_enc(); without EXECUTE on
+    those the insert fails with 'permission denied for function research_sector_row_hash'. This is the real insert, as a real login of the runtime role."""
+    conn = full.app_conn()
+    try:
+        cur = conn.cursor()
+        obs_id, value_hash, captured_at, session = _insert_observation(cur, "PYT1", "pytest-run-1")
+        assert len(value_hash) == 64 and all(c in "0123456789abcdef" for c in value_hash)         # computed by the database, not the caller
+        assert session == captured_at.astimezone(__import__("datetime").timezone.utc).date()
+        cur.execute("INSERT INTO sector_poll (run_id, symbol, source, response_state, chain_effect, response_sector, raw_payload_hash, observation_id, writer, code_ref) "
+                    "VALUES ('pytest-run-1', 'PYT1', 'yfinance_info', 'sector', 'created_observation', 'Technology', %s, %s, 'w', 'c') RETURNING attempted_at", ("a" * 64, obs_id))
+        assert cur.fetchone()[0] is not None
+        _, h2, _, _ = _insert_observation(cur, "PYT1", "pytest-run-2", seq=2, sector="Energy", prev=value_hash)        # a second link of the hash chain
+        assert h2 != value_hash
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_the_sector_helpers_are_executable_by_the_runtime_role_only(full):
+    for fn in SECTOR_HELPERS:
+        assert _catalog(full, "SELECT has_function_privilege(%s, %s, 'EXECUTE')", full.app, fn)[0][0] is True, fn
+        assert _catalog(full, "SELECT has_function_privilege('public', %s, 'EXECUTE')", fn)[0][0] is False, fn
+        assert _catalog(full, "SELECT has_function_privilege(%s, %s, 'EXECUTE')", full.group, fn)[0][0] is False, fn      # the admin group is NOT broadened
+
+
+@pytest.mark.parametrize("missing", SECTOR_HELPERS)
+def test_a_missing_helper_grant_breaks_the_real_insert_and_the_verifier_catches_it(full, snapshot_state, missing):
+    """Regression for the production defect, for each link of the chain (the inner function is reached through the outer one)."""
+    full.exec_admin(f'REVOKE EXECUTE ON FUNCTION {missing} FROM "{full.app}"')
+    conn = full.app_conn()
+    try:
+        cur = conn.cursor()
+        with pytest.raises(psycopg2.errors.InsufficientPrivilege, match="permission denied for function research_sector"):
+            _insert_observation(cur, "PYT2", "pytest-missing")
+    finally:
+        conn.rollback()
+        conn.close()
+    _verify_fails(full, "cannot EXECUTE")
+    full.run_script(ROLES_SQL)                                                       # the role script restores the grant (idempotent)
+    full.run_script(ROLES_VERIFY_SQL)
+    conn = full.app_conn()
+    try:
+        _insert_observation(conn.cursor(), "PYT2", "pytest-restored")
+        conn.rollback()
+    finally:
+        conn.close()
+
+
+def test_verify_flags_a_helper_grant_that_is_too_broad(full, snapshot_state):
+    full.exec_admin(f'GRANT EXECUTE ON FUNCTION {SECTOR_HELPERS[0]} TO "{full.group}"')
+    _verify_fails(full, "runtime role only")
+    full.exec_admin(f'REVOKE EXECUTE ON FUNCTION {SECTOR_HELPERS[0]} FROM "{full.group}"')
+    full.exec_admin(f"GRANT EXECUTE ON FUNCTION {SECTOR_HELPERS[1]} TO PUBLIC")
+    _verify_fails(full, "PUBLIC may EXECUTE")
+    full.exec_admin(f"REVOKE EXECUTE ON FUNCTION {SECTOR_HELPERS[1]} FROM PUBLIC")
+
+
+def test_the_generic_audit_catches_any_future_trigger_helper_the_runtime_role_cannot_execute(full, snapshot_state):
+    """Not specific to the sector tables: a research trigger that calls a research_* helper (directly, or through another) must have that helper executable by the
+    runtime role. A new table + trigger + helper that forgot the grant fails the verifier before it can break a nightly run."""
+    full.exec_admin("CREATE TABLE zz_probe (a INTEGER)")
+    full.exec_admin("CREATE FUNCTION research_zz_inner() RETURNS integer LANGUAGE sql AS 'SELECT 1'")
+    full.exec_admin("CREATE FUNCTION research_zz_outer() RETURNS integer LANGUAGE sql AS 'SELECT research_zz_inner()'")
+    full.exec_admin("CREATE FUNCTION research_zz_stamp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM research_zz_outer(); RETURN NEW; END $$")
+    full.exec_admin("CREATE TRIGGER zz_stamp BEFORE INSERT ON zz_probe FOR EACH ROW EXECUTE FUNCTION research_zz_stamp()")
+    full.exec_admin("REVOKE ALL ON FUNCTION research_zz_inner(), research_zz_outer(), research_zz_stamp() FROM PUBLIC")
+    try:
+        full.run_script(ROLES_SQL)                                                   # so the new table is covered and only the helper audit can fail
+        _verify_fails(full, "a research trigger calls")
+        full.exec_admin(f'GRANT EXECUTE ON FUNCTION research_zz_outer(), research_zz_inner() TO "{full.app}"')
+        full.run_script(ROLES_VERIFY_SQL)                                            # fixed: passes
+    finally:
+        full.exec_admin("DROP TABLE IF EXISTS zz_probe")
+        full.exec_admin("DROP FUNCTION IF EXISTS research_zz_stamp(), research_zz_outer(), research_zz_inner()")
