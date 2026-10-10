@@ -46,6 +46,10 @@ class SessionNotAvailable(RuntimeError):
     """The requested date is not a real, loaded session of the stock panel."""
 
 
+class RepairRefused(RuntimeError):
+    """Repair mode found that the live recomputation differs from what is already stored (or that a stored row would change). Nothing is written."""
+
+
 class ProvenanceRefused(RuntimeError):
     """`observed` was requested but the evidence for it is missing."""
 
@@ -154,7 +158,13 @@ def compute_session(conn, session_date: date, *, provenance: str, sector_rule: s
 
 def run(connect: Callable[[], AbstractContextManager], session_date: date, *, provenance: str,
         sector_rule: str = inputs.RULE_PIT_EVIDENCED, apply: bool = False, code_ref: Optional[str] = None,
-        feature_set_version: str = FEATURE_SET_VERSION, with_stock_rs: bool = False) -> RunReport:
+        feature_set_version: str = FEATURE_SET_VERSION, with_stock_rs: bool = False, repair: bool = False) -> RunReport:
+    """repair=True (needs apply and with_stock_rs): complete a session whose universe, market and sector rows are already committed and only
+    relative-strength rows are missing. Inside ONE transaction it first proves the live recomputation reproduces the stored universe and market
+    content hashes exactly and that no existing row would be touched, writes only the missing relative-strength rows (insert-only), then proves
+    every stored row of the session belongs to the same run. Any difference raises RepairRefused after a rollback: nothing is written."""
+    if repair and not (apply and with_stock_rs):
+        raise ValueError("repair needs apply=True and with_stock_rs=True")
     if apply and not code_ref:
         raise ValueError("code_ref (the git revision of the code that computed the row) is required to write")
     with connect() as conn:
@@ -173,9 +183,23 @@ def run(connect: Callable[[], AbstractContextManager], session_date: date, *, pr
         cur = conn.cursor()
         res = store.write_session(cur, c.regime, c.rs, provenance, SOURCE, code_ref, c.reconstruction_basis,
                                   feature_set_version=feature_set_version, measurements=c.measurements)
+        if repair:
+            problems = []
+            if res["universe"].created or res["market"].created or res["sectors_written"]:
+                problems.append("a universe/market/sector row would have been created, but the session is not missing any")
+            if res["computed_universe_hash"] != res["universe"].content_hash:
+                problems.append("the recomputed universe differs from the stored universe snapshot")
+            if res["computed_hash"] != res["market"].content_hash:
+                problems.append("the recomputed market snapshot differs from the stored one")
+            if problems:
+                conn.rollback()
+                raise RepairRefused("; ".join(problems))
         if with_stock_rs:                   # opt-in: migration 29's per-stock table; default off so mi_v2's requirements are unchanged
             srs = store.write_stock_rs(cur, c.rs, provenance, feature_set_version, code_ref, c.reconstruction_basis)
             report.stock_rs_written = srs["written"]
+            if repair and srs["differs_from_stored"]:
+                conn.rollback()
+                raise RepairRefused("stored relative-strength rows belong to a different run than the recomputation; nothing was written")
             if srs["differs_from_stored"]:
                 report.warnings.append("per-stock rows for this session/version/provenance exist with a different run hash; they were not changed")
         conn.commit()

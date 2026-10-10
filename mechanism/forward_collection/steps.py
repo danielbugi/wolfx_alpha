@@ -230,9 +230,14 @@ def make_observe(feature_set_version: str = FEATURE_SET_VERSION):
             return C.StepResult(C.STEP_OBSERVE, C.FAILED, {"reason": C.REASON_NOT_LATEST if newest and newest > ctx.session else C.REASON_NOT_LOADED,
                                                           "newest_loaded_bar": newest.isoformat() if newest else None},
                                 f"the newest stored stock bar is {newest}, not {ctx.session}: an observation needs the session's own prices as the newest bar")
-        rep = mi_runner.run(ctx.connect, ctx.session, provenance="observed", apply=ctx.apply, code_ref=ctx.code_ref,
-                            feature_set_version=feature_set_version, with_stock_rs=True)
-        detail = {"regime_state": rep.regime_state, "n_universe": rep.n_universe, "n_classified": rep.n_classified, "n_sectors": rep.n_sectors,
+        repair = snap["status"] == SNAPSHOT_REPAIRABLE
+        try:
+            rep = mi_runner.run(ctx.connect, ctx.session, provenance="observed", apply=ctx.apply, code_ref=ctx.code_ref,
+                                feature_set_version=feature_set_version, with_stock_rs=True, repair=repair and ctx.apply)
+        except mi_runner.RepairRefused as e:
+            return C.StepResult(C.STEP_OBSERVE, C.FAILED, {"reason": C.REASON_REPAIR_REFUSED, "problems": snap["problems"], **snap["detail"]},
+                                f"repair refused, nothing written: {e}"[:300])
+        detail = {"repair": repair, "regime_state": rep.regime_state, "n_universe": rep.n_universe, "n_classified": rep.n_classified, "n_sectors": rep.n_sectors,
                   "created": rep.created, "sectors_written": rep.sectors_written, "stock_rs_written": rep.stock_rs_written,
                   "differs_from_stored": rep.differs_from_stored, "warnings": list(rep.warnings)}
         if not ctx.apply:

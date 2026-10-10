@@ -232,6 +232,14 @@ jobs:
         # correctness is covered separately by db-bootstrap-integration below.
         run: python -m pytest mechanism/alerts/tests mechanism/data_updaters/tests mechanism/research/tests mechanism/market_intelligence/tests mechanism/forward_collection/tests ml_training/tests -q
 
+      - name: scan-wrapper real-flock tests (must run on Linux, never skip)
+        # The lock-contention tests of deploy/vps/run_discontinuity_scan.sh need real util-linux flock and bash. They self-skip on Windows/macOS dev machines, so
+        # REQUIRE_REAL_FLOCK=1 turns "no flock here" into a collection error, and the grep fails the job if any test of the file was skipped.
+        run: |
+          REQUIRE_REAL_FLOCK=1 python -m pytest mechanism/forward_collection/tests/test_scan_wrapper_and_timing.py -v -rs -p no:cacheprovider | tee flock_tests.txt
+          ! grep -q "SKIPPED" flock_tests.txt
+          grep -c "PASSED" flock_tests.txt
+
   # ---------------------------------------------------------------------------------------------
   docker-validate:
     needs: changes

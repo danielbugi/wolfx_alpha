@@ -157,6 +157,8 @@ BASH = bash_works()
 needs_bash = pytest.mark.skipif(BASH is None, reason="no working bash here")
 REAL_FLOCK = shutil.which("flock") if sys.platform != "win32" else None
 needs_flock = pytest.mark.skipif(REAL_FLOCK is None, reason="needs Linux flock")
+if os.environ.get("REQUIRE_REAL_FLOCK") == "1":      # CI sets this on Linux: the real-flock tests must RUN there, never silently skip
+    assert REAL_FLOCK and BASH, "REQUIRE_REAL_FLOCK=1 but this environment has no real flock and bash: the lock-contention tests cannot run"
 
 SHIM_FLOCK = r'''#!/bin/sh
 # records every call; fails the lock whose fd number is listed in SHIM_FLOCK_FAIL_FD
@@ -319,3 +321,104 @@ def test_while_the_scan_runs_no_retry_or_pipeline_can_take_its_lock(tmp_path):
     assert out["r"].returncode == 0
     for lock in (".postmarket_retry.lock", ".pipeline.lock", ".discontinuity_scan.lock"):
         assert subprocess.run([REAL_FLOCK, "-n", (base / lock).as_posix(), "true"]).returncode == 0       # all released afterwards
+
+
+# ------------------------------------------------------------------ real flock: failure cleanup, overlap with the real retry wrapper, kernel release
+def lock_is_free(base: Path, name: str) -> bool:
+    return subprocess.run([REAL_FLOCK, "-n", (base / name).as_posix(), "true"]).returncode == 0
+
+
+ALL_LOCKS = (".postmarket_retry.lock", ".pipeline.lock", ".discontinuity_scan.lock")
+
+
+@needs_bash
+@needs_flock
+@pytest.mark.parametrize("rc", [1, 3, 5])
+def test_a_failed_scan_releases_every_lock_and_reports_its_status(tmp_path, rc):
+    base, stub, log = make_base(tmp_path, docker_rc=rc, docker_sleep=1)
+    r = run_wrapper(base, stub, log, real_flock=True)
+    assert r.returncode == rc
+    assert all(lock_is_free(base, n) for n in ALL_LOCKS)
+
+
+@needs_bash
+@needs_flock
+def test_a_pipeline_that_outlasts_its_wait_bound_means_nothing_is_scanned_and_nothing_stays_locked(tmp_path):
+    base, stub, log = make_base(tmp_path)
+    (base / ".pipeline.lock").touch()
+    holder = hold(base / ".pipeline.lock", 4)
+    r = run_wrapper(base, stub, log, real_flock=True, extra_env={"SCAN_PIPELINE_WAIT_SECONDS": "1"})
+    holder.kill()
+    holder.wait()
+    assert r.returncode == 7 and "pipeline still running" in (r.stdout + r.stderr) and not any(c.startswith("docker") for c in calls(log))
+    assert lock_is_free(base, ".postmarket_retry.lock") and lock_is_free(base, ".discontinuity_scan.lock")      # the retry lock it had taken was released on exit
+
+
+@needs_bash
+@needs_flock
+def test_the_real_retry_wrapper_skips_while_a_scan_runs_and_runs_again_after(tmp_path):
+    """Overlap: the production retry wrapper (copied with only its BASE path pointed at the scratch dir) must NOT start a price write while the scan holds the lock."""
+    base, stub, log = make_base(tmp_path, docker_sleep=3)
+    retry = tmp_path / "run_postmarket_retry.sh"
+    text = (VPS / "run_postmarket_retry.sh").read_text(encoding="utf-8").replace("BASE=/opt/donchian", f"BASE={base.as_posix()}")
+    assert f"BASE={base.as_posix()}" in text
+    retry.write_text(text, encoding="utf-8", newline="\n")
+    out = {}
+
+    def go():
+        out["scan"] = run_wrapper(base, stub, log, real_flock=True)
+    th = threading.Thread(target=go)
+    th.start()
+    deadline = time.time() + 20
+    while time.time() < deadline and not any("--scan-only" in c for c in calls(log)):
+        time.sleep(0.05)
+    assert any("--scan-only" in c for c in calls(log))
+    env = dict(os.environ, PATH=Path(stub).as_posix() + os.pathsep + os.environ.get("PATH", ""))
+    during = subprocess.run([BASH, retry.as_posix()], capture_output=True, text=True, env=env, timeout=30)
+    assert during.returncode == 0 and "SKIP: another post-market retry is already in progress" in (during.stdout + during.stderr)
+    assert not any("channel-sender" in c for c in calls(log))                         # no price/post writer was started under the scan
+    th.join()
+    assert out["scan"].returncode == 0
+    after = subprocess.run([BASH, retry.as_posix()], capture_output=True, text=True, env=env, timeout=30)
+    assert after.returncode == 0 and any("channel-sender" in c for c in calls(log))   # the lock was released: the retry proceeds again
+
+
+@needs_bash
+@needs_flock
+def test_two_scans_started_together_run_exactly_one(tmp_path):
+    base, stub, log = make_base(tmp_path, docker_sleep=2)
+    results = []
+
+    def go():
+        results.append(run_wrapper(base, stub, log, real_flock=True))
+    ths = [threading.Thread(target=go) for _ in range(2)]
+    for t in ths:
+        t.start()
+    for t in ths:
+        t.join()
+    assert sorted(r.returncode for r in results) == [0, 8]
+    assert sum(1 for c in calls(log) if "--scan-only" in c) == 1
+
+
+@needs_bash
+@needs_flock
+def test_locks_are_released_by_the_kernel_when_the_wrapper_is_killed(tmp_path):
+    """A SIGKILLed wrapper cannot leak a lock: the kernel drops it with the process (no stale-lockfile state exists)."""
+    base, stub, log = make_base(tmp_path, docker_sleep=30)
+    env = dict(os.environ, DONCHIAN_BASE=base.as_posix(), PATH=Path(stub).as_posix() + os.pathsep + os.environ.get("PATH", ""), SCAN_NOW_LOCAL="06:30")
+    p = subprocess.Popen([BASH, WRAPPER.as_posix()], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    try:
+        deadline = time.time() + 20
+        while time.time() < deadline and not any(c.startswith("docker") for c in calls(log)):
+            time.sleep(0.05)
+        assert any(c.startswith("docker") for c in calls(log))
+        assert not lock_is_free(base, ".pipeline.lock")                               # held while running
+    finally:
+        import signal
+        os.killpg(p.pid, signal.SIGKILL)                                              # the wrapper AND its children (which inherit the lock fds)
+        p.wait()
+    for _ in range(100):
+        if all(lock_is_free(base, n) for n in ALL_LOCKS):
+            break
+        time.sleep(0.05)
+    assert all(lock_is_free(base, n) for n in ALL_LOCKS)

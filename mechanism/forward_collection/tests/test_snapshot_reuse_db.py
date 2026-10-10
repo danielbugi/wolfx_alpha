@@ -136,6 +136,108 @@ def test_a_late_bar_before_the_snapshot_exists_keeps_the_session_incomplete_unti
 
 
 # ---------------------------------------------------------------------------------------------------- partial / inconsistent: fail closed, never written over
+RS_GAPS = ["DELETE FROM stock_relative_strength WHERE horizon_sessions = 20",
+           "DELETE FROM stock_relative_strength WHERE horizon_sessions = 5 AND symbol = 'S0001'",
+           "DELETE FROM stock_relative_strength"]
+
+
+def rs_rows(w):
+    with w.connect() as c:
+        cur = c.cursor()
+        cur.execute("SELECT x::text FROM stock_relative_strength x ORDER BY x::text")
+        return {r[0] for r in cur.fetchall()}
+
+
+def snapshot_status(w, k=0):
+    with w.connect() as c:
+        out = S.committed_snapshot(c, w.sessions[k], S.FEATURE_SET_VERSION, C.decision_deadline(w.sessions[k], 1))
+        c.rollback()
+    return out["status"]
+
+
+@pytest.mark.parametrize("sql", RS_GAPS)
+def test_repair_completes_only_the_missing_rs_rows_leaves_every_committed_row_untouched_and_verifies(world, sql):
+    """Owner-approved repair: universe/market/sector intact, only relative-strength rows missing, strict freshness holds (prices unchanged)."""
+    steps = completed_session(world)
+    forge(world, "stock_relative_strength", sql)
+    full_rows = None
+    with world.connect() as c:
+        cur = c.cursor()
+        cur.execute("SELECT count(*) FROM stock_relative_strength")
+        remaining = cur.fetchone()[0]
+    assert snapshot_status(world) == S.SNAPSHOT_REPAIRABLE
+    kept = rs_rows(world)
+    others_before = {t: v for t, v in fingerprint(world).items() if t != "stock_relative_strength"}
+    rep = collect(world, steps, 0, which=1)
+    assert rep.verdict == C.COMPLETE, [(x.name, x.outcome, x.error) for x in rep.steps]
+    o = observe(rep)
+    assert o.outcome == C.OK and o.detail["repair"] is True and o.detail["stock_rs_written"] > 0 and not o.detail["created"] and o.detail["sectors_written"] == 0
+    after = rs_rows(world)
+    assert kept <= after                                                                 # every row that existed is byte-identical
+    assert len(after) == 3 * FW.SMALL_UNIVERSE and len(after) - len(kept) == o.detail["stock_rs_written"] and len(kept) == remaining
+    assert {t: v for t, v in fingerprint(world).items() if t != "stock_relative_strength"} == others_before   # nothing else was written
+    assert snapshot_status(world) == S.SNAPSHOT_VALID                                    # verified complete after the repair
+    # idempotent: the next fire reuses the now-valid snapshot and writes nothing
+    again = fingerprint(world)
+    rep = collect(world, steps, 0, which=1)
+    assert rep.verdict == C.COMPLETE and observe(rep).detail.get("reuse") is True and fingerprint(world) == again
+
+
+@pytest.mark.parametrize("sql", RS_GAPS[:2])
+def test_repair_is_refused_with_no_writes_when_live_prices_no_longer_match_the_scan(world, sql):
+    steps = completed_session(world)
+    forge(world, "stock_relative_strength", sql)
+    late_bar(world, 0)                                                                   # the strict live-price freshness gate fails
+    before = fingerprint(world)
+    rep = collect(world, steps, 0, which=1)
+    o = observe(rep)
+    assert rep.verdict == C.INCOMPLETE and o.outcome == C.FAILED and "scan_input_mismatch" in (o.error or "")
+    assert fingerprint(world) == before
+
+
+def test_repair_is_refused_with_no_writes_when_the_recomputation_would_differ_from_the_stored_evidence(world):
+    """Fresh scan, fresh prices, but the live universe grew after the committed snapshot: the stored rows cannot be completed truthfully."""
+    steps = completed_session(world)
+    forge(world, "stock_relative_strength", RS_GAPS[0])
+    late_bar(world, 0)
+    world.record_scan(0)                                                                 # the freshness gate now passes
+    before = fingerprint(world)
+    rep = collect(world, steps, 0, which=1)
+    o = observe(rep)
+    assert rep.verdict == C.INCOMPLETE and o.outcome == C.FAILED and o.detail["reason"] == C.REASON_REPAIR_REFUSED, [(x.name, x.outcome, x.error) for x in rep.steps]
+    assert "differs from the stored" in (o.error or "")
+    assert fingerprint(world) == before                                                  # rolled back: not one row was written
+
+
+def test_repair_is_atomic_a_failure_after_some_inserts_leaves_nothing_behind(world, monkeypatch):
+    steps = completed_session(world)
+    forge(world, "stock_relative_strength", RS_GAPS[2])
+    before = fingerprint(world)
+    real = S.mi_runner.store.write_stock_rs
+
+    def write_then_die(cur, *a, **k):
+        real(cur, *a, **k)
+        raise RuntimeError("simulated crash after the inserts")
+    monkeypatch.setattr(S.mi_runner.store, "write_stock_rs", write_then_die)
+    rep = collect(world, steps, 0, which=1)
+    assert rep.verdict == C.INCOMPLETE and observe(rep).outcome == C.FAILED
+    assert fingerprint(world) == before and world.count("stock_relative_strength") == 0
+    monkeypatch.setattr(S.mi_runner.store, "write_stock_rs", real)                      # (not undo(): that would also drop the world's own patches)
+    rep = collect(world, steps, 0, which=1)                                              # the retry then repairs
+    assert rep.verdict == C.COMPLETE and world.count("stock_relative_strength") == 3 * FW.SMALL_UNIVERSE
+
+
+def test_repair_is_never_attempted_on_an_inconsistent_or_sector_partial_snapshot(world, monkeypatch):
+    steps = completed_session(world)
+    forge(world, "stock_relative_strength", RS_GAPS[0])
+    forge(world, "stock_relative_strength", "UPDATE stock_relative_strength SET run_content_hash = repeat('a', 64) WHERE horizon_sessions = 5")
+    assert snapshot_status(world) == S.SNAPSHOT_INCONSISTENT                             # a gap PLUS a foreign run is not repairable
+    monkeypatch.setattr(S.mi_runner, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no repair on inconsistent evidence")))
+    before = fingerprint(world)
+    rep = collect(world, steps, 0, which=1)
+    assert rep.verdict == C.MISSED and fingerprint(world) == before
+
+
 def test_a_snapshot_missing_its_sector_rows_is_partial_fails_closed_permanently_and_is_never_written_over(world, monkeypatch):
     steps = completed_session(world)
     forge(world, "sector_snapshot", "DELETE FROM sector_snapshot")
@@ -144,26 +246,8 @@ def test_a_snapshot_missing_its_sector_rows_is_partial_fails_closed_permanently_
     rep = collect(world, steps, 0, which=1)
     o = observe(rep)
     assert o.outcome == C.FAILED and o.detail["reason"] == C.REASON_SNAPSHOT_PARTIAL
-    assert rep.verdict == C.MISSED and rep.exit_code() == C.EXIT_MISSED                 # permanent: nothing a re-run can repair
+    assert rep.verdict == C.MISSED and rep.exit_code() == C.EXIT_MISSED
     assert fingerprint(world) == before
-
-
-@pytest.mark.parametrize("sql", ["DELETE FROM stock_relative_strength WHERE horizon_sessions = 20", "DELETE FROM stock_relative_strength WHERE horizon_sessions = 5 AND symbol = 'S0001'"])
-def test_only_relative_strength_rows_missing_never_reuses_and_fails_closed_when_prices_moved(world, sql):
-    """The crash-after-the-market-write case is never reused as complete: it falls through to the strict path (repair with unchanged prices is pinned by
-    test_orchestrator_db), which refuses (INCOMPLETE, nothing written) on stale evidence and cannot be certified complete if the universe moved."""
-    steps = completed_session(world)
-    forge(world, "stock_relative_strength", sql)
-    full = world.count("stock_relative_strength")
-    late_bar(world, 0)                                                                  # live prices no longer match the scan
-    before = fingerprint(world)
-    rep = collect(world, steps, 0, which=1)
-    o = observe(rep)
-    assert rep.verdict == C.INCOMPLETE and o.outcome == C.FAILED and "scan_input_mismatch" in (o.error or "")
-    assert fingerprint(world) == before and world.count("stock_relative_strength") == full      # stale evidence: nothing was written
-    world.record_scan(0)                                                                # even with a fresh scan the universe grew (81 != the stored 80): the read-back verify refuses to call it complete
-    rep = collect(world, steps, 0, which=1)
-    assert rep.verdict == C.INCOMPLETE and any(x.name == "verify" and x.outcome == C.FAILED and "!= universe" in (x.error or "") for x in rep.steps)
 
 
 @pytest.mark.parametrize("name,table,sql,params,needle", [

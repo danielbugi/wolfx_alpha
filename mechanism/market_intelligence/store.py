@@ -106,6 +106,8 @@ def write_session(cur, regime: RiskRegime, rs: RelativeStrength, provenance: str
     sector_map = ({str(s): (None if v is None or (isinstance(v, float) and math.isnan(v)) else v) for s, v in rs.stocks["sector"].items()}
                   if len(rs.stocks) else {})
     uni = write_universe_snapshot(cur, rs.session_date, sector_map, sem, provenance, code_ref, reconstruction_basis)
+    computed_universe_hash = content_hash({"session_date": rs.session_date, "provenance": provenance,
+                                           "sector_map": {str(k): v for k, v in sorted(sector_map.items())}})
 
     rec, srec = regime.to_record(), rs.session_record()
     sectors = rs.sector_records()
@@ -140,7 +142,8 @@ def write_session(cur, regime: RiskRegime, rs: RelativeStrength, provenance: str
         cur.execute("SELECT id, content_hash FROM market_snapshot WHERE session_date = %s AND feature_set_version = %s AND provenance = %s",
                     (rs.session_date, feature_set_version, provenance))
         ex = cur.fetchone()
-        return {"universe": uni, "market": Written(ex[0], False, ex[1]), "sectors_written": 0, "computed_hash": h}
+        return {"universe": uni, "market": Written(ex[0], False, ex[1]), "sectors_written": 0, "computed_hash": h,
+                "computed_universe_hash": computed_universe_hash}
     market = Written(row[0], True, h)
     n = 0
     for s in rs.sectors:
@@ -155,7 +158,7 @@ def write_session(cur, regime: RiskRegime, rs: RelativeStrength, provenance: str
             "sec_vs_univ_5, sec_vs_univ_20, sec_vs_univ_60, rank_20, market_snapshot_id, reconstruction_basis) "
             "VALUES (" + ",".join(["%s"] * 23) + ") ON CONFLICT (session_date, feature_set_version, provenance, sector) DO NOTHING", vals)
         n += cur.rowcount
-    return {"universe": uni, "market": market, "sectors_written": n, "computed_hash": h}
+    return {"universe": uni, "market": market, "sectors_written": n, "computed_hash": h, "computed_universe_hash": computed_universe_hash}
 
 
 def append_event_revision(cur, d: ev.EventDraft, declared_basis: Optional[str] = None) -> Written:

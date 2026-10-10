@@ -42,6 +42,7 @@ REASON_NOT_LATEST = "session_is_not_the_newest_loaded_session"
 REASON_NOT_LOADED = "session_not_available"
 REASON_SNAPSHOT_PARTIAL = "committed_snapshot_partial"            # some but not all of the session's observed rows exist: it cannot be completed, only investigated
 REASON_SNAPSHOT_INCONSISTENT = "committed_snapshot_inconsistent"    # the stored rows contradict each other or fall outside the allowed window
+REASON_REPAIR_REFUSED = "snapshot_repair_refused"                  # transient: the live recomputation does not reproduce the stored rows; nothing was written
 REASON_SNAPSHOT_PROBLEMS = (REASON_SNAPSHOT_PARTIAL, REASON_SNAPSHOT_INCONSISTENT)
 
 # the writers' versions the dataset spec must name (pinned against the writers themselves by a test, never trusted blindly)
