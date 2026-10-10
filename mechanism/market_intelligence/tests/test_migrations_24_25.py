@@ -71,7 +71,7 @@ def test_events_are_immutable_but_appendable(conn):
     cur = conn.cursor()
     cur.execute("INSERT INTO market_event (event_key, symbol, event_type) VALUES ('k1','AAA','earnings_scheduled')")
     _replica_if_allowed(cur)
-    for sql in ("UPDATE market_event SET symbol = 'BBB'", "DELETE FROM market_event", "TRUNCATE market_event, market_event_revision"):
+    for sql in ("UPDATE market_event SET symbol = 'BBB'", "DELETE FROM market_event", "TRUNCATE market_event, market_event_revision CASCADE"):
         _fails(cur, sql, exc=psycopg2.errors.IntegrityConstraintViolation, match="append-only")
 
 
@@ -141,7 +141,7 @@ def test_actuals_need_a_reported_status_and_revisions_are_unique_and_immutable(c
 
 def test_a_pre_existing_foreign_relation_makes_the_migration_refuse_atomically(conn):
     cur = conn.cursor()
-    cur.execute("DROP TABLE market_event_revision; DROP TABLE market_event; DROP FUNCTION research_market_event_stamp()")
+    cur.execute("DROP TABLE market_event_revision CASCADE; DROP TABLE market_event CASCADE; DROP FUNCTION research_market_event_stamp()")
     cur.execute("CREATE TABLE market_event (x int)")
     with pytest.raises(psycopg2.Error, match="not a migration-25 object"):
         cur.execute(_sql("add_market_event_tables.sql"))
@@ -153,7 +153,7 @@ def test_a_pre_existing_foreign_relation_makes_the_migration_refuse_atomically(c
 
 def test_migration_25_refuses_without_migration_24(conn):
     cur = conn.cursor()
-    cur.execute("DROP TABLE market_event_revision; DROP TABLE market_event; DROP FUNCTION research_market_event_stamp()")
+    cur.execute("DROP TABLE market_event_revision CASCADE; DROP TABLE market_event CASCADE; DROP FUNCTION research_market_event_stamp()")
     cur.execute("DROP TABLE sector_snapshot; DROP TABLE market_snapshot; DROP TABLE universe_snapshot")
     cur.execute("DROP FUNCTION research_market_guard()")
     with pytest.raises(psycopg2.Error, match="requires migration 24"):

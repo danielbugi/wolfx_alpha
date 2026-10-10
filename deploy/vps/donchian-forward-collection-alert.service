@@ -1,0 +1,9 @@
+# COMMITTED BUT DORMANT (installed by nobody). OnFailure= target. It must NOT post to a Telegram channel (channels carry only data/promotion/news/info). The lab does not
+# decide the alert transport: at activation point this at the operator's existing private alert path (e.g. the private bot's owner chat) or leave it a
+# journald-only unit and alert from the unit's `failed` state.
+[Unit]
+Description=First Light: forward collection FAILED (incomplete, missed or refused session) -- see journalctl -u donchian-forward-collection
+
+[Service]
+Type=oneshot
+ExecStart=/bin/true

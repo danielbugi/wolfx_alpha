@@ -178,7 +178,10 @@ BEGIN
                                      'universe_snapshot', 'market_snapshot', 'sector_snapshot', 'market_event',
                                      'market_event_revision', 'universe_snapshot_id_seq', 'market_snapshot_id_seq',
                                      'sector_snapshot_id_seq', 'market_event_event_id_seq',
-                                     'market_event_revision_id_seq') LOOP
+                                     'market_event_revision_id_seq',
+                                     'forward_return_label', 'forward_return_label_id_seq',
+                                     'source_observation', 'source_poll', 'catalyst_classification', 'stock_relative_strength', 'dataset_manifest', 'experiment_registration', 'experiment_result', 'sector_observation', 'sector_poll', 'sector_reconstruction', 'price_discontinuity_scan',
+                                     'source_observation_id_seq', 'source_poll_id_seq', 'catalyst_classification_id_seq', 'stock_relative_strength_id_seq', 'dataset_manifest_id_seq', 'experiment_registration_id_seq', 'experiment_result_id_seq', 'sector_observation_id_seq', 'sector_poll_id_seq', 'sector_reconstruction_id_seq', 'price_discontinuity_scan_id_seq') LOOP
         -- REVOKE first so a re-run CONVERGES to the baseline (drops any drifted extra privilege such as TRUNCATE).
         IF r.relkind = 'S' THEN
             EXECUTE format('REVOKE ALL ON SEQUENCE %I FROM donchian_app', r.relname);
@@ -200,10 +203,13 @@ END;
 $base$;
 
 -- ---------------------------------------------------------------------------------------------------
--- 7. Market Intelligence tables (migrations 24 / 25). Conditional: a database that has not applied them is unaffected, so this
+-- 7. Append-only research tables: Market Intelligence (migrations 24 / 25) and fwd_v1 labels (migration 26). Conditional: a database that has not applied them is unaffected, so this
 --    script stays valid before and after those migrations. APPEND-ONLY with no maintenance hatch: the runtime role gets
 --    SELECT + INSERT, the admin group gets SELECT only (their guard raises unconditionally; a correction is a new version).
---    Re-run this script (and the verifier) after applying 24 / 25 -- they are excluded from the section 6 baseline above.
+--    Re-run this script (and the verifier) after applying 24 / 25 / 26 -- they are excluded from the section 6 baseline above
+--    (a new immutable table is silently given full DML by section 6 unless it is named in that exclusion list).
+--    forward_return_label: the label generator needs exactly SELECT + INSERT here, plus SELECT on candidate_observation,
+--    stock_prices and market_index_prices (all already granted); it never needs UPDATE / DELETE / TRUNCATE.
 -- ---------------------------------------------------------------------------------------------------
 DO $mi$
 DECLARE
@@ -211,7 +217,9 @@ DECLARE
     f TEXT;
     seq TEXT;
 BEGIN
-    FOREACH t IN ARRAY ARRAY['universe_snapshot', 'market_snapshot', 'sector_snapshot', 'market_event', 'market_event_revision'] LOOP
+    FOREACH t IN ARRAY ARRAY['universe_snapshot', 'market_snapshot', 'sector_snapshot', 'market_event', 'market_event_revision',
+                          'forward_return_label',
+                          'source_observation', 'source_poll', 'catalyst_classification', 'stock_relative_strength', 'dataset_manifest', 'experiment_registration', 'experiment_result', 'sector_observation', 'sector_poll', 'sector_reconstruction', 'price_discontinuity_scan'] LOOP
         IF to_regclass(t) IS NULL THEN CONTINUE; END IF;
         EXECUTE format('ALTER TABLE %I OWNER TO donchian_owner', t);
         EXECUTE format('REVOKE ALL ON %I FROM PUBLIC', t);
@@ -224,9 +232,27 @@ BEGIN
         EXECUTE format('REVOKE ALL ON SEQUENCE %s FROM PUBLIC, donchian_app', seq);
         EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %s TO donchian_app', seq);
     END LOOP;
-    FOREACH f IN ARRAY ARRAY['research_market_guard()', 'research_market_event_stamp()'] LOOP
+    FOREACH f IN ARRAY ARRAY['research_market_guard()', 'research_market_event_stamp()', 'research_label_guard()',
+                          'research_label_consistency()',
+                          'research_observation_guard()', 'research_observation_stamp()', 'research_poll_stamp()', 'research_classification_guard()', 'research_classification_consistency()', 'research_rs_guard()', 'research_rs_stamp()', 'research_registry_guard()', 'research_registry_stamp()', 'research_registry_consistency()', 'research_sector_guard()', 'research_sector_enc(text)', 'research_sector_row_hash(text,text,integer,text,text,text,timestamptz,text,text,text)', 'research_sector_obs_stamp()', 'research_sector_poll_stamp()', 'research_sector_recon_stamp()', 'research_discontinuity_scan_guard()', 'research_discontinuity_scan_stamp()', 'research_price_input_fingerprint(date)', 'research_discontinuity_result_fingerprint()'] LOOP
         IF to_regprocedure(f) IS NOT NULL THEN
             EXECUTE format('ALTER FUNCTION %s OWNER TO donchian_owner', f);
+        END IF;
+    END LOOP;
+    -- migration 32: the read-only fingerprint functions are called by the scan-evidence trigger (as the inserting runtime role) and by the readers.
+    FOREACH f IN ARRAY ARRAY['research_price_input_fingerprint(date)', 'research_discontinuity_result_fingerprint()'] LOOP
+        IF to_regprocedure(f) IS NOT NULL THEN
+            EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO donchian_app, donchian_research_admin', f);
+        END IF;
+    END LOOP;
+    -- migration 31: research_sector_obs_stamp() fires AS THE INSERTING RUNTIME ROLE and calls research_sector_row_hash(), which calls research_sector_enc().
+    -- A trigger function's own EXECUTE right is not checked when it fires, but the functions it CALLS are: without these two grants every sector_observation
+    -- insert fails with "permission denied for function research_sector_row_hash" (found in production on 2026-10-09; the nightly recorder recorded nothing).
+    -- Runtime role ONLY: PUBLIC and the admin group stay denied (both functions are pure; the admin group never inserts observations).
+    FOREACH f IN ARRAY ARRAY['research_sector_enc(text)',
+                             'research_sector_row_hash(text,text,integer,text,text,text,timestamptz,text,text,text)'] LOOP
+        IF to_regprocedure(f) IS NOT NULL THEN
+            EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO donchian_app', f);
         END IF;
     END LOOP;
 END;

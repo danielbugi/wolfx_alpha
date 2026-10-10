@@ -84,6 +84,29 @@ def pre22_env():
     yield from _schema_env(MIGRATIONS[:3])
 
 
+LABEL_MIGRATIONS = ["create_trading_schema.sql", "add_market_data_tables.sql"] + MIGRATIONS + [
+    "add_forward_return_label_table.sql"]
+
+
+@pytest.fixture
+def labels_env():
+    """Migrations 19-22 + 26 on top of the real base schema (stock_prices) and market_index_prices, in a throwaway schema."""
+    yield from _schema_env(LABEL_MIGRATIONS)
+
+
+@pytest.fixture
+def lconn(labels_env):
+    with labels_env[1]() as c:
+        yield c
+        c.rollback()
+
+
+@pytest.fixture
+def registry_env():
+    """Migration 30 alone (dataset manifest + experiment registry carry no foreign key to any other table)."""
+    yield from _schema_env(["add_dataset_experiment_registry_tables.sql"])
+
+
 @pytest.fixture
 def conn(schema_env):
     _, connect = schema_env
@@ -278,3 +301,16 @@ def roles(role_env):
         cur.execute(f'CREATE ROLE "{person}" LOGIN IN ROLE "{role_env.group}"')
     role_env.admin.commit()
     return role_env
+
+
+@pytest.fixture
+def sector_env():
+    """Migration 31 alone (the sector history carries no foreign key to any other table)."""
+    yield from _schema_env(["add_sector_history_tables.sql"])
+
+
+@pytest.fixture
+def sconn(sector_env):
+    with sector_env[1]() as c:
+        yield c
+        c.rollback()

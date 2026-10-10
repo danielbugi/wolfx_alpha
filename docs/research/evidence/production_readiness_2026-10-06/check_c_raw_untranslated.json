@@ -1,0 +1,52 @@
+[
+ {
+  "latency_ms": 524,
+  "n_keys": 15,
+  "quoteType": "EQUITY",
+  "requested": "BRK.B",
+  "sector": null,
+  "sector_key_present": false
+ },
+ {
+  "latency_ms": 470,
+  "n_keys": 1,
+  "quoteType": null,
+  "requested": "BF.B",
+  "sector": null,
+  "sector_key_present": false
+ },
+ {
+  "error_type": "YFException",
+  "latency_ms": 821,
+  "requested": "BRK/A"
+ },
+ {
+  "error_type": "YFException",
+  "latency_ms": 1030,
+  "requested": "BRK/B"
+ },
+ {
+  "latency_ms": 286,
+  "n_keys": 178,
+  "quoteType": "EQUITY",
+  "requested": "BRK-B",
+  "sector": "Financial Services",
+  "sector_key_present": true
+ },
+ {
+  "latency_ms": 320,
+  "n_keys": 187,
+  "quoteType": "EQUITY",
+  "requested": "BF-B",
+  "sector": "Consumer Defensive",
+  "sector_key_present": true
+ },
+ {
+  "latency_ms": 384,
+  "n_keys": 166,
+  "quoteType": "EQUITY",
+  "requested": "BRK-A",
+  "sector": "Financial Services",
+  "sector_key_present": true
+ }
+]

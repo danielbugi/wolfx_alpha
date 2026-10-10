@@ -229,11 +229,71 @@ def test_a_signal_ml_never_processed_gets_the_no_ml_combined_score_and_honest_fl
     assert row["ml_model_version"] is None                   # no enhancer -> no invented version
 
 
-def test_ml_model_version_is_recorded_when_an_enhancer_exists_but_skipped_the_signal(mts, monkeypatch):
+def test_a_loaded_model_that_skipped_the_signal_is_not_recorded_as_its_scorer(mts, monkeypatch):
     s, _ = screener(mts, monkeypatch, [])
     s.ml_enhancer = EnhancerStub()
     out = s._merge_ml_scores([sig("D1", grade="D", alignment=50)], [])
-    assert out[0]["ml_model_version"] == "momentum_test_v1" and out[0]["ml_confidence"] == "not_processed"
+    assert out[0]["ml_model_version"] is None and out[0]["ml_confidence"] == "not_processed"
+
+
+# ------------------------------------------------------------------ model_version through enhance_signals_with_ml
+class ScoringStub:
+    """predict_ml_momentum mirrors ml_signal_enhancer: scored -> includes the version; unavailable -> omits it."""
+    ml_model_version = "momentum_test_v1"
+
+    def __init__(self, scored_symbols):
+        self.scored = set(scored_symbols)
+
+    def get_stock_data_with_indicators(self, symbol):
+        return None
+
+    def get_fundamentals(self, symbol):
+        return None
+
+    def predict_ml_momentum(self, symbol, ml_signal, stock_data, fundamentals):
+        if symbol in self.scored:
+            return {'ml_momentum_probability': 62.5, 'ml_confidence': 'medium', 'ml_prediction_available': True,
+                    'ml_model_version': self.ml_model_version}
+        return {'ml_momentum_probability': None, 'ml_confidence': 'no_model', 'ml_prediction_available': False,
+                'ml_error': 'no_model'}
+
+
+def _enhance_input(symbol):
+    return {**sig(symbol), "urgency": "high", "current_price": 10.0}
+
+
+def test_enhance_leaves_model_version_null_when_no_model_scored_never_unknown(mts, monkeypatch):
+    s, _ = screener(mts, monkeypatch, [])
+    monkeypatch.setattr(mts, "PREDICTION_LOGGING_AVAILABLE", False)
+    s.ml_enhancer = ScoringStub(scored_symbols=[])
+    out = s.enhance_signals_with_ml([_enhance_input("AAA")])
+    assert out[0]["ml_model_version"] is None
+    assert out[0]["ml_prediction_available"] is False and out[0]["ml_momentum_probability"] is None
+
+
+def test_enhance_records_the_version_only_on_the_signal_that_was_scored(mts, monkeypatch):
+    s, _ = screener(mts, monkeypatch, [])
+    monkeypatch.setattr(mts, "PREDICTION_LOGGING_AVAILABLE", False)
+    s.ml_enhancer = ScoringStub(scored_symbols=["SCORED"])
+    out = {r["symbol"]: r for r in s.enhance_signals_with_ml([_enhance_input("SCORED"), _enhance_input("SKIPPED")])}
+    assert out["SCORED"]["ml_model_version"] == "momentum_test_v1"
+    assert out["SKIPPED"]["ml_model_version"] is None
+
+
+def test_prediction_log_batch_version_comes_from_a_scored_signal_not_from_signal_zero(mts, monkeypatch):
+    class Recorder:
+        calls = []
+
+        def record_predictions(self, predictions, **kw):
+            self.calls.append((len(predictions), kw))
+
+    rec = Recorder()
+    s, _ = screener(mts, monkeypatch, [])
+    monkeypatch.setattr(mts, "PREDICTION_LOGGING_AVAILABLE", True)
+    monkeypatch.setattr(mts, "performance_tracker", rec)
+    s.ml_enhancer = ScoringStub(scored_symbols=["SCORED"])
+    s.enhance_signals_with_ml([_enhance_input("SKIPPED"), _enhance_input("SCORED")])
+    assert rec.calls == [(1, {"model_version": "momentum_test_v1"})]
 
 
 def test_a_missing_or_none_alignment_score_means_zero_contribution_not_a_crash(mts, monkeypatch):
@@ -453,3 +513,44 @@ def test_inert_guards_mean_not_evaluated_never_passed(mts, monkeypatch):
     out = s._apply_universe_guards([sig("GOOD")])
     assert [x["symbol"] for x in out] == ["GOOD"] and s.guards_evaluated is False and s.guard_decisions == {}
     assert db.calls == []
+
+# ------------------------------------------------------------------ the S11-observed shape, screener -> real ledger writer
+class CaptureLedgerDB:
+    """Just enough database for `signal_ledger_writer.write_signals`: no open position anywhere; every insert is captured."""
+
+    def __init__(self):
+        self.inserted = []
+
+    def execute_dict_query(self, query, params=None):
+        return []
+
+    def execute_insert(self, query, params=None):
+        self.inserted.append(params)
+        return 1
+
+
+def _through_screener_and_writer(mts, monkeypatch, scored_symbols):
+    from screeners import signal_ledger_writer as W
+    s, _ = screener(mts, monkeypatch, [])
+    monkeypatch.setattr(mts, "PREDICTION_LOGGING_AVAILABLE", False)
+    s.ml_enhancer = ScoringStub(scored_symbols=scored_symbols)
+    inputs = [{**_enhance_input(f"S{g}"), "alignment_grade": g, "quality_grade": g, "atr_14": 1.5} for g in "ABCDF"]
+    out = s.enhance_signals_with_ml(inputs)
+    db = CaptureLedgerDB()
+    W.write_signals(db, out, SESSION, W.StrategyRef(1, "donchian_breakout", "v1"), strict=True)
+    return {p["symbol"]: p for p in db.inserted}
+
+
+def test_with_no_validated_model_every_grade_reaches_the_ledger_with_a_null_model_version(mts, monkeypatch):
+    """Production 2026-10-05/06 (S11): with no validated model 222 of 225 new ledger rows carried 'unknown', across grades A-F. The same shape through the
+    real screener merge and the real ledger writer must store NULL for every grade."""
+    rows = _through_screener_and_writer(mts, monkeypatch, [])
+    assert sorted(rows) == ["SA", "SB", "SC", "SD", "SF"]
+    assert all(r["model_version"] is None for r in rows.values())
+    assert {sym: r["quality_grade"] for sym, r in rows.items()} == {"SA": "A", "SB": "B", "SC": "C", "SD": "D", "SF": "F"}
+
+
+def test_only_the_scored_signal_reaches_the_ledger_with_a_model_version(mts, monkeypatch):
+    rows = _through_screener_and_writer(mts, monkeypatch, ["SB"])
+    assert rows["SB"]["model_version"] == "momentum_test_v1"
+    assert all(r["model_version"] is None for sym, r in rows.items() if sym != "SB")

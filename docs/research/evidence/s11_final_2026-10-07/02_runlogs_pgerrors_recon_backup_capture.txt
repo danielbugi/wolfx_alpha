@@ -1,0 +1,160 @@
+#### runlogs 30
+LOG|== pipeline_runs (last 30) ==
+LOG|pipeline_runs|2026-09-29T22:00:55Z pipeline run starting (mechanism sha=96c4d7c69be8)
+LOG|pipeline_runs|2026-09-29T22:09:46Z pipeline run FAILED (exit 1, mechanism sha=96c4d7c69be8)
+LOG|pipeline_runs|2026-09-30T20:45:18Z pipeline run starting (mechanism sha=96c4d7c69be8)
+LOG|pipeline_runs|2026-09-30T20:54:10Z pipeline run FAILED (exit 1, mechanism sha=96c4d7c69be8)
+LOG|pipeline_runs|2026-09-30T22:00:28Z pipeline run starting (mechanism sha=96c4d7c69be8)
+LOG|pipeline_runs|2026-09-30T22:09:18Z pipeline run FAILED (exit 1, mechanism sha=96c4d7c69be8)
+LOG|pipeline_runs|2026-10-01T20:45:32Z pipeline run starting (mechanism sha=4d9bf93069cb)
+LOG|pipeline_runs|2026-10-01T20:59:56Z pipeline run FAILED (exit 1, mechanism sha=4d9bf93069cb)
+LOG|pipeline_runs|2026-10-01T22:00:28Z pipeline run starting (mechanism sha=4d9bf93069cb)
+LOG|pipeline_runs|2026-10-01T23:30:13Z pipeline run OK (mechanism sha=4d9bf93069cb)
+LOG|pipeline_runs|2026-10-02T20:45:59Z pipeline run starting (mechanism sha=cfd83f72f960)
+LOG|pipeline_runs|2026-10-02T21:00:18Z pipeline run FAILED (exit 1, mechanism sha=cfd83f72f960)
+LOG|pipeline_runs|2026-10-02T22:00:28Z pipeline run starting (mechanism sha=cfd83f72f960)
+LOG|pipeline_runs|2026-10-02T23:22:19Z pipeline run OK (mechanism sha=cfd83f72f960)
+LOG|pipeline_runs|2026-10-03T20:45:54Z pipeline run starting (mechanism sha=cfd83f72f960)
+LOG|pipeline_runs|2026-10-03T20:45:55Z pipeline run OK (mechanism sha=cfd83f72f960)
+LOG|pipeline_runs|2026-10-03T22:00:28Z pipeline run starting (mechanism sha=cfd83f72f960)
+LOG|pipeline_runs|2026-10-03T22:00:29Z pipeline run OK (mechanism sha=cfd83f72f960)
+LOG|pipeline_runs|2026-10-04T20:45:36Z pipeline run starting (mechanism sha=cfd83f72f960)
+LOG|pipeline_runs|2026-10-04T20:46:10Z pipeline run OK (mechanism sha=cfd83f72f960)
+LOG|pipeline_runs|2026-10-04T22:00:59Z pipeline run starting (mechanism sha=cfd83f72f960)
+LOG|pipeline_runs|2026-10-04T22:01:31Z pipeline run OK (mechanism sha=cfd83f72f960)
+LOG|pipeline_runs|2026-10-05T20:45:28Z pipeline run starting (mechanism sha=cfd83f72f960)
+LOG|pipeline_runs|2026-10-05T20:59:59Z pipeline run FAILED (exit 1, mechanism sha=cfd83f72f960)
+LOG|pipeline_runs|2026-10-05T22:00:33Z pipeline run starting (mechanism sha=cfd83f72f960)
+LOG|pipeline_runs|2026-10-05T23:21:51Z pipeline run OK (mechanism sha=cfd83f72f960)
+LOG|pipeline_runs|2026-10-06T20:45:53Z pipeline run starting (mechanism sha=cfd83f72f960)
+LOG|pipeline_runs|2026-10-06T20:59:59Z pipeline run FAILED (exit 1, mechanism sha=cfd83f72f960)
+LOG|pipeline_runs|2026-10-06T22:00:54Z pipeline run starting (mechanism sha=cfd83f72f960)
+LOG|pipeline_runs|2026-10-06T23:24:55Z pipeline run OK (mechanism sha=cfd83f72f960)
+LOG|== channel_sender_runs (last 30) ==
+LOG|channel_sender_runs|2026-10-04T09:00:32Z channel-sender OK: mechanism/alerts/send_channel_notices.py (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-04T17:00:58Z channel-sender starting: mechanism/alerts/send_channel_notices.py --slot 2 --to prod --send (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-04T17:01:01Z channel-sender OK: mechanism/alerts/send_channel_notices.py (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-05T00:30:54Z channel-sender starting: mechanism/screeners/evaluate_signal_ledger.py (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-05T00:30:56Z channel-sender OK: mechanism/screeners/evaluate_signal_ledger.py (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-05T02:00:51Z channel-sender starting: mechanism/shared/market_calendar.py gate --key digest:prod (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-05T02:00:52Z channel-sender FAILED (exit 3): mechanism/shared/market_calendar.py (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-05T02:00:52Z firstlight1_updateonly SKIPPED: no new session for digest:prod
+LOG|channel_sender_runs|2026-10-05T07:00:28Z channel-sender starting: mechanism/alerts/send_earnings_today.py --to prod --send (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-05T07:00:30Z channel-sender OK: mechanism/alerts/send_earnings_today.py (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-05T09:01:28Z channel-sender starting: mechanism/alerts/send_channel_notices.py --slot 1 --to prod --send (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-05T09:01:32Z channel-sender OK: mechanism/alerts/send_channel_notices.py (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-05T17:00:16Z channel-sender starting: mechanism/alerts/send_channel_notices.py --slot 2 --to prod --send (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-05T17:00:19Z channel-sender OK: mechanism/alerts/send_channel_notices.py (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-06T00:30:54Z channel-sender starting: mechanism/screeners/evaluate_signal_ledger.py (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-06T00:30:57Z channel-sender OK: mechanism/screeners/evaluate_signal_ledger.py (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-06T02:00:28Z channel-sender starting: mechanism/shared/market_calendar.py gate --key digest:prod (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-06T02:00:29Z channel-sender FAILED (exit 3): mechanism/shared/market_calendar.py (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-06T02:00:29Z firstlight1_updateonly SKIPPED: no new session for digest:prod
+LOG|channel_sender_runs|2026-10-06T07:00:28Z channel-sender starting: mechanism/alerts/send_earnings_today.py --to prod --send (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-06T07:00:31Z channel-sender OK: mechanism/alerts/send_earnings_today.py (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-06T09:00:54Z channel-sender starting: mechanism/alerts/send_channel_notices.py --slot 1 --to prod --send (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-06T09:00:58Z channel-sender OK: mechanism/alerts/send_channel_notices.py (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-06T17:00:54Z channel-sender starting: mechanism/alerts/send_channel_notices.py --slot 2 --to prod --send (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-06T17:00:57Z channel-sender OK: mechanism/alerts/send_channel_notices.py (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-07T00:30:54Z channel-sender starting: mechanism/screeners/evaluate_signal_ledger.py (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-07T00:30:58Z channel-sender OK: mechanism/screeners/evaluate_signal_ledger.py (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-07T02:00:55Z channel-sender starting: mechanism/shared/market_calendar.py gate --key digest:prod (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-07T02:00:57Z channel-sender FAILED (exit 3): mechanism/shared/market_calendar.py (mechanism sha=cfd83f72f960)
+LOG|channel_sender_runs|2026-10-07T02:00:57Z firstlight1_updateonly SKIPPED: no new session for digest:prod
+LOG|== postmarket_retry_runs (last 30) ==
+LOG|postmarket_retry_runs|2026-10-06T22:20:05Z post-market retry starting (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-06T22:28:55Z post-market retry OK (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-06T22:40:20Z post-market retry starting (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-06T22:49:11Z post-market retry OK (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-06T23:00:29Z post-market retry starting (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-06T23:09:19Z post-market retry OK (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-06T23:20:09Z post-market retry starting (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-06T23:29:01Z post-market retry OK (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-06T23:40:28Z post-market retry starting (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-06T23:49:18Z post-market retry OK (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-07T00:00:38Z post-market retry starting (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-07T00:09:30Z post-market retry OK (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-07T00:20:28Z post-market retry starting (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-07T00:29:20Z post-market retry OK (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-07T00:40:18Z post-market retry starting (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-07T00:49:09Z post-market retry OK (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-07T01:00:28Z post-market retry starting (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-07T01:09:20Z post-market retry OK (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-07T01:20:28Z post-market retry starting (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-07T01:29:20Z post-market retry OK (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-07T01:40:28Z post-market retry starting (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-07T01:49:20Z post-market retry OK (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-07T02:00:03Z post-market retry starting (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-07T02:08:55Z post-market retry OK (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-07T02:20:28Z post-market retry starting (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-07T02:29:20Z post-market retry OK (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-07T02:40:23Z post-market retry starting (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-07T02:49:15Z post-market retry OK (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-07T03:00:28Z post-market retry starting (mechanism sha=cfd83f72f960)
+LOG|postmarket_retry_runs|2026-10-07T03:09:20Z post-market retry OK (mechanism sha=cfd83f72f960)
+LOG|== nightly_backup (last 30) ==
+LOG|nightly_backup|2026-09-24T11:43:00Z FAILED db=trading_production reason=pg_restore -l could not read the archive: pg_restore: error: could not open input file "-": No such file or directory
+LOG|nightly_backup|2026-09-24T11:45:03Z OK db=trading_production dir=/opt/donchian/backups/nightly/20260924T114326Z bytes=631284720 sha256=74102efc9933bebc2f6b174a9c84a5a92e48c4d1413f8c50cf8cd41d5f55f5cf
+LOG|nightly_backup|2026-09-24T23:33:06Z OK db=trading_production dir=/opt/donchian/backups/nightly/20260924T233128Z bytes=631369450 sha256=e29e8422106b6f25d23bb83bf0076289e6b273bc894c1153323650ea17bf25dd
+LOG|nightly_backup|2026-09-25T23:33:52Z OK db=trading_production dir=/opt/donchian/backups/nightly/20260925T233213Z bytes=631860285 sha256=5e1c6cb606305712bbe6f24d4f88d4f60486cb24c6d0c82808440735b1538d96
+LOG|nightly_backup|2026-09-26T23:34:01Z OK db=trading_production dir=/opt/donchian/backups/nightly/20260926T233223Z bytes=632743440 sha256=374e6bb95f14504c537939aaeff9d010919d36efd881ef4c65e58d806d18c689
+LOG|nightly_backup|2026-09-27T23:35:21Z OK db=trading_production dir=/opt/donchian/backups/nightly/20260927T233341Z bytes=632744334 sha256=6e4e1cda5083e843f81a93b33e09dc545d7ad1b483071b6775e162b033bccac7
+LOG|nightly_backup|2026-09-28T23:35:50Z OK db=trading_production dir=/opt/donchian/backups/nightly/20260928T233412Z bytes=633729330 sha256=fa58cfc5f71b27a8a50cf58f25a6cc3349b5e1cbeb1148527e974ea26a729d27
+LOG|nightly_backup|2026-09-29T23:35:06Z OK db=trading_production dir=/opt/donchian/backups/nightly/20260929T233328Z bytes=633733134 sha256=941b48eaa533993b91ce3fb6626894bfd9a5f4dc65c56e6daa3ef158b8469339
+LOG|nightly_backup|2026-09-30T23:34:19Z OK db=trading_production dir=/opt/donchian/backups/nightly/20260930T233241Z bytes=634213657 sha256=03ac268559e9420cfea0faedfde96f54f5d35bffefb0b730ed3fa4b329a0210a
+LOG|nightly_backup|2026-10-01T23:33:09Z OK db=trading_production dir=/opt/donchian/backups/nightly/20261001T233130Z bytes=635882599 sha256=3deb4aaf84af9d3595affa0b3292e1bc337f8ee9b7e385366c4a2be1349cc63c
+LOG|nightly_backup|2026-10-02T23:34:32Z OK db=trading_production dir=/opt/donchian/backups/nightly/20261002T233254Z bytes=636702398 sha256=b1e5a3a47f2c0eea2f761853071360f049456d453db3f6a7aedc5f1057c050f5
+LOG|nightly_backup|2026-10-03T23:34:32Z OK db=trading_production dir=/opt/donchian/backups/nightly/20261003T233254Z bytes=636730998 sha256=bc34327c9049b3293dee42f0f35518f4f56416ed99036e2cba4abecfded7a2a2
+LOG|nightly_backup|2026-10-04T23:34:32Z OK db=trading_production dir=/opt/donchian/backups/nightly/20261004T233254Z bytes=636735167 sha256=0475ea58f84d80bdd54c712621ccce82f1244984e3c365fac9fe41cf0b420c13
+LOG|nightly_backup|2026-10-05T23:36:17Z OK db=trading_production dir=/opt/donchian/backups/nightly/20261005T233438Z bytes=637648076 sha256=b2b632924a29089cad4c0f96d683144dacb97a780f817539d14fa834b8ee8b61
+LOG|nightly_backup|2026-10-06T23:32:06Z OK db=trading_production dir=/opt/donchian/backups/nightly/20261006T233028Z bytes=638386802 sha256=fba09062ef146526cc63227886cef060890fd0ad56e954d45bae5fca492743e7
+#### pgerrors 2026-10-03T09:48:00Z
+PGERR|since=2026-10-03T09:48:00Z lines=356
+PGERR|pattern=[permission denied] count=0
+PGERR|pattern=[password authentication failed] count=0
+PGERR|pattern=[must be owner] count=0
+PGERR|pattern=[does not exist] count=0
+PGERR|pattern=[deadlock] count=0
+PGERR|pattern=[duplicate key] count=0
+PGERR|pattern=[violates] count=0
+PGERR|pattern=[FATAL] count=0
+PGERR|pattern=[ERROR] count=3
+PGERR|pattern=[sequence] count=0
+PGERR|pattern=[role "donchian] count=0
+PGERR|top|      2 ERROR:  numeric field overflow
+PGERR|top|      1 ERROR:  cannot execute CREATE TABLE AS in a read-only transaction
+#### recon 2026-10-05
+RECON|ledger_rows_for_date|126
+RECON|by_direction|1=64, -1=62
+RECON|duplicate_symbol_direction_strategy_date|0
+RECON|model_version|unknown=124, <NULL>=2
+RECON|model_version_by_grade|A/unknown=21, B/unknown=23, B/<NULL>=1, C/unknown=18, D/unknown=16, F/unknown=46, F/<NULL>=1
+RECON|observation_id_not_null|0
+RECON|created_at_range|2026-10-06 02:16:22.143451+03 .. 2026-10-06 02:16:22.494422+03
+RECON|stock_prices_rows_for_date_and_symbols|3066/3066
+RECON|dup_bars_symbol_date_gt1|0
+RECON|delivery_rows_for_session|daily_digest/prod/sent/att1, market_health/prod/sent/att1, momentum_board/prod/sent/att1, top_gainers/prod/sent/att1
+#### recon 2026-10-06
+RECON|ledger_rows_for_date|99
+RECON|by_direction|1=44, -1=55
+RECON|duplicate_symbol_direction_strategy_date|0
+RECON|model_version|unknown=98, <NULL>=1
+RECON|model_version_by_grade|A/unknown=10, B/unknown=22, C/unknown=13, D/unknown=18, F/unknown=35, F/<NULL>=1
+RECON|observation_id_not_null|0
+RECON|created_at_range|2026-10-07 02:19:38.337259+03 .. 2026-10-07 02:19:38.600727+03
+RECON|stock_prices_rows_for_date_and_symbols|3065/3065
+RECON|dup_bars_symbol_date_gt1|0
+RECON|delivery_rows_for_session|daily_digest/prod/sent/att1, market_health/prod/sent/att1, momentum_board/prod/sent/att1, top_gainers/prod/sent/att1
+#### backup
+BKP|log|2026-10-03T23:34:32Z OK db=trading_production dir=/opt/donchian/backups/nightly/20261003T233254Z bytes=636730998 sha256=bc34327c9049b3293dee42f0f35518f4f56416ed99036e2cba4abecfded7a2a2
+BKP|log|2026-10-04T23:34:32Z OK db=trading_production dir=/opt/donchian/backups/nightly/20261004T233254Z bytes=636735167 sha256=0475ea58f84d80bdd54c712621ccce82f1244984e3c365fac9fe41cf0b420c13
+BKP|log|2026-10-05T23:36:17Z OK db=trading_production dir=/opt/donchian/backups/nightly/20261005T233438Z bytes=637648076 sha256=b2b632924a29089cad4c0f96d683144dacb97a780f817539d14fa834b8ee8b61
+BKP|log|2026-10-06T23:32:06Z OK db=trading_production dir=/opt/donchian/backups/nightly/20261006T233028Z bytes=638386802 sha256=fba09062ef146526cc63227886cef060890fd0ad56e954d45bae5fca492743e7
+BKP|dir_listing=20261003T233254Z 20261004T233254Z 20261005T233438Z 20261006T233028Z 
+BKP|unit|Result=success
+BKP|unit|ExecMainExitTimestamp=Tue 2026-10-06 23:32:06 UTC
+BKP|unit|ExecMainStatus=0
+#### capture
+CAPTURE|run/obs/snap/registry/activation|0/0/0/0/0
+CAPTURE|ledger_rows_with_observation_id|0
+CAPTURE|env_RESEARCH_CAPTURE_ENABLED_keys=0

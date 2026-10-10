@@ -1,0 +1,125 @@
+{
+  "strategy": {
+    "id": 4,
+    "key": "gamma_empty",
+    "version": "v1",
+    "display_name": "gamma_empty",
+    "description": "t",
+    "registered_at": "2026-10-04T13:57:59.787409+03:00"
+  },
+  "definitions_version": "2026-10-04.1",
+  "min_sample_size": 5,
+  "dimensions": {
+    "direction": {
+      "strategy_id": 4,
+      "dimension": "direction",
+      "label": "Direction",
+      "state": "no_data",
+      "definitions_version": "2026-10-04.1",
+      "groups": [],
+      "truncated": false
+    },
+    "exit": {
+      "strategy_id": 4,
+      "dimension": "exit",
+      "label": "Exit type",
+      "state": "no_data",
+      "definitions_version": "2026-10-04.1",
+      "groups": [],
+      "truncated": false
+    },
+    "quality_grade": {
+      "strategy_id": 4,
+      "dimension": "quality_grade",
+      "label": "Quality grade (at signal time)",
+      "state": "no_data",
+      "definitions_version": "2026-10-04.1",
+      "groups": [],
+      "truncated": false
+    },
+    "sector": {
+      "strategy_id": 4,
+      "dimension": "sector",
+      "label": "Sector (at signal time)",
+      "state": "no_data",
+      "definitions_version": "2026-10-04.1",
+      "groups": [],
+      "truncated": false
+    },
+    "signal_month": {
+      "strategy_id": 4,
+      "dimension": "signal_month",
+      "label": "Signal month",
+      "state": "no_data",
+      "definitions_version": "2026-10-04.1",
+      "groups": [],
+      "truncated": false
+    },
+    "holding_bars": {
+      "strategy_id": 4,
+      "dimension": "holding_bars",
+      "label": "Holding period (trading bars)",
+      "state": "no_data",
+      "definitions_version": "2026-10-04.1",
+      "groups": [],
+      "truncated": false
+    },
+    "model_scored": {
+      "strategy_id": 4,
+      "dimension": "model_scored",
+      "label": "Scored by a validated model",
+      "state": "no_data",
+      "definitions_version": "2026-10-04.1",
+      "groups": [],
+      "truncated": false
+    },
+    "market_regime": {
+      "strategy_id": 4,
+      "dimension": "market_regime",
+      "label": "Market regime at signal",
+      "state": "not_available",
+      "requires": "market_snapshot rows (migration 24) joined by session, observed provenance only",
+      "groups": []
+    },
+    "volatility_regime": {
+      "strategy_id": 4,
+      "dimension": "volatility_regime",
+      "label": "Volatility regime at signal",
+      "state": "not_available",
+      "requires": "market_snapshot (migration 24)",
+      "groups": []
+    },
+    "relative_strength": {
+      "strategy_id": 4,
+      "dimension": "relative_strength",
+      "label": "Relative strength at signal",
+      "state": "not_available",
+      "requires": "sector_snapshot / feature_snapshot (migrations 22, 24)",
+      "groups": []
+    },
+    "earnings_proximity": {
+      "strategy_id": 4,
+      "dimension": "earnings_proximity",
+      "label": "Earnings proximity",
+      "state": "not_available",
+      "requires": "market_event (migration 25) with a known_at earlier than the signal",
+      "groups": []
+    },
+    "catalyst": {
+      "strategy_id": 4,
+      "dimension": "catalyst",
+      "label": "Catalyst type",
+      "state": "not_available",
+      "requires": "a versioned catalyst classification of PIT-safe events",
+      "groups": []
+    },
+    "ml_score_bucket": {
+      "strategy_id": 4,
+      "dimension": "ml_score_bucket",
+      "label": "ML score bucket",
+      "state": "not_available",
+      "requires": "the score itself -- signal_ledger stores only the model version, not the probability",
+      "groups": []
+    }
+  }
+}

@@ -472,6 +472,18 @@ except ImportError as e:
 except Exception as e:
     logger.error(f"❌ Error including strategy intelligence router: {e}")
 
+# Generic strategy performance API (read-only: summary, outcomes, conditional breakdowns for ANY strategy/version,
+# computed by mechanism/strategy_analytics; unavailable dimensions answer not_available)
+try:
+    from routers.strategy_performance import strategy_performance_router
+
+    app.include_router(strategy_performance_router)
+    logger.info("✅ Strategy performance router included successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  Strategy performance router not available: {e}")
+except Exception as e:
+    logger.error(f"❌ Error including strategy performance router: {e}")
+
 
 # Import and include the Market Intelligence router (internal, read-only: session market regime and sector / relative-strength
 # snapshots from mechanism/market_intelligence; answers `available: false` until migrations 24/25 are applied)

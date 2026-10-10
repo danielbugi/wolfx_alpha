@@ -1,0 +1,159 @@
+#### pipeline lifecycle 2026-10-05T20:00:00Z 2026-10-07T00:00:00Z
+JRN|unit=donchian-pipeline.service preset=lifecycle since=2026-10-05T20:00:00Z until=2026-10-07T00:00:00Z
+JRN|unit_lines_in_window=436384
+JRN|2026-10-05T20:45:29+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3273426]: Started: 2026-10-05 20:45:29
+JRN|2026-10-05T20:59:58+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3273426]: ❌ Failed updates: 0
+JRN|2026-10-05T20:59:59+00:00 ubuntu-8gb-nbg1-2 systemd[1]: donchian-pipeline.service: Main process exited, code=exited, status=1/FAILURE
+JRN|2026-10-05T20:59:59+00:00 ubuntu-8gb-nbg1-2 systemd[1]: donchian-pipeline.service: Failed with result 'exit-code'.
+JRN|2026-10-05T20:59:59+00:00 ubuntu-8gb-nbg1-2 systemd[1]: Failed to start donchian-pipeline.service - First Light: full daily pipeline (docker compose run --rm pipeline).
+JRN|2026-10-05T22:00:34+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: Started: 2026-10-05 22:00:34
+JRN|2026-10-05T22:09:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: ❌ Failed updates: 0
+JRN|2026-10-05T22:11:44+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: ❌ Failed updates: 68
+JRN|2026-10-05T22:13:47+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: ❌ Failed updates: 154
+JRN|2026-10-05T22:21:14+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 22:21:14,195 - ERROR - Error fetching company info for BRK/A: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-05T22:21:14+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 22:21:14,196 - WARNING - Function fetch_company_info attempt 1 failed: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}. Retrying in 2.0s...
+JRN|2026-10-05T22:21:16+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 22:21:16,971 - ERROR - Error fetching company info for BRK/A: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-05T22:21:16+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 22:21:16,971 - WARNING - Function fetch_company_info attempt 2 failed: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}. Retrying in 4.0s...
+JRN|2026-10-05T22:21:21+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 22:21:21,548 - ERROR - Error fetching company info for BRK/A: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-05T22:21:21+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 22:21:21,549 - WARNING - Function fetch_company_info attempt 3 failed: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}. Retrying in 8.0s...
+JRN|2026-10-05T22:21:30+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 22:21:30,327 - ERROR - Error fetching company info for BRK/A: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-05T22:21:30+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 22:21:30,328 - ERROR - Function fetch_company_info failed after 3 retries: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-05T22:21:30+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 22:21:30,328 - ERROR - Error updating fundamentals for BRK/A: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-05T22:48:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 22:48:22,221 - INFO - Successfully updated fundamentals for OOMA (Quality Score: 54)
+JRN|2026-10-05T22:48:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 22:48:22,221 - INFO - ✅ Successfully completed fundamentals update for OOMA
+JRN|2026-10-05T23:05:16+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]:         ❌ Failed updates: 2
+JRN|2026-10-05T23:08:05+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]:         ❌ Failed updates: 136
+JRN|2026-10-05T23:15:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]:         ❌ Failed updates: 116
+JRN|2026-10-05T23:21:51+00:00 ubuntu-8gb-nbg1-2 systemd[1]: donchian-pipeline.service: Deactivated successfully.
+JRN|2026-10-05T23:21:51+00:00 ubuntu-8gb-nbg1-2 systemd[1]: Finished donchian-pipeline.service - First Light: full daily pipeline (docker compose run --rm pipeline).
+JRN|2026-10-05T23:21:51+00:00 ubuntu-8gb-nbg1-2 systemd[1]: donchian-pipeline.service: Consumed 17.491s CPU time.
+JRN|2026-10-06T20:45:54+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3553066]: Started: 2026-10-06 20:45:54
+JRN|2026-10-06T20:59:58+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3553066]: ❌ Failed updates: 0
+JRN|2026-10-06T20:59:59+00:00 ubuntu-8gb-nbg1-2 systemd[1]: donchian-pipeline.service: Main process exited, code=exited, status=1/FAILURE
+JRN|2026-10-06T20:59:59+00:00 ubuntu-8gb-nbg1-2 systemd[1]: donchian-pipeline.service: Failed with result 'exit-code'.
+JRN|2026-10-06T20:59:59+00:00 ubuntu-8gb-nbg1-2 systemd[1]: Failed to start donchian-pipeline.service - First Light: full daily pipeline (docker compose run --rm pipeline).
+JRN|2026-10-06T22:00:55+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: Started: 2026-10-06 22:00:55
+JRN|2026-10-06T22:09:44+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: ❌ Failed updates: 0
+JRN|2026-10-06T22:12:03+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: ❌ Failed updates: 64
+JRN|2026-10-06T22:14:10+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: ❌ Failed updates: 154
+JRN|2026-10-06T22:21:59+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 22:21:59,150 - ERROR - Error fetching company info for BRK/A: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-06T22:21:59+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 22:21:59,151 - WARNING - Function fetch_company_info attempt 1 failed: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}. Retrying in 2.0s...
+JRN|2026-10-06T22:22:02+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 22:22:02,454 - ERROR - Error fetching company info for BRK/A: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-06T22:22:02+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 22:22:02,455 - WARNING - Function fetch_company_info attempt 2 failed: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}. Retrying in 4.0s...
+JRN|2026-10-06T22:22:07+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 22:22:07,106 - ERROR - Error fetching company info for BRK/A: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-06T22:22:07+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 22:22:07,107 - WARNING - Function fetch_company_info attempt 3 failed: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}. Retrying in 8.0s...
+JRN|2026-10-06T22:22:15+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 22:22:15,867 - ERROR - Error fetching company info for BRK/A: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-06T22:22:15+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 22:22:15,868 - ERROR - Function fetch_company_info failed after 3 retries: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-06T22:22:15+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 22:22:15,868 - ERROR - Error updating fundamentals for BRK/A: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-06T22:50:26+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 22:50:26,756 - INFO - Successfully updated fundamentals for OOMA (Quality Score: 54)
+JRN|2026-10-06T22:50:26+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 22:50:26,756 - INFO - ✅ Successfully completed fundamentals update for OOMA
+JRN|2026-10-06T23:08:06+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]:         ❌ Failed updates: 2
+JRN|2026-10-06T23:11:16+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]:         ❌ Failed updates: 136
+JRN|2026-10-06T23:18:39+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]:         ❌ Failed updates: 116
+JRN|2026-10-06T23:24:55+00:00 ubuntu-8gb-nbg1-2 systemd[1]: donchian-pipeline.service: Deactivated successfully.
+JRN|2026-10-06T23:24:55+00:00 ubuntu-8gb-nbg1-2 systemd[1]: Finished donchian-pipeline.service - First Light: full daily pipeline (docker compose run --rm pipeline).
+JRN|2026-10-06T23:24:55+00:00 ubuntu-8gb-nbg1-2 systemd[1]: donchian-pipeline.service: Consumed 17.224s CPU time.
+JRN|end
+#### pipeline guards 2026-10-05T20:00:00Z 2026-10-07T00:00:00Z
+JRN|unit=donchian-pipeline.service preset=guards since=2026-10-05T20:00:00Z until=2026-10-07T00:00:00Z
+JRN|unit_lines_in_window=436384
+JRN|2026-10-05T23:15:24+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 23:15:24,436 - INFO - Universe guards mode: ACTIVE (session 2026-10-05 >= GUARDS_EFFECTIVE_FROM=2026-10-02)
+JRN|2026-10-05T23:16:20+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 23:16:20,050 - INFO - Universe guards: dropped 81/1397 symbols (illiquid, too little history, or a price discontinuity)
+JRN|2026-10-06T23:18:42+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 23:18:42,182 - INFO - Universe guards mode: ACTIVE (session 2026-10-06 >= GUARDS_EFFECTIVE_FROM=2026-10-02)
+JRN|2026-10-06T23:19:36+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 23:19:36,490 - INFO - Universe guards: dropped 78/1366 symbols (illiquid, too little history, or a price discontinuity)
+JRN|end
+#### pipeline errors 2026-10-05T20:00:00Z 2026-10-07T00:00:00Z
+JRN|unit=donchian-pipeline.service preset=errors since=2026-10-05T20:00:00Z until=2026-10-07T00:00:00Z
+JRN|unit_lines_in_window=436384
+JRN|2026-10-05T20:59:59+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3273426]: ERROR: Pipeline failed at step: price freshness check (the 2026-10-05 bar is not in yet - the session stays unmarked and the next pipeline attempt retries)
+JRN|2026-10-05T22:21:14+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 22:21:14,195 - ERROR - Error fetching company info for BRK/A: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-05T22:21:16+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 22:21:16,971 - ERROR - Error fetching company info for BRK/A: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-05T22:21:21+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 22:21:21,548 - ERROR - Error fetching company info for BRK/A: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-05T22:21:30+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 22:21:30,327 - ERROR - Error fetching company info for BRK/A: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-05T22:21:30+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 22:21:30,328 - ERROR - Function fetch_company_info failed after 3 retries: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-05T22:21:30+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 22:21:30,328 - ERROR - Error updating fundamentals for BRK/A: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-05T23:15:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 23:15:22,669 - WARNING - No ML models found - running without ML enhancement
+JRN|2026-10-05T23:16:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: Average ML Probability: n/a (no validated ML scores)
+JRN|2026-10-06T20:59:59+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3553066]: ERROR: Pipeline failed at step: price freshness check (the 2026-10-06 bar is not in yet - the session stays unmarked and the next pipeline attempt retries)
+JRN|2026-10-06T22:21:59+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 22:21:59,150 - ERROR - Error fetching company info for BRK/A: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-06T22:22:02+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 22:22:02,454 - ERROR - Error fetching company info for BRK/A: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-06T22:22:07+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 22:22:07,106 - ERROR - Error fetching company info for BRK/A: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-06T22:22:15+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 22:22:15,867 - ERROR - Error fetching company info for BRK/A: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-06T22:22:15+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 22:22:15,868 - ERROR - Function fetch_company_info failed after 3 retries: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-06T22:22:15+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 22:22:15,868 - ERROR - Error updating fundamentals for BRK/A: Failed to parse json response from Yahoo Finance: {'code': 'Not Found', 'description': 'HTTP 404 Not Found'}
+JRN|2026-10-06T23:18:40+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: 2026-10-06 23:18:40,085 - WARNING - No ML models found - running without ML enhancement
+JRN|2026-10-06T23:19:38+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3567935]: Average ML Probability: n/a (no validated ML scores)
+JRN|end
+#### pipeline funnel 2026-10-05T22:00:00Z 2026-10-05T23:30:00Z
+JRN|unit=donchian-pipeline.service preset=funnel since=2026-10-05T22:00:00Z until=2026-10-05T23:30:00Z
+JRN|unit_lines_in_window=220641
+JRN|2026-10-05T22:00:33+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]:  Container donchian-screener-postgres-1 Running
+JRN|2026-10-05T22:00:33+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]:  Container donchian-screener-postgres-1 Waiting
+JRN|2026-10-05T22:00:34+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]:  Container donchian-screener-postgres-1 Healthy
+JRN|2026-10-05T22:00:34+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]:  Container donchian-screener-pipeline-run-2d42af7d67ff Creating
+JRN|2026-10-05T22:00:34+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]:  Container donchian-screener-pipeline-run-2d42af7d67ff Created
+JRN|2026-10-05T22:00:34+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: [market_calendar] new US session 2026-10-05 (last processed: 2026-10-02) [calendar: cache]
+JRN|2026-10-05T23:15:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: Step 9/13: Running multi-timeframe screener...
+JRN|2026-10-05T23:15:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 23:15:22,668 - INFO - Combined Donchian Screener with ML Enhancement - ALL BUGS FIXED
+JRN|2026-10-05T23:15:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 23:15:22,669 - WARNING - No ML models found - running without ML enhancement
+JRN|2026-10-05T23:15:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 23:15:22,669 - WARNING - WARNING: ML model not available - will run without ML enhancement
+JRN|2026-10-05T23:15:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 23:15:22,669 - INFO - CombinedDonchianScreener ML Enhancement initialized
+JRN|2026-10-05T23:15:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 23:15:22,670 - INFO - Multi-Timeframe ML Screener initialized
+JRN|2026-10-05T23:15:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 23:15:22,671 - INFO - Executing FIXED query for daily breakout signals (session 2026-10-05)...
+JRN|2026-10-05T23:15:23+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 23:15:23,104 - INFO - Found 1397 daily breakout signals
+JRN|2026-10-05T23:15:23+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 23:15:23,105 - INFO - Signal breakdown: {'near_bearish': 697, 'bullish_breakout': 103, 'bearish_breakout': 155, 'near_bullish': 442}
+JRN|2026-10-05T23:15:23+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 23:15:23,107 - INFO - Found 1397 daily breakout signals
+JRN|2026-10-05T23:15:24+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 23:15:24,436 - INFO - Universe guards mode: ACTIVE (session 2026-10-05 >= GUARDS_EFFECTIVE_FROM=2026-10-02)
+JRN|2026-10-05T23:16:20+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 23:16:20,050 - INFO - Universe guards: dropped 81/1397 symbols (illiquid, too little history, or a price discontinuity)
+JRN|2026-10-05T23:16:20+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 23:16:20,051 - INFO - Applying ML enhancement to high-quality signals...
+JRN|2026-10-05T23:16:21+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 23:16:21,717 - INFO - ML enhancement completed: 888 signals processed
+JRN|2026-10-05T23:16:21+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 23:16:21,717 - INFO - Screener behaviour mode: NEW (universe_guards, combined_score_ranking, ml_unprocessed_fallback, ledger_integrity_refusals)
+JRN|2026-10-05T23:16:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: 2026-10-05 23:16:22,098 - INFO - Results saved to breakout_results/multi_timeframe_ml_enhanced_20261005_231621.json
+JRN|2026-10-05T23:16:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: ML Enhancement (CombinedDonchianScreener) imported from: /app/mechanism/ml_enhancement
+JRN|2026-10-05T23:16:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: Bullish Breakouts: 101.0
+JRN|2026-10-05T23:16:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: Bearish Breakouts: 142.0
+JRN|2026-10-05T23:16:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: Near Bullish: 417.0
+JRN|2026-10-05T23:16:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: Near Bearish: 656.0
+JRN|2026-10-05T23:16:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]:  1.    ABR | Bearish Breakout at $3.47 | Alignment: 100% (A) | ML: N/A
+JRN|2026-10-05T23:16:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]:  2.   ABSI | Bullish Breakout at $11.53 | Alignment: 100% (A) | ML: N/A
+JRN|2026-10-05T23:16:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]:  3.   ACRE | Bearish Breakout at $3.70 | Alignment: 100% (A) | ML: N/A
+JRN|2026-10-05T23:16:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]:  4.   AGNC | Bearish Breakout at $8.65 | Alignment: 100% (A) | ML: N/A
+JRN|2026-10-05T23:16:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]:  5.    AIV | Bearish Breakout at $1.88 | Alignment: 100% (A) | ML: N/A
+JRN|2026-10-05T23:16:22+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: SUCCESS: multi-timeframe screener completed
+JRN|2026-10-05T23:16:35+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: Cleared ml_breakout_dataset_v2 and price_discontinuities (own tables) for full rebuild
+JRN|2026-10-05T23:20:56+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]:   AUC bullish 0.6226 (n=68692) | bearish 0.6196 (n=49756)
+JRN|2026-10-05T23:20:56+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]:   AUC vs plan profit within direction: bullish 0.5063 | bearish 0.4985
+JRN|2026-10-05T23:20:56+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: Top features: vol_ratio_50 0.2626, vol_ratio_10 0.1363, is_bullish 0.0942, rsi_14 0.038, bollinger_pos 0.0333, atr_pct 0.0296, ret_5d 0.0281, gap_pct 0.0234
+JRN|2026-10-05T23:20:56+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: NOT PROMOTED (gate failed: plan_profit_auc_within_direction). The live screener keeps whatever model (if any) it already had.
+JRN|2026-10-05T23:20:56+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: Report: /app/ml_training/models/candidates/report_momentum_20261005_2320.json
+JRN|2026-10-05T23:21:50+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]:   AUC bullish 0.5194 (n=68692) | bearish 0.4933 (n=49756)
+JRN|2026-10-05T23:21:50+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]:   AUC vs plan profit within direction: bullish 0.5194 | bearish 0.4933
+JRN|2026-10-05T23:21:50+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: NOT PROMOTED (gate failed: holdout_auc, over_direction_baseline, top_decile_lift, plan_profit_auc_within_direction). The live screener keeps whatever model (if any) it already had.
+JRN|2026-10-05T23:21:50+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: Report: /app/ml_training/models/candidates/report_plan_profit_20261005_2321.json
+JRN|2026-10-05T23:21:51+00:00 ubuntu-8gb-nbg1-2 run_pipeline.sh[3288441]: [market_calendar] 'pipeline' marked processed through 2026-10-05
+JRN|end
+#### eval lifecycle 2026-10-03T10:00:00Z 2026-10-07T04:00:00Z
+REFUSED: window must be >0 and <=36h
+#### eval errors 2026-10-03T10:00:00Z 2026-10-07T04:00:00Z
+REFUSED: window must be >0 and <=36h
+#### notice-evening lifecycle 2026-10-03T10:00:00Z 2026-10-07T04:00:00Z
+REFUSED: window must be >0 and <=36h
+#### notice-evening errors 2026-10-03T10:00:00Z 2026-10-07T04:00:00Z
+REFUSED: window must be >0 and <=36h
+#### notice-evening delivery 2026-10-05T16:50:00Z 2026-10-05T17:10:00Z
+JRN|unit=donchian-notice-evening.service preset=delivery since=2026-10-05T16:50:00Z until=2026-10-05T17:10:00Z
+JRN|unit_lines_in_window=17
+JRN|2026-10-05T17:00:16+00:00 ubuntu-8gb-nbg1-2 systemd[1]: Starting donchian-notice-evening.service - First Light: evening channel notice, slot 2 (matches the disabled Windows FirstLight-4-Notices-Evening task)...
+JRN|2026-10-05T17:00:16+00:00 ubuntu-8gb-nbg1-2 run_channel_sender.sh[3233737]: 2026-10-05T17:00:16Z channel-sender starting: mechanism/alerts/send_channel_notices.py --slot 2 --to prod --send (mechanism sha=cfd83f72f960)
+JRN|2026-10-05T17:00:17+00:00 ubuntu-8gb-nbg1-2 run_channel_sender.sh[3233754]:  Container donchian-screener-channel-sender-run-b06cd00a2b43 Creating
+JRN|2026-10-05T17:00:17+00:00 ubuntu-8gb-nbg1-2 run_channel_sender.sh[3233754]:  Container donchian-screener-channel-sender-run-b06cd00a2b43 Created
+JRN|2026-10-05T17:00:19+00:00 ubuntu-8gb-nbg1-2 run_channel_sender.sh[3233754]: SENT 1 notices [assistant] to PROD (slot 2, 2026-10-05).
+JRN|2026-10-05T17:00:19+00:00 ubuntu-8gb-nbg1-2 run_channel_sender.sh[3233867]: 2026-10-05T17:00:19Z channel-sender OK: mechanism/alerts/send_channel_notices.py (mechanism sha=cfd83f72f960)
+JRN|2026-10-05T17:00:19+00:00 ubuntu-8gb-nbg1-2 systemd[1]: Finished donchian-notice-evening.service - First Light: evening channel notice, slot 2 (matches the disabled Windows FirstLight-4-Notices-Evening task).
+JRN|end
+#### notice-midday errors 2026-10-03T10:00:00Z 2026-10-07T04:00:00Z
+REFUSED: window must be >0 and <=36h
+#### earnings-today errors 2026-10-03T10:00:00Z 2026-10-07T04:00:00Z
+REFUSED: window must be >0 and <=36h
+#### postmarket-retry errors 2026-10-03T10:00:00Z 2026-10-07T04:00:00Z
+REFUSED: window must be >0 and <=36h

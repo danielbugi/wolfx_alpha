@@ -45,10 +45,13 @@ BEGIN
     END LOOP;
     -- Market Intelligence tables (migrations 24 / 25) are included when present: append-only, runtime INSERT/SELECT, admin SELECT only.
     mi := ARRAY(SELECT x FROM unnest(ARRAY['universe_snapshot', 'market_snapshot', 'sector_snapshot', 'market_event',
-                                           'market_event_revision']) x WHERE to_regclass(x) IS NOT NULL);
+                                           'market_event_revision', 'forward_return_label',
+                                           'source_observation', 'source_poll', 'catalyst_classification', 'stock_relative_strength', 'dataset_manifest', 'experiment_registration', 'experiment_result', 'sector_observation', 'sector_poll', 'sector_reconstruction', 'price_discontinuity_scan']) x WHERE to_regclass(x) IS NOT NULL);
     allt := allt || mi;
     imm := imm || mi;
-    fns := fns || ARRAY(SELECT x FROM unnest(ARRAY['research_market_guard()', 'research_market_event_stamp()']) x
+    fns := fns || ARRAY(SELECT x FROM unnest(ARRAY['research_market_guard()', 'research_market_event_stamp()', 'research_label_guard()',
+                                           'research_label_consistency()',
+                                           'research_observation_guard()', 'research_observation_stamp()', 'research_poll_stamp()', 'research_classification_guard()', 'research_classification_consistency()', 'research_rs_guard()', 'research_rs_stamp()', 'research_registry_guard()', 'research_registry_stamp()', 'research_registry_consistency()', 'research_sector_guard()', 'research_sector_enc(text)', 'research_sector_row_hash(text,text,integer,text,text,text,timestamptz,text,text,text)', 'research_sector_obs_stamp()', 'research_sector_poll_stamp()', 'research_sector_recon_stamp()', 'research_discontinuity_scan_guard()', 'research_discontinuity_scan_stamp()', 'research_price_input_fingerprint(date)', 'research_discontinuity_result_fingerprint()']) x
                         WHERE to_regprocedure(x) IS NOT NULL);
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'donchian_owner' AND rolcanlogin) THEN
         RAISE EXCEPTION 'FAIL donchian_owner must be NOLOGIN';
@@ -129,6 +132,48 @@ BEGIN
         END IF;
         IF NOT has_function_privilege('donchian_research_admin', f, 'EXECUTE') THEN
             RAISE EXCEPTION 'FAIL donchian_research_admin cannot EXECUTE %', f;
+        END IF;
+    END LOOP;
+    FOREACH f IN ARRAY ARRAY['research_price_input_fingerprint(date)', 'research_discontinuity_result_fingerprint()'] LOOP
+        IF to_regprocedure(f) IS NULL THEN CONTINUE; END IF;                         -- migration 32 not applied: nothing to check
+        IF has_function_privilege('public', f, 'EXECUTE') THEN
+            RAISE EXCEPTION 'FAIL PUBLIC may EXECUTE %', f;
+        END IF;
+        IF NOT has_function_privilege('donchian_app', f, 'EXECUTE') OR NOT has_function_privilege('donchian_research_admin', f, 'EXECUTE') THEN
+            RAISE EXCEPTION 'FAIL the runtime role and the admin group must EXECUTE % (the scan-evidence trigger and the readers call it)', f;
+        END IF;
+    END LOOP;
+    FOREACH f IN ARRAY ARRAY['research_sector_enc(text)', 'research_sector_row_hash(text,text,integer,text,text,text,timestamptz,text,text,text)'] LOOP
+        IF to_regprocedure(f) IS NULL THEN CONTINUE; END IF;                         -- migration 31 not applied: nothing to check
+        IF has_function_privilege('public', f, 'EXECUTE') THEN
+            RAISE EXCEPTION 'FAIL PUBLIC may EXECUTE %', f;
+        END IF;
+        IF has_function_privilege('donchian_research_admin', f, 'EXECUTE') THEN
+            RAISE EXCEPTION 'FAIL the admin group may EXECUTE % (the grant is for the runtime role only)', f;
+        END IF;
+        IF NOT has_function_privilege('donchian_app', f, 'EXECUTE') THEN
+            RAISE EXCEPTION 'FAIL the runtime role cannot EXECUTE % (research_sector_obs_stamp() calls it as the inserting role: every sector_observation insert would fail)', f;
+        END IF;
+    END LOOP;
+    -- Generic dependency audit: every research_* function that a research trigger function CALLS (directly or through other research_* functions) must be executable by
+    -- the runtime role, because the trigger runs with the inserting role's privileges. (The trigger function's own EXECUTE right is not needed.)
+    FOR obj IN
+        WITH RECURSIVE trg AS (
+            SELECT DISTINCT p.oid FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid JOIN pg_class c ON c.oid = t.tgrelid
+            WHERE NOT t.tgisinternal AND c.relnamespace = to_regnamespace(sch) AND p.proname LIKE 'research\_%'),
+        helpers AS (SELECT p.oid, p.proname FROM pg_proc p WHERE p.pronamespace = to_regnamespace(sch) AND p.proname LIKE 'research\_%'),
+        chain(root, fn, depth) AS (
+            SELECT oid, oid, 0 FROM trg
+            UNION
+            SELECT ch.root, h.oid, ch.depth + 1 FROM chain ch JOIN pg_proc src ON src.oid = ch.fn
+            JOIN helpers h ON h.oid <> ch.fn AND src.prosrc ILIKE '%' || h.proname || '(%' WHERE ch.depth < 8)
+        SELECT DISTINCT fn::regprocedure::text AS sig, fn FROM chain WHERE depth > 0
+    LOOP
+        IF NOT has_function_privilege('donchian_app', obj.fn, 'EXECUTE') THEN
+            RAISE EXCEPTION 'FAIL a research trigger calls % but the runtime role cannot EXECUTE it (every insert that fires that trigger would fail)', obj.sig;
+        END IF;
+        IF has_function_privilege('public', obj.fn, 'EXECUTE') THEN
+            RAISE EXCEPTION 'FAIL PUBLIC may EXECUTE trigger helper %', obj.sig;
         END IF;
     END LOOP;
     IF NOT has_column_privilege('donchian_app', 'candidate_capture_run', 'status', 'UPDATE') THEN
@@ -222,7 +267,9 @@ BEGIN
         BEGIN EXECUTE format('TRUNCATE %I', t); RAISE EXCEPTION 'FAIL TRUNCATE on % was allowed', t;
         EXCEPTION WHEN insufficient_privilege THEN refused := refused + 1; END;
     END LOOP;
-    FOREACH t IN ARRAY ARRAY['universe_snapshot', 'market_snapshot', 'sector_snapshot', 'market_event', 'market_event_revision'] LOOP
+    FOREACH t IN ARRAY ARRAY['universe_snapshot', 'market_snapshot', 'sector_snapshot', 'market_event', 'market_event_revision',
+                             'forward_return_label',
+                             'source_observation', 'source_poll', 'catalyst_classification', 'stock_relative_strength', 'dataset_manifest', 'experiment_registration', 'experiment_result', 'sector_observation', 'sector_poll', 'sector_reconstruction', 'price_discontinuity_scan'] LOOP
         IF to_regclass(t) IS NULL THEN CONTINUE; END IF;
         expected := expected + 3;
         SELECT attname INTO mc FROM pg_attribute WHERE attrelid = to_regclass(t) AND attnum > 0 AND NOT attisdropped ORDER BY attnum LIMIT 1;

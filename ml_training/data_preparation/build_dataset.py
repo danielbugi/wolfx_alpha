@@ -18,6 +18,7 @@ import os
 import sys
 import time
 import warnings
+from datetime import date, datetime, timezone
 
 import numpy as np
 import pandas as pd
@@ -82,6 +83,50 @@ def process_symbol(symbol, px, sector, start_date):
     return out, disc
 
 
+def symbol_discontinuities(symbol, px):
+    """The discontinuities of one symbol, by EXACTLY the rule process_symbol applies (same normalisation, same minimum history, same detector), without
+    computing any dataset row. The scan-only mode uses this; a test pins that the two produce the identical set."""
+    px = px.dropna(subset=["close"]).drop_duplicates("date").sort_values("date").reset_index(drop=True)
+    if len(px) < MIN_BAR_INDEX + pf.PLAN_HORIZON:
+        return pd.DataFrame()
+    return pf.find_discontinuities(px).assign(symbol=symbol)
+
+
+# A discontinuity is a fact with two times: `date` (when it happened) and `detected_at` (the first time THIS SYSTEM saw it). Only the second says what a
+# live run could have known, so a rebuild must never move it for a row it merely re-detects. It moves only when the row is genuinely NEW (a fresh insert)
+# or MATERIALLY CHANGED (the provider restated the bar: a different fact is known from now on). The adjusted-price jitter of ordinary dividends leaves
+# the ratio of two adjacent closes unchanged to ~1e-12, so the tolerance below cannot be tripped by it. A ratio that is not a finite number (Infinity when the
+# previous close is 0, NaN) is compared FIRST by equality: numeric NaN/Infinity make the tolerance arithmetic NaN, which compares as 'greater' and would re-stamp the
+# row on every rebuild (found by the production-data rehearsal: 64 of the 1,040 legacy rows have an Infinity ratio). See docs/research/LAB_DISCONTINUITY_PROVENANCE.md.
+RATIO_RELATIVE_TOLERANCE = 1e-4
+_UPSERT_DISCONTINUITIES = f"""
+    INSERT INTO price_discontinuities (symbol, date, kind, prev_close, close, ratio, detected_at) VALUES %s
+    ON CONFLICT (symbol, date, kind) DO UPDATE SET prev_close = EXCLUDED.prev_close, close = EXCLUDED.close, ratio = EXCLUDED.ratio,
+        detected_at = CASE
+            WHEN price_discontinuities.ratio IS NOT DISTINCT FROM EXCLUDED.ratio THEN price_discontinuities.detected_at     -- the same fact, NULL / NaN / +-Infinity included
+            WHEN price_discontinuities.ratio IS NULL OR EXCLUDED.ratio IS NULL THEN clock_timestamp()
+            WHEN price_discontinuities.ratio IN ('NaN', 'Infinity', '-Infinity') OR EXCLUDED.ratio IN ('NaN', 'Infinity', '-Infinity') THEN clock_timestamp()
+            WHEN abs(EXCLUDED.ratio - price_discontinuities.ratio) > {RATIO_RELATIVE_TOLERANCE} * greatest(abs(price_discontinuities.ratio), 1e-12) THEN clock_timestamp()
+            ELSE price_discontinuities.detected_at END"""
+
+
+def upsert_discontinuities(cur, rows):
+    """rows: (symbol, date, kind, prev_close, close, ratio). A new row is stamped with the real detection instant (clock_timestamp(), not the
+    transaction start, which can precede the detection); an existing row keeps its stamp unless materially changed."""
+    execute_values(cur, _UPSERT_DISCONTINUITIES, rows, template="(%s, %s, %s, %s, %s, %s, clock_timestamp())")
+
+
+def prune_discontinuities(cur, seen):
+    """Delete the rows a COMPLETE rebuild no longer detects (the provider restated them away). A later re-appearance is a new fact with a new stamp.
+    Never called for a partial run (--test / --limit) or before every chunk succeeded."""
+    cur.execute("CREATE TEMP TABLE _disc_seen (symbol VARCHAR(20), date DATE, kind VARCHAR(20)) ON COMMIT DROP")
+    if seen:
+        execute_values(cur, "INSERT INTO _disc_seen VALUES %s", sorted(seen))
+    cur.execute("DELETE FROM price_discontinuities d WHERE NOT EXISTS "
+                "(SELECT 1 FROM _disc_seen s WHERE s.symbol = d.symbol AND s.date = d.date AND s.kind = d.kind)")
+    return cur.rowcount
+
+
 def save(conn, ds: pd.DataFrame, disc: pd.DataFrame):
     cur = conn.cursor()
     nn = lambda v: None if pd.isna(v) else v  # noqa: E731
@@ -102,24 +147,150 @@ def save(conn, ds: pd.DataFrame, disc: pd.DataFrame):
     if len(disc):
         rows = [(r.symbol, pd.Timestamp(r.date).date(), r.kind, nn(r.prev_close), nn(r.close), nn(r.ratio))
                 for r in disc.itertuples()]
-        execute_values(cur, """
-            INSERT INTO price_discontinuities (symbol, date, kind, prev_close, close, ratio) VALUES %s
-            ON CONFLICT (symbol, date, kind) DO UPDATE SET prev_close=EXCLUDED.prev_close,
-                close=EXCLUDED.close, ratio=EXCLUDED.ratio, detected_at=NOW()""", rows)
+        upsert_discontinuities(cur, rows)
     conn.commit()
 
 
-def main():
-    ap = argparse.ArgumentParser(description="Build ml_breakout_dataset_v2 from stock_prices only")
+SCAN_WRITER = "build_dataset"
+SCAN_CODE_REF = "ml_training/data_preparation/build_dataset.py#scan@v1"
+SCAN_ONLY_CODE_REF = "ml_training/data_preparation/build_dataset.py#scan_only@v1"
+EXIT_REFUSED_SESSION, EXIT_NO_CALENDAR, EXIT_SCAN_REFUSED = 3, 5, 1
+
+
+def latest_completed_session():
+    """The latest completed US market session on the market calendar (the same function the pipeline's gate and the collector use). Isolated so a test can
+    inject a session; raises when no trustworthy calendar is available."""
+    sys.path.insert(0, os.path.join(ROOT, "mechanism"))
+    from shared import market_calendar as mc
+    sessions, _source = mc.get_sessions()
+    d = mc.latest_completed(sessions, datetime.now(timezone.utc))
+    if d is None:
+        raise RuntimeError("no completed session on the calendar")
+    return d
+
+
+def record_failed_scan(session, started_at, reason, run_id, code_ref=SCAN_CODE_REF):
+    """Best effort, on its own connection (the scan's own transaction may be unusable). A failed scan claims no fingerprint, so it can never satisfy a reader."""
+    try:
+        c = psycopg2.connect(**ml_config.db_config)
+        c.cursor().execute(
+            "INSERT INTO price_discontinuity_scan (session_date, status, failure_reason, started_at, run_id, writer, code_ref) "
+            "VALUES (%s, 'failed', %s, %s, %s, %s, %s)", (session, reason, started_at, run_id, SCAN_WRITER, code_ref))
+        c.commit()
+        c.close()
+    except Exception as e:  # noqa: BLE001
+        print(f"WARNING: could not record the failed scan ({reason}): {type(e).__name__}", file=sys.stderr)
+
+
+def finish_scan(cur, session, started_at, run_id, input_claim, code_ref=SCAN_CODE_REF):
+    """The last step of a COMPLETE scan, inside the caller's transaction (the prune is already done): claim the price input fingerprinted at the START of
+    the run and the discontinuity table as it is now. The database recomputes both and refuses the row if either differs (prices changed during the run, wrong
+    session, wrong claim). A retry with an identical input and result is a no-op (ON CONFLICT DO NOTHING keeps the first completion time).
+    Returns the new row's id, or None when an identical scan already existed."""
+    cur.execute("SELECT n_rows, fingerprint FROM research_discontinuity_result_fingerprint()")
+    n_found, result_fp = cur.fetchone()
+    newest, n_symbols, n_rows, input_fp = input_claim
+    cur.execute(
+        "INSERT INTO price_discontinuity_scan (session_date, status, newest_bar, n_symbols, n_price_rows, input_fingerprint, n_discontinuities, result_fingerprint, "
+        "started_at, run_id, writer, code_ref) VALUES (%s, 'complete', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        "ON CONFLICT (session_date, input_fingerprint, result_fingerprint) WHERE status = 'complete' DO NOTHING RETURNING id",
+        (session, newest, n_symbols, n_rows, input_fp, n_found, result_fp, started_at, run_id, SCAN_WRITER, code_ref))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
+def _parser():
+    ap = argparse.ArgumentParser(description="Build ml_breakout_dataset_v2 from stock_prices only, or (--scan-only) refresh the price-discontinuity scan evidence")
     ap.add_argument("--test", nargs="+", help="only these symbols")
     ap.add_argument("--limit", type=int, help="first N symbols (debug)")
     ap.add_argument("--start-date", default="2018-01-01", help="earliest breakout date to include")
     ap.add_argument("--replace", action="store_true",
-                    help="delete existing ml_breakout_dataset_v2 rows (and re-detect discontinuities) first")
-    args = ap.parse_args()
+                    help="delete existing ml_breakout_dataset_v2 rows first and, after a complete run, drop discontinuities no longer detected "
+                         "(rows still detected keep their first-detected timestamp)")
+    ap.add_argument("--session", help="the US market session this run scans: YYYY-MM-DD, or 'latest-completed' (resolved from the market calendar). With a complete "
+                                      "--replace run, or --scan-only, it records the append-only price_discontinuity_scan evidence the collector requires; without "
+                                      "it no evidence is recorded (a manual rebuild)")
+    ap.add_argument("--scan-only", action="store_true",
+                    help="detect discontinuities and record the scan evidence ONLY: the ML dataset is never read, rebuilt, truncated or altered. Requires --session; the "
+                         "session must be the latest completed market session. Not combinable with --replace / --test / --limit")
+    return ap
+
+
+def main(argv=None):
+    ap = _parser()
+    args = ap.parse_args(argv)
+    if args.scan_only:
+        if args.replace or args.test or args.limit:
+            ap.error("--scan-only cannot be combined with --replace, --test or --limit (it never touches the dataset and always scans the whole price table)")
+        if not args.session:
+            ap.error("--scan-only requires --session (an explicit date or 'latest-completed')")
+
+    session = None
+    if args.session:
+        if args.session == "latest-completed" or args.scan_only:
+            try:
+                latest = latest_completed_session()
+            except Exception as e:  # noqa: BLE001
+                print(f"FATAL: no trustworthy market calendar ({type(e).__name__}): refusing to choose a session", file=sys.stderr)
+                sys.exit(EXIT_NO_CALENDAR)
+        if args.session == "latest-completed":
+            session = latest
+        else:
+            session = date.fromisoformat(args.session)
 
     conn = psycopg2.connect(**ml_config.db_config)
     cur = conn.cursor()
+    complete_run = bool(args.scan_only or (args.replace and not args.test and not args.limit))
+    if session is not None and not complete_run:
+        print("NOTE: --session is only used by a complete --replace run or --scan-only (no --test / --limit); no scan evidence will be recorded")
+        session = None
+    code_ref = SCAN_ONLY_CODE_REF if args.scan_only else SCAN_CODE_REF
+    scan = None                                          # (started_at, run_id, input_claim, code_ref) once the scan is open
+    if complete_run and session is None:
+        print("NOTE: no --session given: price_discontinuity_scan evidence will NOT be recorded for this run")
+    if complete_run and session is not None:
+        cur.execute("SELECT clock_timestamp()")
+        started_at = cur.fetchone()[0]
+        run_id = f"dsc-{session.isoformat()}-{started_at.astimezone(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')}"
+        if args.scan_only and session != latest:
+            conn.commit()
+            print(f"FATAL: the scan session {session} is not the latest completed market session {latest}: refusing to scan", file=sys.stderr)
+            record_failed_scan(session, started_at, "session_not_latest_completed", run_id, code_ref)
+            sys.exit(EXIT_REFUSED_SESSION)
+        cur.execute("SELECT newest_bar, n_symbols, n_price_rows, fingerprint FROM research_price_input_fingerprint(%s)", (session,))
+        claim = cur.fetchone()
+        cur.execute("SELECT max(date) FROM stock_prices")                       # the detector reads the whole table, so the session's bar must be the newest in it
+        newest_all = cur.fetchone()[0]
+        conn.commit()
+        if claim[0] != session or newest_all != session:
+            print(f"FATAL: the newest stored price bar is {newest_all}, not the scan session {session}: refusing to scan "
+                  f"(the session is not loaded, or a later bar is mixed in)", file=sys.stderr)
+            record_failed_scan(session, started_at, "price_data_not_at_session", run_id, code_ref)
+            sys.exit(EXIT_REFUSED_SESSION)
+        scan = (started_at, run_id, claim, code_ref)
+        print(f"Scan {run_id}{' (scan-only)' if args.scan_only else ''}: session {session}, {claim[2]} price rows, {claim[1]} symbols, "
+              f"input fingerprint {claim[3][:16]}")
+    try:
+        _build(args, conn, cur, scan, session)
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        try:
+            conn.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        if scan is not None:
+            record_failed_scan(session, scan[0], "scan_exception", scan[1], scan[3])
+        print(f"FATAL: {type(e).__name__}: {e}", file=sys.stderr)
+        raise
+    finally:
+        try:
+            conn.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _build(args, conn, cur, scan, session):
     if args.test:
         symbols = sorted(args.test)
     else:
@@ -127,31 +298,54 @@ def main():
         symbols = [r[0] for r in cur.fetchall()]
         if args.limit:
             symbols = symbols[:args.limit]
-    if args.replace and not args.test:
+    if args.replace and not args.test and not args.scan_only:
         cur.execute("DELETE FROM ml_breakout_dataset_v2")
-        cur.execute("DELETE FROM price_discontinuities")
         conn.commit()
-        print("Cleared ml_breakout_dataset_v2 and price_discontinuities (own tables) for full rebuild")
-    sectors = load_sectors(conn)
+        print("Cleared ml_breakout_dataset_v2 for full rebuild (price_discontinuities is NOT cleared: it keeps first-detection provenance)")
+    sectors = {} if args.scan_only else load_sectors(conn)        # scan-only never reads the dataset inputs it does not need
     start = pd.Timestamp(args.start_date)
     t0, n_rows, n_disc, n_sym = time.time(), 0, 0, 0
+    seen = set()
     for i in range(0, len(symbols), 150):
         chunk = symbols[i:i + 150]
         prices = load_prices(conn, chunk)
         parts, discs = [], []
         for sym, px in prices.groupby("symbol", sort=False):
-            ds, disc = process_symbol(sym, px, sectors.get(sym), start)
+            if args.scan_only:
+                disc = symbol_discontinuities(sym, px)
+                ds = None
+            else:
+                ds, disc = process_symbol(sym, px, sectors.get(sym), start)
             if ds is not None:
                 parts.append(ds)
             if len(disc):
                 discs.append(disc)
         ds_all = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
         disc_all = pd.concat(discs, ignore_index=True) if discs else pd.DataFrame()
-        save(conn, ds_all, disc_all)
+        save(conn, ds_all, disc_all)                              # with an empty dataset frame this writes only price_discontinuities
+        seen.update((r.symbol, pd.Timestamp(r.date).date(), r.kind) for r in disc_all.itertuples())
         n_rows += len(ds_all); n_disc += len(disc_all); n_sym += len(chunk)
         print(f"  {n_sym}/{len(symbols)} symbols | {n_rows} samples | {n_disc} discontinuities | {time.time() - t0:.0f}s", flush=True)
-    print(f"Done: {n_rows} samples, {n_disc} discontinuities recorded, feature_set={pf.FEATURE_SET_VERSION}")
-    conn.close()
+    if (args.replace or args.scan_only) and not args.test and not args.limit:
+        pruned = prune_discontinuities(cur, seen)
+        print(f"Pruned {pruned} discontinuities no longer detected; {len(seen)} detected rows kept their first-detected timestamp")
+        if scan is not None:
+            started_at, run_id, claim, code_ref = scan
+            try:
+                wrote = finish_scan(cur, session, started_at, run_id, claim, code_ref)
+                conn.commit()                                   # the prune and the scan evidence become visible together, or not at all
+            except psycopg2.Error as e:
+                conn.rollback()
+                print(f"FATAL: the scan evidence was REFUSED by the database ({getattr(e, 'pgcode', None)}): {str(e).splitlines()[0]}", file=sys.stderr)
+                record_failed_scan(session, started_at, "input_changed_during_scan", run_id, code_ref)
+                sys.exit(EXIT_SCAN_REFUSED)
+            print(f"Scan evidence {'recorded' if wrote is not None else 'already recorded for this exact input and result (no new row)'}: session {session}")
+        else:
+            conn.commit()
+    if args.scan_only:
+        print(f"Done (scan-only): {n_disc} discontinuities detected over {n_sym} symbols; the ML dataset was not touched")
+    else:
+        print(f"Done: {n_rows} samples, {n_disc} discontinuities recorded, feature_set={pf.FEATURE_SET_VERSION}")
 
 
 if __name__ == "__main__":

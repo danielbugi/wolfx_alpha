@@ -52,7 +52,16 @@ CALLABLE_RESEARCH_FUNCTIONS = ("research_maintenance_open(text,text,integer)", "
 RESEARCH_ROLES = ("donchian_owner", "donchian_app", "donchian_research_admin")
 # Market Intelligence (migrations 24 / 25): a separate release from Release B, append-only, runtime INSERT/SELECT. Present only once applied;
 # when present they must not be mistaken for ordinary DML-baseline tables.
-MARKET_INTELLIGENCE_TABLES = ("universe_snapshot", "market_snapshot", "sector_snapshot", "market_event", "market_event_revision")
+MARKET_INTELLIGENCE_TABLES = ("universe_snapshot", "market_snapshot", "sector_snapshot", "market_event", "market_event_revision",
+                              # migration 26 (fwd_v1 forward-outcome labels): same append-only runtime grant model
+                              "forward_return_label",
+                              # migrations 27-30 (first-seen observations, catalyst classification, per-stock RS, dataset/experiment registry)
+                              "source_observation", "source_poll", "catalyst_classification", "stock_relative_strength",
+                              "dataset_manifest", "experiment_registration", "experiment_result",
+                              # migration 31 (append-only forward sector observation history)
+                              "sector_observation", "sector_poll", "sector_reconstruction",
+                              # migration 32 (append-only discontinuity-scan heartbeat)
+                              "price_discontinuity_scan")
 CAPTURE_ENV_VAR = "RESEARCH_CAPTURE_ENABLED"
 
 GUARD_MODE_RE = re.compile(r"Universe guards mode: (INERT|ACTIVE)\b[^\n]*")
@@ -333,10 +342,10 @@ def check_app_privileges(db: ReadOnlyDB, rep: Report, app: str = "donchian_app",
         admin_w = [f"{t}:{p}" for t in mi for p in ("INSERT", "UPDATE", "DELETE", "TRUNCATE")
                    if db.scalar("SELECT has_table_privilege(%s, %s::regclass, %s)", (group, t, p))]
         rep.check(not no_ins and not admin_w, "privileges.market_intelligence_append_only",
-                  f"{len(mi)} Market Intelligence tables: runtime INSERT/SELECT, admin group read-only",
+                  f"{len(mi)} append-only lab tables (Market Intelligence, forward labels): runtime INSERT/SELECT, admin group read-only",
                   f"runtime lacks INSERT/SELECT on {no_ins}; admin group may write {admin_w}")
     else:
-        rep.add(INFO, "privileges.market_intelligence_append_only", "migrations 24/25 not applied; nothing to check")
+        rep.add(INFO, "privileges.market_intelligence_append_only", "migrations 24/25/26 not applied; nothing to check")
 
     rep.check(bool(db.scalar("SELECT has_schema_privilege(%s, current_schema(), 'USAGE')", (app,))),
               "privileges.schema_usage", "USAGE on schema", "no USAGE on the schema")

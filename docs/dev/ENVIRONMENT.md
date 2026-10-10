@@ -56,6 +56,9 @@
 | `DATA_PROVIDER` | [required] | `yfinance` | `yfinance` \| `alpaca` \| `tiingo` — see [../../CLAUDE.md](../../CLAUDE.md) for the coverage/reliability tradeoffs of each |
 | `ALPACA_API_KEY`, `ALPACA_API_SECRET` | [secret] when set | — | |
 | `TIINGO_API_KEY` | [secret] when set | — | Fundamentals stay yfinance-sourced for ~99% of the universe even with Tiingo active for prices — Tiingo's Fundamentals API is Dow-30-only on the current plan |
+| `SECTOR_HISTORY_RECORDER_ENABLED` | [optional] feature flag | unset = OFF | Forward sector history (migration 31; `mechanism/data_updaters/sector_history_recorder.py`, called only from `fundamentals_updater.py`). Exactly `1` turns it on; anything else is off. **Off in production**: migration 31 is not applied there. A recording failure is logged and counted, never raised into fundamentals ingestion. |
+| `DONCHIAN_BASE` | [optional] script override, **tests only** | `/opt/donchian` | Base directory read by `deploy/vps/run_forward_collection.sh` and `deploy/db/pre_activation_backup.sh`. Production never sets it; it exists so the wrapper's refusal paths (no pin, no arming file, wrong arming file) can be tested against a scratch directory |
+| `PG_CONTAINER` | [optional] script override | `donchian-screener-postgres-1` | The Postgres container `deploy/db/pre_activation_backup.sh` dumps from |
 
 ## Data update / screening / ML tuning
 

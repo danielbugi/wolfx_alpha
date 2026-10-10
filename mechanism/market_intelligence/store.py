@@ -93,7 +93,8 @@ def write_universe_snapshot(cur, session_date: date, sector_map: Mapping[str, Op
 
 
 def write_session(cur, regime: RiskRegime, rs: RelativeStrength, provenance: str, source: str, code_ref: str,
-                  reconstruction_basis: Optional[str] = None, feature_set_version: str = FEATURE_SET_VERSION) -> Dict[str, Any]:
+                  reconstruction_basis: Optional[str] = None, feature_set_version: str = FEATURE_SET_VERSION,
+                  measurements: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
     """One session's universe + market + sector snapshots, insert-only, in the caller's transaction (the caller commits).
     The sector map's own provenance (rs.coverage['sector_map']) must equal the row provenance: an observed row can never be built on a
     reconstructed sector map, and a reconstructed one can never claim PIT-safety."""
@@ -108,7 +109,12 @@ def write_session(cur, regime: RiskRegime, rs: RelativeStrength, provenance: str
 
     rec, srec = regime.to_record(), rs.session_record()
     sectors = rs.sector_records()
-    h = content_hash({"regime": rec, "rs": srec, "sectors": sectors, "universe": uni.content_hash, "provenance": provenance})
+    hashed = {"regime": rec, "rs": srec, "sectors": sectors, "universe": uni.content_hash, "provenance": provenance}
+    coverage = dict(rs.coverage)
+    if measurements:                        # breadth / sector measurements ride in the JSONB coverage column (migration 24 has no typed home)
+        coverage["measurements"] = dict(measurements)
+        hashed["measurements"] = dict(measurements)
+    h = content_hash(hashed)
     u, sp = rs.universe, rs.spx_ret
 
     def hz(d: Mapping[int, Any], h_: int, key: Optional[str] = None) -> Any:
@@ -128,13 +134,13 @@ def write_session(cur, regime: RiskRegime, rs: RelativeStrength, provenance: str
          _f(hz(sp, 5)), _f(hz(sp, 20)), _f(hz(sp, 60)),
          _f(hz(u, 5, "ret")), _f(hz(u, 20, "ret")), _f(hz(u, 60, "ret")),
          hz(u, 5, "n_valid"), hz(u, 20, "n_valid"), hz(u, 60, "n_valid"),
-         _json(rs.coverage), source, uni.id, h, code_ref, reconstruction_basis))
+         _json(coverage), source, uni.id, h, code_ref, reconstruction_basis))
     row = cur.fetchone()
     if not row:
         cur.execute("SELECT id, content_hash FROM market_snapshot WHERE session_date = %s AND feature_set_version = %s AND provenance = %s",
                     (rs.session_date, feature_set_version, provenance))
         ex = cur.fetchone()
-        return {"universe": uni, "market": Written(ex[0], False, ex[1]), "sectors_written": 0}
+        return {"universe": uni, "market": Written(ex[0], False, ex[1]), "sectors_written": 0, "computed_hash": h}
     market = Written(row[0], True, h)
     n = 0
     for s in rs.sectors:
@@ -149,7 +155,7 @@ def write_session(cur, regime: RiskRegime, rs: RelativeStrength, provenance: str
             "sec_vs_univ_5, sec_vs_univ_20, sec_vs_univ_60, rank_20, market_snapshot_id, reconstruction_basis) "
             "VALUES (" + ",".join(["%s"] * 23) + ") ON CONFLICT (session_date, feature_set_version, provenance, sector) DO NOTHING", vals)
         n += cur.rowcount
-    return {"universe": uni, "market": market, "sectors_written": n}
+    return {"universe": uni, "market": market, "sectors_written": n, "computed_hash": h}
 
 
 def append_event_revision(cur, d: ev.EventDraft, declared_basis: Optional[str] = None) -> Written:
@@ -176,6 +182,36 @@ def append_event_revision(cur, d: ev.EventDraft, declared_basis: Optional[str] =
          d.source_ref, d.pit_grade, d.status, d.fiscal_period, d.eps_estimate, d.eps_actual, d.revenue_estimate, d.revenue_actual,
          _json(dict(d.payload)), h, d.provenance, d.reconstruction_basis))
     return Written(cur.fetchone()[0], True, h)
+
+
+def write_stock_rs(cur, rs: RelativeStrength, provenance: str, feature_set_version: str, code_ref: str,
+                   reconstruction_basis: Optional[str] = None) -> Dict[str, Any]:
+    """Per-stock rs_v1 rows (migration 29), insert-only, in the caller's transaction. Every universe stock gets one row per horizon; an unavailable
+    measurement is stored as state='unavailable' with NULLs. Idempotent on the table's UNIQUE key: a re-run writes nothing it already has, and a
+    re-run whose inputs were restated leaves the stored rows alone (`differs_from_stored`) -- a correction is a new model_version."""
+    from market_intelligence.stock_rs_rows import records_hash, stock_rs_records
+    sem = rs.coverage.get("sector_map") or {}
+    if sem.get("provenance") != provenance:
+        raise ValueError(f"sector map provenance {sem.get('provenance')!r} does not match the row provenance {provenance!r}")
+    recs = stock_rs_records(rs)
+    if not recs:
+        return {"n_records": 0, "written": 0, "run_content_hash": None, "differs_from_stored": False}
+    h = records_hash(recs, rs.session_date.isoformat(), rs.model_version, feature_set_version, provenance)
+    written = 0
+    for r in recs:
+        cur.execute(
+            "INSERT INTO stock_relative_strength (session_date, symbol, horizon_sessions, model_version, feature_set_version, provenance, "
+            "reconstruction_basis, sector, sector_pit_safe, state, ret_pct, vs_spx_pp, vs_sector_pp, rs_percentile, n_universe_valid, "
+            "benchmark_symbol, run_content_hash, code_ref) VALUES (" + ",".join(["%s"] * 18) + ") "
+            "ON CONFLICT (session_date, symbol, horizon_sessions, model_version, feature_set_version, provenance) DO NOTHING",
+            (rs.session_date, r["symbol"], r["horizon_sessions"], rs.model_version, feature_set_version, provenance, reconstruction_basis,
+             r["sector"], r["sector_pit_safe"], r["state"], r["ret_pct"], r["vs_spx_pp"], r["vs_sector_pp"], r["rs_percentile"],
+             r["n_universe_valid"], r["benchmark_symbol"], h, code_ref))
+        written += cur.rowcount
+    cur.execute("SELECT count(*) FROM stock_relative_strength WHERE session_date = %s AND model_version = %s AND feature_set_version = %s "
+                "AND provenance = %s AND run_content_hash <> %s",
+                (rs.session_date, rs.model_version, feature_set_version, provenance, h))
+    return {"n_records": len(recs), "written": written, "run_content_hash": h, "differs_from_stored": cur.fetchone()[0] > 0}
 
 
 # ------------------------------------------------------------------ readers (observed-only unless explicitly widened)
@@ -238,4 +274,23 @@ def get_event_revisions(cur, event_keys: Optional[List[str]] = None, include_rec
     cur2 = cur.connection.cursor(cursor_factory=RealDictCursor)
     cur2.execute("SELECT r.*, e.symbol, e.event_type FROM market_event_revision r JOIN market_event e USING (event_key) WHERE "
                  + " AND ".join(where) + " ORDER BY r.event_key, r.revision", args)
+    return [_row(r) for r in cur2.fetchall()]
+
+
+def get_stock_rs(cur, session_date: date, symbols: Optional[List[str]] = None, model_version: str = "rs_v1",
+                 feature_set_version: str = "mi_v2", include_reconstructed: bool = False, known_by: Optional[Any] = None) -> List[Dict[str, Any]]:
+    """Per-stock rows for one session. Observed-only by default; `known_by` (tz-aware) restricts to rows whose DB-stamped created_at is <= it, so a
+    research read can never see a row that did not yet exist. A missing measurement is state='unavailable' with None, never 0."""
+    clause, params = prov.sql_filter("provenance", None, include_reconstructed)
+    where, args = [clause, "session_date = %s", "model_version = %s", "feature_set_version = %s"], list(params) + [session_date, model_version, feature_set_version]
+    if symbols is not None:
+        where.append("symbol = ANY(%s)")
+        args.append(list(symbols))
+    if known_by is not None:
+        if getattr(known_by, "tzinfo", None) is None:
+            raise ValueError("known_by must be timezone-aware")
+        where.append("created_at <= %s")
+        args.append(known_by)
+    cur2 = cur.connection.cursor(cursor_factory=RealDictCursor)
+    cur2.execute("SELECT * FROM stock_relative_strength WHERE " + " AND ".join(where) + " ORDER BY symbol, horizon_sessions, provenance", args)
     return [_row(r) for r in cur2.fetchall()]

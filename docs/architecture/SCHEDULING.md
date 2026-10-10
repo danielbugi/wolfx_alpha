@@ -14,6 +14,11 @@
 > **Market Intelligence has no timer.** No unit, script or pipeline step runs `mechanism/market_intelligence` (pinned by `test_activation_neutral.py`); the
 > Market Environment Telegram post is in no package or rotation. See [MARKET_INTELLIGENCE.md](MARKET_INTELLIGENCE.md).
 
+> **Exception: `donchian-forward-collection.{service,timer}` and `donchian-forward-collection-alert.service` are committed in `deploy/vps/` but are NOT installed and NOT scheduled.**
+> They are the dormant forward-research collector (04:00 and 08:15 Asia/Jerusalem, the day after a session) and appear in no table below because production does not run them.
+> Installing them is a manual administrator step in [../operations/FORWARD_RESEARCH_ACTIVATION_RUNBOOK.md](../operations/FORWARD_RESEARCH_ACTIVATION_RUNBOOK.md); until then this
+> document's "everything in `deploy/vps/` is what runs" rule does not apply to them (the wrapper also refuses without an arming file).
+
 ## 1. All timers, one table
 
 All Israel-local schedules use systemd's native per-timer `Asia/Jerusalem` calendar tag — DST-safe

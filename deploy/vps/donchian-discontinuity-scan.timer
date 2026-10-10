@@ -1,0 +1,16 @@
+# COMMITTED, NOT INSTALLED. A timer only fires after an administrator installs it and runs `systemctl enable --now donchian-discontinuity-scan.timer`.
+#
+# ONE fire per night, Jerusalem time (the tag every other production timer uses, so it moves with the post-market retry across daylight-saving changes):
+#   06:20  after the final post-market retry (06:00 start; its runs take 9-16 min, bound 20) has started and, via the retry lock the wrapper takes, finished. The
+#          retry is the last scheduled price writer of the night; after it nothing scheduled writes prices until 23:45. In UTC this is 03:20 in summer (Israel UTC+3)
+#          and 04:20 in winter (UTC+2): the retry moves identically, so the ordering never changes. The collector's first attempt follows at 06:45.
+# No catch-up (Persistent=false): a scan must never run at an arbitrary time after a reboot; a missed night is a visible gap (the collector then reports INCOMPLETE).
+# There is no repeat/loop: one execution per night. Weekends and holidays re-resolve the same latest completed session and are idempotent (an identical input and
+# result record no new row).
+[Timer]
+OnCalendar=*-*-* 06:20:00 Asia/Jerusalem
+Persistent=false
+RandomizedDelaySec=30
+
+[Install]
+WantedBy=timers.target
