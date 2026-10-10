@@ -2,7 +2,6 @@
 // One message: what it looks like in Telegram, its facts and history, and (with the control token) edit and delete. The server decides
 // whether an action is allowed (production lock, 48 h delete window, ...) and says why; this component only shows that answer.
 import React, { useEffect, useRef, useState } from 'react';
-import { Spinner } from '@nextui-org/react';
 import { CheckCircleIcon, ExclamationTriangleIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import { telegramApi, toControlError } from '@/services/telegramApi';
 import type { ActionResult, ControlErrorInfo, MessageDetail } from '@/services/telegramApi';
@@ -12,6 +11,7 @@ import Dialog from '@/components/common/Dialog';
 import { ChannelChip, StatusChip } from '@/components/telegram/StatusChips';
 import { Btn } from '@/components/telegram/ui';
 import type { RowMode } from '@/components/telegram/MessageTable';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 /** 'photo' is local to this component only (replacing the image of an existing photo message) - it never comes from or goes back to the
  * table's own RowMode, which only knows about view/edit/delete. */
@@ -274,7 +274,7 @@ export default function MessageModal({ id, initialMode, timezone, token, control
           </p>
         )}
         {!detail && !loadError && (
-          <div className="flex justify-center py-12"><Spinner color="primary" /></div>
+          <div className="flex justify-center py-12"><LoadingSpinner /></div>
         )}
 
         {detail && (

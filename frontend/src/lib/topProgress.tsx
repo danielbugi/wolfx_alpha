@@ -63,7 +63,7 @@ function TopProgressBar({ active }: { active: boolean }) {
         active ? 'opacity-100' : 'opacity-0'
       }`}
     >
-      <div className="h-full w-2/5 bg-cyan-500 top-progress-fill" />
+      <div className="h-full w-2/5 rounded-full bg-gradient-to-r from-transparent via-accent to-transparent top-progress-fill" />
     </div>
   );
 }

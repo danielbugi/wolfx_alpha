@@ -78,7 +78,7 @@ export default function SymbolHoverLink({ symbol, className }: SymbolHoverLinkPr
       <PopoverTrigger>
         <Link
           href={`/stock/${symbol}`}
-          className={className ?? 'font-semibold text-slate-800 hover:text-cyan-700'}
+          className={className ?? 'font-semibold text-slate-800 hover:text-accent'}
           onMouseEnter={handleEnter}
           onMouseLeave={handleLeave}
         >

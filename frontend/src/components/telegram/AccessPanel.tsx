@@ -181,7 +181,7 @@ export default function AccessPanel() {
       <Card className="border border-slate-200 shadow-sm">
         <CardHeader className="flex flex-wrap items-center justify-between gap-2 p-4 pb-2">
           <div>
-            <h3 className="text-sm font-semibold text-slate-800">Who may use the bot</h3>
+            <h3 className="text-[15px] font-semibold text-slate-900">Who may use the bot</h3>
             <p className="text-xs text-slate-400">{MODE_LABEL[overview.mode] ?? overview.mode}</p>
           </div>
           {!overview.owner_configured && (

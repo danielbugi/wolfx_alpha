@@ -216,7 +216,12 @@ function WorkspaceView({ pinnedKey, onNavigateStrategy }: { pinnedKey?: string; 
   }, [loadList]);
 
   if (listError && !strategies) {
-    return <ErrorAlert title="Could not load strategies" message={listError.message} onRetry={loadList} />;
+    return (
+      <>
+        <h1 className="large-title mb-6 px-1 pt-2">Strategies</h1>
+        <ErrorAlert title="Could not load strategies" message={listError.message} onRetry={loadList} />
+      </>
+    );
   }
   if (!strategies) return <LoadingSpinner className="py-24" />;
   if (unknownPinned || !selected) {
@@ -279,8 +284,8 @@ function WorkspaceView({ pinnedKey, onNavigateStrategy }: { pinnedKey?: string; 
 
 export default function StrategyWorkspace({ pinnedKey, onNavigateStrategy }: { pinnedKey?: string; onNavigateStrategy?: (s: StrategyListItem) => void }) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-cyan-50">
-      <div className="container mx-auto max-w-7xl p-4">
+    <div className="min-h-screen bg-slate-50">
+      <div className="container mx-auto px-4 pb-12 pt-6 sm:px-6 lg:px-8 max-w-7xl">
         <Suspense fallback={<LoadingSpinner className="py-24" />}>
           <WorkspaceView pinnedKey={pinnedKey} onNavigateStrategy={onNavigateStrategy} />
         </Suspense>

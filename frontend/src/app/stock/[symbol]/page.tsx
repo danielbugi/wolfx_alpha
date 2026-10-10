@@ -16,10 +16,9 @@ import {
   Button,
   Chip,
   Divider,
-  Spinner,
-  Progress,
   Tooltip as NextUITooltip,
 } from '@nextui-org/react';
+import { ProgressBar } from '@/components/ui/Field';
 import {
   XAxis,
   YAxis,
@@ -34,6 +33,9 @@ import PlanBar from '@/components/strategy/PlanBar';
 import LightweightCandlestickChart from '@/components/charts/LightweightCandlestickChart';
 import { positionPct, nearestBarDate } from '@/lib/priceMath';
 import { confidenceColor, gradeColor } from '@/lib/uiColors';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
+import SearchBox from '@/components/layout/SearchBox';
+import SegmentedControl from '@/components/ui/SegmentedControl';
 
 const RANGE_OPTIONS = [
   { label: '1M', days: 30 },
@@ -174,7 +176,7 @@ function TimeframeCard({
 }) {
   const pos = positionPct(price ?? undefined, donchianLow ?? undefined, donchianHigh ?? undefined);
   return (
-    <Card className="shadow-sm border border-slate-200">
+    <Card className="border border-black/[0.05] shadow-sm">
       <CardBody className="p-4">
         <div className="flex justify-between items-center mb-2">
           <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">{title}</p>
@@ -197,7 +199,7 @@ function TimeframeCard({
           <span>Low {donchianLow != null ? `$${donchianLow.toFixed(2)}` : 'N/A'}</span>
           <span>High {donchianHigh != null ? `$${donchianHigh.toFixed(2)}` : 'N/A'}</span>
         </div>
-        <Progress value={pos} className="mb-1" classNames={{ indicator: 'bg-slate-700' }} size="sm" />
+        <ProgressBar value={pos} className="mb-1" barClassName="bg-slate-700" />
         <p className="text-xs text-slate-500">Position in channel: {pos.toFixed(0)}%</p>
         {extra && <p className="text-xs text-slate-500 mt-1">{extra}</p>}
       </CardBody>
@@ -214,7 +216,7 @@ function ScoreBar({ label, value }: { label: string; value: number | null | unde
         <span className="text-slate-600">{label}</span>
         <span className="font-semibold text-slate-800">{value != null ? value.toFixed(0) : 'N/A'}</span>
       </div>
-      <Progress value={v} classNames={{ indicator: color }} size="sm" />
+      <ProgressBar value={v} barClassName={color} />
     </div>
   );
 }
@@ -292,10 +294,10 @@ export default function StockDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-cyan-50">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
-          <Spinner size="lg" color="primary" className="mb-4" />
-          <p className="text-slate-600 text-sm">Loading {symbol}...</p>
+          <LoadingSpinner size="large" className="mb-4" />
+          <p className="text-slate-600 text-sm">Loading {symbol}…</p>
         </div>
       </div>
     );
@@ -303,16 +305,25 @@ export default function StockDetailPage() {
 
   if (error || !detail) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-cyan-50 p-4">
-        <Card className="max-w-md w-full shadow-lg">
-          <CardBody className="text-center p-8">
-            <div className="text-red-500 text-4xl mb-4">!</div>
-            <h2 className="text-xl font-semibold text-slate-800 mb-2">{error || 'Not found'}</h2>
-            <Button color="primary" variant="solid" onClick={fetchDetail} className="w-full">
-              Retry
-            </Button>
-          </CardBody>
-        </Card>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <div className="w-full max-w-sm text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-2xl font-bold text-slate-400 shadow-sm ring-1 ring-black/[0.05]">
+            ?
+          </div>
+          <h1 className="text-[22px] font-bold text-slate-900">{error || 'Not found'}</h1>
+          <p className="mt-1 text-sm text-slate-500">Check the ticker, or search for another symbol.</p>
+          <div className="mt-5 text-left">
+            <SearchBox autoFocus />
+          </div>
+          <div className="mt-4 flex items-center justify-center gap-4 text-[13px] font-medium">
+            <button type="button" onClick={fetchDetail} className="text-accent hover:underline">
+              Try again
+            </button>
+            <Link href="/" className="text-slate-500 hover:text-slate-800">
+              Back to Dashboard
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
@@ -344,15 +355,16 @@ export default function StockDetailPage() {
     !!latestQ?.net_income && !!previousQ?.net_income && latestQ.net_income > 0 && previousQ.net_income < 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-cyan-50">
-      <div className="container mx-auto p-4 max-w-7xl space-y-4">
-        {/* Header */}
-        <Card className="shadow-sm border border-slate-200">
+    <div className="min-h-screen bg-slate-50">
+      <div className="container mx-auto px-4 pb-12 pt-6 sm:px-6 lg:px-8 max-w-7xl space-y-4">
+        {/* Header -- stays pinned while the chart and fundamentals scroll beneath it (below the
+            mobile top bar on narrow screens). */}
+        <Card className="material-thick sticky top-[4.25rem] z-20 border border-black/[0.05] shadow-sm lg:top-3">
           <CardBody className="p-4">
             <div className="flex flex-wrap justify-between items-center gap-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-bold text-slate-800">{detail.symbol}</h1>
+                  <h1 className="large-title">{detail.symbol}</h1>
                   {snap.quality_grade && (
                     <Chip size="sm" className={`${gradeColor(snap.quality_grade)} text-xs`}>
                       Grade {snap.quality_grade}
@@ -376,7 +388,7 @@ export default function StockDetailPage() {
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-2xl font-bold text-slate-800">${fmtNum(snap.current_price)}</p>
+                <p className="large-title">${fmtNum(snap.current_price)}</p>
                 <p className={`text-sm font-semibold ${isUp ? 'text-emerald-600' : 'text-red-600'}`}>
                   {fmtPct(priceChangePct)}
                 </p>
@@ -386,14 +398,14 @@ export default function StockDetailPage() {
         </Card>
 
         {/* Price chart */}
-        <Card className="shadow-sm border border-slate-200">
-          <CardHeader className="p-3 pb-2 flex flex-wrap justify-between items-center gap-2">
-            <h3 className="text-sm font-semibold text-slate-700">Price & Donchian Channel</h3>
-            <div className="flex flex-wrap gap-1">
+        <Card className="border border-black/[0.05] shadow-sm">
+          <CardHeader className="px-5 pt-4 pb-2 flex flex-wrap justify-between items-center gap-2">
+            <h3 className="text-[15px] font-semibold text-slate-900">Price & Donchian Channel</h3>
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 size="sm"
                 variant={showDonchian ? 'solid' : 'light'}
-                className={showDonchian ? 'bg-slate-700 text-white text-xs' : 'text-xs'}
+                className={showDonchian ? 'rounded-full bg-slate-900 text-white text-xs' : 'rounded-full text-xs text-slate-700'}
                 onClick={() => setShowDonchian((v) => !v)}
               >
                 Donchian
@@ -401,24 +413,19 @@ export default function StockDetailPage() {
               <Button
                 size="sm"
                 variant={showVolume ? 'solid' : 'light'}
-                className={showVolume ? 'bg-slate-700 text-white text-xs' : 'text-xs'}
+                className={showVolume ? 'rounded-full bg-slate-900 text-white text-xs' : 'rounded-full text-xs text-slate-700'}
                 onClick={() => setShowVolume((v) => !v)}
               >
                 Volume
               </Button>
-              <Divider orientation="vertical" className="h-6 mx-1 bg-slate-200" />
-              {RANGE_OPTIONS.map((r) => (
-                <Button
-                  key={r.days}
-                  size="sm"
-                  variant={rangeDays === r.days ? 'solid' : 'light'}
-                  className={rangeDays === r.days ? 'bg-slate-700 text-white text-xs' : 'text-xs'}
-                  onClick={() => changeRange(r.days)}
-                  isLoading={chartLoading && rangeDays === r.days}
-                >
-                  {r.label}
-                </Button>
-              ))}
+              <div className="mx-1 h-6 w-px bg-slate-200" />
+              <SegmentedControl
+                aria-label="Chart range"
+                options={RANGE_OPTIONS.map((r) => ({ value: String(r.days), label: r.label }))}
+                value={String(rangeDays)}
+                onChange={(v) => changeRange(Number(v))}
+              />
+              {chartLoading && <LoadingSpinner size="small" className="ml-1" />}
             </div>
           </CardHeader>
           <Divider className="bg-slate-200" />
@@ -472,9 +479,9 @@ export default function StockDetailPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* AI Rating & Confidence */}
-          <Card className="shadow-sm border border-slate-200">
-            <CardHeader className="bg-slate-700 text-white p-3">
-              <h3 className="text-sm font-semibold">AI Rating & Confidence</h3>
+          <Card className="border border-black/[0.05] shadow-sm">
+            <CardHeader className="px-5 pt-4 pb-2">
+              <h3 className="text-[15px] font-semibold text-slate-900">AI Rating & Confidence</h3>
             </CardHeader>
             <CardBody className="p-4">
               {hasSignal ? (
@@ -556,7 +563,7 @@ export default function StockDetailPage() {
                       <p className="text-xs text-slate-500 mt-3">
                         Suggested position size at 1% account risk: {Math.min(10, 1 / rating.plan.risk_pct * 100).toFixed(1)}%
                         of portfolio (capped at 10%) —{' '}
-                        <Link href="/strategy" className="underline hover:text-cyan-700">
+                        <Link href="/strategy" className="underline hover:text-accent">
                           adjust assumptions on the Strategy page
                         </Link>
                       </p>
@@ -577,9 +584,9 @@ export default function StockDetailPage() {
           </Card>
 
           {/* Fundamentals & Quality */}
-          <Card className="shadow-sm border border-slate-200">
-            <CardHeader className="p-3 pb-2">
-              <h3 className="text-sm font-semibold text-slate-700">Fundamentals & Quality</h3>
+          <Card className="border border-black/[0.05] shadow-sm">
+            <CardHeader className="px-5 pt-4 pb-2">
+              <h3 className="text-[15px] font-semibold text-slate-900">Fundamentals & Quality</h3>
             </CardHeader>
             <Divider className="bg-slate-200" />
             <CardBody className="p-4">
@@ -604,9 +611,9 @@ export default function StockDetailPage() {
         </div>
 
         {/* Financials trend */}
-        <Card className="shadow-sm border border-slate-200">
-          <CardHeader className="p-3 pb-2">
-            <h3 className="text-sm font-semibold text-slate-700">Quarterly Financials</h3>
+        <Card className="border border-black/[0.05] shadow-sm">
+          <CardHeader className="px-5 pt-4 pb-2">
+            <h3 className="text-[15px] font-semibold text-slate-900">Quarterly Financials</h3>
           </CardHeader>
           <Divider className="bg-slate-200" />
           <CardBody className="p-3">
@@ -627,7 +634,7 @@ export default function StockDetailPage() {
                 <Table
                   removeWrapper
                   className="text-xs mt-3"
-                  classNames={{ th: 'bg-slate-50 text-slate-600 font-medium text-xs h-7', td: 'text-xs py-1.5' }}
+                  classNames={{ th: 'bg-slate-50/70 text-slate-500 font-medium text-[11px] h-7', td: 'text-xs py-1.5' }}
                 >
                   <TableHeader>
                     <TableColumn>QUARTER</TableColumn>
@@ -658,10 +665,10 @@ export default function StockDetailPage() {
         </Card>
 
         {/* Breakout track record */}
-        <Card className="shadow-sm border border-slate-200">
-          <CardHeader className="p-3 pb-2">
+        <Card className="border border-black/[0.05] shadow-sm">
+          <CardHeader className="px-5 pt-4 pb-2">
             <div className="flex justify-between items-center w-full">
-              <h3 className="text-sm font-semibold text-slate-700">Breakout Track Record</h3>
+              <h3 className="text-[15px] font-semibold text-slate-900">Breakout Track Record</h3>
               {track.total_breakouts > 0 && (
                 <div className="flex gap-4 text-xs text-slate-500">
                   <span>{track.total_breakouts} events</span>
@@ -679,7 +686,7 @@ export default function StockDetailPage() {
               <Table
                 removeWrapper
                 className="text-xs"
-                classNames={{ th: 'bg-slate-50 text-slate-600 font-medium text-xs h-7', td: 'text-xs py-1.5' }}
+                classNames={{ th: 'bg-slate-50/70 text-slate-500 font-medium text-[11px] h-7', td: 'text-xs py-1.5' }}
               >
                 <TableHeader>
                   <TableColumn>DATE</TableColumn>

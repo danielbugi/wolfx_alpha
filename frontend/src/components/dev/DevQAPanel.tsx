@@ -163,7 +163,7 @@ function QAPanelInner() {
       : 'bg-emerald-600';
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 font-sans" style={{ fontFamily: 'inherit' }}>
+    <div className="fixed bottom-16 right-4 z-50 font-sans" style={{ fontFamily: 'inherit' }}>
       {open && (
         <div className="mb-2 w-96 max-h-[70vh] overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 text-slate-100 shadow-2xl">
           <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700 sticky top-0 bg-slate-900">

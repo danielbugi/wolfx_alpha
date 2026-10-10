@@ -18,7 +18,7 @@ const NEGATIVE = '#dc2626'; // red-600, matches sectorColor()/top-losers styling
 
 const VIX_REGIME_STYLE: Record<string, { label: string; className: string }> = {
   calm: { label: 'Calm', className: 'bg-emerald-100 text-emerald-800' },
-  normal: { label: 'Normal', className: 'bg-cyan-100 text-cyan-800' },
+  normal: { label: 'Normal', className: 'bg-sky-100 text-sky-800' },
   elevated: { label: 'Elevated', className: 'bg-amber-100 text-amber-800' },
   fear: { label: 'Fear', className: 'bg-red-100 text-red-700' },
 };
@@ -37,20 +37,20 @@ function IndexCard({ entry }: { entry: MarketIndexEntry }) {
   const regime = entry.regime ? VIX_REGIME_STYLE[entry.regime] : null;
 
   return (
-    <div className="flex flex-col min-w-[128px] px-3 py-2 border-r border-slate-200 last:border-r-0">
+    <div className="flex flex-col min-w-[140px] px-4 py-3 border-r border-slate-100 last:border-r-0">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-slate-700 truncate">{entry.display_name}</span>
+        <span className="text-xs font-medium text-slate-500 truncate">{entry.display_name}</span>
         {regime && (
-          <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${regime.className}`}>
+          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${regime.className}`}>
             {regime.label}
           </span>
         )}
       </div>
       <div className="flex items-end justify-between gap-2 mt-1">
         <div>
-          <p className="text-sm font-bold text-slate-800 leading-tight">{formatClose(entry.symbol, entry.close)}</p>
+          <p className="text-[15px] font-semibold tabular-nums tracking-[-0.01em] text-slate-900 leading-tight">{formatClose(entry.symbol, entry.close)}</p>
           {entry.change_pct !== null && (
-            <p className="text-[11px] font-semibold leading-tight" style={{ color }}>
+            <p className="mt-0.5 text-[11px] font-semibold tabular-nums leading-tight" style={{ color }}>
               {isUp ? '+' : ''}
               {entry.change_pct.toFixed(2)}%
             </p>
@@ -95,7 +95,7 @@ export default function MarketIndicesStrip({
 }) {
   if (loading && indices.length === 0) {
     return (
-      <Card className="mb-4 shadow-sm border border-slate-200">
+      <Card className="mb-4 border border-black/[0.05] shadow-sm">
         <CardBody className="p-3">
           <div className="h-16 flex items-center justify-center text-xs text-slate-400">
             Loading market data…
@@ -110,7 +110,7 @@ export default function MarketIndicesStrip({
   }
 
   return (
-    <Card className="mb-4 shadow-sm border border-slate-200">
+    <Card className="mb-4 border border-black/[0.05] shadow-sm">
       <CardBody className="p-0">
         <div className="flex overflow-x-auto">
           {indices.map((entry) => (

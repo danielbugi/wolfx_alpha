@@ -7,13 +7,14 @@ import {
   CardHeader,
   Chip,
   Divider,
-  Spinner,
   Button,
 } from '@nextui-org/react';
-import { clsx } from 'clsx';
 import { systemHealthApi, mlStatsApi, SystemHealthReport, MLStatsReport, HealthSection, HealthCheck, HealthStatus } from '@/services/api';
 import MLStatsPanel from '@/components/health/MLStatsPanel';
 import { usePagePerf } from '@/hooks/usePagePerf';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
+import ErrorAlert from '@/components/common/ErrorAlert';
+import SegmentedControl from '@/components/ui/SegmentedControl';
 
 type ViewMode = 'overview' | 'basic' | 'ml';
 
@@ -75,10 +76,10 @@ function CheckRow({ check }: { check: HealthCheck }) {
 
 function SectionCard({ title, subtitle, section }: { title: string; subtitle: string; section: HealthSection }) {
   return (
-    <Card className="shadow-sm border border-slate-200">
+    <Card className="border border-black/[0.05] shadow-sm">
       <CardHeader className="flex items-center justify-between p-4 pb-2">
         <div>
-          <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
+          <h3 className="text-[15px] font-semibold text-slate-900">{title}</h3>
           <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>
         </div>
         <StatusBadge status={section.overall} />
@@ -95,10 +96,10 @@ function SectionCard({ title, subtitle, section }: { title: string; subtitle: st
 
 function CoverageCard({ coverage }: { coverage: NonNullable<SystemHealthReport['universe_coverage']> }) {
   return (
-    <Card className="shadow-sm border border-slate-200">
+    <Card className="border border-black/[0.05] shadow-sm">
       <CardHeader className="flex items-center justify-between p-4 pb-2">
         <div>
-          <h3 className="text-sm font-semibold text-slate-800">Universe Coverage</h3>
+          <h3 className="text-[15px] font-semibold text-slate-900">Universe Coverage</h3>
           <p className="text-xs text-slate-500 mt-0.5">Russell 3000 expansion progress</p>
         </div>
         <StatusBadge status={coverage.overall} />
@@ -121,7 +122,7 @@ function CoverageCard({ coverage }: { coverage: NonNullable<SystemHealthReport['
             <span className="font-semibold text-slate-700">{coverage.quarterly_fundamentals_coverage_pct?.toFixed(1)}%</span>
           </div>
           <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-            <div className="h-full bg-cyan-500" style={{ width: `${coverage.quarterly_fundamentals_coverage_pct ?? 0}%` }} />
+            <div className="h-full bg-accent" style={{ width: `${coverage.quarterly_fundamentals_coverage_pct ?? 0}%` }} />
           </div>
         </div>
         <div>
@@ -140,9 +141,9 @@ function CoverageCard({ coverage }: { coverage: NonNullable<SystemHealthReport['
 
 function SectorBreakdownCard({ sectors }: { sectors: NonNullable<SystemHealthReport['universe_coverage']['sector_breakdown']> }) {
   return (
-    <Card className="shadow-sm border border-slate-200">
+    <Card className="border border-black/[0.05] shadow-sm">
       <CardHeader className="p-4 pb-2">
-        <h3 className="text-sm font-semibold text-slate-800">Sector Breakdown</h3>
+        <h3 className="text-[15px] font-semibold text-slate-900">Sector Breakdown</h3>
       </CardHeader>
       <Divider className="bg-slate-100" />
       <CardBody className="p-4 pt-3">
@@ -211,13 +212,13 @@ export default function SystemHealthPage() {
   const sectors = coverage?.sector_breakdown;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-cyan-50">
-      <div className="container mx-auto p-4 max-w-5xl space-y-4">
-        <div className="p-4 bg-white rounded-lg shadow-sm border border-slate-200">
+    <div className="min-h-screen bg-slate-50">
+      <div className="container mx-auto px-4 pb-12 pt-6 sm:px-6 lg:px-8 max-w-5xl space-y-4">
+        <div className="px-1 pt-2 pb-1">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-slate-800">System Health</h1>
-              <p className="text-slate-600 text-sm mt-1">
+              <h1 className="large-title">System Health</h1>
+              <p className="mt-1.5 max-w-3xl text-[15px] leading-relaxed text-slate-500">
                 Production-readiness across pipeline freshness, data quality, ML model health, and universe
                 coverage — four different failure modes a single metric would miss.
               </p>
@@ -229,24 +230,20 @@ export default function SystemHealthPage() {
             </div>
             <div className="flex flex-col items-end gap-2 shrink-0">
               {report && view === 'overview' && <StatusBadge status={report.overall} />}
-              <Button size="sm" className="bg-slate-700 text-white" onClick={refreshAll} isLoading={loading || mlLoading}>
+              <Button size="sm" className="rounded-full bg-slate-900 px-4 font-medium text-white" onClick={refreshAll} isLoading={loading || mlLoading}>
                 Refresh
               </Button>
             </div>
           </div>
 
-          <div className="flex gap-2 mt-4 border-t border-slate-100 pt-3">
-            {VIEWS.map((v) => (
-              <Button
-                key={v.key}
-                size="sm"
-                variant={view === v.key ? 'solid' : 'bordered'}
-                className={clsx('text-xs', view === v.key ? 'bg-slate-700 text-white' : 'border-slate-300 text-slate-600')}
-                onClick={() => setView(v.key)}
-              >
-                {v.label}
-              </Button>
-            ))}
+          <div className="mt-5">
+            <SegmentedControl
+              aria-label="Health view"
+              size="md"
+              options={VIEWS.map((v) => ({ value: v.key, label: v.label }))}
+              value={view}
+              onChange={setView}
+            />
           </div>
         </div>
 
@@ -254,10 +251,10 @@ export default function SystemHealthPage() {
         {view === 'overview' && (
           loading && !report ? (
             <div className="flex justify-center py-16">
-              <Spinner color="primary" />
+              <LoadingSpinner />
             </div>
           ) : error ? (
-            <p className="text-center text-red-500 text-sm py-16">{error}</p>
+            <ErrorAlert title="Couldn’t load the system health report" message={error} onRetry={fetchReport} className="my-4" />
           ) : report ? (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -287,10 +284,10 @@ export default function SystemHealthPage() {
         {view === 'basic' && (
           loading && !report ? (
             <div className="flex justify-center py-16">
-              <Spinner color="primary" />
+              <LoadingSpinner />
             </div>
           ) : error ? (
-            <p className="text-center text-red-500 text-sm py-16">{error}</p>
+            <ErrorAlert title="Couldn’t load the system health report" message={error} onRetry={fetchReport} className="my-4" />
           ) : report ? (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -316,10 +313,10 @@ export default function SystemHealthPage() {
           <>
             {loading && !report ? (
               <div className="flex justify-center py-8">
-                <Spinner color="primary" />
+                <LoadingSpinner />
               </div>
             ) : error ? (
-              <p className="text-center text-red-500 text-sm py-8">{error}</p>
+              <ErrorAlert title="Couldn’t load the system health report" message={error} onRetry={fetchReport} className="my-4" />
             ) : report ? (
               <SectionCard
                 title="ML Model Health"
@@ -330,10 +327,10 @@ export default function SystemHealthPage() {
 
             {mlLoading && !mlReport ? (
               <div className="flex justify-center py-16">
-                <Spinner color="primary" />
+                <LoadingSpinner />
               </div>
             ) : mlError ? (
-              <p className="text-center text-red-500 text-sm py-16">{mlError}</p>
+              <ErrorAlert title="Couldn’t load ML health" message={mlError} onRetry={fetchMlReport} className="my-4" />
             ) : mlReport ? (
               <MLStatsPanel report={mlReport} />
             ) : null}

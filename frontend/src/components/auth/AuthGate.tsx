@@ -6,12 +6,16 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Sidebar from '@/components/layout/Sidebar';
 import MobileNav from '@/components/layout/MobileNav';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 const PUBLIC_PATHS = new Set(['/login']);
 
 function Centered({ text }: { text: string }) {
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-slate-50 text-sm text-slate-500">{text}</div>
+    <div className="flex min-h-screen w-full flex-col items-center justify-center gap-3 bg-slate-50 text-sm text-slate-500">
+      <LoadingSpinner size="medium" />
+      {text}
+    </div>
   );
 }
 

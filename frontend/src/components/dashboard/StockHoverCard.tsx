@@ -1,11 +1,12 @@
 'use client';
 
 import React from 'react';
-import { Chip, Spinner } from '@nextui-org/react';
+import { Chip } from '@nextui-org/react';
 import LightweightCandlestickChart from '@/components/charts/LightweightCandlestickChart';
 import { HoverStockSummary } from '@/hooks/useHoverStockSummary';
 import { positionPct, pctChange } from '@/lib/priceMath';
 import { confidenceColor } from '@/lib/uiColors';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 export interface StockHoverCardProps {
   symbol: string;
@@ -48,7 +49,7 @@ export default function StockHoverCard({ symbol, data }: StockHoverCardProps) {
 
       {barsLoading ? (
         <div className="h-[110px] flex items-center justify-center">
-          <Spinner size="sm" />
+          <LoadingSpinner size="small" />
         </div>
       ) : bars.length === 0 ? (
         <div className="h-[110px] flex items-center justify-center">
