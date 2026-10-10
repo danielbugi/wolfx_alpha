@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Card,
@@ -25,6 +24,7 @@ import ErrorAlert from '@/components/common/ErrorAlert';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import SortHeader from '@/components/ui/SortHeader';
 import { useTableSort } from '@/hooks/useTableSort';
+import SymbolHoverLink from '@/components/dashboard/SymbolHoverLink';
 
 // Position size is min(cap, accountRisk / stopRisk): for a fixed account it always ranks inversely to stop risk,
 // so sorting by 1/risk orders the column correctly without depending on the two inputs above the table.
@@ -190,9 +190,7 @@ export default function StrategyPage() {
                     <TableRow key={r.symbol}>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
-                          <Link href={`/stock/${r.symbol}`} className="font-semibold text-slate-800 hover:text-accent">
-                            {r.symbol}
-                          </Link>
+                          <SymbolHoverLink symbol={r.symbol} />
                           {r.is_new && (
                             <Chip size="sm" className="bg-amber-100 text-amber-800 text-[10px] h-4 px-1">
                               NEW

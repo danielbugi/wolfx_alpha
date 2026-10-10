@@ -16,6 +16,16 @@ const HOVER_CLOSE_DELAY_MS = 150;
 export interface SymbolHoverLinkProps {
   symbol: string;
   className?: string;
+  /**
+   * When set, the symbol is a button that calls this instead of a link to the stock page — for tables where clicking
+   * a symbol opens something else (e.g. the Strategies candidate/signal detail panels). The click doesn't bubble to
+   * the row.
+   */
+  onSelect?: () => void;
+  /** Accessible name for the `onSelect` button (defaults to the symbol). */
+  ariaLabel?: string;
+  /** Render the symbol as plain text: for a symbol inside something that is already a link (a card), since links can't nest. */
+  asText?: boolean;
 }
 
 /**
@@ -27,7 +37,7 @@ export interface SymbolHoverLinkProps {
  * popover content itself doesn't immediately dismiss it. On touch devices
  * onMouseEnter simply never fires, so this degrades to a plain link.
  */
-export default function SymbolHoverLink({ symbol, className }: SymbolHoverLinkProps) {
+export default function SymbolHoverLink({ symbol, className, onSelect, ariaLabel, asText = false }: SymbolHoverLinkProps) {
   const [open, setOpen] = useState(false);
   const [prefetch, setPrefetch] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -76,14 +86,36 @@ export default function SymbolHoverLink({ symbol, className }: SymbolHoverLinkPr
       }}
     >
       <PopoverTrigger>
-        <Link
-          href={`/stock/${symbol}`}
-          className={className ?? 'font-semibold text-slate-800 hover:text-accent'}
-          onMouseEnter={handleEnter}
-          onMouseLeave={handleLeave}
-        >
-          {symbol}
-        </Link>
+        {asText ? (
+          <span className={className ?? 'font-semibold text-slate-800'} onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
+            {symbol}
+          </span>
+        ) : onSelect ? (
+          <button
+            type="button"
+            aria-label={ariaLabel ?? symbol}
+            className={className ?? 'font-semibold text-slate-800 hover:text-accent'}
+            onMouseEnter={handleEnter}
+            onMouseLeave={handleLeave}
+            onClick={(e) => {
+              e.stopPropagation();
+              clearTimer();
+              setOpen(false);
+              onSelect();
+            }}
+          >
+            {symbol}
+          </button>
+        ) : (
+          <Link
+            href={`/stock/${symbol}`}
+            className={className ?? 'font-semibold text-slate-800 hover:text-accent'}
+            onMouseEnter={handleEnter}
+            onMouseLeave={handleLeave}
+          >
+            {symbol}
+          </Link>
+        )}
       </PopoverTrigger>
       <PopoverContent onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
         <StockHoverCard symbol={symbol} data={data} />
