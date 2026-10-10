@@ -193,7 +193,7 @@ def test_the_committed_units_pass_the_preflights_dormancy_check():
 def test_the_timer_fires_exactly_when_the_contract_design_says():
     fires = A.ONCALENDAR.findall(TIMER.read_text(encoding="utf-8"))
     assert fires == [(h, C.SCHEDULER_DESIGN["timezone"]) for h in C.SCHEDULER_DESIGN["fires_local"]]
-    assert "Persistent=true" in directives(TIMER)
+    assert "Persistent=false" in directives(TIMER) and "Persistent=true" not in directives(TIMER)      # no catch-up after enabling, a restart or a reboot
 
 
 def test_the_service_has_the_contracts_timeout_and_treats_a_lock_refusal_as_not_a_failure():

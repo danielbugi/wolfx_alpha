@@ -9,13 +9,15 @@
 #          polls and (once capture is enabled) a COMPLETE capture run; anything missing yields INCOMPLETE (exit 2, an alert state), never COMPLETE.
 #   08:15  the recovery attempt: the same session again. It cannot repair a stale scan (strict fingerprint rule), but a session whose snapshot is already
 #          committed and valid is REUSED read-only (never rewritten, never turned INCOMPLETE by a later price change), so the second fire is an idempotent check.
+# Persistent=false (owner decision 2026-10-11): enabling the timer, restarting it or rebooting the server must NEVER trigger an immediate catch-up run. A missed fire is
+# simply missed; the other fire of the same night, or the next night's, re-checks the (idempotent) session, and a missed session is a visible gap, never a late write.
 # The second fire's worst case (08:15 + 45 min timeout + 60 s) is still before 00:00 UTC of session+2, so with availability_grace_days=1 every
 # observation this schedule can write is known before its decision deadline (contract.required_grace_days() computes this over every weekday of
 # both daylight-saving offsets; a test pins it). The weekend fires find nothing new to do and exit 0 ("latest completed session" is unchanged).
 [Timer]
 OnCalendar=*-*-* 06:45:00 Asia/Jerusalem
 OnCalendar=*-*-* 08:15:00 Asia/Jerusalem
-Persistent=true
+Persistent=false
 RandomizedDelaySec=60
 
 [Install]
