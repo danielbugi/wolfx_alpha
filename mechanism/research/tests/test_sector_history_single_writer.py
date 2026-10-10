@@ -26,6 +26,7 @@ ALLOWED_MENTIONS = {
     "mechanism/research/lab/sector_history.py": "pure selector: docstring only",
     "deploy/db/research_roles.sql": "role grants (the same immutable-table treatment as every research table)",
     "deploy/db/research_roles_verify.sql": "role verification",
+    "ops/checkpoint/assert_forward_research.sql": "read-only post-cycle assertions (SELECT only; the checkpoint runs with default_transaction_read_only=on)",
     "deploy/db/research_roles_rollback.sql": "role rollback",
     "deploy/db/rollback_24_31.sql": "schema rollback: DROP-only (no row is ever written; test_rollback_24_31_db pins that it refuses while any table holds a row)",
     "mechanism/validate_release_b.py": "read-only production validator: classifies the tables as append-only (privilege checks only)",
@@ -79,8 +80,9 @@ def test_nothing_writes_the_reconstruction_store_and_nothing_copies_fundamentals
     for rel, text in files():
         if rel in ("mechanism/add_sector_history_tables.sql",):
             continue
-        assert not re.search(r"sector_reconstruction", text) or rel.startswith("deploy/db/research_roles") or rel in ("mechanism/validate_release_b.py", "deploy/db/rollback_24_31.sql"), rel
-        if "daily_fundamentals" in text:
+        assert not re.search(r"sector_reconstruction", text) or rel.startswith("deploy/db/research_roles") or rel in (
+            "mechanism/validate_release_b.py", "deploy/db/rollback_24_31.sql", "ops/checkpoint/assert_forward_research.sql"), rel
+        if "daily_fundamentals" in text and rel != "ops/checkpoint/assert_forward_research.sql":      # the read-only assertion file compares coverage against the fundamentals universe
             assert not any(t in text for t in ("sector_observation", "sector_poll")), f"{rel} reads daily_fundamentals AND names the history"
 
 

@@ -234,9 +234,8 @@ SCAN_TRIGGERS = ("price_discontinuity_scan_immutable_row", "price_discontinuity_
 def record_scan_on(cur, session, *, finished=None, run_id="test-scan"):
     """The nightly builder's last step, for real (build_dataset.finish_scan: the database recomputes both fingerprints and refuses a false claim). TESTS ONLY, in a
     disposable schema: the database stamps completion with ITS clock, which in a simulated past would be 'after the cutoff', so the new row's stamp is moved to
-    `finished` (default: three hours before the session's knowledge cutoff, i.e. inside the overnight cycle) with the triggers briefly off and then ENABLE ALWAYS again."""
-    from datetime import timedelta
-    from market_intelligence import inputs
+    `finished` (default: 23:30 UTC on the session's own day: after the close and before every collector fire of the next day) with the triggers briefly off and then ENABLE ALWAYS again."""
+    from datetime import datetime, time, timezone
     from ml_training.data_preparation import build_dataset as bd
     cur.execute("SELECT clock_timestamp()")
     started = cur.fetchone()[0]
@@ -244,7 +243,7 @@ def record_scan_on(cur, session, *, finished=None, run_id="test-scan"):
     claim = cur.fetchone()
     scan_id = bd.finish_scan(cur, session, started, run_id, claim)
     if scan_id is not None:
-        when = finished if finished is not None else inputs.knowledge_cutoff(session) - timedelta(hours=3)
+        when = finished if finished is not None else datetime.combine(session, time(23, 30), timezone.utc)      # after the close, before any collector fire of the next day
         cur.execute("ALTER TABLE price_discontinuity_scan DISABLE TRIGGER USER")
         cur.execute("UPDATE price_discontinuity_scan SET finished_at = %s WHERE id = %s", (when, scan_id))
         for name in SCAN_TRIGGERS:

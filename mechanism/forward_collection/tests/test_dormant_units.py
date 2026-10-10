@@ -187,7 +187,7 @@ def test_the_arming_file_is_never_committed_or_created_by_any_repository_file():
 def test_the_committed_units_pass_the_preflights_dormancy_check():
     ok, detail = A.scheduler_units_check(REPO)
     assert ok, detail["problems"]
-    assert detail["committed"] == sorted(A.UNIT_FILES)
+    assert detail["committed"] == sorted(A.UNIT_FILES + A.SCAN_FILES)
 
 
 def test_the_timer_fires_exactly_when_the_contract_design_says():
@@ -203,10 +203,10 @@ def test_the_service_has_the_contracts_timeout_and_treats_a_lock_refusal_as_not_
 
 def test_the_preflight_blocks_if_the_units_are_missing_or_stop_being_dormant(tmp_path):
     ok, detail = A.scheduler_units_check(tmp_path)
-    assert not ok and len(detail["problems"]) == len(A.UNIT_FILES)
+    assert not ok and len(detail["problems"]) == len(A.UNIT_FILES) + len(A.SCAN_FILES)
     vps = tmp_path / "deploy" / "vps"
     vps.mkdir(parents=True)
-    for name in A.UNIT_FILES:
+    for name in A.UNIT_FILES + A.SCAN_FILES:
         shutil.copy(VPS / name, vps / name)
     assert A.scheduler_units_check(tmp_path)[0]
     (vps / A.UNIT_WRAPPER).write_text((VPS / A.UNIT_WRAPPER).read_text(encoding="utf-8").replace("FORWARD_COLLECTION_ARMED", "X"), encoding="utf-8")

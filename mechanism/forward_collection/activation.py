@@ -86,7 +86,33 @@ MIN_REQUEST_SITES = 2                                                           
 UNIT_SERVICE, UNIT_TIMER, UNIT_ALERT, UNIT_WRAPPER = ("donchian-forward-collection.service", "donchian-forward-collection.timer",
                                                       "donchian-forward-collection-alert.service", "run_forward_collection.sh")
 UNIT_FILES = (UNIT_SERVICE, UNIT_TIMER, UNIT_ALERT, UNIT_WRAPPER)
+SCAN_SERVICE, SCAN_TIMER, SCAN_WRAPPER = "donchian-discontinuity-scan.service", "donchian-discontinuity-scan.timer", "run_discontinuity_scan.sh"
+SCAN_FILES = (SCAN_SERVICE, SCAN_TIMER, SCAN_WRAPPER)
 ONCALENDAR = re.compile(r"^OnCalendar=\*-\*-\* (\d\d:\d\d):00 (\S+)\s*$", re.M)
+
+
+def scan_schedule_problems(sessions: Optional[Sequence[Any]] = None) -> List[str]:
+    """The night's single scan against the retry that precedes it and the collector fires that follow it, in every daylight-saving regime (the schedule is in
+    Asia/Jerusalem exactly like the retry, but sessions and the knowledge cutoff are in New York time, so the four mismatch/regime days are checked):
+    the scan starts after the final retry's scheduled start plus its maximum runtime; the first collector fire is not before the scan plus its budget; both
+    fires are before the session's knowledge cutoff (noon New York the next day)."""
+    from datetime import date as _d, timedelta as _td
+    from market_intelligence import inputs as MI
+    D = C.SCHEDULER_DESIGN
+    problems: List[str] = []
+    for s in (sessions or [_d(2026, 3, 16), _d(2026, 7, 6), _d(2026, 10, 26), _d(2026, 12, 7)]):
+        scan, retry = C.scan_instant_utc(s), C.last_retry_start_utc(s)
+        first, last = C.fire_instants_utc(s)[0], C.fire_instants_utc(s)[-1]
+        cutoff = MI.knowledge_cutoff(s)
+        if scan <= retry:
+            problems.append(f"{s}: the scan ({scan:%H:%M}Z) is not after the final retry's scheduled start ({retry:%H:%M}Z)")
+        if scan < retry + _td(minutes=int(D["retry_max_runtime_minutes"])):
+            problems.append(f"{s}: the scan starts before the final retry's worst-case end")
+        if first < scan + _td(minutes=int(D["scan_budget_minutes"])):
+            problems.append(f"{s}: the first collector fire ({first:%H:%M}Z) is before the scan plus its budget")
+        if not (last < cutoff):
+            problems.append(f"{s}: the recovery fire ({last:%H:%M}Z) is not before the knowledge cutoff ({cutoff:%H:%M}Z)")
+    return problems
 
 
 def scheduler_units_check(repo_root: Path) -> Tuple[bool, Dict[str, Any]]:
@@ -96,7 +122,7 @@ def scheduler_units_check(repo_root: Path) -> Tuple[bool, Dict[str, Any]]:
     vps = repo_root / "deploy" / "vps"
     problems: List[str] = []
     texts: Dict[str, str] = {}
-    for name in UNIT_FILES:
+    for name in UNIT_FILES + SCAN_FILES:
         p = vps / name
         if p.is_file():
             texts[name] = p.read_text(encoding="utf-8")
@@ -117,12 +143,40 @@ def scheduler_units_check(repo_root: Path) -> Tuple[bool, Dict[str, Any]]:
                             ("FORWARD_COLLECTION_ARMED", "the arming file that keeps it inert until activation")):
             if needle not in wrapper:
                 problems.append(f"{UNIT_WRAPPER}: missing {why}")
-    approved = set(UNIT_FILES)
+    scan_service, scan_timer, scan_wrapper = texts.get(SCAN_SERVICE, ""), texts.get(SCAN_TIMER, ""), texts.get(SCAN_WRAPPER, "")
+    if scan_service and "ExecStart=/opt/donchian/scripts/" + SCAN_WRAPPER not in scan_service:
+        problems.append(f"{SCAN_SERVICE}: ExecStart is not the tracked wrapper")
+    if scan_service and "SuccessExitStatus" in "\n".join(ln for ln in scan_service.splitlines() if not ln.lstrip().startswith("#")):
+        problems.append(f"{SCAN_SERVICE}: a failed scan must stay a failed unit (no SuccessExitStatus)")
+    if scan_timer:
+        h, m = C.SCHEDULER_DESIGN["scan_local"].split(":")
+        if ONCALENDAR.findall(scan_timer) != [(f"{int(h):02d}:{int(m):02d}", C.SCHEDULER_DESIGN["timezone"])]:
+            problems.append(f"{SCAN_TIMER}: OnCalendar is not the contract's single scan time {C.SCHEDULER_DESIGN['scan_local']}")
+        if "Persistent=false" not in scan_timer:
+            problems.append(f"{SCAN_TIMER}: must be Persistent=false (a scan never catches up at an arbitrary time)")
+        if re.search(r"^(OnUnitActiveSec|OnUnitInactiveSec|OnBootSec|OnActiveSec)=", scan_timer, re.M):
+            problems.append(f"{SCAN_TIMER}: a repeating or boot-relative trigger is a rescan loop; exactly one OnCalendar per night is allowed")
+    if scan_wrapper:
+        for needle, why in (("--scan-only", "the scan-only mode (no dataset rebuild)"), ("--session latest-completed", "the calendar-resolved target session"),
+                            (".postmarket_retry.lock", "the retry lock it must hold"), (".pipeline.lock", "the pipeline lock it must hold"),
+                            ("flock -w", "waiting for a running retry"), ("NOT_BEFORE_LOCAL", "the not-before-the-final-retry guard")):
+            if needle not in scan_wrapper:
+                problems.append(f"{SCAN_WRAPPER}: missing {why}")
+        for forbidden, why in (("--replace", "a dataset rebuild"), ("--apply", "a collector write"), ("while true", "a loop"), ("sleep ", "a polling loop")):
+            if forbidden in "\n".join(ln for ln in scan_wrapper.splitlines() if not ln.lstrip().startswith("#")):
+                problems.append(f"{SCAN_WRAPPER}: contains {why} ({forbidden!r})")
+    for name in SCAN_FILES:
+        if "forward-collection" in texts.get(name, ""):
+            problems.append(f"{name}: the scan must stand alone (it must not reference the collector's units)")
+    problems += scan_schedule_problems()
+    approved = set(UNIT_FILES) | set(SCAN_FILES)
     if vps.is_dir():
         for p in sorted(vps.glob("*.service")) + sorted(vps.glob("*.timer")):
             if p.name not in approved and "forward-collection" in p.read_text(encoding="utf-8"):
                 problems.append(f"{p.name}: another unit references the collector (it must stand alone)")
-    return not problems, {"problems": problems, "committed": sorted(texts), "fires_local": list(C.SCHEDULER_DESIGN["fires_local"]),
+            if p.name not in approved and "discontinuity-scan" in p.read_text(encoding="utf-8"):
+                problems.append(f"{p.name}: another unit references the scan (it must stand alone)")
+    return not problems, {"problems": problems, "committed": sorted(texts), "fires_local": list(C.SCHEDULER_DESIGN["fires_local"]), "scan_local": C.SCHEDULER_DESIGN["scan_local"],
                           "dormancy": "installed only by an administrator; the wrapper refuses without FORWARD_COLLECTION_ARMED"}
 
 

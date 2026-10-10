@@ -2,16 +2,18 @@
 # being in this directory (or in the mechanism image) does nothing. The wrapper it triggers also refuses without its arming file.
 #
 # Two fires per session day, both on the calendar day AFTER the session, in Jerusalem time (the tag every other production timer uses):
-#   04:00  first attempt. The pipeline normally ends ~02:25 and, on the 14-day earnings-calendar re-fetch night, ~03:14 (observed 2026-10-08 03:13:43), so
-#          04:00 leaves 46 minutes after the slowest observed night and runs after the 03:30 ledger evaluator. It is NOT trusted to mean "the pipeline is done":
-#          the collector verifies the session's own price bar, its written snapshots, the sector-history polls and (once capture is enabled) a COMPLETE capture
-#          run, so a late, failed or partial pipeline yields INCOMPLETE (exit 2, an alert state), never COMPLETE.
-#   08:15  the recovery attempt: the same session again (idempotent; a lock refusal exits 3, which is not an alert). Also after the 05:00 price safety net.
+#   06:45  first attempt. It follows the night's single price-discontinuity scan (donchian-discontinuity-scan.timer, 06:20), which itself follows the final
+#          post-market retry (06:00 start, 9-16 min). That retry loads the late-arriving bars (a recurring straggler arrived 23:46Z-02:47Z on four consecutive
+#          nights), so by 06:45 the stored prices, the scan evidence and the pipeline's output are final for the night. The collector is still NOT trusted to
+#          mean "everything is done": it verifies the session's own price bar, a COMPLETE scan whose fingerprints match the stored prices, the sector-history
+#          polls and (once capture is enabled) a COMPLETE capture run; anything missing yields INCOMPLETE (exit 2, an alert state), never COMPLETE.
+#   08:15  the recovery attempt: the same session again. It cannot repair a stale scan (strict fingerprint rule), but a session whose snapshot is already
+#          committed and valid is REUSED read-only (never rewritten, never turned INCOMPLETE by a later price change), so the second fire is an idempotent check.
 # The second fire's worst case (08:15 + 45 min timeout + 60 s) is still before 00:00 UTC of session+2, so with availability_grace_days=1 every
 # observation this schedule can write is known before its decision deadline (contract.required_grace_days() computes this over every weekday of
 # both daylight-saving offsets; a test pins it). The weekend fires find nothing new to do and exit 0 ("latest completed session" is unchanged).
 [Timer]
-OnCalendar=*-*-* 04:00:00 Asia/Jerusalem
+OnCalendar=*-*-* 06:45:00 Asia/Jerusalem
 OnCalendar=*-*-* 08:15:00 Asia/Jerusalem
 Persistent=true
 RandomizedDelaySec=60

@@ -38,7 +38,7 @@ def repo(tmp_path_factory):
         shutil.copy(f, r / "mechanism" / f.replace("\\", "/").rsplit("/", 1)[1])
     vps = r / "deploy" / "vps"
     vps.mkdir(parents=True)
-    for name in A.UNIT_FILES:
+    for name in A.UNIT_FILES + A.SCAN_FILES:
         shutil.copy(FE.ROOT + "/deploy/vps/" + name, vps / name)
     return r
 

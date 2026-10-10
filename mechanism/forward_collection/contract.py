@@ -40,6 +40,9 @@ ALERT_EXIT_CODES = (EXIT_INCOMPLETE, EXIT_MISSED, EXIT_REFUSED)   # LOCKED alone
 REASON_PAST_DEADLINE = "past_decision_deadline"
 REASON_NOT_LATEST = "session_is_not_the_newest_loaded_session"
 REASON_NOT_LOADED = "session_not_available"
+REASON_SNAPSHOT_PARTIAL = "committed_snapshot_partial"            # some but not all of the session's observed rows exist: it cannot be completed, only investigated
+REASON_SNAPSHOT_INCONSISTENT = "committed_snapshot_inconsistent"    # the stored rows contradict each other or fall outside the allowed window
+REASON_SNAPSHOT_PROBLEMS = (REASON_SNAPSHOT_PARTIAL, REASON_SNAPSHOT_INCONSISTENT)
 
 # the writers' versions the dataset spec must name (pinned against the writers themselves by a test, never trusted blindly)
 COLLECTOR_VERSIONS: Dict[str, Any] = {
@@ -218,7 +221,8 @@ def classify(session: date, results: Sequence[StepResult], *, apply: bool, locke
     missing = [n for n in need if n not in by or by[n].outcome not in SUCCESS]
     permanent = [r for r in results if r.outcome == REFUSED and r.detail.get("reason") == REASON_PAST_DEADLINE] + \
                 [r for r in results if r.name == STEP_VERIFY and r.detail.get("permanent_problems")] + \
-                [r for r in results if r.name == STEP_OBSERVE and r.outcome == FAILED and r.detail.get("reason") == REASON_NOT_LATEST]
+                [r for r in results if r.name == STEP_OBSERVE and r.outcome == FAILED and r.detail.get("reason") == REASON_NOT_LATEST] + \
+                [r for r in results if r.name == STEP_OBSERVE and r.outcome == FAILED and r.detail.get("reason") in REASON_SNAPSHOT_PROBLEMS]
     sector_gap = [r for r in results if r.name == STEP_SECTOR_HISTORY and r.detail.get("permanent_problems")]
     if sector_gap and not permanent:
         return MISSED, missing, ("the sector history for this session can no longer be completed (the refresh did not happen before the decision "
@@ -239,7 +243,12 @@ SCHEDULER_DESIGN: Dict[str, Any] = {
     "command": "python -m forward_collection run --latest-completed --apply --with-sector-history-check --with-capture-check --code-ref <mechanism image tag>",
     "wrapper": "run_channel_sender.sh-style one-shot `docker compose run --rm` at CURRENT_MECHANISM_SHA, flock'ed",
     "timezone": "Asia/Jerusalem",
-    "fires_local": ("04:00", "08:15"),
+    "fires_local": ("06:45", "08:15"),
+    "scan": "donchian-discontinuity-scan.{service,timer} (one pair, committed under deploy/vps but NOT INSTALLED): exactly one `build_dataset.py --scan-only --session latest-completed` per night, after the final post-market retry has started AND finished (it takes the retry lock and holds it); never a recurring rescan loop",
+    "scan_local": "06:20",
+    "last_retry_start_local": "06:00",         # the post-market retry timer: 23:45 then every 20 min 00:00-05:40, then 06:00 Asia/Jerusalem (donchian-postmarket-retry.timer)
+    "retry_max_runtime_minutes": 20,           # OBSERVED 9-16 min per run; 20 is the bound the scan timer is placed after
+    "scan_budget_minutes": 25,                 # the scan may wait up to 17 min for a running retry, then runs ~1-2 min (measured 57-70 s on production data)
     "fires_on": "the calendar day AFTER the session (Tue..Sat for Mon..Fri sessions)",
     "timeout_minutes": 45,
     "persistent": True,
@@ -268,6 +277,17 @@ def fire_instants_utc(session: date, design: Mapping[str, Any] = SCHEDULER_DESIG
 def worst_case_finish_utc(session: date, design: Mapping[str, Any] = SCHEDULER_DESIGN) -> datetime:
     """The last fire of the session plus the unit's timeout, plus the timer's RandomizedDelaySec (60 s)."""
     return fire_instants_utc(session, design)[-1] + timedelta(minutes=int(design["timeout_minutes"]), seconds=60)
+
+
+def scan_instant_utc(session: date, design: Mapping[str, Any] = SCHEDULER_DESIGN) -> datetime:
+    """The nominal start of the night's single scan: `scan_local` on the calendar day after the session, in the schedule's own timezone."""
+    h, m = (int(x) for x in design["scan_local"].split(":"))
+    return datetime.combine(session + timedelta(days=1), time(h, m), tzinfo=ZoneInfo(design["timezone"])).astimezone(timezone.utc)
+
+
+def last_retry_start_utc(session: date, design: Mapping[str, Any] = SCHEDULER_DESIGN) -> datetime:
+    h, m = (int(x) for x in design["last_retry_start_local"].split(":"))
+    return datetime.combine(session + timedelta(days=1), time(h, m), tzinfo=ZoneInfo(design["timezone"])).astimezone(timezone.utc)
 
 
 def required_grace_days(design: Mapping[str, Any] = SCHEDULER_DESIGN, year: int = 2026) -> int:
@@ -299,6 +319,20 @@ def validate_design(grace_days: int, design: Mapping[str, Any] = SCHEDULER_DESIG
     f1, f2 = (int(x) for x in design["fires_local"][0].split(":"))
     if (f1 * 60 + f2) < (h * 60 + m + int(design["first_fire_margin_minutes"])):
         problems.append("the first fire is earlier than the pipeline's worst-case finish plus the margin: prices might not be loaded yet")
+    for key in ("scan_local", "last_retry_start_local", "retry_max_runtime_minutes", "scan_budget_minutes"):
+        if not design.get(key):
+            problems.append(f"scheduler design is missing '{key}'")
+    if any(not design.get(k) for k in ("scan_local", "last_retry_start_local", "retry_max_runtime_minutes", "scan_budget_minutes")):
+        return problems
+    sh, sm = (int(x) for x in design["scan_local"].split(":"))
+    rh, rm = (int(x) for x in design["last_retry_start_local"].split(":"))
+    scan_min, retry_min = sh * 60 + sm, rh * 60 + rm
+    if scan_min <= retry_min:
+        problems.append("the scan is not scheduled after the final post-market retry's scheduled start: a later retry could still write prices after it")
+    if scan_min < retry_min + int(design["retry_max_runtime_minutes"]):
+        problems.append("the scan is scheduled before the final retry's worst-case end (its scheduled start plus the retry's maximum runtime)")
+    if (f1 * 60 + f2) < scan_min + int(design["scan_budget_minutes"]):
+        problems.append("the first collector fire is earlier than the scan's start plus its wait-and-run budget: the scan evidence might not exist yet")
     return problems
 
 

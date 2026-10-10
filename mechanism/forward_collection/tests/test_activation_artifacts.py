@@ -30,7 +30,8 @@ EXPECTED_MANIFEST = {
                                      "add_sector_history_tables", "add_price_discontinuity_scan")),
     "deploy/db/research_roles.sql", "deploy/db/research_roles_verify.sql", "deploy/db/research_roles_rollback.sql", "deploy/db/rollback_24_31.sql", "deploy/db/rollback_32.sql",
     "deploy/db/pre_activation_backup.sh", "deploy/vps/run_forward_collection.sh", "deploy/vps/donchian-forward-collection.service",
-    "deploy/vps/donchian-forward-collection.timer", "deploy/vps/donchian-forward-collection-alert.service", "docs/operations/forward_research_preflight_spec.json",
+    "deploy/vps/donchian-forward-collection.timer", "deploy/vps/donchian-forward-collection-alert.service",
+    "deploy/vps/run_discontinuity_scan.sh", "deploy/vps/donchian-discontinuity-scan.service", "deploy/vps/donchian-discontinuity-scan.timer", "docs/operations/forward_research_preflight_spec.json",
 }
 
 

@@ -208,6 +208,7 @@ for u in donchian-forward-collection.service donchian-forward-collection.timer d
 $R 'systemd-analyze verify /etc/systemd/system/donchian-forward-collection.service /etc/systemd/system/donchian-forward-collection.timer && systemctl daemon-reload'
 ```
 **Expected:** no output from `verify`. **Verify:** `$R 'systemctl is-enabled donchian-forward-collection.timer; systemctl list-timers --all | grep -c forward'` → `disabled` and `0`. **Rollback:** `$R 'rm -f /etc/systemd/system/donchian-forward-collection* /opt/donchian/scripts/run_forward_collection.sh && systemctl daemon-reload'`.
+> **SUPERSEDED (lab, not deployed): the first fire moves to 06:45 and a single scan runs at 06:20 after the final post-market retry; see [DISCONTINUITY_SCAN_AND_COLLECTOR_TIMING.md](DISCONTINUITY_SCAN_AND_COLLECTOR_TIMING.md).**
 **Why 04:00 and not 03:15.** The pipeline normally ends about 02:25 local, but on the 14-day earnings-calendar re-fetch night it ended 03:13:43 (2026-10-07), 77 seconds before a 03:15 fire. 04:00 leaves 46 minutes after that slowest observed night and runs after the 03:30 ledger evaluator; 08:15 stays as the recovery attempt (and follows the 05:00 price safety net). The first fire is not trusted to mean "the pipeline is done": the collector resolves the session from the US calendar and then checks the session's own price bar, the written snapshots, the sector-history polls and (from the capture boundary on) a COMPLETE capture run, so a late, failed or partial pipeline gives INCOMPLETE (exit 2, an alert state) and the 08:15 attempt completes it idempotently. Proven by `test_schedule_timing_pure.py` and `test_schedule_dependencies_db.py`.
 **14b Action (read-only dry run through the production wrapper path, identity `donchian_app`):**
 `$D "cd /opt/donchian/compose && IMAGE_TAG=$TAG docker compose --project-directory /opt/donchian/compose -f docker-compose.yml -f docker-compose.prod.yml --env-file $ENVF run --rm -e PYTHONPATH=/app/mechanism channel-sender -m forward_collection run --latest-completed --with-sector-history-check --with-capture-check" </dev/null`
@@ -297,8 +298,11 @@ e49796921842fde116bf7fcefb641de718566e1ac447a2096238879ef2b1538f  deploy/db/rese
 e147ae29a396264330cd5b1ccc5e4e8d664b8cdd5b9a8028c15121e9b9ce00d1  deploy/db/pre_activation_backup.sh
 7f927df3e2590292cf14b397d660458aea7f01d8f40f5b7c6de74fe54ef21905  deploy/vps/run_forward_collection.sh
 d024b112623c9093fa41775ba707a2d9ddb5eb7c4184f8591a98dfea21fb50df  deploy/vps/donchian-forward-collection.service
-c98c5e250aec3b12124860752f066b939e7782089b221b70d2aba926475eacf7  deploy/vps/donchian-forward-collection.timer
+d6ba456b95e0e88e9cdac4506f50c8da87cf3e7560b3d5de9690e9840946be27  deploy/vps/donchian-forward-collection.timer
 39f2c9baeedda1eb7ca3a72aefc1f1b1bcf47cae04f07d832701983836667185  deploy/vps/donchian-forward-collection-alert.service
+4305bb298a082b082e2a049d5ca2e6d7518289727b7778f7ce64522c175a781b  deploy/vps/donchian-discontinuity-scan.timer
+78713bf765ee6a417b0acb795f8cd8b39187c6f9cc22eb38b8b9da30c6a85a33  deploy/vps/donchian-discontinuity-scan.service
+9bcfaa0478790aabdd55d92de675c5b5076e556ef6a1238bd1ceb12f0286100c  deploy/vps/run_discontinuity_scan.sh
 f579ff201446158552d175bdab73c94bf81a3943f3ab4146947d08ed22ce1f10  docs/operations/forward_research_preflight_spec.json
 ```
 

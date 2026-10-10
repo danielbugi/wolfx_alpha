@@ -77,7 +77,7 @@ def test_the_cutoff_follows_the_overnight_cycle_and_precedes_the_next_one_in_eve
     for s in [date(2026, 3, 16), date(2026, 7, 6), date(2026, 10, 26), date(2026, 12, 7)]:
         cut = inputs.knowledge_cutoff(s)
         nxt = s + timedelta(days=1)
-        for hh, mm in ((4, 0), (8, 15)):
+        for hh, mm in ((6, 45), (8, 15)):
             assert datetime.combine(nxt, time(hh, mm), jer).astimezone(UTC) < cut, (s, hh)
         assert datetime.combine(nxt, time(23, 45), jer).astimezone(UTC) > cut, s
 
@@ -267,7 +267,7 @@ def test_prune_removes_only_rows_a_complete_rebuild_no_longer_detects_and_a_reap
 
 def test_main_prunes_only_after_a_complete_replace_and_no_longer_deletes_the_table_up_front():
     src = inspect.getsource(bd.main) + inspect.getsource(bd._build)
-    assert "if args.replace and not args.test and not args.limit:" in src and "prune_discontinuities" in src
+    assert "if (args.replace or args.scan_only) and not args.test and not args.limit:" in src and "prune_discontinuities" in src
     assert 'DELETE FROM price_discontinuities"' not in src                                  # the up-front delete that destroyed provenance is gone
     assert "NOW()" not in inspect.getsource(bd.upsert_discontinuities) and "detected_at=NOW()" not in inspect.getsource(bd)
 

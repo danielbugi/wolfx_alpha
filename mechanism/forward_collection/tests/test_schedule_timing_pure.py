@@ -33,23 +33,23 @@ SESSIONS = weekday_sessions()
 WEEKDAYS = [d for d in SESSIONS if date(2026, 1, 1) <= d <= date(2026, 12, 31)]
 
 
-def test_the_declared_schedule_is_04_00_and_08_15_in_jerusalem_time():
-    assert C.SCHEDULER_DESIGN["fires_local"] == ("04:00", "08:15") and C.SCHEDULER_DESIGN["timezone"] == "Asia/Jerusalem"
+def test_the_declared_schedule_is_06_45_and_08_15_in_jerusalem_time():
+    assert C.SCHEDULER_DESIGN["fires_local"] == ("06:45", "08:15") and C.SCHEDULER_DESIGN["timezone"] == "Asia/Jerusalem"
     assert "--with-capture-check" in C.SCHEDULER_DESIGN["command"] and "--with-sector-history-check" in C.SCHEDULER_DESIGN["command"]
     assert C.validate_design(1) == []
 
 
-@pytest.mark.parametrize("label,session,first_utc,first_ny_hour", [
-    ("summer (both on DST)", date(2026, 7, 6), (1, 0), 21),
-    ("winter (neither on DST)", date(2026, 12, 7), (2, 0), 21),
-    ("spring mismatch: US on DST, Israel not yet", date(2026, 3, 16), (2, 0), 22),
-    ("autumn mismatch: Israel off DST, US still on", date(2026, 10, 26), (2, 0), 22),
+@pytest.mark.parametrize("label,session,first_utc,first_ny,ny_day_offset", [
+    ("summer (both on DST)", date(2026, 7, 6), (3, 45), (23, 45), 0),
+    ("winter (neither on DST)", date(2026, 12, 7), (4, 45), (23, 45), 0),
+    ("spring mismatch: US on DST, Israel not yet", date(2026, 3, 16), (4, 45), (0, 45), 1),
+    ("autumn mismatch: Israel off DST, US still on", date(2026, 10, 26), (4, 45), (0, 45), 1),
 ])
-def test_the_fires_follow_the_local_clock_across_every_daylight_saving_regime(label, session, first_utc, first_ny_hour):
+def test_the_fires_follow_the_local_clock_across_every_daylight_saving_regime(label, session, first_utc, first_ny, ny_day_offset):
     f1, f2 = C.fire_instants_utc(session)
     assert (f1.hour, f1.minute) == first_utc, label
-    assert f1.astimezone(JER).strftime("%H:%M") == "04:00" and f2.astimezone(JER).strftime("%H:%M") == "08:15"
-    assert f1.astimezone(NY).hour == first_ny_hour and f1.astimezone(NY).date() == session          # the evening of the session itself, New York time
+    assert f1.astimezone(JER).strftime("%H:%M") == "06:45" and f2.astimezone(JER).strftime("%H:%M") == "08:15"
+    assert (f1.astimezone(NY).hour, f1.astimezone(NY).minute) == first_ny and f1.astimezone(NY).date() == session + timedelta(days=ny_day_offset)
     assert f1.date() == session + timedelta(days=1) and f2.date() == session + timedelta(days=1)          # the calendar day AFTER the session (UTC)
 
 
@@ -81,10 +81,10 @@ def test_the_first_fire_leaves_a_real_margin_after_the_slowest_observed_pipeline
     assert any("pipeline" in p for p in C.validate_design(1, old)), "the validator must now reject the old 03:15 first fire"
 
 
-def test_the_first_fire_follows_the_ledger_evaluator_and_precedes_the_recovery_fire_by_hours():
+def test_the_first_fire_follows_the_ledger_evaluator_and_precedes_the_recovery_fire_by_at_least_an_hour():
     h, m = (int(x) for x in C.SCHEDULER_DESIGN["evaluator_local"].split(":"))
     f1, f2 = (tuple(int(x) for x in t.split(":")) for t in C.SCHEDULER_DESIGN["fires_local"])
-    assert f1 > (h, m) and (f2[0] * 60 + f2[1]) - (f1[0] * 60 + f1[1]) >= 4 * 60
+    assert f1 > (h, m) and (f2[0] * 60 + f2[1]) - (f1[0] * 60 + f1[1]) >= 60
 
 
 def test_both_fires_are_before_the_decision_deadline_with_one_grace_day_in_every_regime():
@@ -94,11 +94,11 @@ def test_both_fires_are_before_the_decision_deadline_with_one_grace_day_in_every
         assert C.worst_case_finish_utc(s) - decision_deadline(s, 0) < timedelta(days=1)           # i.e. one grace day is exactly enough
 
 
-def test_a_first_fire_earlier_than_the_worst_observed_finish_plus_margin_is_rejected_and_04_00_is_the_earliest_accepted_round_time():
+def test_a_first_fire_before_the_scan_or_the_pipeline_is_final_is_rejected_and_06_45_is_the_earliest_accepted():
     ok, bad = [], []
-    for hh in range(2, 6):
-        for mm in (0, 30):
-            d = dict(C.SCHEDULER_DESIGN, fires_local=(f"{hh:02d}:{mm:02d}", "08:15"))
-            (bad if any("pipeline" in p for p in C.validate_design(1, d)) else ok).append(f"{hh:02d}:{mm:02d}")
-    assert ok[0] == "04:00" and "03:30" in bad                                  # worst observed finish 03:15 + the 30-minute margin = 03:45
-    assert all(t < "03:45" for t in bad) and all(t >= "03:45" for t in ok)
+    for hh in range(2, 9):
+        for mm in (0, 15, 30, 45):
+            d = dict(C.SCHEDULER_DESIGN, fires_local=(f"{hh:02d}:{mm:02d}", "09:30"))
+            (bad if any(("pipeline" in p or "scan" in p) for p in C.validate_design(1, d)) else ok).append(f"{hh:02d}:{mm:02d}")
+    assert ok[0] == "06:45" and "06:30" in bad and "03:30" in bad                # the scan's start (06:20) + its 25 minute budget dominates the old pipeline limit (03:45)
+    assert all(t < "06:45" for t in bad) and all(t >= "06:45" for t in ok)
