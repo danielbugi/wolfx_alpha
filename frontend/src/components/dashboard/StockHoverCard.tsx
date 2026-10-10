@@ -5,7 +5,6 @@ import { Chip } from '@nextui-org/react';
 import LightweightCandlestickChart from '@/components/charts/LightweightCandlestickChart';
 import { HoverStockSummary } from '@/hooks/useHoverStockSummary';
 import { positionPct, pctChange } from '@/lib/priceMath';
-import { confidenceColor } from '@/lib/uiColors';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 export interface StockHoverCardProps {
@@ -24,19 +23,15 @@ export default function StockHoverCard({ symbol, data }: StockHoverCardProps) {
 
   const currentPrice = last?.close;
   const changePct = pctChange(last?.close, prev?.close);
-  const channelPos = positionPct(
-    currentPrice ?? undefined,
-    last?.donchian_low_20 ?? undefined,
-    last?.donchian_high_20 ?? undefined
-  );
+  const channelPos = positionPct(currentPrice, last?.donchian_low_20, last?.donchian_high_20);
 
   return (
     <div className="w-80 p-1">
       <div className="flex justify-between items-center mb-2">
         <p className="font-bold text-slate-800 text-sm">{symbol}</p>
         {data.signal?.has_signal ? (
-          <Chip size="sm" className={`text-xs ${confidenceColor(data.signal.ml_confidence)}`}>
-            {data.signal.ml_confidence?.replace('_', ' ') || 'signal'}
+          <Chip size="sm" className="bg-accent-soft text-accent text-xs font-medium">
+            Active signal
           </Chip>
         ) : (
           signalLoaded && (
@@ -59,7 +54,7 @@ export default function StockHoverCard({ symbol, data }: StockHoverCardProps) {
         <>
           <div className="flex justify-between items-baseline mb-1">
             <p className="text-lg font-bold text-slate-800">
-              {currentPrice != null ? `$${currentPrice.toFixed(2)}` : 'N/A'}
+              {currentPrice != null ? `$${currentPrice.toFixed(2)}` : '—'}
             </p>
             {changePct != null && (
               <p className={`text-sm font-semibold ${changePct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
@@ -75,7 +70,9 @@ export default function StockHoverCard({ symbol, data }: StockHoverCardProps) {
             height={110}
             showVolume={false}
           />
-          <p className="text-xs text-slate-500 mt-1">Channel position: {channelPos.toFixed(0)}%</p>
+          <p className="text-xs text-slate-500 mt-1">
+            20-day channel position: {channelPos != null ? `${channelPos.toFixed(0)}%` : '—'}
+          </p>
         </>
       )}
     </div>
