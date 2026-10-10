@@ -4,12 +4,13 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Card, CardBody, CardHeader, Chip, Divider, Spinner } from '@nextui-org/react';
+import { Card, CardBody, CardHeader, Chip, Divider } from '@nextui-org/react';
 import { CheckCircleIcon, ClockIcon, ExclamationTriangleIcon, MinusCircleIcon } from '@heroicons/react/24/outline';
 import { telegramApi, toControlError } from '@/services/telegramApi';
 import type { ChannelTarget, ScheduleReport, ScheduleStatus } from '@/services/telegramApi';
 import ErrorAlert from '@/components/common/ErrorAlert';
 import { Btn } from '@/components/telegram/ui';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 const STATUS_CHIP: Record<ScheduleStatus, { icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; className: string; label: string }> = {
   done: { icon: CheckCircleIcon, className: 'bg-emerald-100 text-emerald-800', label: 'Done' },
@@ -81,7 +82,7 @@ export default function ScheduleView({ targets }: { targets: ChannelTarget[] }) 
       <Divider className="bg-slate-100" />
       <CardBody className="p-0">
         {loading && !report ? (
-          <div className="flex justify-center py-8"><Spinner color="primary" /></div>
+          <div className="flex justify-center py-8"><LoadingSpinner /></div>
         ) : error ? (
           <div className="p-4"><ErrorAlert title="Cannot load the schedule" message={error.message} onRetry={load} /></div>
         ) : report ? (

@@ -36,7 +36,8 @@ function SessionsRow({ userId }: { userId: number }) {
   if (sessions.length === 0) return <p className="text-xs text-slate-400">No sessions.</p>;
 
   return (
-    <table className="w-full text-xs">
+    <div className="overflow-x-auto">
+    <table className="w-full min-w-[32rem] text-xs">
       <thead>
         <tr className="text-left text-slate-400">
           <th className="py-1 pr-3 font-medium">Created</th>
@@ -66,6 +67,7 @@ function SessionsRow({ userId }: { userId: number }) {
         ))}
       </tbody>
     </table>
+    </div>
   );
 }
 
@@ -178,10 +180,10 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-6">
+    <div className="container mx-auto px-4 pb-12 pt-6 sm:px-6 lg:px-8 max-w-5xl space-y-6">
       <div>
-        <h1 className="text-lg font-semibold text-slate-800">Users</h1>
-        <p className="text-sm text-slate-500">Accounts that may sign in to this dashboard, and their active sessions.</p>
+        <h1 className="large-title">Users</h1>
+        <p className="mt-1.5 max-w-3xl text-[15px] leading-relaxed text-slate-500">Accounts that may sign in to this dashboard, and their active sessions.</p>
       </div>
 
       <CreateUserForm onCreated={load} />

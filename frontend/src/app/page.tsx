@@ -5,27 +5,22 @@ import {
   Card,
   CardBody,
   CardHeader,
-  Table,
-  TableHeader,
-  TableColumn,
-  TableBody,
-  TableRow,
-  TableCell,
   Button,
   Chip,
-  Divider,
 } from '@nextui-org/react';
 import { ResponsiveContainer, Treemap } from 'recharts';
 import { apiClient, screenerApi, momentumBoardApi, momentumLeadersApi, marketApi, MainPageData, MarketOverview, MomentumBoardResult, MomentumLeadersBoard, MarketIndexEntry, SectorHistoryEntry } from '@/services/api';
-import SymbolHoverLink from '@/components/dashboard/SymbolHoverLink';
 import { usePagePerf } from '@/hooks/usePagePerf';
 import { useTopProgress } from '@/lib/topProgress';
-import LoadingSpinner from '@/components/common/LoadingSpinner';
+import { DashboardSkeleton } from '@/components/ui/Skeleton';
 import ErrorAlert from '@/components/common/ErrorAlert';
 import MarketIndicesStrip from '@/components/dashboard/MarketIndicesStrip';
 import SectorTrendChart from '@/components/dashboard/SectorTrendChart';
 import MomentumBoard, { BoardCategory } from '@/components/dashboard/MomentumBoard';
 import MomentumLeaders from '@/components/dashboard/MomentumLeaders';
+import MarketMovers from '@/components/dashboard/MarketMovers';
+import SegmentedControl from '@/components/ui/SegmentedControl';
+import { ResolvedTheme, useResolvedTheme } from '@/lib/theme';
 
 function timeAgo(date: Date | null): string {
   if (!date) return '—';
@@ -38,11 +33,18 @@ function timeAgo(date: Date | null): string {
   return `${hours}h ago`;
 }
 
-function sectorColor(perf: number): string {
-  if (perf >= 1) return '#059669';
-  if (perf >= 0) return '#6ee7b7';
-  if (perf >= -1) return '#fca5a5';
-  return '#dc2626';
+// Same thresholds in both themes; the dark set is deeper so the heatmap doesn't glare on a dark page.
+const SECTOR_PALETTE = {
+  light: { strongUp: '#34c759', up: '#b4ecc3', down: '#ffc2bd', strongDown: '#ff6961', label: '#1d1d1f', sub: '#3a3a3c', gap: '#fff' },
+  dark: { strongUp: '#248a3d', up: '#1f4a2b', down: '#5a2826', strongDown: '#c0392f', label: '#f5f5f7', sub: '#d1d1d6', gap: '#1c1c1e' },
+} as const;
+
+function sectorColor(perf: number, theme: ResolvedTheme): string {
+  const p = SECTOR_PALETTE[theme];
+  if (perf >= 1) return p.strongUp;
+  if (perf >= 0) return p.up;
+  if (perf >= -1) return p.down;
+  return p.strongDown;
 }
 
 const SECTOR_ABBR: Record<string, string> = {
@@ -67,6 +69,8 @@ function fitSectorLabel(name: string, width: number, fontSize: number): string {
 
 export default function DashboardPage() {
   const { markLoaded } = usePagePerf('/');
+  const theme = useResolvedTheme();
+  const palette = SECTOR_PALETTE[theme];
   const { start: startProgress, done: doneProgress } = useTopProgress();
 
   // `initialLoading` gates the full-page state (true only until the first
@@ -243,21 +247,13 @@ export default function DashboardPage() {
   }, [fetchBoard]);
 
   if (initialLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-cyan-50">
-        <div className="text-center">
-          <LoadingSpinner size="large" className="mb-4" />
-          <p className="text-slate-600 text-base font-medium">Loading Trading Data</p>
-          <p className="text-slate-500 text-sm mt-1">Connecting to market feeds</p>
-        </div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-cyan-50 p-4">
-        <Card className="max-w-md w-full shadow-lg">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <Card className="max-w-md w-full border border-black/[0.05] shadow-lg">
           <CardBody className="p-6">
             <ErrorAlert
               title="Connection Error"
@@ -276,8 +272,8 @@ export default function DashboardPage() {
   if (!data) return null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-cyan-50">
-      <div className="container mx-auto p-4 max-w-7xl">
+    <div className="min-h-screen bg-slate-50">
+      <div className="container mx-auto px-4 pb-12 pt-6 sm:px-6 lg:px-8 max-w-7xl">
 
         {/* Market Indices Strip -- real S&P 500/Nasdaq/Russell/VIX/etc. data,
             placed above everything else: traders orient top-down (macro
@@ -285,16 +281,16 @@ export default function DashboardPage() {
         <MarketIndicesStrip indices={marketIndices} loading={marketIndicesLoading} error={marketIndicesError} />
 
         {/* Header */}
-        <div className="flex justify-between items-center mb-6 p-4 bg-white rounded-lg shadow-sm border border-slate-200">
+        <div className="px-1 pt-2 pb-1 flex flex-wrap justify-between items-end gap-x-6 gap-y-3 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">Trading Dashboard</h1>
-            <p className="text-slate-600 text-sm mt-1">Professional market analysis and confirmed momentum signals</p>
+            <h1 className="large-title">Dashboard</h1>
+            <p className="mt-1.5 max-w-3xl text-[15px] leading-relaxed text-slate-500">Professional market analysis and confirmed momentum signals</p>
           </div>
           <div className="flex items-center gap-3">
             <div className="text-right">
               <p className="text-xs text-slate-500 flex items-center justify-end gap-1.5">
                 {refreshing && (
-                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-500 animate-pulse" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
                 )}
                 {refreshing ? 'Refreshing…' : 'Last updated'}
               </p>
@@ -307,7 +303,7 @@ export default function DashboardPage() {
               size="sm"
               onClick={fetchData}
               isLoading={refreshing}
-              className="bg-slate-700 text-white"
+              className="rounded-full bg-slate-900 px-4 font-medium text-white"
             >
               {refreshing ? 'Refreshing' : 'Refresh'}
             </Button>
@@ -316,40 +312,40 @@ export default function DashboardPage() {
 
         {/* Market Summary Cards */}
         {data?.market_summary && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-            <Card className="shadow-sm border border-slate-200">
-              <CardBody className="text-center p-4">
-                <p className="text-xs text-slate-500 mb-2 uppercase tracking-wide">Total Symbols</p>
-                <p className="text-xl font-bold text-slate-800">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+            <Card className="border border-black/[0.05] shadow-sm">
+              <CardBody className="p-5">
+                <p className="text-[13px] font-medium text-slate-500">Total Symbols</p>
+                <p className="mt-1 text-[28px] font-semibold leading-tight tracking-[-0.02em] tabular-nums text-slate-900">
                   {data.market_summary.total_symbols.toLocaleString()}
                 </p>
-                <p className="text-[10px] text-slate-400 mt-1">tracked, incl. illiquid</p>
+                <p className="mt-1 text-xs text-slate-400">tracked, incl. illiquid</p>
               </CardBody>
             </Card>
 
-            <Card className="shadow-sm border border-slate-200">
-              <CardBody className="text-center p-4">
-                <p className="text-xs text-slate-500 mb-2 uppercase tracking-wide">Volume Ratio</p>
-                <p className="text-xl font-bold text-slate-800">
+            <Card className="border border-black/[0.05] shadow-sm">
+              <CardBody className="p-5">
+                <p className="text-[13px] font-medium text-slate-500">Volume Ratio</p>
+                <p className="mt-1 text-[28px] font-semibold leading-tight tracking-[-0.02em] tabular-nums text-slate-900">
                   {data.market_summary.avg_volume_ratio != null ? `${data.market_summary.avg_volume_ratio.toFixed(2)}x` : '—'}
                 </p>
               </CardBody>
             </Card>
 
-            <Card className="shadow-sm border border-slate-200">
-              <CardBody className="text-center p-4">
-                <p className="text-xs text-slate-500 mb-2 uppercase tracking-wide">Confirmed Today</p>
-                <p className="text-xl font-bold text-slate-800">
+            <Card className="border border-black/[0.05] shadow-sm">
+              <CardBody className="p-5">
+                <p className="text-[13px] font-medium text-slate-500">Confirmed Today</p>
+                <p className="mt-1 text-[28px] font-semibold leading-tight tracking-[-0.02em] tabular-nums text-slate-900">
                   {boardStarredTotal}
                 </p>
-                <p className="text-[10px] text-slate-400 mt-1">★ on 2+ Momentum Board lists</p>
+                <p className="mt-1 text-xs text-slate-400">★ on 2+ Momentum Board lists</p>
               </CardBody>
             </Card>
 
-            <Card className="shadow-sm border border-slate-200">
-              <CardBody className="text-center p-4">
-                <p className="text-xs text-slate-500 mb-2 uppercase tracking-wide">Data Updated</p>
-                <p className="text-sm font-semibold text-slate-700">
+            <Card className="border border-black/[0.05] shadow-sm">
+              <CardBody className="p-5">
+                <p className="text-[13px] font-medium text-slate-500">Data Updated</p>
+                <p className="mt-2 text-[15px] font-semibold tabular-nums text-slate-900">
                   {data.market_summary.last_updated}
                 </p>
               </CardBody>
@@ -367,60 +363,52 @@ export default function DashboardPage() {
           />
         )}
         {marketOverview && (
-          <Card className="mb-6 shadow-sm border border-slate-200">
-            <CardHeader className="p-3 pb-2 flex items-center justify-between flex-wrap gap-2">
-              <h3 className="text-sm font-semibold text-slate-700">Market Overview — Today</h3>
+          <Card className="mb-6 border border-black/[0.05] shadow-sm">
+            <CardHeader className="px-5 pt-5 pb-3 flex items-center justify-between flex-wrap gap-2">
+              <h3 className="text-[17px] font-semibold text-slate-900">Market Overview <span className="font-normal text-slate-400">Today</span></h3>
               <div className="flex items-center gap-2">
                 {marketOverviewError && (
                   <Chip size="sm" className="bg-amber-100 text-amber-800 text-[10px]">
                     showing stale data — last refresh failed
                   </Chip>
                 )}
-                <Button
-                  size="sm"
-                  variant={sectorView === 'heatmap' ? 'solid' : 'bordered'}
-                  className={sectorView === 'heatmap' ? 'bg-slate-700 text-white text-xs h-7' : 'text-xs h-7 border-slate-300'}
-                  onClick={() => setSectorView('heatmap')}
-                >
-                  Heatmap
-                </Button>
-                <Button
-                  size="sm"
-                  variant={sectorView === 'trend' ? 'solid' : 'bordered'}
-                  className={sectorView === 'trend' ? 'bg-slate-700 text-white text-xs h-7' : 'text-xs h-7 border-slate-300'}
-                  onClick={() => setSectorView('trend')}
-                >
-                  Trend
-                </Button>
+                <SegmentedControl
+                  aria-label="Sector view"
+                  options={[
+                    { value: 'heatmap', label: 'Heatmap' },
+                    { value: 'trend', label: 'Trend' },
+                  ]}
+                  value={sectorView}
+                  onChange={setSectorView}
+                />
               </div>
             </CardHeader>
-            <Divider className="bg-slate-200" />
-            <CardBody className="p-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                <div className="bg-slate-50 rounded p-3 text-center">
-                  <p className="text-xs text-slate-500 mb-1">Advance/Decline</p>
-                  <p className="text-lg font-bold text-slate-800">
+            <CardBody className="px-5 pb-5 pt-1">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                <div className="bg-slate-50 rounded-xl p-4">
+                  <p className="text-xs font-medium text-slate-500 mb-1">Advance/Decline</p>
+                  <p className="text-xl font-semibold tracking-[-0.01em] tabular-nums text-slate-900">
                     {marketOverview.market_breadth.gainers} / {marketOverview.market_breadth.losers}
                   </p>
                   <p className="text-xs text-slate-500">ratio {marketOverview.market_breadth.advance_decline_ratio.toFixed(2)}</p>
                 </div>
-                <div className="bg-slate-50 rounded p-3 text-center">
-                  <p className="text-xs text-slate-500 mb-1">Unusual Volume</p>
-                  <p className="text-lg font-bold text-slate-800">{marketOverview.market_breadth.unusual_volume_count}</p>
+                <div className="bg-slate-50 rounded-xl p-4">
+                  <p className="text-xs font-medium text-slate-500 mb-1">Unusual Volume</p>
+                  <p className="text-xl font-semibold tracking-[-0.01em] tabular-nums text-slate-900">{marketOverview.market_breadth.unusual_volume_count}</p>
                   <p className="text-xs text-slate-500">stocks</p>
                 </div>
-                <div className="bg-slate-50 rounded p-3 text-center">
-                  <p className="text-xs text-slate-500 mb-1">Overbought / Oversold</p>
-                  <p className="text-lg font-bold text-slate-800">
+                <div className="bg-slate-50 rounded-xl p-4">
+                  <p className="text-xs font-medium text-slate-500 mb-1">Overbought / Oversold</p>
+                  <p className="text-xl font-semibold tracking-[-0.01em] tabular-nums text-slate-900">
                     <span className="text-red-600">{marketOverview.market_breadth.overbought_count}</span>
                     {' / '}
                     <span className="text-emerald-600">{marketOverview.market_breadth.oversold_count}</span>
                   </p>
                   <p className="text-xs text-slate-500">RSI &gt;70 / &lt;30</p>
                 </div>
-                <div className="bg-slate-50 rounded p-3 text-center">
-                  <p className="text-xs text-slate-500 mb-1">Avg RSI / Vol Ratio</p>
-                  <p className="text-lg font-bold text-slate-800">
+                <div className="bg-slate-50 rounded-xl p-4">
+                  <p className="text-xs font-medium text-slate-500 mb-1">Avg RSI / Vol Ratio</p>
+                  <p className="text-xl font-semibold tracking-[-0.01em] tabular-nums text-slate-900">
                     {marketOverview.market_indicators.avg_rsi.toFixed(0)} / {marketOverview.market_indicators.avg_volume_ratio.toFixed(2)}x
                   </p>
                   <p className="text-xs text-slate-500">across {marketOverview.market_breadth.total_stocks} stocks</p>
@@ -428,7 +416,7 @@ export default function DashboardPage() {
               </div>
 
               <div className="flex justify-between items-center mb-2">
-                <p className="text-xs text-slate-500 uppercase tracking-wide">
+                <p className="text-xs text-slate-500">
                   {sectorView === 'heatmap'
                     ? 'Sector Performance — box size = # stocks, color = avg change. Click a sector to filter the Momentum Board below.'
                     : 'Sector Performance — 90-day cumulative return. Click a sector below to isolate it and filter the Momentum Board.'}
@@ -436,7 +424,7 @@ export default function DashboardPage() {
                 {selectedSector && (
                   <Chip
                     size="sm"
-                    className="bg-slate-700 text-white text-xs cursor-pointer"
+                    className="bg-accent text-white text-xs cursor-pointer"
                     onClose={() => setSelectedSector(null)}
                   >
                     {selectedSector}
@@ -450,6 +438,7 @@ export default function DashboardPage() {
                   onSelectSector={setSelectedSector}
                 />
               ) : (
+              <div className="overflow-hidden rounded-xl">
               <ResponsiveContainer width="100%" height={280}>
                 <Treemap
                   data={marketOverview.sector_performance.map((s) => ({
@@ -459,7 +448,7 @@ export default function DashboardPage() {
                     avg_performance: s.avg_performance,
                   }))}
                   dataKey="size"
-                  stroke="#fff"
+                  stroke={palette.gap}
                   isAnimationActive={false}
                   content={(node) => {
                     // Treemap hands back our own datum's fields on the node (see the
@@ -490,9 +479,10 @@ export default function DashboardPage() {
                           y={y}
                           width={width}
                           height={height}
+                          rx={6}
                           style={{
-                            fill: sectorColor(perf),
-                            stroke: isSelected ? '#0f172a' : '#fff',
+                            fill: sectorColor(perf, theme),
+                            stroke: isSelected ? palette.label : palette.gap,
                             strokeWidth: isSelected ? 3 : 2,
                           }}
                         />
@@ -502,12 +492,13 @@ export default function DashboardPage() {
                           textAnchor="middle"
                           fontSize={nameFontSize}
                           fontWeight={600}
-                          fill="#0f172a"
+                          fill={palette.label}
+                          stroke="none"
                         >
                           {label}
                         </text>
                         {canShowPerf && (
-                          <text x={x + width / 2} y={y + height / 2 + 11} textAnchor="middle" fontSize={10} fill="#1e293b">
+                          <text x={x + width / 2} y={y + height / 2 + 11} textAnchor="middle" fontSize={10} fill={palette.sub} stroke="none">
                             {perf >= 0 ? '+' : ''}
                             {perf.toFixed(2)}%
                           </text>
@@ -517,6 +508,7 @@ export default function DashboardPage() {
                   }}
                 />
               </ResponsiveContainer>
+              </div>
               )}
             </CardBody>
           </Card>
@@ -547,210 +539,16 @@ export default function DashboardPage() {
         />
 
         {/* Whole-Market Movers -- unlike Momentum Board above (breakout/near-breakout only,
-            confirmed by 2+ lists), these three rank every liquid stock regardless of Donchian
-            category: the widest-angle "what's moving" view on the page. */}
-        <div className="flex items-center gap-2 mb-3">
-          <h2 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Whole-Market Movers</h2>
-          <span className="text-xs text-slate-400">— any stock, not just breakout-confirmed names</span>
-        </div>
-
-        {/* Market Data Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-
-          {/* Top Gainers */}
-          {data?.top_gainers && (
-            <Card className="shadow-sm border border-slate-200">
-            <CardHeader className="p-3 pb-2">
-  <div className="flex justify-between items-center">
-    <h3 className="text-sm font-semibold text-slate-700">Top Gainers</h3>
-    <Button
-      size="sm"
-      variant="light"
-      className="text-xs"
-      onClick={() => window.location.href = '/screener?filter=gainers'}
-    >
-      View All
-    </Button>
-  </div>
-</CardHeader>
-              <Divider className="bg-slate-200"/>
-              <CardBody className="p-0">
-                <Table
-                  removeWrapper
-                  className="text-xs"
-                  classNames={{
-                    th: "bg-slate-50 text-slate-600 font-medium text-xs h-7",
-                    td: "text-xs py-1.5"
-                  }}
-                >
-                  <TableHeader>
-                    <TableColumn>SYMBOL</TableColumn>
-                    <TableColumn align="end">PRICE</TableColumn>
-                    <TableColumn align="end">CHANGE</TableColumn>
-                    <TableColumn>SECTOR</TableColumn>
-                  </TableHeader>
-                  <TableBody>
-                    {data.top_gainers.map((stock) => (
-                      <TableRow key={stock.symbol}>
-                        <TableCell>
-                          <SymbolHoverLink symbol={stock.symbol} />
-                        </TableCell>
-                        <TableCell className="text-right text-slate-700">
-                          ${stock.current_price.toFixed(2)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className="font-semibold text-emerald-600">
-                            +{stock.price_change_pct.toFixed(2)}%
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-slate-500 text-xs">
-                          {stock.sector}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardBody>
-            </Card>
-          )}
-
-          {/* Top Losers */}
-          {data?.top_losers && (
-            <Card className="shadow-sm border border-slate-200">
-             <CardHeader className="p-3 pb-2">
-  <div className="flex justify-between items-center">
-    <h3 className="text-sm font-semibold text-slate-700">Top Losers</h3>
-    <Button
-      size="sm"
-      variant="light"
-      className="text-xs"
-      onClick={() => window.location.href = '/screener?filter=losers'}
-    >
-      View All
-    </Button>
-  </div>
-</CardHeader>
-              <Divider className="bg-slate-200"/>
-              <CardBody className="p-0">
-                <Table
-                  removeWrapper
-                  className="text-xs"
-                  classNames={{
-                    th: "bg-slate-50 text-slate-600 font-medium text-xs h-7",
-                    td: "text-xs py-1.5"
-                  }}
-                >
-                  <TableHeader>
-                    <TableColumn>SYMBOL</TableColumn>
-                    <TableColumn align="end">PRICE</TableColumn>
-                    <TableColumn align="end">CHANGE</TableColumn>
-                    <TableColumn>SECTOR</TableColumn>
-                  </TableHeader>
-                  <TableBody>
-                    {data.top_losers.map((stock) => (
-                      <TableRow key={stock.symbol}>
-                        <TableCell>
-                          <SymbolHoverLink symbol={stock.symbol} />
-                        </TableCell>
-                        <TableCell className="text-right text-slate-700">
-                          ${stock.current_price.toFixed(2)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className="font-semibold text-red-600">
-                            {stock.price_change_pct.toFixed(2)}%
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-slate-500 text-xs">
-                          {stock.sector}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardBody>
-            </Card>
-          )}
-        </div>
-
-        {/* Unusual Volume - Full Width */}
-        {data?.unusual_volume && (
-          <Card className="shadow-sm border border-slate-200">
-        <CardHeader className="p-3 pb-2">
-  <div className="flex justify-between items-center">
-    <div>
-      <h3 className="text-sm font-semibold text-slate-700">Unusual Volume Activity</h3>
-      <p className="text-xs text-slate-500 mt-1">Stocks with significantly higher trading volume</p>
-    </div>
-    <Button
-      size="sm"
-      variant="light"
-      className="text-xs"
-      onClick={() => window.location.href = '/screener?filter=volume'}
-    >
-      View All
-    </Button>
-  </div>
-</CardHeader>
-            <Divider className="bg-slate-200"/>
-            <CardBody className="p-0">
-              <Table
-                removeWrapper
-                className="text-xs"
-                classNames={{
-                  th: "bg-slate-50 text-slate-600 font-medium text-xs h-7",
-                  td: "text-xs py-1.5"
-                }}
-              >
-                <TableHeader>
-                  <TableColumn>SYMBOL</TableColumn>
-                  <TableColumn align="end">PRICE</TableColumn>
-                  <TableColumn align="end">VOLUME</TableColumn>
-                  <TableColumn align="end">RATIO</TableColumn>
-                  <TableColumn align="end">CHANGE</TableColumn>
-                  <TableColumn>SECTOR</TableColumn>
-                </TableHeader>
-                <TableBody>
-                  {data.unusual_volume.map((stock) => (
-                    <TableRow key={stock.symbol}>
-                      <TableCell>
-                        <SymbolHoverLink symbol={stock.symbol} />
-                      </TableCell>
-                      <TableCell className="text-right text-slate-700">
-                        ${stock.current_price.toFixed(2)}
-                      </TableCell>
-                      <TableCell className="text-right text-slate-600">
-                        {(stock.volume / 1000000).toFixed(1)}M
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <span className={`font-semibold ${
-                          stock.volume_ratio == null ? 'text-slate-400' :
-                          stock.volume_ratio >= 3 ? 'text-red-600' :
-                          stock.volume_ratio >= 2 ? 'text-amber-600' : 'text-slate-600'
-                        }`}>
-                          {stock.volume_ratio != null ? `${stock.volume_ratio.toFixed(1)}x` : '—'}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <span className={`font-semibold ${
-                          stock.price_change_pct >= 0 ? 'text-emerald-600' : 'text-red-600'
-                        }`}>
-                          {stock.price_change_pct >= 0 ? '+' : ''}{stock.price_change_pct.toFixed(2)}%
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-slate-500 text-xs">
-                        {stock.sector}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardBody>
-          </Card>
-        )}
+            confirmed by 2+ lists), these rank every liquid stock regardless of Donchian category. */}
+        <MarketMovers
+          gainers={data.top_gainers ?? []}
+          losers={data.top_losers ?? []}
+          unusualVolume={data.unusual_volume ?? []}
+        />
 
         {/* Footer */}
-        <div className="text-center py-4">
-          <p className="text-xs text-slate-500">
+        <div className="text-center pt-8 pb-2">
+          <p className="text-xs text-slate-400">
             Data refreshes automatically every 5 minutes | Donchian Breakout Screening Platform
           </p>
         </div>

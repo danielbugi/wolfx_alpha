@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Card,
   CardBody,
@@ -15,12 +16,28 @@ import {
   Button,
   Chip,
   Divider,
-  Spinner,
-  Input,
-  Tooltip,
 } from '@nextui-org/react';
+import { HoverTip, TextField } from '@/components/ui/Field';
 import { strategyApi, StrategyRankResult } from '@/services/api';
 import PlanBar from '@/components/strategy/PlanBar';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
+import ErrorAlert from '@/components/common/ErrorAlert';
+import SegmentedControl from '@/components/ui/SegmentedControl';
+import SortHeader from '@/components/ui/SortHeader';
+import { useTableSort } from '@/hooks/useTableSort';
+
+// Position size is min(cap, accountRisk / stopRisk): for a fixed account it always ranks inversely to stop risk,
+// so sorting by 1/risk orders the column correctly without depending on the two inputs above the table.
+const ACCESSORS = {
+  symbol: (r: StrategyRankResult) => r.symbol,
+  dir: (r: StrategyRankResult) => r.direction,
+  entry: (r: StrategyRankResult) => r.current_price,
+  risk: (r: StrategyRankResult) => r.risk_pct,
+  reward: (r: StrategyRankResult) => r.reward_pct_tp3,
+  size: (r: StrategyRankResult) => (r.risk_pct > 0 ? 1 / r.risk_pct : null),
+  score: (r: StrategyRankResult) => r.strategy_score,
+};
+type Col = keyof typeof ACCESSORS;
 
 const DIRECTION_OPTIONS: { label: string; value: 'all' | 'long' | 'short' }[] = [
   { label: 'All', value: 'all' },
@@ -32,6 +49,11 @@ export default function StrategyPage() {
   const [direction, setDirection] = useState<'all' | 'long' | 'short'>('all');
   const [highConfidenceOnly, setHighConfidenceOnly] = useState(false);
   const [results, setResults] = useState<StrategyRankResult[]>([]);
+  const router = useRouter();
+  const { sorted, sortKey, sortDir, toggle } = useTableSort(results, ACCESSORS);
+  const sortHeader = (key: Col, label: string, align: 'start' | 'end' = 'start') => (
+    <SortHeader label={label} align={align} active={sortKey === key} dir={sortDir} onClick={() => toggle(key)} />
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,52 +87,46 @@ export default function StrategyPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-cyan-50">
-      <div className="container mx-auto p-4 max-w-7xl">
-        <div className="mb-6 p-4 bg-white rounded-lg shadow-sm border border-slate-200">
-          <h1 className="text-2xl font-bold text-slate-800">Trading Strategy</h1>
-          <p className="text-slate-600 text-sm mt-1">
+    <div className="min-h-screen bg-slate-50">
+      <div className="container mx-auto px-4 pb-12 pt-6 sm:px-6 lg:px-8 max-w-7xl">
+        <div className="mb-6 px-1 pt-2 pb-1">
+          <h1 className="large-title">Position Plans</h1>
+          <p className="mt-1.5 max-w-3xl text-[15px] leading-relaxed text-slate-500">
             Entry / stop / take-profit plan for every active breakout, ranked by a risk-adjusted score —
             momentum + fundamentals + timeframe alignment, weighted against volatility-based risk.
           </p>
         </div>
 
         {/* Controls */}
-        <Card className="mb-4 shadow-sm border border-slate-200">
-          <CardBody className="p-4 flex flex-wrap gap-4 items-end">
+        <Card className="mb-4 border border-black/[0.05] shadow-sm">
+          <CardBody className="p-5 flex-row flex-wrap gap-x-5 gap-y-4 items-end">
             <div>
-              <p className="text-xs text-slate-500 mb-1.5 uppercase tracking-wide">Direction</p>
-              <div className="flex gap-1">
-                {DIRECTION_OPTIONS.map((o) => (
-                  <Button
-                    key={o.value}
-                    size="sm"
-                    variant={direction === o.value ? 'solid' : 'bordered'}
-                    className={direction === o.value ? 'bg-slate-700 text-white text-xs' : 'text-xs border-slate-300'}
-                    onClick={() => setDirection(o.value)}
-                  >
-                    {o.label}
-                  </Button>
-                ))}
-              </div>
+              <p className="mb-1 text-xs font-medium text-slate-600">Direction</p>
+              <SegmentedControl
+                aria-label="Direction"
+                size="md"
+                options={DIRECTION_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                value={direction}
+                onChange={setDirection}
+              />
             </div>
 
             <Button
               size="sm"
               variant={highConfidenceOnly ? 'solid' : 'bordered'}
-              className={highConfidenceOnly ? 'bg-emerald-600 text-white text-xs' : 'text-xs border-slate-300'}
+              className={highConfidenceOnly ? 'rounded-full bg-emerald-600 text-white text-xs' : 'rounded-full text-xs border-slate-300 text-slate-700'}
               onClick={() => setHighConfidenceOnly(!highConfidenceOnly)}
             >
               High Confidence Only
             </Button>
 
-            <Divider orientation="vertical" className="h-10 hidden md:block" />
+            <div className="hidden h-9 w-px bg-slate-200 md:block" />
 
-            <div className="w-36">
-              <Input
+            <div className="w-40">
+              <TextField
                 type="number"
-                size="sm"
-                label="Account Risk % / trade"
+                label="Account risk / trade"
+                suffix="%"
                 value={accountRiskPct.toString()}
                 min={0.1}
                 max={10}
@@ -118,11 +134,11 @@ export default function StrategyPage() {
                 onChange={(e) => setAccountRiskPct(Number(e.target.value) || 0)}
               />
             </div>
-            <div className="w-32">
-              <Input
+            <div className="w-36">
+              <TextField
                 type="number"
-                size="sm"
-                label="Max Position %"
+                label="Max position"
+                suffix="%"
                 value={maxPositionPct.toString()}
                 min={1}
                 max={100}
@@ -137,42 +153,44 @@ export default function StrategyPage() {
         </Card>
 
         {/* Results */}
-        <Card className="shadow-sm border border-slate-200">
-          <CardHeader className="p-3 pb-2 flex justify-between items-center">
-            <h3 className="text-sm font-semibold text-slate-700">Ranked Plans {!loading && `(${results.length})`}</h3>
+        <Card className="border border-black/[0.05] shadow-sm">
+          <CardHeader className="px-5 pt-4 pb-2 flex justify-between items-center">
+            <h3 className="text-[15px] font-semibold text-slate-900">Ranked Plans {!loading && `(${results.length})`}</h3>
           </CardHeader>
           <Divider className="bg-slate-200" />
           <CardBody className="p-0">
             {loading ? (
               <div className="flex justify-center py-12">
-                <Spinner color="primary" />
+                <LoadingSpinner />
               </div>
             ) : error ? (
-              <p className="text-center text-red-500 text-sm py-12">{error}</p>
+              <ErrorAlert title="Couldn’t load position plans" message={error} onRetry={fetchResults} className="m-4" />
             ) : results.length === 0 ? (
               <p className="text-center text-slate-400 text-sm py-12">No active breakout signals match these filters.</p>
             ) : (
               <Table
                 removeWrapper
+                aria-label="Ranked position plans"
+                onRowAction={(key) => router.push(`/stock/${key}`)}
                 className="text-xs"
-                classNames={{ th: 'bg-slate-50 text-slate-600 font-medium text-xs h-8', td: 'text-xs py-2' }}
+                classNames={{ th: 'bg-slate-50/70 text-slate-500 font-medium text-[11px] h-8 first:pl-5 last:pr-5', td: 'text-xs py-2 first:pl-5 last:pr-5', tr: 'cursor-pointer' }}
               >
                 <TableHeader>
-                  <TableColumn>SYMBOL</TableColumn>
-                  <TableColumn>DIR</TableColumn>
-                  <TableColumn align="end">ENTRY</TableColumn>
-                  <TableColumn align="end">STOP (RISK%)</TableColumn>
+                  <TableColumn>{sortHeader('symbol', 'Symbol')}</TableColumn>
+                  <TableColumn>{sortHeader('dir', 'Dir')}</TableColumn>
+                  <TableColumn align="end">{sortHeader('entry', 'Entry', 'end')}</TableColumn>
+                  <TableColumn align="end">{sortHeader('risk', 'Stop (risk %)', 'end')}</TableColumn>
                   <TableColumn>PLAN</TableColumn>
-                  <TableColumn align="end">TP1/TP2/TP3</TableColumn>
-                  <TableColumn align="end">POSITION SIZE</TableColumn>
-                  <TableColumn align="end">SCORE</TableColumn>
+                  <TableColumn align="end">{sortHeader('reward', 'TP1/TP2/TP3', 'end')}</TableColumn>
+                  <TableColumn align="end">{sortHeader('size', 'Position size', 'end')}</TableColumn>
+                  <TableColumn align="end">{sortHeader('score', 'Score', 'end')}</TableColumn>
                 </TableHeader>
                 <TableBody>
-                  {results.map((r) => (
+                  {sorted.map((r) => (
                     <TableRow key={r.symbol}>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
-                          <Link href={`/stock/${r.symbol}`} className="font-semibold text-slate-800 hover:text-cyan-700">
+                          <Link href={`/stock/${r.symbol}`} className="font-semibold text-slate-800 hover:text-accent">
                             {r.symbol}
                           </Link>
                           {r.is_new && (
@@ -216,14 +234,14 @@ export default function StrategyPage() {
                         {positionSizeFor(r.risk_pct).toFixed(1)}%
                       </TableCell>
                       <TableCell className="text-right">
-                        <Tooltip
+                        <HoverTip
                           content={
                             <div className="text-xs p-1 space-y-0.5">
                               <p>Momentum: {r.momentum_score == null ? '—' : r.momentum_score.toFixed(0)} × 0.40</p>
                               <p>Fundamentals: {r.fundamentals_score == null ? '—' : r.fundamentals_score.toFixed(0)} × 0.25</p>
                               <p>Alignment: {r.alignment_score == null ? '—' : r.alignment_score.toFixed(0)} × 0.20</p>
                               <p>Risk bonus: {r.risk_bonus.toFixed(0)} × 0.15</p>
-                              <Divider className="my-1" />
+                              <div className="my-1 h-px bg-white/20" />
                               <p className="font-semibold">Confidence: {r.ml_confidence}</p>
                             </div>
                           }
@@ -231,7 +249,7 @@ export default function StrategyPage() {
                           <span className="font-bold text-slate-800 cursor-help border-b border-dotted border-slate-400">
                             {r.strategy_score.toFixed(0)}
                           </span>
-                        </Tooltip>
+                        </HoverTip>
                       </TableCell>
                     </TableRow>
                   ))}

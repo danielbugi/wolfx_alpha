@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Spinner, Button } from '@nextui-org/react';
+import { Button } from '@nextui-org/react';
 import { mlStatsApi, MLStatsReport } from '@/services/api';
 import MLStatsPanel from '@/components/health/MLStatsPanel';
 import { usePagePerf } from '@/hooks/usePagePerf';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
+import ErrorAlert from '@/components/common/ErrorAlert';
 
 export default function MLStatsPage() {
   const { markLoaded } = usePagePerf('/ml-stats');
@@ -32,15 +34,15 @@ export default function MLStatsPage() {
   }, [fetchReport]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-cyan-50">
-      <div className="container mx-auto p-4 max-w-5xl space-y-4">
-        <div className="p-4 bg-white rounded-lg shadow-sm border border-slate-200 flex items-center justify-between">
+    <div className="min-h-screen bg-slate-50">
+      <div className="container mx-auto px-4 pb-12 pt-6 sm:px-6 lg:px-8 max-w-5xl space-y-4">
+        <div className="px-1 pt-2 pb-1 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">ML Stats</h1>
-            <p className="text-slate-600 text-sm mt-1">
+            <h1 className="large-title">ML Stats</h1>
+            <p className="mt-1.5 max-w-3xl text-[15px] leading-relaxed text-slate-500">
               Model accuracy, what it&apos;s actually learning from, and how its live predictions have played
               out. For data-pipeline correctness, see{' '}
-              <Link href="/system-health" className="text-cyan-700 hover:underline">System Health</Link>.
+              <Link href="/system-health" className="text-accent hover:underline">System Health</Link>.
             </p>
             {report && (
               <p className="text-xs text-slate-400 mt-2">
@@ -48,15 +50,15 @@ export default function MLStatsPage() {
               </p>
             )}
           </div>
-          <Button size="sm" className="bg-slate-700 text-white shrink-0" onClick={fetchReport} isLoading={loading}>
+          <Button size="sm" className="rounded-full bg-slate-900 px-4 font-medium text-white shrink-0" onClick={fetchReport} isLoading={loading}>
             Refresh
           </Button>
         </div>
 
         {loading && !report ? (
-          <div className="flex justify-center py-16"><Spinner color="primary" /></div>
+          <div className="flex justify-center py-16"><LoadingSpinner /></div>
         ) : error ? (
-          <p className="text-center text-red-500 text-sm py-16">{error}</p>
+          <ErrorAlert title="Couldn’t load ML stats" message={error} onRetry={fetchReport} className="my-4" />
         ) : report ? (
           <MLStatsPanel report={report} />
         ) : null}
