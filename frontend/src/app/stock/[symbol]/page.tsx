@@ -3,50 +3,36 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import {
-  Card,
-  CardBody,
-  CardHeader,
-  Table,
-  TableHeader,
-  TableColumn,
-  TableBody,
-  TableRow,
-  TableCell,
-  Button,
-  Chip,
-} from '@nextui-org/react';
+import { Card, CardBody, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip } from '@nextui-org/react';
 import { ExclamationTriangleIcon } from '@heroicons/react/20/solid';
 import { clsx } from 'clsx';
 import { HoverTip, ProgressBar } from '@/components/ui/Field';
 import {
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  Legend,
-} from 'recharts';
-import { stockApi, formatters, isHttpStatus, Maybe, StockDetail, PriceBar, EarningsDateEntry } from '@/services/api';
+  stockApi,
+  marketApi,
+  formatters,
+  isHttpStatus,
+  Maybe,
+  StockDetail,
+  PriceBar,
+  EarningsDateEntry,
+  SectorHistoryEntry,
+} from '@/services/api';
 import PlanBar from '@/components/strategy/PlanBar';
-import LightweightCandlestickChart from '@/components/charts/LightweightCandlestickChart';
-import { positionPct, nearestBarDate } from '@/lib/priceMath';
+import StockChart from '@/components/charts/StockChart';
+import KeyLevels from '@/components/stock/KeyLevels';
+import FinancialGrowth from '@/components/stock/FinancialGrowth';
+import EarningsPanel from '@/components/stock/EarningsPanel';
+import PeersPanel from '@/components/stock/PeersPanel';
+import { positionPct } from '@/lib/priceMath';
 import { gradeColor } from '@/lib/uiColors';
-import { useResolvedTheme } from '@/lib/theme';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import SearchBox from '@/components/layout/SearchBox';
-import SegmentedControl from '@/components/ui/SegmentedControl';
 
-const RANGE_OPTIONS = [
-  { label: '1M', days: 30 },
-  { label: '3M', days: 90 },
-  { label: '6M', days: 180 },
-  { label: '1Y', days: 365 },
-];
-
-type DetailTab = 'plan' | 'fundamentals' | 'quarterly' | 'track';
+// The chart builds weekly/monthly candles and the 200-day average from daily bars, so load the longest history the
+// API serves (backend caps price history at 730 days) once; switching interval or range is then instant.
+const HISTORY_DAYS = 730;
+const EARNINGS_LIMIT = 16;
 
 // "—" for unknown everywhere on this page: a missing value is never shown as 0, "N/A%" or a default.
 const UNKNOWN = '—';
@@ -61,13 +47,9 @@ function fmtNum(v: number | null | undefined, decimals = 2): string {
   return v.toFixed(decimals);
 }
 
-function fmtBig(v: number | null | undefined): string {
-  if (v === null || v === undefined) return UNKNOWN;
-  const abs = Math.abs(v);
-  if (abs >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
-  if (abs >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
-  if (abs >= 1e3) return `$${(v / 1e3).toFixed(1)}K`;
-  return `$${v.toFixed(2)}`;
+/** Compact price for the narrow 52-week cell: whole dollars from $100 up, cents below. */
+function fmtRange(v: number): string {
+  return v >= 100 ? v.toFixed(0) : v.toFixed(2);
 }
 
 /** Whole days from today (local) to an ISO date; negative = in the past. */
@@ -255,56 +237,49 @@ function SectionTitle({ children, aside }: { children: React.ReactNode; aside?: 
   );
 }
 
+/** A page section: a card with the page's standard padding. */
+function Section({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <Card className={clsx('border border-black/[0.05] shadow-sm', className)}>
+      <CardBody className="p-5">{children}</CardBody>
+    </Card>
+  );
+}
+
 export default function StockDetailPage() {
   const params = useParams();
   const symbol = (params?.symbol as string)?.toUpperCase();
-  const theme = useResolvedTheme();
 
   const [detail, setDetail] = useState<StockDetail | null>(null);
   const [bars, setBars] = useState<PriceBar[]>([]);
   const [earnings, setEarnings] = useState<EarningsDateEntry[]>([]);
-  const [rangeDays, setRangeDays] = useState(180);
+  const [sectorHistory, setSectorHistory] = useState<SectorHistoryEntry[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [chartLoading, setChartLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showDonchian, setShowDonchian] = useState(true);
-  const [showVolume, setShowVolume] = useState(true);
-  // null = not chosen yet: opens on the trade plan when there's an active signal, otherwise on fundamentals.
-  const [tab, setTab] = useState<DetailTab | null>(null);
 
   // Guards the un-awaited earnings fetch against landing after navigating to
   // a different symbol.
   const latestSymbolRef = useRef(symbol);
   latestSymbolRef.current = symbol;
 
-  // fetchDetail (also wired to the Retry button) must always load the range the
-  // user has selected *now*, not the one captured when `symbol` last changed --
-  // and a range change must not re-run it (changeRange fetches bars itself).
-  const rangeDaysRef = useRef(rangeDays);
-  rangeDaysRef.current = rangeDays;
-
   const fetchDetail = useCallback(async () => {
     if (!symbol) return;
     try {
       setLoading(true);
       setError(null);
-      setTab(null);
       // Earnings markers come from yfinance (~1s cold) -- fire them off on
       // their own so the page and chart render as soon as detail + price
       // history are in, and the markers pop in afterwards. Not awaited on
       // purpose; a failure just means no markers.
       setEarnings([]);
       stockApi
-        .getEarnings(symbol)
+        .getEarnings(symbol, EARNINGS_LIMIT)
         .then((r) => {
           if (latestSymbolRef.current === symbol) setEarnings(r.earnings_dates);
         })
         .catch(() => {});
 
-      const [d, ph] = await Promise.all([
-        stockApi.getDetail(symbol),
-        stockApi.getPriceHistory(symbol, rangeDaysRef.current),
-      ]);
+      const [d, ph] = await Promise.all([stockApi.getDetail(symbol), stockApi.getPriceHistory(symbol, HISTORY_DAYS)]);
       setDetail(d);
       setBars(ph.bars);
     } catch (err: unknown) {
@@ -318,17 +293,13 @@ export default function StockDetailPage() {
     fetchDetail();
   }, [fetchDetail]);
 
-  const changeRange = async (days: number) => {
-    setRangeDays(days);
-    if (!symbol) return;
-    try {
-      setChartLoading(true);
-      const ph = await stockApi.getPriceHistory(symbol, days);
-      setBars(ph.bars);
-    } finally {
-      setChartLoading(false);
-    }
-  };
+  // Sector history (shared with the dashboard) for "90 days vs sector"; optional — the row shows "—" without it.
+  useEffect(() => {
+    marketApi
+      .getSectorHistory(90)
+      .then((r) => setSectorHistory(r.sectors))
+      .catch(() => setSectorHistory(null));
+  }, []);
 
   if (loading) {
     return (
@@ -371,19 +342,11 @@ export default function StockDetailPage() {
   const timeframes = extractTimeframes(detail);
   const hasSignal = detail.data_source === 'active_signal';
   const track = detail.breakout_track_record;
-  const activeTab: DetailTab = tab ?? (hasSignal ? 'plan' : 'fundamentals');
   const asOfDate = detail.data_source === 'no_signal' ? detail.snapshot.as_of_date : null;
 
   const priceChangePct = snap.price_change_pct;
   const isUp = (priceChangePct ?? 0) >= 0;
 
-  // Earnings markers must land on an existing bar (see nearestBarDate) --
-  // a date too far past the last bar (e.g. an upcoming report) can't be
-  // placed on the chart, so surface it as a caption instead of silently
-  // dropping it.
-  const unplottedUpcomingEarnings = earnings.find(
-    (e) => nearestBarDate(bars, e.date, 3) === null && new Date(e.date) > new Date(bars[bars.length - 1]?.date || 0)
-  );
   const nextEarnings = earnings
     .filter((e) => daysUntil(e.date) >= 0)
     .sort((a, b) => a.date.localeCompare(b.date))[0];
@@ -398,23 +361,19 @@ export default function StockDetailPage() {
   const isTurnaround =
     !!latestQ?.net_income && !!previousQ?.net_income && latestQ.net_income > 0 && previousQ.net_income < 0;
 
-  const chartColors =
-    theme === 'dark'
-      ? { grid: '#2f2f33', tick: '#98989f', revenue: '#64d2ff', income: '#30d158' }
-      : { grid: '#e3e3e8', tick: '#737378', revenue: '#0a84ff', income: '#34c759' };
-
-  const tabs: { value: DetailTab; label: string }[] = [
-    { value: 'plan', label: hasSignal ? 'Signal & plan' : 'Signal' },
-    { value: 'fundamentals', label: 'Fundamentals' },
-    { value: 'quarterly', label: 'Quarterly' },
-    { value: 'track', label: `Track record${track.total_breakouts > 0 ? ` (${track.total_breakouts})` : ''}` },
-  ];
+  // 52-week range for the key-numbers strip (same rule as Key levels: needs a full year of bars).
+  const year = bars.slice(-252);
+  const hasYear = year.length >= 240;
+  const yearHighs = year.map((b) => b.high).filter((v): v is number => v != null);
+  const yearLows = year.map((b) => b.low).filter((v): v is number => v != null);
+  const hi52 = hasYear && yearHighs.length ? Math.max(...yearHighs) : null;
+  const lo52 = hasYear && yearLows.length ? Math.min(...yearLows) : null;
 
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="container mx-auto px-4 pb-12 pt-6 sm:px-6 lg:px-8 max-w-7xl space-y-4">
-        {/* Header -- pinned while the chart and details scroll beneath it on larger screens. Not on phones: it wraps
-            to several lines there and would cover too much of a small screen. */}
+        {/* Header -- pinned while the rest scrolls beneath it on larger screens. Not on phones: it wraps to several
+            lines there and would cover too much of a small screen. */}
         <Card className="material-thick z-20 border border-black/[0.05] shadow-sm md:sticky md:top-[4.25rem] lg:top-3">
           <CardBody className="flex-row flex-wrap items-center justify-between gap-x-6 gap-y-2 px-5 py-3.5">
             <div className="min-w-0">
@@ -466,9 +425,10 @@ export default function StockDetailPage() {
 
         {/* Key numbers */}
         <Card className="border border-black/[0.05] shadow-sm">
-          <CardBody className="grid grid-cols-2 divide-black/[0.06] p-0 sm:grid-cols-4 lg:grid-cols-7 lg:divide-x">
+          <CardBody className="grid grid-cols-2 divide-black/[0.06] p-0 sm:grid-cols-4 lg:grid-cols-8 lg:divide-x">
             <Stat label="Market cap" value={snap.market_cap_formatted || (snap.market_cap != null ? formatters.marketCap(snap.market_cap) : UNKNOWN)} />
             <Stat label="P/E" value={fmtNum(snap.pe_ratio, 1)} />
+            <Stat label="52-week range" value={hi52 != null && lo52 != null ? `${fmtRange(lo52)} – ${fmtRange(hi52)}` : UNKNOWN} />
             <Stat label="Beta" value={fmtNum(snap.beta)} />
             <Stat label="RSI (14d)" value={fmtNum(timeframes.daily.rsi, 1)} />
             <Stat label="ATR (14d)" value={timeframes.daily.atr != null ? `$${fmtNum(timeframes.daily.atr)}` : UNKNOWN} />
@@ -481,53 +441,13 @@ export default function StockDetailPage() {
           </CardBody>
         </Card>
 
-        {/* Price chart + where price sits in each timeframe's channel */}
+        {/* Chart */}
         <Card className="border border-black/[0.05] shadow-sm">
-          <CardHeader className="px-5 pt-4 pb-2 flex flex-wrap justify-between items-center gap-2">
-            <h3 className="text-[15px] font-semibold text-slate-900">Price & Donchian channel</h3>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                variant={showDonchian ? 'solid' : 'light'}
-                className={showDonchian ? 'rounded-full bg-slate-900 text-white text-xs' : 'rounded-full text-xs text-slate-700'}
-                onClick={() => setShowDonchian((v) => !v)}
-              >
-                Donchian
-              </Button>
-              <Button
-                size="sm"
-                variant={showVolume ? 'solid' : 'light'}
-                className={showVolume ? 'rounded-full bg-slate-900 text-white text-xs' : 'rounded-full text-xs text-slate-700'}
-                onClick={() => setShowVolume((v) => !v)}
-              >
-                Volume
-              </Button>
-              <div className="mx-1 h-6 w-px bg-slate-200" />
-              <SegmentedControl
-                aria-label="Chart range"
-                options={RANGE_OPTIONS.map((r) => ({ value: String(r.days), label: r.label }))}
-                value={String(rangeDays)}
-                onChange={(v) => changeRange(Number(v))}
-              />
-              {chartLoading && <LoadingSpinner size="small" className="ml-1" />}
-            </div>
-          </CardHeader>
-          <CardBody className="px-2 pb-2 pt-0">
-            <LightweightCandlestickChart
-              bars={bars}
-              earnings={earnings}
-              variant="full"
-              height={420}
-              showDonchian={showDonchian}
-              showVolume={showVolume}
-            />
-            {unplottedUpcomingEarnings && (
-              <p className="text-xs text-slate-500 mt-1 px-1">
-                Next earnings: {unplottedUpcomingEarnings.date} (beyond the charted range)
-              </p>
-            )}
-          </CardBody>
-          <div className="grid grid-cols-1 gap-5 border-t border-black/[0.06] px-5 py-4 md:grid-cols-3">
+          <div className="px-5 pb-3 pt-4">
+            <h3 className="text-[15px] font-semibold text-slate-900">Chart</h3>
+          </div>
+          <StockChart bars={bars} earnings={earnings} breakouts={track.entries} height={420} />
+          <div className="mt-2 grid grid-cols-1 gap-5 border-t border-black/[0.06] px-5 py-4 md:grid-cols-3">
             <ChannelColumn
               title="Daily · 20-day channel"
               donchianHigh={timeframes.daily.donchianHigh}
@@ -558,283 +478,236 @@ export default function StockDetailPage() {
           </div>
         </Card>
 
-        {/* Details, one subject at a time */}
-        <div className="overflow-x-auto pb-1">
-          <SegmentedControl aria-label="Stock details" size="md" options={tabs} value={activeTab} onChange={setTab} />
-        </div>
-
-        {activeTab === 'plan' && (
-          <Card className="border border-black/[0.05] shadow-sm">
-            <CardBody className="p-5">
-              {hasSignal ? (
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-                  <div className="lg:col-span-3">
-                    {rating.plan ? (
-                      <>
-                        <SectionTitle
-                          aside={
-                            <HoverTip
-                              content={
-                                <div className="space-y-0.5">
-                                  <p>Momentum: {rating.plan.momentum_score == null ? UNKNOWN : rating.plan.momentum_score.toFixed(0)} × 0.40</p>
-                                  <p>Fundamentals: {rating.plan.fundamentals_score == null ? UNKNOWN : rating.plan.fundamentals_score.toFixed(0)} × 0.25</p>
-                                  <p>Alignment: {rating.plan.alignment_score == null ? UNKNOWN : rating.plan.alignment_score.toFixed(0)} × 0.20</p>
-                                  <p>Risk bonus: {rating.plan.risk_bonus.toFixed(0)} × 0.15</p>
-                                </div>
-                              }
-                            >
-                              <span className="cursor-help border-b border-dotted border-slate-400 text-xs font-semibold text-slate-700">
-                                Strategy score {rating.plan.strategy_score.toFixed(0)}
-                              </span>
-                            </HoverTip>
+        {/* Signal & plan next to key levels */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+          <Section className="lg:col-span-3">
+            {hasSignal ? (
+              <div className="space-y-5">
+                {rating.plan ? (
+                  <div>
+                    <SectionTitle
+                      aside={
+                        <HoverTip
+                          content={
+                            <div className="space-y-0.5">
+                              <p>Momentum: {rating.plan.momentum_score == null ? UNKNOWN : rating.plan.momentum_score.toFixed(0)} × 0.40</p>
+                              <p>Fundamentals: {rating.plan.fundamentals_score == null ? UNKNOWN : rating.plan.fundamentals_score.toFixed(0)} × 0.25</p>
+                              <p>Alignment: {rating.plan.alignment_score == null ? UNKNOWN : rating.plan.alignment_score.toFixed(0)} × 0.20</p>
+                              <p>Risk bonus: {rating.plan.risk_bonus.toFixed(0)} × 0.15</p>
+                            </div>
                           }
                         >
-                          <span className="inline-flex items-center gap-2">
-                            Trade plan
-                            <Chip
-                              size="sm"
-                              className={`text-xs ${rating.plan.direction === 'long' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}`}
-                            >
-                              {rating.plan.direction === 'long' ? 'Long' : 'Short'}
-                            </Chip>
+                          <span className="cursor-help border-b border-dotted border-slate-400 text-xs font-semibold text-slate-700">
+                            Strategy score {rating.plan.strategy_score.toFixed(0)}
                           </span>
-                        </SectionTitle>
+                        </HoverTip>
+                      }
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        Trade plan
+                        <Chip
+                          size="sm"
+                          className={`text-xs ${rating.plan.direction === 'long' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}`}
+                        >
+                          {rating.plan.direction === 'long' ? 'Long' : 'Short'}
+                        </Chip>
+                      </span>
+                    </SectionTitle>
 
-                        <PlanBar
-                          plan={{
-                            stop_loss_price: rating.plan.stop_loss_price,
-                            entry_price: rating.plan.entry_price,
-                            tp1: rating.plan.tp1,
-                            tp2: rating.plan.tp2,
-                            tp3: rating.plan.tp3,
-                          }}
-                        />
+                    <PlanBar
+                      plan={{
+                        stop_loss_price: rating.plan.stop_loss_price,
+                        entry_price: rating.plan.entry_price,
+                        tp1: rating.plan.tp1,
+                        tp2: rating.plan.tp2,
+                        tp3: rating.plan.tp3,
+                      }}
+                    />
 
-                        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-                          {[
-                            { label: 'Entry', price: rating.plan.entry_price, pct: null, tone: 'text-slate-900' },
-                            { label: 'Stop', price: rating.plan.stop_loss_price, pct: -rating.plan.risk_pct, tone: 'text-red-600' },
-                            { label: 'TP1', price: rating.plan.tp1, pct: rating.plan.reward_pct_tp1, tone: 'text-emerald-600' },
-                            { label: 'TP2', price: rating.plan.tp2, pct: rating.plan.reward_pct_tp2, tone: 'text-emerald-600' },
-                            { label: 'TP3', price: rating.plan.tp3, pct: rating.plan.reward_pct_tp3, tone: 'text-emerald-600' },
-                          ].map((level) => (
-                            <div key={level.label} className="rounded-xl bg-slate-50 px-3 py-2.5">
-                              <p className="text-[11px] font-medium text-slate-500">{level.label}</p>
-                              <p className={`text-[15px] font-semibold tabular-nums ${level.tone}`}>${fmtNum(level.price)}</p>
-                              <p className="text-[11px] tabular-nums text-slate-400">{level.pct != null ? fmtPct(level.pct) : 'current price'}</p>
-                            </div>
-                          ))}
+                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                      {[
+                        { label: 'Entry', price: rating.plan.entry_price, pct: null, tone: 'text-slate-900' },
+                        { label: 'Stop', price: rating.plan.stop_loss_price, pct: -rating.plan.risk_pct, tone: 'text-red-600' },
+                        { label: 'TP1', price: rating.plan.tp1, pct: rating.plan.reward_pct_tp1, tone: 'text-emerald-600' },
+                        { label: 'TP2', price: rating.plan.tp2, pct: rating.plan.reward_pct_tp2, tone: 'text-emerald-600' },
+                        { label: 'TP3', price: rating.plan.tp3, pct: rating.plan.reward_pct_tp3, tone: 'text-emerald-600' },
+                      ].map((level) => (
+                        <div key={level.label} className="rounded-xl bg-slate-50 px-3 py-2.5">
+                          <p className="text-[11px] font-medium text-slate-500">{level.label}</p>
+                          <p className={`text-[15px] font-semibold tabular-nums ${level.tone}`}>${fmtNum(level.price)}</p>
+                          <p className="text-[11px] tabular-nums text-slate-400">{level.pct != null ? fmtPct(level.pct) : 'current price'}</p>
                         </div>
-                        <p className="mt-3 text-xs text-slate-500">
-                          Suggested position size at 1% account risk:{' '}
-                          <span className="font-semibold text-slate-700">{Math.min(10, (1 / rating.plan.risk_pct) * 100).toFixed(1)}%</span> of
-                          portfolio (capped at 10%) —{' '}
-                          <Link href="/strategy" className="text-accent hover:underline">
-                            adjust on Position Plans
-                          </Link>
-                        </p>
-                      </>
-                    ) : (
-                      <p className="text-sm text-slate-400">Strategy plan unavailable for this signal.</p>
-                    )}
+                      ))}
+                    </div>
+                    <p className="mt-3 text-xs text-slate-500">
+                      Suggested position size at 1% account risk:{' '}
+                      <span className="font-semibold text-slate-700">{Math.min(10, (1 / rating.plan.risk_pct) * 100).toFixed(1)}%</span> of
+                      portfolio (capped at 10%) —{' '}
+                      <Link href="/strategy" className="text-accent hover:underline">
+                        adjust on Position Plans
+                      </Link>
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-400">Strategy plan unavailable for this signal.</p>
+                )}
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <p className="mb-2 text-xs font-semibold text-slate-700">Signal</p>
+                    <div className="flex flex-wrap gap-2">
+                      {rating.signal_type && (
+                        <Chip size="sm" className="bg-slate-100 text-slate-700 text-xs capitalize">
+                          {rating.signal_type.replace(/_/g, ' ')}
+                        </Chip>
+                      )}
+                      {rating.alignment_grade && (
+                        <Chip size="sm" className="bg-slate-100 text-slate-700 text-xs">
+                          Timeframe alignment {rating.alignment_score}% ({rating.alignment_grade})
+                        </Chip>
+                      )}
+                    </div>
+                    {rating.reasoning && <p className="mt-2 text-sm leading-relaxed text-slate-600">{rating.reasoning}</p>}
                   </div>
 
-                  <div className="space-y-4 lg:col-span-2">
-                    <div>
-                      <SectionTitle>Signal</SectionTitle>
-                      <div className="flex flex-wrap gap-2">
-                        {rating.signal_type && (
-                          <Chip size="sm" className="bg-slate-100 text-slate-700 text-xs capitalize">
-                            {rating.signal_type.replace(/_/g, ' ')}
-                          </Chip>
-                        )}
-                        {rating.alignment_grade && (
-                          <Chip size="sm" className="bg-slate-100 text-slate-700 text-xs">
-                            Timeframe alignment {rating.alignment_score}% ({rating.alignment_grade})
-                          </Chip>
-                        )}
-                      </div>
-                      {rating.reasoning && <p className="mt-2 text-sm leading-relaxed text-slate-600">{rating.reasoning}</p>}
-                    </div>
-
-                    {/* The ML score is shown for reference only: it has not shown a reliable edge in validation, so it
-                        is labelled as experimental and kept out of the header. */}
-                    {(rating.ml_momentum_probability != null || rating.ml_confidence) && (
-                      <div className="rounded-xl border border-amber-200/70 bg-amber-50/60 p-3.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-xs font-semibold text-slate-700">Model score · experimental</p>
-                          <p className="text-[15px] font-semibold tabular-nums text-slate-900">
-                            {rating.ml_momentum_probability != null ? `${rating.ml_momentum_probability.toFixed(0)}%` : UNKNOWN}
-                            {rating.ml_confidence && (
-                              <span className="ml-1.5 text-xs font-medium capitalize text-slate-500">({rating.ml_confidence.replace('_', ' ')})</span>
-                            )}
-                          </p>
-                        </div>
-                        <p className="mt-1.5 flex gap-1.5 text-[11px] leading-relaxed text-slate-600">
-                          <ExclamationTriangleIcon className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
-                          Not yet a proven predictor — in testing it hasn&apos;t shown a reliable edge. Shown for reference only.
+                  {/* The ML score is shown for reference only: it has not shown a reliable edge in validation, so it is
+                      labelled as experimental and kept out of the header. */}
+                  {(rating.ml_momentum_probability != null || rating.ml_confidence) && (
+                    <div className="rounded-xl border border-amber-200/70 bg-amber-50/60 p-3.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-slate-700">Model score · experimental</p>
+                        <p className="text-[15px] font-semibold tabular-nums text-slate-900">
+                          {rating.ml_momentum_probability != null ? `${rating.ml_momentum_probability.toFixed(0)}%` : UNKNOWN}
+                          {rating.ml_confidence && (
+                            <span className="ml-1.5 text-xs font-medium capitalize text-slate-500">({rating.ml_confidence.replace('_', ' ')})</span>
+                          )}
                         </p>
                       </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="py-6 text-center">
-                  <p className="text-sm text-slate-600">{rating.reasoning || 'No active breakout signal for this symbol right now.'}</p>
-                  <p className="mt-2 text-xs text-slate-400">The chart and the other tabs show the latest available snapshot.</p>
-                </div>
-              )}
-            </CardBody>
-          </Card>
-        )}
-
-        {activeTab === 'fundamentals' && (
-          <Card className="border border-black/[0.05] shadow-sm">
-            <CardBody className="grid grid-cols-1 gap-8 p-5 lg:grid-cols-2">
-              <div>
-                <SectionTitle>Quality scores</SectionTitle>
-                <ScoreBar label="Growth" value={snap.growth_score} />
-                <ScoreBar label="Profitability" value={snap.profitability_score} />
-                <ScoreBar label="Financial health" value={snap.financial_health_score} />
-                <ScoreBar label="Valuation" value={snap.valuation_score} />
-                <div className="my-3 h-px bg-black/[0.06]" />
-                <ScoreBar label="Overall quality" value={snap.overall_quality_score} />
-              </div>
-              <div>
-                <SectionTitle>Valuation</SectionTitle>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {[
-                    ['P/E', fmtNum(snap.pe_ratio, 1)],
-                    ['P/B', fmtNum(snap.pb_ratio, 1)],
-                    ['P/S', fmtNum(snap.ps_ratio, 1)],
-                    ['PEG', fmtNum(snap.peg_ratio)],
-                    ['Beta', fmtNum(snap.beta)],
-                    ['Dividend yield', snap.dividend_yield != null ? `${fmtNum(snap.dividend_yield)}%` : UNKNOWN],
-                  ].map(([label, value]) => (
-                    <div key={label} className="rounded-xl bg-slate-50 px-3 py-2.5">
-                      <p className="text-[11px] font-medium text-slate-500">{label}</p>
-                      <p className={clsx('text-[15px] font-semibold tabular-nums', value === UNKNOWN ? 'text-slate-400' : 'text-slate-900')}>{value}</p>
+                      <p className="mt-1.5 flex gap-1.5 text-[11px] leading-relaxed text-slate-600">
+                        <ExclamationTriangleIcon className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
+                        Not yet a proven predictor — in testing it hasn&apos;t shown a reliable edge. Shown for reference only.
+                      </p>
                     </div>
-                  ))}
-                </div>
-              </div>
-            </CardBody>
-          </Card>
-        )}
-
-        {activeTab === 'quarterly' && (
-          <Card className="border border-black/[0.05] shadow-sm">
-            <CardBody className="p-5">
-              {financials.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-6">No quarterly financial data available for this symbol.</p>
-              ) : (
-                <>
-                  <SectionTitle>Revenue & net income</SectionTitle>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={financials} barGap={2}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} vertical={false} />
-                      <XAxis dataKey="quarter" tick={{ fontSize: 10, fill: chartColors.tick }} stroke={chartColors.grid} />
-                      <YAxis tick={{ fontSize: 10, fill: chartColors.tick }} width={64} tickFormatter={(v) => fmtBig(v)} stroke={chartColors.grid} />
-                      <Tooltip
-                        formatter={(v) => (typeof v === 'number' ? fmtBig(v) : UNKNOWN)}
-                        cursor={{ fill: theme === 'dark' ? 'rgb(255 255 255 / 0.04)' : 'rgb(0 0 0 / 0.04)' }}
-                        contentStyle={{ fontSize: 12, borderRadius: 10, border: 'none', boxShadow: '0 8px 24px rgb(0 0 0 / 0.12)', background: theme === 'dark' ? '#2c2c2e' : '#fff', color: theme === 'dark' ? '#f5f5f7' : '#1d1d1f' }}
-                      />
-                      <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
-                      <Bar dataKey="revenue" fill={chartColors.revenue} name="Revenue" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="net_income" fill={chartColors.income} name="Net income" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                  <Table
-                    removeWrapper
-                    aria-label="Quarterly margins and returns"
-                    className="mt-4"
-                    classNames={{ th: 'bg-slate-50/70 text-slate-500 font-medium text-[11px] h-8', td: 'text-[13px] py-2 tabular-nums' }}
-                  >
-                    <TableHeader>
-                      <TableColumn>QUARTER</TableColumn>
-                      <TableColumn align="end">GROSS MGN</TableColumn>
-                      <TableColumn align="end">OP MGN</TableColumn>
-                      <TableColumn align="end">NET MGN</TableColumn>
-                      <TableColumn align="end">ROE</TableColumn>
-                      <TableColumn align="end">ROA</TableColumn>
-                      <TableColumn align="end">D/E</TableColumn>
-                    </TableHeader>
-                    <TableBody>
-                      {financials.map((q, i) => (
-                        <TableRow key={i}>
-                          <TableCell className="font-semibold text-slate-800">{q.quarter || `Q${q.fiscal_quarter} ${q.fiscal_year}`}</TableCell>
-                          <TableCell className="text-right">{fmtPct(q.gross_margin)}</TableCell>
-                          <TableCell className="text-right">{fmtPct(q.operating_margin)}</TableCell>
-                          <TableCell className="text-right">{fmtPct(q.net_margin)}</TableCell>
-                          <TableCell className="text-right">{fmtPct(q.roe)}</TableCell>
-                          <TableCell className="text-right">{fmtPct(q.roa)}</TableCell>
-                          <TableCell className="text-right">{fmtNum(q.debt_to_equity)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </>
-              )}
-            </CardBody>
-          </Card>
-        )}
-
-        {activeTab === 'track' && (
-          <Card className="border border-black/[0.05] shadow-sm">
-            <CardBody className="p-0">
-              {track.entries.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-10">No historical breakout events recorded for this symbol.</p>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 divide-black/[0.06] border-b border-black/[0.06] sm:grid-cols-4 sm:divide-x">
-                    <Stat label="Breakout events" value={track.total_breakouts} />
-                    <Stat label="Win rate" value={track.win_rate != null ? `${track.win_rate}%` : UNKNOWN} />
-                    <Stat label="Avg max gain (10d)" value={fmtPct(track.avg_gain_10d)} />
-                    <Stat label="Avg max loss (10d)" value={fmtPct(track.avg_loss_10d)} />
-                  </div>
-                  <Table
-                    removeWrapper
-                    aria-label="Breakout history"
-                    classNames={{ th: 'bg-slate-50/70 text-slate-500 font-medium text-[11px] h-8 first:pl-5 last:pr-5', td: 'text-[13px] py-2 tabular-nums first:pl-5 last:pr-5' }}
-                  >
-                    <TableHeader>
-                      <TableColumn>DATE</TableColumn>
-                      <TableColumn>TYPE</TableColumn>
-                      <TableColumn align="end">ENTRY</TableColumn>
-                      <TableColumn>OUTCOME</TableColumn>
-                      <TableColumn align="end">MAX GAIN 10D</TableColumn>
-                      <TableColumn align="end">MAX LOSS 10D</TableColumn>
-                    </TableHeader>
-                    <TableBody>
-                      {track.entries.slice(0, 25).map((e, i) => (
-                        <TableRow key={i}>
-                          <TableCell className="text-slate-600">{e.date}</TableCell>
-                          <TableCell className="text-slate-600">{e.breakout_type ?? UNKNOWN}</TableCell>
-                          <TableCell className="text-right">{e.entry_price != null ? `$${fmtNum(e.entry_price)}` : UNKNOWN}</TableCell>
-                          <TableCell>
-                            {e.success === null ? (
-                              <Chip size="sm" className="bg-slate-100 text-slate-500 text-xs">pending</Chip>
-                            ) : e.success ? (
-                              <Chip size="sm" className="bg-emerald-100 text-emerald-800 text-xs">success</Chip>
-                            ) : (
-                              <Chip size="sm" className="bg-red-100 text-red-700 text-xs">failed</Chip>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right text-emerald-600">{fmtPct(e.max_gain_10d)}</TableCell>
-                          <TableCell className="text-right text-red-600">{fmtPct(e.max_loss_10d)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  {track.entries.length > 25 && (
-                    <p className="px-5 py-3 text-xs text-slate-400">Showing the latest 25 of {track.entries.length} events.</p>
                   )}
-                </>
-              )}
-            </CardBody>
-          </Card>
-        )}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <SectionTitle>Signal</SectionTitle>
+                <p className="text-sm text-slate-600">{rating.reasoning || 'No active breakout signal for this symbol right now.'}</p>
+                <p className="mt-2 text-xs text-slate-400">The chart and the sections below show the latest available data.</p>
+              </div>
+            )}
+          </Section>
+
+          <Section className="lg:col-span-2">
+            <KeyLevels bars={bars} price={snap.current_price} atr={timeframes.daily.atr} sector={snap.sector} sectorHistory={sectorHistory} />
+          </Section>
+        </div>
+
+        <Section>
+          <FinancialGrowth quarters={financials} />
+        </Section>
+
+        <Section>
+          <EarningsPanel earnings={earnings} bars={bars} />
+        </Section>
+
+        {/* Fundamentals & valuation */}
+        <Section>
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+            <div>
+              <SectionTitle>Quality scores</SectionTitle>
+              <ScoreBar label="Growth" value={snap.growth_score} />
+              <ScoreBar label="Profitability" value={snap.profitability_score} />
+              <ScoreBar label="Financial health" value={snap.financial_health_score} />
+              <ScoreBar label="Valuation" value={snap.valuation_score} />
+              <div className="my-3 h-px bg-black/[0.06]" />
+              <ScoreBar label="Overall quality" value={snap.overall_quality_score} />
+            </div>
+            <div>
+              <SectionTitle>Valuation</SectionTitle>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {[
+                  ['P/E', fmtNum(snap.pe_ratio, 1)],
+                  ['P/B', fmtNum(snap.pb_ratio, 1)],
+                  ['P/S', fmtNum(snap.ps_ratio, 1)],
+                  ['PEG', fmtNum(snap.peg_ratio)],
+                  ['Beta', fmtNum(snap.beta)],
+                  ['Dividend yield', snap.dividend_yield != null ? `${fmtNum(snap.dividend_yield)}%` : UNKNOWN],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-xl bg-slate-50 px-3 py-2.5">
+                    <p className="text-[11px] font-medium text-slate-500">{label}</p>
+                    <p className={clsx('text-[15px] font-semibold tabular-nums', value === UNKNOWN ? 'text-slate-400' : 'text-slate-900')}>{value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Section>
+
+        <Section>
+          <PeersPanel symbol={detail.symbol} sector={snap.sector} />
+        </Section>
+
+        {/* Breakout track record */}
+        <Section>
+          <SectionTitle>Breakout track record</SectionTitle>
+          {track.entries.length === 0 ? (
+            <p className="py-4 text-center text-sm text-slate-400">No historical breakout events recorded for this symbol.</p>
+          ) : (
+            <>
+              <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {[
+                  ['Breakout events', String(track.total_breakouts)],
+                  ['Win rate', track.win_rate != null ? `${track.win_rate}%` : UNKNOWN],
+                  ['Avg max gain (10d)', fmtPct(track.avg_gain_10d)],
+                  ['Avg max loss (10d)', fmtPct(track.avg_loss_10d)],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-xl bg-slate-50 px-3 py-2.5">
+                    <p className="text-[11px] font-medium text-slate-500">{label}</p>
+                    <p className="text-[15px] font-semibold tabular-nums text-slate-900">{value}</p>
+                  </div>
+                ))}
+              </div>
+              <Table
+                removeWrapper
+                aria-label="Breakout history"
+                classNames={{ th: 'bg-slate-50/70 text-slate-500 font-medium text-[11px] h-8', td: 'text-[13px] py-2 tabular-nums' }}
+              >
+                <TableHeader>
+                  <TableColumn>DATE</TableColumn>
+                  <TableColumn>TYPE</TableColumn>
+                  <TableColumn align="end">ENTRY</TableColumn>
+                  <TableColumn>OUTCOME</TableColumn>
+                  <TableColumn align="end">MAX GAIN 10D</TableColumn>
+                  <TableColumn align="end">MAX LOSS 10D</TableColumn>
+                </TableHeader>
+                <TableBody>
+                  {track.entries.slice(0, 25).map((e, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="text-slate-600">{e.date}</TableCell>
+                      <TableCell className="text-slate-600">{e.breakout_type ?? UNKNOWN}</TableCell>
+                      <TableCell className="text-right">{e.entry_price != null ? `$${fmtNum(e.entry_price)}` : UNKNOWN}</TableCell>
+                      <TableCell>
+                        {e.success === null ? (
+                          <Chip size="sm" className="bg-slate-100 text-slate-500 text-xs">pending</Chip>
+                        ) : e.success ? (
+                          <Chip size="sm" className="bg-emerald-100 text-emerald-800 text-xs">success</Chip>
+                        ) : (
+                          <Chip size="sm" className="bg-red-100 text-red-700 text-xs">failed</Chip>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right text-emerald-600">{fmtPct(e.max_gain_10d)}</TableCell>
+                      <TableCell className="text-right text-red-600">{fmtPct(e.max_loss_10d)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {track.entries.length > 25 && <p className="mt-3 text-xs text-slate-400">Showing the latest 25 of {track.entries.length} events.</p>}
+            </>
+          )}
+        </Section>
       </div>
     </div>
   );

@@ -111,6 +111,7 @@ export default function LightweightCandlestickChart({
         textColor: '#475569',
         fontSize: 10,
       },
+      localization: { locale: 'en-US' }, // match the English UI, not the browser's language
       ...variantOptions(initialRef.current.isMini),
     });
     chartRef.current = chart;
