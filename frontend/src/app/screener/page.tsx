@@ -2,7 +2,6 @@
 
 import React, { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import {
   Card,
   CardBody,
@@ -29,6 +28,7 @@ import ErrorAlert from '@/components/common/ErrorAlert';
 import { MultiSelect, SelectField, TextField } from '@/components/ui/Field';
 import SortHeader from '@/components/ui/SortHeader';
 import { XMarkIcon } from '@heroicons/react/20/solid';
+import SymbolHoverLink from '@/components/dashboard/SymbolHoverLink';
 
 const DEFAULT_FILTERS: ScreenerFilterRequest = { limit: 50, sort_by: 'price_change_pct', sort_order: 'desc' };
 
@@ -451,9 +451,7 @@ function ScreenerPageContent() {
                         {results.map((stock) => (
                           <TableRow key={stock.symbol}>
                             <TableCell>
-                              <Link href={`/stock/${stock.symbol}`} className="font-semibold text-slate-800 hover:text-accent">
-                                {stock.symbol}
-                              </Link>
+                              <SymbolHoverLink symbol={stock.symbol} />
                             </TableCell>
                             <TableCell className="text-right tabular-nums text-slate-800">${stock.current_price.toFixed(2)}</TableCell>
                             <TableCell className="text-right">

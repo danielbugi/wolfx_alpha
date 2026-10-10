@@ -32,7 +32,16 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: nav.push, replace: vi.fn() }),
 }));
 vi.mock('@/hooks/usePagePerf', () => ({ usePagePerf: () => ({ markLoaded: () => {} }) }));
-vi.mock('@/components/dashboard/SymbolHoverLink', () => ({ default: ({ symbol }: { symbol: string }) => <span>{symbol}</span> }));
+// Stand-in for the hover card (no network): keeps its contract — a button calling onSelect (without bubbling to the
+// row) when one is given, plain text otherwise.
+vi.mock('@/components/dashboard/SymbolHoverLink', () => ({
+  default: ({ symbol, onSelect, ariaLabel }: { symbol: string; onSelect?: () => void; ariaLabel?: string }) =>
+    onSelect ? (
+      <button type="button" aria-label={ariaLabel ?? symbol} onClick={(e) => { e.stopPropagation(); onSelect(); }}>{symbol}</button>
+    ) : (
+      <span>{symbol}</span>
+    ),
+}));
 
 import StrategiesPage from '@/app/strategies/page';
 import StrategyPage from '@/app/strategies/[strategyKey]/page';
