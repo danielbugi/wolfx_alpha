@@ -357,16 +357,19 @@ class PgStore:
 
     def news_recent(self, symbol: str, limit: int) -> List[Dict]:
         return self.db.execute_dict_query(
-            "SELECT published_at, headline, source, url FROM news_items WHERE symbol = %s ORDER BY published_at DESC LIMIT %s",
+            "SELECT published_at, headline, source, url, image_url FROM news_items WHERE symbol = %s ORDER BY published_at DESC LIMIT %s",
             (symbol, limit))
 
     def save_news(self, symbol: str, items: List[Dict], ok: bool, now) -> None:
         with self.db.get_sync_connection() as conn:
             cur = conn.cursor()
             for it in items:
-                cur.execute("INSERT INTO news_items (symbol, published_at, headline, source, url, url_hash, fetched_at) "
-                            "VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (symbol, url_hash) DO NOTHING",
-                            (symbol, it["published_at"], it["headline"], it.get("source"), it["url"], it["url_hash"], now))
+                # image_url (migration 33) is filled in on a later fetch for rows stored before it existed
+                cur.execute("INSERT INTO news_items (symbol, published_at, headline, source, url, url_hash, image_url, fetched_at) "
+                            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (symbol, url_hash) "
+                            "DO UPDATE SET image_url = COALESCE(news_items.image_url, EXCLUDED.image_url)",
+                            (symbol, it["published_at"], it["headline"], it.get("source"), it["url"], it["url_hash"],
+                             it.get("image_url"), now))
             cur.execute("INSERT INTO news_fetched (symbol, fetched_at, ok) VALUES (%s, %s, %s) "
                         "ON CONFLICT (symbol) DO UPDATE SET fetched_at = EXCLUDED.fetched_at, ok = EXCLUDED.ok", (symbol, now, ok))
             conn.commit()

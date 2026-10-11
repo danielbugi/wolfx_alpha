@@ -38,12 +38,32 @@ class NewsResult:
     stale: bool = False          # items come from an earlier fetch because the provider is failing now
 
 
+# Image sizes Alpaca sends, smallest first: a list thumbnail wants the smallest one available.
+IMAGE_SIZES = ("thumb", "small", "large")
+
+
+def pick_image(images) -> Optional[str]:
+    """The smallest http(s) image link in an Alpaca `images` list, or None (many stories have none)."""
+    by_size = {}
+    for img in images or []:
+        try:
+            url = str(img["url"]).strip()
+        except (KeyError, TypeError):
+            continue
+        if urlparse(url).scheme in ("http", "https") and len(url) <= 1000:
+            by_size.setdefault(img.get("size"), url)
+    for size in IMAGE_SIZES:
+        if size in by_size:
+            return by_size[size]
+    return next(iter(by_size.values()), None)
+
+
 def url_hash(url: str) -> str:
     return hashlib.sha256(url.encode("utf-8")).hexdigest()
 
 
 def parse_alpaca(payload: Dict, symbol: str) -> List[Dict]:
-    """Alpaca JSON -> [{published_at, headline, source, url, url_hash}]; skips anything malformed, non-http links and other symbols."""
+    """Alpaca JSON -> [{published_at, headline, source, url, url_hash, image_url}]; skips anything malformed, non-http links and other symbols."""
     out, seen = [], set()
     for n in (payload or {}).get("news", []) or []:
         try:
@@ -60,7 +80,7 @@ def parse_alpaca(payload: Dict, symbol: str) -> List[Dict]:
             continue
         seen.add(url)
         out.append({"published_at": when, "headline": headline, "source": (n.get("source") or "")[:60] or None,
-                    "url": url[:1000], "url_hash": url_hash(url)})
+                    "url": url[:1000], "url_hash": url_hash(url), "image_url": pick_image(n.get("images"))})
     return out
 
 

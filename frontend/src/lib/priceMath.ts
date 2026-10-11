@@ -3,12 +3,16 @@
 // card, and the candlestick chart -- pulled out so it isn't copy-pasted a
 // third time.
 
+/**
+ * Where `price` sits in the [low, high] channel, 0-100. Null when any input is unknown or the channel has no width —
+ * "unknown", never a made-up midpoint (this used to return 50, which displayed as a real reading).
+ */
 export function positionPct(
-  price: number | undefined,
-  low: number | undefined,
-  high: number | undefined
-): number {
-  if (price == null || low == null || high == null || high === low) return 50;
+  price: number | null | undefined,
+  low: number | null | undefined,
+  high: number | null | undefined
+): number | null {
+  if (price == null || low == null || high == null || high === low) return null;
   return Math.max(0, Math.min(100, ((price - low) / (high - low)) * 100));
 }
 

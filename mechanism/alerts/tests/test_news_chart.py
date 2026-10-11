@@ -33,7 +33,7 @@ def test_alpaca_payload_is_parsed_into_headline_link_source_and_time():
     g = got[0]
     assert g["published_at"] == datetime(2026, 9, 21, 7, 28, tzinfo=timezone.utc) and g["source"] == "benzinga" and g["url"] == "https://news.test/1"
     assert g["url_hash"] == ns.url_hash("https://news.test/1") and len(g["url_hash"]) == 64
-    assert set(g) == {"published_at", "headline", "source", "url", "url_hash"}                          # no article body is ever kept
+    assert set(g) == {"published_at", "headline", "source", "url", "url_hash", "image_url"}             # no article body is ever kept (an image link is not content)
 
 
 @pytest.mark.parametrize("bad", [item(url="javascript:alert(1)"), item(url="ftp://x.test/1"), item(url="data:text/html,x"), item(url=""),

@@ -47,7 +47,7 @@ export interface MomentumLeadersProps {
  */
 export default function MomentumLeaders({ board, sessionDate, loading, error, onRetry }: MomentumLeadersProps) {
   return (
-    <Card className="mb-6 border border-black/[0.05] shadow-sm">
+    <Card className="mb-6 border border-black/[0.05] shadow-sm" data-stock-list="Momentum Leaders">
       <CardHeader className="px-5 pt-5 pb-2">
         <div className="flex justify-between items-center w-full">
           <div>
