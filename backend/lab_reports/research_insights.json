@@ -1,6 +1,6 @@
 {
  "generated_at": "2026-10-11",
- "code_ref": "pending",
+ "code_ref": "3afff09",
  "status": "research_only",
  "use": "Research evidence only. Not a trading signal, not advice, and not used by the live signal path.",
  "schema": "lab_report_v1",
@@ -132,7 +132,7 @@
    {
     "claim": "Within recurring-operating catalysts a different exit policy beats the fixed-3R exit",
     "status": "not_supported",
-    "evidence": "best policy A_atr_stop_fixed_3R +0.155 R vs fixed 3R +0.155 R (intervals overlap)",
+    "evidence": "the fixed-3R exit is itself the best policy (+0.155 R); the others range +0.052 to +0.080 R, all intervals overlap",
     "reports": [
      "catalyst_sec_earnings"
     ]
