@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import Sidebar from '@/components/layout/Sidebar';
 import MobileNav from '@/components/layout/MobileNav';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import { useStockNavCapture } from '@/lib/stockNav';
 
 const PUBLIC_PATHS = new Set(['/login']);
 
@@ -29,6 +30,8 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const isPublicPath = PUBLIC_PATHS.has(pathname);
+  // Remembers which stock list a stock was opened from, for the stock page's next/previous arrows.
+  useStockNavCapture();
 
   useEffect(() => {
     if (status === 'unauthenticated' && !isPublicPath) {

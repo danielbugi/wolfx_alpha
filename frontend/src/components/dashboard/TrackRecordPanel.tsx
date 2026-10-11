@@ -110,6 +110,7 @@ export default function TrackRecordPanel({ summary, signals }: TrackRecordPanelP
           ) : (
             <Table
               removeWrapper
+              aria-label="Recent signals"
               className="text-xs"
               classNames={{ th: 'bg-slate-50/70 text-slate-500 font-medium text-[11px] h-8', td: 'text-xs py-2' }}
             >

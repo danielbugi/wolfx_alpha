@@ -24,6 +24,7 @@ import KeyLevels from '@/components/stock/KeyLevels';
 import FinancialGrowth from '@/components/stock/FinancialGrowth';
 import EarningsPanel from '@/components/stock/EarningsPanel';
 import PeersPanel from '@/components/stock/PeersPanel';
+import { StockNavButtons, StockNavCaption, useStockNav } from '@/components/stock/StockNavArrows';
 import { positionPct } from '@/lib/priceMath';
 import { gradeColor } from '@/lib/uiColors';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
@@ -249,6 +250,8 @@ function Section({ children, className }: { children: React.ReactNode; className
 export default function StockDetailPage() {
   const params = useParams();
   const symbol = (params?.symbol as string)?.toUpperCase();
+  // Previous/next stock in the list this one was opened from (arrows in the header, ← / → keys).
+  const nav = useStockNav(symbol);
 
   const [detail, setDetail] = useState<StockDetail | null>(null);
   const [bars, setBars] = useState<PriceBar[]>([]);
@@ -376,7 +379,9 @@ export default function StockDetailPage() {
             lines there and would cover too much of a small screen. */}
         <Card className="material-thick z-20 border border-black/[0.05] shadow-sm md:sticky md:top-[4.25rem] lg:top-3">
           <CardBody className="flex-row flex-wrap items-center justify-between gap-x-6 gap-y-2 px-5 py-3.5">
-            <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-3">
+              <StockNavButtons nav={nav} />
+              <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="large-title">{detail.symbol}</h1>
                 {hasSignal ? (
@@ -413,6 +418,12 @@ export default function StockDetailPage() {
                 {snap.industry ? ` · ${snap.industry}` : ''}
                 {asOfDate ? ` · data as of ${asOfDate}` : ''}
               </p>
+              {nav.list && nav.index >= 0 && (
+                <p className="mt-0.5 text-xs text-slate-400">
+                  <StockNavCaption nav={nav} />
+                </p>
+              )}
+              </div>
             </div>
             <div className="sm:text-right">
               <p className="large-title tabular-nums">{snap.current_price != null ? `$${fmtNum(snap.current_price)}` : UNKNOWN}</p>
