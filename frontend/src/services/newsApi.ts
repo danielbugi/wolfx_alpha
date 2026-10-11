@@ -6,6 +6,8 @@ export interface NewsItem {
   headline: string;
   source: string | null;
   url: string;
+  /** small thumbnail from the provider, or null (many stories have none) */
+  image_url: string | null;
 }
 
 export interface StockNews {

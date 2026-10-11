@@ -17,6 +17,24 @@ function ago(iso: string): string {
   return then.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+/** The story's thumbnail. Hidden if the image fails to load, so a broken image never shows. Plain <img>: the hosts are
+ * the publishers' CDNs, unknown in advance, so next/image's allow-list doesn't fit. No referrer is sent. */
+function Thumb({ src }: { src: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+      className="h-16 w-24 shrink-0 rounded-lg bg-slate-100 object-cover ring-1 ring-black/[0.05]"
+    />
+  );
+}
+
 /**
  * Latest headlines for the stock (headline, source, time, link — no article text). Real states only: no headlines says
  * so, and when the provider is down the page says that, showing older stored headlines flagged as such if there are any.
@@ -68,6 +86,7 @@ export default function NewsPanel({ symbol }: { symbol: string }) {
                     rel="noopener noreferrer"
                     className="group flex items-start gap-3 rounded-lg py-2.5 hover:bg-black/[0.02]"
                   >
+                    {item.image_url && <Thumb src={item.image_url} />}
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium leading-snug text-slate-800 group-hover:text-accent">{item.headline}</p>
                       <p className="mt-0.5 text-[11px] text-slate-400">

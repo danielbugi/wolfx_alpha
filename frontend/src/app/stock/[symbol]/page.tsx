@@ -33,11 +33,44 @@ import { positionPct } from '@/lib/priceMath';
 import { gradeColor } from '@/lib/uiColors';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import SearchBox from '@/components/layout/SearchBox';
+import SegmentedControl from '@/components/ui/SegmentedControl';
 
 // The chart builds weekly/monthly candles and the 200-day average from daily bars, so load the longest history the
 // API serves (backend caps price history at 730 days) once; switching interval or range is then instant.
 const HISTORY_DAYS = 730;
 const EARNINGS_LIMIT = 16;
+
+type DetailTab = 'news' | 'strategy' | 'financials' | 'earnings' | 'peers';
+const DETAIL_TABS: { value: DetailTab; label: string }[] = [
+  { value: 'news', label: 'News' },
+  { value: 'strategy', label: 'Strategy' },
+  { value: 'financials', label: 'Financials' },
+  { value: 'earnings', label: 'Earnings' },
+  { value: 'peers', label: 'Peers' },
+];
+const TAB_KEY = 'stock_detail_tab';
+
+/** The details tab, remembered in this browser so moving to the next stock keeps the same tab. Opens on News. */
+function useDetailTab() {
+  const [tab, setTabState] = useState<DetailTab>('news');
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(TAB_KEY);
+      if (saved && DETAIL_TABS.some((t) => t.value === saved)) setTabState(saved as DetailTab);
+    } catch {
+      /* no storage: stay on News */
+    }
+  }, []);
+  const setTab = useCallback((t: DetailTab) => {
+    setTabState(t);
+    try {
+      window.localStorage.setItem(TAB_KEY, t);
+    } catch {
+      /* this view only */
+    }
+  }, []);
+  return [tab, setTab] as const;
+}
 
 // "—" for unknown everywhere on this page: a missing value is never shown as 0, "N/A%" or a default.
 const UNKNOWN = '—';
@@ -275,6 +308,7 @@ export default function StockDetailPage() {
   // Previous/next stock in the list this one was opened from (arrows in the header, ← / → keys).
   const nav = useStockNav(symbol);
   const watchlist = useWatchlist();
+  const [tab, setTab] = useDetailTab();
 
   const [detail, setDetail] = useState<StockDetail | null>(null);
   const [bars, setBars] = useState<PriceBar[]>([]);
@@ -553,240 +587,265 @@ export default function StockDetailPage() {
           </div>
         </Card>
 
-        {/* Signal & plan next to key levels */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-          <Section className="lg:col-span-3">
-            {hasSignal ? (
-              <div className="space-y-5">
-                {rating.plan ? (
-                  <div>
-                    <SectionTitle
-                      aside={
-                        <HoverTip
-                          content={
-                            <div className="space-y-0.5">
-                              <p>Momentum: {rating.plan.momentum_score == null ? UNKNOWN : rating.plan.momentum_score.toFixed(0)} × 0.40</p>
-                              <p>Fundamentals: {rating.plan.fundamentals_score == null ? UNKNOWN : rating.plan.fundamentals_score.toFixed(0)} × 0.25</p>
-                              <p>Alignment: {rating.plan.alignment_score == null ? UNKNOWN : rating.plan.alignment_score.toFixed(0)} × 0.20</p>
-                              <p>Risk bonus: {rating.plan.risk_bonus.toFixed(0)} × 0.15</p>
-                            </div>
-                          }
-                        >
-                          <span className="cursor-help border-b border-dotted border-slate-400 text-xs font-semibold text-slate-700">
-                            Strategy score {rating.plan.strategy_score.toFixed(0)}
-                          </span>
-                        </HoverTip>
-                      }
-                    >
-                      <span className="inline-flex items-center gap-2">
-                        Trade plan
-                        <Chip
-                          size="sm"
-                          className={`text-xs ${rating.plan.direction === 'long' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}`}
-                        >
-                          {rating.plan.direction === 'long' ? 'Long' : 'Short'}
-                        </Chip>
-                      </span>
-                    </SectionTitle>
-
-                    <PlanBar
-                      plan={{
-                        stop_loss_price: rating.plan.stop_loss_price,
-                        entry_price: rating.plan.entry_price,
-                        tp1: rating.plan.tp1,
-                        tp2: rating.plan.tp2,
-                        tp3: rating.plan.tp3,
-                      }}
-                    />
-
-                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-                      {[
-                        { label: 'Entry', price: rating.plan.entry_price, pct: null, tone: 'text-slate-900' },
-                        { label: 'Stop', price: rating.plan.stop_loss_price, pct: -rating.plan.risk_pct, tone: 'text-red-600' },
-                        { label: 'TP1', price: rating.plan.tp1, pct: rating.plan.reward_pct_tp1, tone: 'text-emerald-600' },
-                        { label: 'TP2', price: rating.plan.tp2, pct: rating.plan.reward_pct_tp2, tone: 'text-emerald-600' },
-                        { label: 'TP3', price: rating.plan.tp3, pct: rating.plan.reward_pct_tp3, tone: 'text-emerald-600' },
-                      ].map((level) => (
-                        <div key={level.label} className="rounded-xl bg-slate-50 px-3 py-2.5">
-                          <p className="text-[11px] font-medium text-slate-500">{level.label}</p>
-                          <p className={`text-[15px] font-semibold tabular-nums ${level.tone}`}>${fmtNum(level.price)}</p>
-                          <p className="text-[11px] tabular-nums text-slate-400">{level.pct != null ? fmtPct(level.pct) : 'current price'}</p>
-                        </div>
-                      ))}
-                    </div>
-                    <p className="mt-3 text-xs text-slate-500">
-                      Suggested position size at 1% account risk:{' '}
-                      <span className="font-semibold text-slate-700">{Math.min(10, (1 / rating.plan.risk_pct) * 100).toFixed(1)}%</span> of
-                      portfolio (capped at 10%) —{' '}
-                      <Link href="/strategy" className="text-accent hover:underline">
-                        adjust on Position Plans
-                      </Link>
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-400">Strategy plan unavailable for this signal.</p>
-                )}
-
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <p className="mb-2 text-xs font-semibold text-slate-700">Signal</p>
-                    <div className="flex flex-wrap gap-2">
-                      {rating.signal_type && (
-                        <Chip size="sm" className="bg-slate-100 text-slate-700 text-xs capitalize">
-                          {rating.signal_type.replace(/_/g, ' ')}
-                        </Chip>
-                      )}
-                      {rating.alignment_grade && (
-                        <Chip size="sm" className="bg-slate-100 text-slate-700 text-xs">
-                          Timeframe alignment {rating.alignment_score}% ({rating.alignment_grade})
-                        </Chip>
-                      )}
-                    </div>
-                    {rating.reasoning && <p className="mt-2 text-sm leading-relaxed text-slate-600">{rating.reasoning}</p>}
-                  </div>
-
-                  {/* The ML score is shown for reference only: it has not shown a reliable edge in validation, so it is
-                      labelled as experimental and kept out of the header. */}
-                  {(rating.ml_momentum_probability != null || rating.ml_confidence) && (
-                    <div className="rounded-xl border border-amber-200/70 bg-amber-50/60 p-3.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs font-semibold text-slate-700">Model score · experimental</p>
-                        <p className="text-[15px] font-semibold tabular-nums text-slate-900">
-                          {rating.ml_momentum_probability != null ? `${rating.ml_momentum_probability.toFixed(0)}%` : UNKNOWN}
-                          {rating.ml_confidence && (
-                            <span className="ml-1.5 text-xs font-medium capitalize text-slate-500">({rating.ml_confidence.replace('_', ' ')})</span>
-                          )}
-                        </p>
-                      </div>
-                      <p className="mt-1.5 flex gap-1.5 text-[11px] leading-relaxed text-slate-600">
-                        <ExclamationTriangleIcon className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
-                        Not yet a proven predictor — in testing it hasn&apos;t shown a reliable edge. Shown for reference only.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div>
-                <SectionTitle>Signal</SectionTitle>
-                <p className="text-sm text-slate-600">{rating.reasoning || 'No active breakout signal for this symbol right now.'}</p>
-                <p className="mt-2 text-xs text-slate-400">The chart and the sections below show the latest available data.</p>
-              </div>
-            )}
-          </Section>
-
-          <Section className="lg:col-span-2">
-            <KeyLevels bars={bars} price={snap.current_price} atr={timeframes.daily.atr} sector={snap.sector} sectorHistory={sectorHistory} />
-          </Section>
+        {/* Details in tabs; the page remembers the last tab, so stepping through a list keeps you on it. */}
+        <div className="overflow-x-auto pb-1 pt-2">
+          <SegmentedControl aria-label="Stock details" size="md" options={DETAIL_TABS} value={tab} onChange={setTab} />
         </div>
 
-        <Section>
-          <NewsPanel symbol={detail.symbol} />
-        </Section>
+        {tab === 'news' && (
+          <>
+            <Section>
+              <NewsPanel symbol={detail.symbol} />
+            </Section>
+          </>
+        )}
 
-        <Section>
-          <FinancialGrowth quarters={financials} />
-        </Section>
+        {tab === 'strategy' && (
+          <>
+            {/* Signal & plan next to key levels */}
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+              <Section className="lg:col-span-3">
+                {hasSignal ? (
+                  <div className="space-y-5">
+                    {rating.plan ? (
+                      <div>
+                        <SectionTitle
+                          aside={
+                            <HoverTip
+                              content={
+                                <div className="space-y-0.5">
+                                  <p>Momentum: {rating.plan.momentum_score == null ? UNKNOWN : rating.plan.momentum_score.toFixed(0)} × 0.40</p>
+                                  <p>Fundamentals: {rating.plan.fundamentals_score == null ? UNKNOWN : rating.plan.fundamentals_score.toFixed(0)} × 0.25</p>
+                                  <p>Alignment: {rating.plan.alignment_score == null ? UNKNOWN : rating.plan.alignment_score.toFixed(0)} × 0.20</p>
+                                  <p>Risk bonus: {rating.plan.risk_bonus.toFixed(0)} × 0.15</p>
+                                </div>
+                              }
+                            >
+                              <span className="cursor-help border-b border-dotted border-slate-400 text-xs font-semibold text-slate-700">
+                                Strategy score {rating.plan.strategy_score.toFixed(0)}
+                              </span>
+                            </HoverTip>
+                          }
+                        >
+                          <span className="inline-flex items-center gap-2">
+                            Trade plan
+                            <Chip
+                              size="sm"
+                              className={`text-xs ${rating.plan.direction === 'long' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}`}
+                            >
+                              {rating.plan.direction === 'long' ? 'Long' : 'Short'}
+                            </Chip>
+                          </span>
+                        </SectionTitle>
 
-        <Section>
-          <EarningsPanel earnings={earnings} bars={bars} />
-        </Section>
+                        <PlanBar
+                          plan={{
+                            stop_loss_price: rating.plan.stop_loss_price,
+                            entry_price: rating.plan.entry_price,
+                            tp1: rating.plan.tp1,
+                            tp2: rating.plan.tp2,
+                            tp3: rating.plan.tp3,
+                          }}
+                        />
 
-        {/* Fundamentals & valuation */}
-        <Section>
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-            <div>
-              <SectionTitle>Quality scores</SectionTitle>
-              <ScoreBar label="Growth" value={snap.growth_score} />
-              <ScoreBar label="Profitability" value={snap.profitability_score} />
-              <ScoreBar label="Financial health" value={snap.financial_health_score} />
-              <ScoreBar label="Valuation" value={snap.valuation_score} />
-              <div className="my-3 h-px bg-black/[0.06]" />
-              <ScoreBar label="Overall quality" value={snap.overall_quality_score} />
-            </div>
-            <div>
-              <SectionTitle>Valuation</SectionTitle>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {[
-                  ['P/E', fmtNum(snap.pe_ratio, 1)],
-                  ['P/B', fmtNum(snap.pb_ratio, 1)],
-                  ['P/S', fmtNum(snap.ps_ratio, 1)],
-                  ['PEG', fmtNum(snap.peg_ratio)],
-                  ['Beta', fmtNum(snap.beta)],
-                  ['Dividend yield', snap.dividend_yield != null ? `${fmtNum(snap.dividend_yield)}%` : UNKNOWN],
-                ].map(([label, value]) => (
-                  <div key={label} className="rounded-xl bg-slate-50 px-3 py-2.5">
-                    <p className="text-[11px] font-medium text-slate-500">{label}</p>
-                    <p className={clsx('text-[15px] font-semibold tabular-nums', value === UNKNOWN ? 'text-slate-400' : 'text-slate-900')}>{value}</p>
+                        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                          {[
+                            { label: 'Entry', price: rating.plan.entry_price, pct: null, tone: 'text-slate-900' },
+                            { label: 'Stop', price: rating.plan.stop_loss_price, pct: -rating.plan.risk_pct, tone: 'text-red-600' },
+                            { label: 'TP1', price: rating.plan.tp1, pct: rating.plan.reward_pct_tp1, tone: 'text-emerald-600' },
+                            { label: 'TP2', price: rating.plan.tp2, pct: rating.plan.reward_pct_tp2, tone: 'text-emerald-600' },
+                            { label: 'TP3', price: rating.plan.tp3, pct: rating.plan.reward_pct_tp3, tone: 'text-emerald-600' },
+                          ].map((level) => (
+                            <div key={level.label} className="rounded-xl bg-slate-50 px-3 py-2.5">
+                              <p className="text-[11px] font-medium text-slate-500">{level.label}</p>
+                              <p className={`text-[15px] font-semibold tabular-nums ${level.tone}`}>${fmtNum(level.price)}</p>
+                              <p className="text-[11px] tabular-nums text-slate-400">{level.pct != null ? fmtPct(level.pct) : 'current price'}</p>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="mt-3 text-xs text-slate-500">
+                          Suggested position size at 1% account risk:{' '}
+                          <span className="font-semibold text-slate-700">{Math.min(10, (1 / rating.plan.risk_pct) * 100).toFixed(1)}%</span> of
+                          portfolio (capped at 10%) —{' '}
+                          <Link href="/strategy" className="text-accent hover:underline">
+                            adjust on Position Plans
+                          </Link>
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-400">Strategy plan unavailable for this signal.</p>
+                    )}
+
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div>
+                        <p className="mb-2 text-xs font-semibold text-slate-700">Signal</p>
+                        <div className="flex flex-wrap gap-2">
+                          {rating.signal_type && (
+                            <Chip size="sm" className="bg-slate-100 text-slate-700 text-xs capitalize">
+                              {rating.signal_type.replace(/_/g, ' ')}
+                            </Chip>
+                          )}
+                          {rating.alignment_grade && (
+                            <Chip size="sm" className="bg-slate-100 text-slate-700 text-xs">
+                              Timeframe alignment {rating.alignment_score}% ({rating.alignment_grade})
+                            </Chip>
+                          )}
+                        </div>
+                        {rating.reasoning && <p className="mt-2 text-sm leading-relaxed text-slate-600">{rating.reasoning}</p>}
+                      </div>
+
+                      {/* The ML score is shown for reference only: it has not shown a reliable edge in validation, so it is
+                          labelled as experimental and kept out of the header. */}
+                      {(rating.ml_momentum_probability != null || rating.ml_confidence) && (
+                        <div className="rounded-xl border border-amber-200/70 bg-amber-50/60 p-3.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs font-semibold text-slate-700">Model score · experimental</p>
+                            <p className="text-[15px] font-semibold tabular-nums text-slate-900">
+                              {rating.ml_momentum_probability != null ? `${rating.ml_momentum_probability.toFixed(0)}%` : UNKNOWN}
+                              {rating.ml_confidence && (
+                                <span className="ml-1.5 text-xs font-medium capitalize text-slate-500">({rating.ml_confidence.replace('_', ' ')})</span>
+                              )}
+                            </p>
+                          </div>
+                          <p className="mt-1.5 flex gap-1.5 text-[11px] leading-relaxed text-slate-600">
+                            <ExclamationTriangleIcon className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
+                            Not yet a proven predictor — in testing it hasn&apos;t shown a reliable edge. Shown for reference only.
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </Section>
-
-        <Section>
-          <PeersPanel symbol={detail.symbol} sector={snap.sector} />
-        </Section>
-
-        {/* Breakout track record */}
-        <Section>
-          <SectionTitle>Breakout track record</SectionTitle>
-          {track.entries.length === 0 ? (
-            <p className="py-4 text-center text-sm text-slate-400">No historical breakout events recorded for this symbol.</p>
-          ) : (
-            <>
-              <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {[
-                  ['Breakout events', String(track.total_breakouts)],
-                  ['Win rate', track.win_rate != null ? `${track.win_rate}%` : UNKNOWN],
-                  ['Avg max gain (10d)', fmtPct(track.avg_gain_10d)],
-                  ['Avg max loss (10d)', fmtPct(track.avg_loss_10d)],
-                ].map(([label, value]) => (
-                  <div key={label} className="rounded-xl bg-slate-50 px-3 py-2.5">
-                    <p className="text-[11px] font-medium text-slate-500">{label}</p>
-                    <p className="text-[15px] font-semibold tabular-nums text-slate-900">{value}</p>
+                ) : (
+                  <div>
+                    <SectionTitle>Signal</SectionTitle>
+                    <p className="text-sm text-slate-600">{rating.reasoning || 'No active breakout signal for this symbol right now.'}</p>
+                    <p className="mt-2 text-xs text-slate-400">The chart and the sections below show the latest available data.</p>
                   </div>
-                ))}
+                )}
+              </Section>
+
+              <Section className="lg:col-span-2">
+                <KeyLevels bars={bars} price={snap.current_price} atr={timeframes.daily.atr} sector={snap.sector} sectorHistory={sectorHistory} />
+              </Section>
+            </div>
+
+            {/* Breakout track record */}
+            <Section>
+              <SectionTitle>Breakout track record</SectionTitle>
+              {track.entries.length === 0 ? (
+                <p className="py-4 text-center text-sm text-slate-400">No historical breakout events recorded for this symbol.</p>
+              ) : (
+                <>
+                  <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {[
+                      ['Breakout events', String(track.total_breakouts)],
+                      ['Win rate', track.win_rate != null ? `${track.win_rate}%` : UNKNOWN],
+                      ['Avg max gain (10d)', fmtPct(track.avg_gain_10d)],
+                      ['Avg max loss (10d)', fmtPct(track.avg_loss_10d)],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-xl bg-slate-50 px-3 py-2.5">
+                        <p className="text-[11px] font-medium text-slate-500">{label}</p>
+                        <p className="text-[15px] font-semibold tabular-nums text-slate-900">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <Table
+                    removeWrapper
+                    aria-label="Breakout history"
+                    classNames={{ th: 'bg-slate-50/70 text-slate-500 font-medium text-[11px] h-8', td: 'text-[13px] py-2 tabular-nums' }}
+                  >
+                    <TableHeader>
+                      <TableColumn>DATE</TableColumn>
+                      <TableColumn>TYPE</TableColumn>
+                      <TableColumn align="end">ENTRY</TableColumn>
+                      <TableColumn>OUTCOME</TableColumn>
+                      <TableColumn align="end">MAX GAIN 10D</TableColumn>
+                      <TableColumn align="end">MAX LOSS 10D</TableColumn>
+                    </TableHeader>
+                    <TableBody>
+                      {track.entries.slice(0, 25).map((e, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-slate-600">{e.date}</TableCell>
+                          <TableCell className="text-slate-600">{e.breakout_type ?? UNKNOWN}</TableCell>
+                          <TableCell className="text-right">{e.entry_price != null ? `$${fmtNum(e.entry_price)}` : UNKNOWN}</TableCell>
+                          <TableCell>
+                            {e.success === null ? (
+                              <Chip size="sm" className="bg-slate-100 text-slate-500 text-xs">pending</Chip>
+                            ) : e.success ? (
+                              <Chip size="sm" className="bg-emerald-100 text-emerald-800 text-xs">success</Chip>
+                            ) : (
+                              <Chip size="sm" className="bg-red-100 text-red-700 text-xs">failed</Chip>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right text-emerald-600">{fmtPct(e.max_gain_10d)}</TableCell>
+                          <TableCell className="text-right text-red-600">{fmtPct(e.max_loss_10d)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {track.entries.length > 25 && <p className="mt-3 text-xs text-slate-400">Showing the latest 25 of {track.entries.length} events.</p>}
+                </>
+              )}
+            </Section>
+          </>
+        )}
+
+        {tab === 'financials' && (
+          <>
+            <Section>
+              <FinancialGrowth quarters={financials} />
+            </Section>
+
+            {/* Fundamentals & valuation */}
+            <Section>
+              <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+                <div>
+                  <SectionTitle>Quality scores</SectionTitle>
+                  <ScoreBar label="Growth" value={snap.growth_score} />
+                  <ScoreBar label="Profitability" value={snap.profitability_score} />
+                  <ScoreBar label="Financial health" value={snap.financial_health_score} />
+                  <ScoreBar label="Valuation" value={snap.valuation_score} />
+                  <div className="my-3 h-px bg-black/[0.06]" />
+                  <ScoreBar label="Overall quality" value={snap.overall_quality_score} />
+                </div>
+                <div>
+                  <SectionTitle>Valuation</SectionTitle>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {[
+                      ['P/E', fmtNum(snap.pe_ratio, 1)],
+                      ['P/B', fmtNum(snap.pb_ratio, 1)],
+                      ['P/S', fmtNum(snap.ps_ratio, 1)],
+                      ['PEG', fmtNum(snap.peg_ratio)],
+                      ['Beta', fmtNum(snap.beta)],
+                      ['Dividend yield', snap.dividend_yield != null ? `${fmtNum(snap.dividend_yield)}%` : UNKNOWN],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-xl bg-slate-50 px-3 py-2.5">
+                        <p className="text-[11px] font-medium text-slate-500">{label}</p>
+                        <p className={clsx('text-[15px] font-semibold tabular-nums', value === UNKNOWN ? 'text-slate-400' : 'text-slate-900')}>{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <Table
-                removeWrapper
-                aria-label="Breakout history"
-                classNames={{ th: 'bg-slate-50/70 text-slate-500 font-medium text-[11px] h-8', td: 'text-[13px] py-2 tabular-nums' }}
-              >
-                <TableHeader>
-                  <TableColumn>DATE</TableColumn>
-                  <TableColumn>TYPE</TableColumn>
-                  <TableColumn align="end">ENTRY</TableColumn>
-                  <TableColumn>OUTCOME</TableColumn>
-                  <TableColumn align="end">MAX GAIN 10D</TableColumn>
-                  <TableColumn align="end">MAX LOSS 10D</TableColumn>
-                </TableHeader>
-                <TableBody>
-                  {track.entries.slice(0, 25).map((e, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="text-slate-600">{e.date}</TableCell>
-                      <TableCell className="text-slate-600">{e.breakout_type ?? UNKNOWN}</TableCell>
-                      <TableCell className="text-right">{e.entry_price != null ? `$${fmtNum(e.entry_price)}` : UNKNOWN}</TableCell>
-                      <TableCell>
-                        {e.success === null ? (
-                          <Chip size="sm" className="bg-slate-100 text-slate-500 text-xs">pending</Chip>
-                        ) : e.success ? (
-                          <Chip size="sm" className="bg-emerald-100 text-emerald-800 text-xs">success</Chip>
-                        ) : (
-                          <Chip size="sm" className="bg-red-100 text-red-700 text-xs">failed</Chip>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right text-emerald-600">{fmtPct(e.max_gain_10d)}</TableCell>
-                      <TableCell className="text-right text-red-600">{fmtPct(e.max_loss_10d)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {track.entries.length > 25 && <p className="mt-3 text-xs text-slate-400">Showing the latest 25 of {track.entries.length} events.</p>}
-            </>
-          )}
-        </Section>
+            </Section>
+          </>
+        )}
+
+        {tab === 'earnings' && (
+          <>
+            <Section>
+              <EarningsPanel earnings={earnings} bars={bars} />
+            </Section>
+          </>
+        )}
+
+        {tab === 'peers' && (
+          <>
+            <Section>
+              <PeersPanel symbol={detail.symbol} sector={snap.sector} />
+            </Section>
+          </>
+        )}
       </div>
     </div>
   );
