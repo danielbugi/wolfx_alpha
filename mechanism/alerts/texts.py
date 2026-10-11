@@ -28,18 +28,26 @@ ACK_HINT = "Tap the button below to continue. If the button does not respond, se
 NOT_INVITED = ("This is the First Light private assistant. Access is on request, and seats are limited.\n\n"
                "Tap <b>Request access</b> and the owner will review it. If you already have an invitation link, open it again.\n\n"
                "Your Telegram id: <code>{uid}</code>")
+NOT_INVITED_AUTO = ("<b>Welcome to First Light</b> ☀️\n\n"
+                    "Momentum, context and the story behind the move, in one private chat.\n\n"
+                    "Tap <b>Join</b> to get started. If you already have an invitation link, open it again.\n\n"
+                    "Your Telegram id: <code>{uid}</code>")
 NOT_INVITED_CLOSED = ("This is the First Light private assistant. Access is closed for now.\n\n"
                       "If you already have an invitation link, open it again.\n\nYour Telegram id: <code>{uid}</code>")
 REQUEST_PENDING = "Your request is waiting for the owner. You will hear back here."
 REQUEST_COOLDOWN = "Your last request was not approved. You can ask again after {date}."
-REQUEST_BUTTON, WHAT_BUTTON, BACK_TO_ACCESS = "Request access", "What is this?", "Back"
+REQUEST_BUTTON, JOIN_BUTTON, WHAT_BUTTON, BACK_TO_ACCESS = "Request access", "Join", "What is this?", "Back"
 WHAT_IS_THIS = (
     "<b>The First Light private assistant</b>\n"
-    "It reads the same end-of-day scan as the First Light channel and lets you follow your own watchlist and portfolio since the day "
-    "you add a stock, with news and a chart for each stock.\n\n"
-    "Access is on request, and the owner approves each one. If you request access, your Telegram id and the time are stored until the "
-    "owner decides (at most 14 days). Nothing is stored if you do not tap the button.\n\n"
-    "Educational data from public price sources, not investment advice.")
+    "Momentum and context for the stocks that matter to you: what is moving today, a chart and the latest news for each stock, and your "
+    "own watchlist and portfolio followed from the day you add them. Built on trusted, professional market data.\n\n"
+    "{access}\n\n"
+    "Educational information, not investment advice.")
+WHAT_IS_THIS_APPROVE = ("Access is on request, and the owner reviews each one. If you request access, your Telegram id, your public "
+                        "Telegram name and the time are stored until it is decided (at most 14 days). Nothing is stored if you do not "
+                        "tap the button.")
+WHAT_IS_THIS_AUTO = ("Tap Join and you are in right away. Your Telegram id and your public Telegram name are stored while you have "
+                     "access. Nothing is stored if you do not tap the button.")
 REQUEST_SENT = "Thanks - your request was sent to the owner. You will hear back here."
 REQUEST_POPUP_SENT = "Request sent"
 REQUEST_POPUP_ALREADY = "Your request is already waiting."
@@ -48,10 +56,10 @@ REQUEST_POPUP_FULL = "The waiting list is full. Please try again later."
 REQUEST_POPUP_BLOCKED = "This account cannot request access."
 REQUEST_POPUP_MEMBER = "You already have access. Send /start."
 REQUEST_POPUP_COOLDOWN = "Your last request was not approved. You can ask again after {date}."
-ACCESS_GRANTED_USER = "You are in. Welcome to the First Light assistant."
+ACCESS_GRANTED_USER = "You're in 🎉 Welcome to First Light."
 ACCESS_DECLINED_USER = "Your request was not approved this time. You can ask again after {date}."
-OWNER_REQUEST_NOTICE = "Access request from Telegram id <code>{uid}</code>."
-OWNER_AUTO_NOTICE = "Access granted automatically (open beta) to Telegram id <code>{uid}</code>."
+OWNER_REQUEST_NOTICE = "Access request from {who}."
+OWNER_AUTO_NOTICE = "New member (joined automatically): {who}\nMembers: {n} of {cap}."
 OWNER_APPROVED, OWNER_DECLINED = "Approved <code>{uid}</code>.", "Declined <code>{uid}</code>."
 OWNER_NO_REQUEST = "No waiting request for {uid} (already handled or expired)."
 OWNER_NOT_NOTIFIED = " (they could not be notified - they may have blocked the bot)"
@@ -59,7 +67,7 @@ NOT_INVITED_POPUP = "Private assistant - invitation required."
 INVITE_INVALID = ("This invitation link is not valid any more: it was already used or it expired. "
                   "Ask the owner for a new one.\n\nYour Telegram id: <code>{uid}</code>")
 INVITE_REVOKED = "This account no longer has access to the assistant."
-WELCOME_INVITED = "Welcome. Your invitation was accepted."
+WELCOME_INVITED = "Welcome ☀️ Your invitation was accepted."
 
 # Group chats are public to everyone in the group, so the bot only points to the private chat there and never shows data.
 GROUP_POINTER = "This is a private assistant and it does not answer in groups. Open a private chat with the bot."
@@ -129,16 +137,17 @@ ABOUT = DISCLAIMER_LONG
 MENU_TODAY, MENU_PORTFOLIO, MENU_WATCHLIST, MENU_HELP = "Today's lists", "Portfolio", "Watchlist", "Help"
 
 ONBOARDING = {
-    1: ("<b>Welcome to First Light</b>\n\n"
-        "This is your private assistant. It reads the same end-of-day scan as the channel and helps you follow the stocks you "
-        "care about.\n\nOther users cannot see your lists.\n\n<i>Step 1 of 4</i>"),
+    1: ("<b>Welcome to First Light</b> ☀️\n\n"
+        "Your private market companion: the stocks with momentum, the context behind the move, and an easy way to follow the "
+        "ones you care about.\n\nYour lists are yours alone. Other users cannot see them.\n\n<i>Step 1 of 4</i>"),
     2: ("<b>How it works</b>\n\n"
         "<b>1. Today's lists</b> - every stock from the channel's lists, each shown once.\n"
         "<b>2. Tap a stock</b> - its numbers, news and a chart.\n"
         "<b>3. Add it</b> to your Watchlist or Portfolio - the bot remembers your price and the day.\n"
         "<b>4. Come back any time</b> - see how each stock changed since that day.\n\n<i>Step 2 of 4</i>"),
     3: ("<b>Your data</b>\n\n"
-        "Stored: the symbols you add, the price you give (or the last close), the day, and optionally your shares. Nothing else.\n\n"
+        "Stored: your public Telegram name, the symbols you add, the price you give (or the last close), the day, and optionally "
+        "your shares. Nothing else.\n\n"
         "Prices are end-of-day. /export gives you everything you saved and /deleteme erases it.\n\n"
         "The owner of this bot can technically read the database.\n\n<i>Step 3 of 4</i>"),
 }
@@ -151,9 +160,10 @@ NEXT, BACK_BTN, SKIP_GUIDE = "Next", "Back", "Skip guide"
 
 PRIVACY = (
     "<b>What is stored</b>\n"
-    "Your Telegram id, the day you accepted the notice, and for each stock you add: the symbol, your price (or the last close), the "
-    "day, and your shares if you gave them. No names, no messages. If you asked for access, your Telegram id and the time of the "
-    "request were kept only until the owner decided (at most 14 days).\n\n"
+    "Your Telegram id, your public Telegram name and @username (refreshed when you use the bot, so the owner can see who has "
+    "access), the day you accepted the notice, and for each stock you add: the symbol, your price (or the last close), the day, and "
+    "your shares if you gave them. No messages. If you asked for access, your Telegram id, public name and the time of the request "
+    "were kept only until it was decided (at most 14 days).\n\n"
     "If you turn on /morning, one switch and the last session messaged are stored, nothing else; /morning off or /deleteme removes it.\n\n"
     "Only you see your lists. The owner of this bot can technically read the database.\n\n"
     "/export sends everything you saved as a file. /deleteme erases it after you confirm.")
@@ -169,3 +179,19 @@ MORNING_ON = ("Morning message is on. After each daily scan you get a short mess
 MORNING_OFF = "Morning message is off. Nothing about it is stored."
 MORNING_STATUS_ON = "The morning message is on. Turn it off with /morning off."
 MORNING_STATUS_OFF = "The morning message is off. Turn it on with /morning on."
+
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# The bot's Telegram profile, set by run_bot.py at startup. DESCRIPTION is what a person sees in the empty chat before tapping
+# Start (Telegram limit 512 characters); SHORT_DESCRIPTION is on the bot's profile page and in shared links (limit 120).
+# Sell the value - momentum, context, strong data - and never the machinery: no universe size, no counts, no formulas.
+# ---------------------------------------------------------------------------------------------------------------------------
+BOT_SHORT_DESCRIPTION = "☀️ Momentum, context and the story behind the move. Your private market companion."
+BOT_DESCRIPTION = (
+    "Hi, I'm First Light ☀️\n\n"
+    "Every market day I bring you the stocks with momentum and the context behind them: charts, news and the bigger picture.\n\n"
+    "📈 See what is moving, and why\n"
+    "👀 Follow your own watchlist and portfolio\n"
+    "🌅 A quiet morning note when your stocks change\n\n"
+    "Built on trusted, professional market data. Educational information, not investment advice.\n\n"
+    "Tap Start 👇")

@@ -347,3 +347,122 @@ def test_nobody_else_learns_anything_from_a_forwarded_post():
     said = texts_sent(calls)
     assert "-1005551234" not in " ".join(said)                                          # a member and a stranger get their usual replies only
     assert said[1] == texts.NOT_INVITED.format(uid=77)
+
+
+# ================================================================== member management from the dashboard (migration 34)
+def _named(update, first_name, username=None):
+    """The same update, sent by a person with this public Telegram name."""
+    body = update.get("message") or update["callback_query"]
+    body["from"]["first_name"] = first_name
+    if username:
+        body["from"]["username"] = username
+    return update
+
+
+def test_the_dashboard_mode_wins_over_the_env_mode_and_the_screen_says_join():
+    svc = service()
+    svc.store.settings[acc.MODE_KEY] = "auto"                                           # switched on the dashboard; .env still says approve
+    svc, calls = drive([msg(77, "/start"), tap(77, "rq:info", 2), tap(77, "rq:new", 3)], svc, enroll=False, access_mode="approve")
+    first = sent(calls)[0]
+    assert first.text == texts.NOT_INVITED_AUTO.format(uid=77) and buttons(first) == [("Join", "rq:new"), INFO]
+    info = edits(calls)[0]
+    assert texts.WHAT_IS_THIS_AUTO in info.text and buttons(info)[0] == ("Join", "rq:new")
+    assert svc.store.access_status(77) == "active" and 77 not in svc.store.requests
+
+
+def test_the_dashboard_cap_wins_and_a_full_house_shows_the_request_screen_again():
+    svc = service()
+    svc.store.settings.update({acc.MODE_KEY: "auto", acc.MAX_MEMBERS_KEY: "1"})
+    svc, calls = drive([tap(1001, "rq:new"), msg(1002, "/start", 2), tap(1002, "rq:new", 3)], svc, enroll=False, max_members=25)
+    assert svc.store.access_status(1001) == "active" and svc.store.requests[1002]["status"] == "pending"
+    assert [m for m in to_user(calls, 1002)][0].text == texts.NOT_INVITED.format(uid=1002)     # no free seat: back to "Request access"
+    [fyi] = [m for m in to_owner(calls) if "automatically" in m.text]
+    assert "Members: 1 of 1." in fyi.text
+
+
+def test_unusable_dashboard_settings_fall_back_to_the_env_values():
+    a = acc.Access(service().store, OWNER_ID, "approve", 25)
+    for mode, cap in (("open", "-3"), ("", "abc"), ("AUTO", "999999")):
+        a.store.settings.update({acc.MODE_KEY: mode, acc.MAX_MEMBERS_KEY: cap})
+        assert a.effective_mode() == "approve" and a.effective_max_members() == 25
+
+
+def test_switching_mode_and_cap_is_validated_and_audited():
+    store = service().store
+    a = acc.Access(store, OWNER_ID, "approve", 25)
+    assert a.set_mode(OWNER_ID, "auto") and a.effective_mode() == "auto"
+    assert a.set_max_members(OWNER_ID, 200) and a.effective_max_members() == 200
+    assert (OWNER_ID, "mode", None, "auto") in store.audit_log and (OWNER_ID, "cap", None, "200") in store.audit_log
+    with pytest.raises(ValueError):
+        a.set_mode(OWNER_ID, "everyone")
+    for bad in (0, -1, acc.MEMBERS_CAP_LIMIT + 1):
+        with pytest.raises(ValueError):
+            a.set_max_members(OWNER_ID, bad)
+    store.set_setting = lambda *args: False                                             # migration 34 not applied
+    assert a.set_mode(OWNER_ID, "closed") is False and (OWNER_ID, "mode", None, "closed") not in store.audit_log
+
+
+def test_a_request_carries_the_public_name_and_the_owner_sees_it_escaped():
+    svc, calls = drive([_named(tap(77, "rq:new"), "<Dana>", "dana_t")], service(), enroll=False)
+    assert svc.store.requests[77]["first_name"] == "<Dana>" and svc.store.requests[77]["username"] == "dana_t"
+    [notice] = to_owner(calls)
+    assert "&lt;Dana&gt; (@dana_t) · <code>77</code>" in notice.text and "<Dana>" not in notice.text
+    svc, calls = drive([msg(OWNER_ID, "/requests")], svc, enroll=False)
+    assert "&lt;Dana&gt; (@dana_t)" in texts_sent(calls)[0]
+
+
+def test_a_members_name_is_mirrored_and_refreshed_but_a_strangers_never_stored():
+    svc = service()
+    svc.store.set_access(5, "active")
+    svc, _ = drive([_named(msg(5, "/start"), "Dana", "dana"), _named(msg(77, "/start", 2), "Stranger", "who")], svc, enroll=False)
+    assert svc.store.users[5]["first_name"] == "Dana" and svc.store.users[5]["username"] == "dana"
+    assert 77 not in svc.store.users and not svc.store.requests                        # looking still stores nothing
+    svc, _ = drive([_named(msg(5, "/start"), "Dana  K." + "x" * 80)], svc, enroll=False)
+    assert svc.store.users[5]["username"] is None                                       # removed @username: mirrored as gone
+    assert svc.store.users[5]["first_name"] == ("Dana K." + "x" * 80)[:acc.NAME_MAX]
+
+
+def test_the_bot_profile_copy_fits_telegram_and_never_shows_the_machinery():
+    assert len(texts.BOT_DESCRIPTION) <= 512 and len(texts.BOT_SHORT_DESCRIPTION) <= 120
+    for t in (texts.BOT_DESCRIPTION, texts.BOT_SHORT_DESCRIPTION, texts.NOT_INVITED_AUTO, texts.WHAT_IS_THIS, texts.ONBOARDING[1]):
+        assert not BANNED.search(strip(t)) and "beta" not in t.lower()
+        assert not re.search(r"\d", strip(t).replace("{uid}", "").replace("Step 1 of 4", ""))   # no universe size, counts or formulas
+    assert "not investment advice" in texts.BOT_DESCRIPTION
+
+
+def test_the_privacy_copy_admits_names_are_stored():
+    assert "No names" not in texts.PRIVACY and "public Telegram name" in texts.PRIVACY
+    assert "public Telegram name" in texts.ONBOARDING[3] and "public Telegram name" in texts.WHAT_IS_THIS_APPROVE
+
+
+def test_member_profiles_and_settings_round_trip_with_real_postgres():
+    """Names on request and member rows, bot_settings, the members list and the audit read, against the real tables (migration 34)."""
+    db = _pg()
+    store = bs.PgStore(db)
+    bs.PgStore._profiles.update(present=False, checked_at=0.0)
+    if not store.has_member_profiles():
+        pytest.skip("migration 34 (add_bot_member_profiles.sql) is not applied to this database")
+    owner, u1, u2 = 990_000_000_400, 990_000_000_401, 990_000_000_402
+    old = {r["key"]: r["value"] for r in db.execute_dict_query("SELECT key, value FROM bot_settings")}
+    try:
+        assert store.add_request(u1, ("Dana", "dana")) is True
+        row = [r for r in store.pending_requests(500)[1] if r["telegram_user_id"] == u1][0]
+        assert (row["first_name"], row["username"]) == ("Dana", "dana")
+        a = acc.Access(store, owner, "approve", 25)
+        assert a.approve_request(owner, u1) == "approved"
+        store.touch_user(u1, ("Dana", None))
+        store.set_access(u2, "revoked", owner)
+        m = [r for r in store.members("active") if r["telegram_user_id"] == u1][0]
+        assert m["first_name"] == "Dana" and m["username"] is None and m["joined_via"] == "request" and m["tracked_n"] == 0
+        assert m["morning_on"] is False
+        assert u2 in [r["telegram_user_id"] for r in store.members("revoked")]
+        assert a.set_mode(owner, "auto") and store.get_setting(acc.MODE_KEY) == "auto" and a.effective_mode() == "auto"
+        assert any(r["action"] == "approve" and r["target"] == u1 for r in store.audit_rows(20))
+    finally:
+        db.execute_insert("DELETE FROM bot_requests WHERE telegram_user_id IN (%s, %s)", (u1, u2))
+        db.execute_insert("DELETE FROM bot_access WHERE telegram_user_id IN (%s, %s)", (u1, u2))
+        db.execute_insert("DELETE FROM bot_users WHERE telegram_user_id IN (%s, %s)", (u1, u2))
+        db.execute_insert("DELETE FROM bot_audit WHERE actor = %s OR target IN (%s, %s)", (owner, u1, u2))
+        db.execute_insert("DELETE FROM bot_settings")
+        for k, v in old.items():
+            db.execute_insert("INSERT INTO bot_settings (key, value) VALUES (%s, %s)", (k, v))

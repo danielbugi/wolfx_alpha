@@ -6,16 +6,102 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Card, CardBody, CardHeader, Chip, Divider } from '@nextui-org/react';
 import { CheckIcon, ClipboardIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
-import { botAccessApi, toControlError } from '@/services/botAccessApi';
-import type { AccessOverview, ControlErrorInfo, PendingRequest } from '@/services/botAccessApi';
+import { clsx } from 'clsx';
+import { botAccessApi, displayName, toControlError } from '@/services/botAccessApi';
+import type { AccessMode, AccessOverview, ControlErrorInfo, PendingRequest } from '@/services/botAccessApi';
 import { Btn } from '@/components/telegram/ui';
 import ErrorAlert from '@/components/common/ErrorAlert';
+import MembersPanel from '@/components/telegram/MembersPanel';
 
 const MODE_LABEL: Record<string, string> = {
   approve: 'Manual approval — you decide each request',
   auto: 'Auto-approve up to the member cap',
   closed: 'Closed — nobody new can request',
 };
+
+const MODES: { mode: AccessMode; label: string }[] = [
+  { mode: 'auto', label: 'Auto-approve' },
+  { mode: 'approve', label: 'Manual' },
+  { mode: 'closed', label: 'Closed' },
+];
+
+function AccessSettings({ overview, onSaved }: { overview: AccessOverview; onSaved: (note: string) => void }) {
+  const [cap, setCap] = useState(String(overview.max_members));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async (body: { mode?: AccessMode; max_members?: number }) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await botAccessApi.updateSettings(body);
+      onSaved(`Saved: ${MODE_LABEL[r.mode] ?? r.mode}, cap ${r.max_members}. The bot uses it from the next request.`);
+    } catch (err) {
+      setError(toControlError(err).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const capNum = Number(cap);
+  const capValid = Number.isInteger(capNum) && capNum >= 1 && capNum <= 10000;
+
+  if (!overview.settings_available) {
+    return (
+      <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        The access mode comes from the bot&apos;s .env (BOT_ACCESS_MODE). Switching it here needs migration 34 on the database.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-lg border border-slate-200 p-0.5" role="radiogroup" aria-label="Access mode">
+          {MODES.map(({ mode, label }) => (
+            <button
+              key={mode}
+              type="button"
+              role="radio"
+              aria-checked={overview.mode === mode}
+              disabled={busy || overview.mode === mode}
+              onClick={() => save({ mode })}
+              className={clsx(
+                'rounded-md px-3 py-1 text-xs font-medium disabled:cursor-default',
+                overview.mode === mode ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <label className="flex items-center gap-1.5 text-xs text-slate-600">
+          Member cap
+          <input
+            type="number"
+            min={1}
+            max={10000}
+            value={cap}
+            onChange={(e) => setCap(e.target.value)}
+            className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm tabular-nums focus:border-slate-500 focus:outline-none"
+          />
+        </label>
+        <Btn size="sm" variant="secondary" disabled={busy || !capValid || capNum === overview.max_members} onClick={() => save({ max_members: capNum })}>
+          Save cap
+        </Btn>
+      </div>
+      <p className="text-[11px] text-slate-400">
+        {overview.mode === 'auto'
+          ? `Anyone who taps Join gets in at once while there are fewer than ${overview.max_members} members; after that, requests wait for you here.`
+          : overview.mode === 'approve'
+            ? 'Every request waits here for your Approve or Decline.'
+            : 'Nobody new can ask. Invite links still work.'}
+        {!overview.mode_from_dashboard && ' (Currently from the bot\u2019s .env.)'}
+      </p>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
 
 function localWhen(iso: string): string {
   return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).format(
@@ -46,8 +132,10 @@ function RequestRow({
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-100 px-3 py-2">
       <div>
-        <p className="font-mono text-sm text-slate-800">{row.telegram_user_id}</p>
-        <p className="text-xs text-slate-400">Requested {localWhen(row.requested_at)}</p>
+        <p className="text-sm font-medium text-slate-800">{displayName(row) ?? <span className="font-mono font-normal">{row.telegram_user_id}</span>}</p>
+        <p className="text-xs text-slate-400">
+          {displayName(row) && <span className="font-mono">{row.telegram_user_id} · </span>}Requested {localWhen(row.requested_at)}
+        </p>
       </div>
       <div className="flex gap-2">
         <Btn size="sm" variant="primary" disabled={busy} onClick={() => onApprove(row.telegram_user_id)}>
@@ -77,6 +165,8 @@ export default function AccessPanel() {
   const [revokeConfirm, setRevokeConfirm] = useState(false);
   const [revokeBusy, setRevokeBusy] = useState(false);
 
+  const [membersTick, setMembersTick] = useState(0);      // bumped after a decision so the Members list refetches
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -101,6 +191,7 @@ export default function AccessPanel() {
         const r = await botAccessApi.approve(uid);
         setActionNote(r.notified ? `Approved ${uid} and sent them the welcome message.` : `Approved ${uid}, but could not DM them (they may have blocked the bot).`);
         await load();
+        setMembersTick((t) => t + 1);
       } catch (err) {
         setActionNote(toControlError(err).message);
       } finally {
@@ -162,6 +253,7 @@ export default function AccessPanel() {
       setRevokeId('');
       setRevokeConfirm(false);
       await load();
+      setMembersTick((t) => t + 1);
     } catch (err) {
       setActionNote(toControlError(err).message);
     } finally {
@@ -192,8 +284,18 @@ export default function AccessPanel() {
         </CardHeader>
         <Divider className="bg-slate-100" />
         <CardBody className="space-y-4 p-4 pt-3">
+          <AccessSettings
+            key={`${overview.mode}-${overview.max_members}`}
+            overview={overview}
+            onSaved={(note) => {
+              setActionNote(note);
+              load();
+              setMembersTick((t) => t + 1);
+            }}
+          />
+
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Tile label="Active members" value={overview.active} />
+            <Tile label={`Active members (cap ${overview.max_members})`} value={overview.active} />
             <Tile label="Waiting for approval" value={overview.pending_count} />
             <Tile label="Revoked" value={overview.revoked} />
             <Tile label="Open invite links" value={overview.open_invites} />
@@ -276,6 +378,7 @@ export default function AccessPanel() {
           </div>
         </CardBody>
       </Card>
+      <MembersPanel key={membersTick} namesAvailable={overview.settings_available} onChanged={load} />
     </section>
   );
 }

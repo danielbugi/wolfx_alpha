@@ -25,7 +25,7 @@ _MECHANISM = str(Path(__file__).resolve().parents[2] / "mechanism")
 if _MECHANISM not in sys.path:
     sys.path.append(_MECHANISM)
 
-from alerts.access import Access, MODES  # noqa: E402
+from alerts.access import MAX_MEMBERS_KEY, MODE_KEY, MODES, Access  # noqa: E402
 from alerts.bot_service import PgStore  # noqa: E402
 from alerts import screens, texts  # noqa: E402
 from alerts.telegram_client import _load_env  # noqa: E402
@@ -101,21 +101,28 @@ def _bot_username() -> Optional[str]:
     return username
 
 
+def _who(row: Dict) -> Dict:
+    return {"first_name": row.get("first_name"), "username": row.get("username")}
+
+
 def overview(get_connection: Callable) -> Dict:
     access = build_access(get_connection)
     counts = access.summary()
     pending_n, pending_rows = access.waiting(limit=25)
     funnel = access.funnel(30)
+    store = access.store
     return {
-        "mode": access.mode,
+        "mode": access.effective_mode(),
+        "mode_from_dashboard": store.get_setting(MODE_KEY) in MODES,
+        "settings_available": store.has_member_profiles(),     # migration 34 applied: the mode/cap can be switched here
         "owner_configured": access.owner_id is not None,
-        "max_members": access.max_members,
+        "max_members": access.effective_max_members(),
         "max_pending": access.max_pending,
         "active": counts["active"],
         "revoked": counts["revoked"],
         "open_invites": counts["open_invites"],
         "pending_count": pending_n,
-        "pending": [{"telegram_user_id": int(r["telegram_user_id"]), "requested_at": r["requested_at"]} for r in pending_rows],
+        "pending": [{"telegram_user_id": int(r["telegram_user_id"]), "requested_at": r["requested_at"], **_who(r)} for r in pending_rows],
         "funnel_30d": funnel,
     }
 
@@ -157,3 +164,47 @@ def create_invite(get_connection: Callable, note: Optional[str]) -> Dict:
     payload = access.create_invite(owner, note)               # 'inv_<code>'
     username = _bot_username()
     return {"payload": payload, "link": f"https://t.me/{username}?start={payload}" if username else None}
+
+
+def members(get_connection: Callable, status: str) -> List[Dict]:
+    """Everyone who has ('active') or had ('revoked') access, newest first. Names appear once migration 34 is applied."""
+    access = build_access(get_connection)
+    return [{"telegram_user_id": int(r["telegram_user_id"]), **_who(r), "status": r["status"],
+             "approved_at": r.get("approved_at"), "revoked_at": r.get("revoked_at"), "last_seen": r.get("last_seen"),
+             "finished_guide": r.get("acknowledged_at") is not None, "tracked": int(r.get("tracked_n") or 0),
+             "morning_on": bool(r.get("morning_on")), "joined_via": r.get("joined_via")}
+            for r in access.store.members(status)]
+
+
+def restore(get_connection: Callable, target: int) -> Dict:
+    """Let a revoked person back in (the same as the bot's /approve) and tell them, best-effort."""
+    access = build_access(get_connection)
+    owner = _require_owner(access)
+    if access.is_owner(target):
+        return {"result": "owner", "notified": False}
+    if access.store.access_status(target) != "revoked":
+        return {"result": "not_revoked", "notified": False}
+    access.approve(owner, target)
+    return {"result": "restored", "notified": _dm(target, texts.ACCESS_GRANTED_USER)}
+
+
+def audit(get_connection: Callable, limit: int) -> List[Dict]:
+    access = build_access(get_connection)
+    return [{"at": r["created_at"], "actor": int(r["actor"]), "action": r["action"],
+             "target": int(r["target"]) if r.get("target") is not None else None, "detail": r.get("detail")}
+            for r in access.store.audit_rows(limit)]
+
+
+def update_settings(get_connection: Callable, mode: Optional[str], max_members: Optional[int]) -> Dict:
+    """Switch the access mode and/or the member cap. The bot reads them on the next request: no restart. ValueError on bad
+    values; RuntimeError when migration 34 is not applied (nowhere to keep them) or there is no owner."""
+    access = build_access(get_connection)
+    owner = _require_owner(access)
+    if not access.store.has_member_profiles():
+        raise RuntimeError("Switching from the dashboard needs migration 34 (add_bot_member_profiles.sql). Until then the bot's "
+                           ".env values (BOT_ACCESS_MODE / BOT_MAX_MEMBERS) apply.")
+    if mode is not None:
+        access.set_mode(owner, mode)
+    if max_members is not None:
+        access.set_max_members(owner, max_members)
+    return {"mode": access.effective_mode(), "max_members": access.effective_max_members()}

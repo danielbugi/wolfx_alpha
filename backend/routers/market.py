@@ -11,6 +11,7 @@ import logging
 
 from services.market_data_service import MarketDataService
 from services.market_calendar_service import get_market_calendar
+from services.instruments import find as find_instrument
 
 logger = logging.getLogger(__name__)
 
@@ -73,3 +74,35 @@ def get_calendar():
     except Exception as e:
         logger.error(f"Error getting market calendar: {e}")
         raise HTTPException(status_code=500, detail="Error getting market calendar")
+
+
+@market_router.get("/instruments")
+def get_instruments(market_data_service: MarketDataService = Depends(get_market_data_service)):
+    """
+    Every instrument on the Markets pages (indices, index futures, metals, energy, agriculture, currencies, crypto,
+    rates & volatility): last close, % change over calendar windows (1d/1w/1m/3m/ytd/1y, null when history doesn't
+    reach) and a sparkline. An instrument without fetched history yet carries has_data: false.
+    """
+    try:
+        return market_data_service.get_instruments()
+    except Exception as e:
+        logger.error(f"Error getting instruments: {e}")
+        raise HTTPException(status_code=500, detail="Error getting instruments")
+
+
+@market_router.get("/instruments/{symbol}/history")
+def get_instrument_history(
+        symbol: str,
+        days: int = Query(730, ge=5, le=1825, description="Calendar days of daily history"),
+        market_data_service: MarketDataService = Depends(get_market_data_service),
+):
+    """Daily OHLCV bars for one registered instrument, oldest first (same bar shape as a stock's price history)."""
+    inst = find_instrument(symbol)
+    if inst is None:
+        raise HTTPException(status_code=404, detail=f"Unknown instrument '{symbol}'")
+    try:
+        bars = market_data_service.get_instrument_history(inst.symbol, days)
+    except Exception as e:
+        logger.error(f"Error getting instrument history: {e}")
+        raise HTTPException(status_code=500, detail="Error getting instrument history")
+    return {"symbol": inst.symbol, "name": inst.name, "group": inst.group, "unit": inst.unit, "bars": bars}

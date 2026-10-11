@@ -438,18 +438,29 @@ def not_invited(uid: int, state: Dict, invalid_invite: bool = False) -> Screen:
         return Screen(texts.REQUEST_COOLDOWN.format(date=_day(state.get("until"))))
     if reason == "closed":
         return Screen(texts.NOT_INVITED_CLOSED.format(uid=uid), [[Btn(texts.WHAT_BUTTON, "rq:info")]])
-    text = texts.INVITE_INVALID if invalid_invite else texts.NOT_INVITED
-    return Screen(text.format(uid=uid), [[Btn(texts.REQUEST_BUTTON, "rq:new"), Btn(texts.WHAT_BUTTON, "rq:info")]])
+    instant = bool(state.get("instant"))                      # auto mode with a free seat: the button lets them straight in
+    text = texts.INVITE_INVALID if invalid_invite else (texts.NOT_INVITED_AUTO if instant else texts.NOT_INVITED)
+    button = texts.JOIN_BUTTON if instant else texts.REQUEST_BUTTON
+    return Screen(text.format(uid=uid), [[Btn(button, "rq:new"), Btn(texts.WHAT_BUTTON, "rq:info")]])
 
 
-def what_is_this(can_request: bool) -> Screen:
-    rows = [[Btn(texts.REQUEST_BUTTON, "rq:new")]] if can_request else []
+def what_is_this(can_request: bool, instant: bool = False) -> Screen:
+    rows = [[Btn(texts.JOIN_BUTTON if instant else texts.REQUEST_BUTTON, "rq:new")]] if can_request else []
     rows.append([Btn("‹ " + texts.BACK_TO_ACCESS, "rq:back")])
-    return Screen(texts.WHAT_IS_THIS, rows)
+    return Screen(texts.WHAT_IS_THIS.format(access=texts.WHAT_IS_THIS_AUTO if instant else texts.WHAT_IS_THIS_APPROVE), rows)
 
 
-def owner_request(uid: int) -> Screen:
-    return Screen(texts.OWNER_REQUEST_NOTICE.format(uid=uid), [[Btn("Approve", f"ra:{uid}"), Btn("Decline", f"rd:{uid}")]])
+def who(uid: int, first_name: Optional[str] = None, username: Optional[str] = None) -> str:
+    """'Dana (@dana) · <code>123</code>' for the owner's notices; the name parts are the person's own, so they are escaped."""
+    parts = [html.escape(first_name, quote=False)] if first_name else []
+    if username:
+        parts.append(f"(@{html.escape(username, quote=False)})")
+    return (" ".join(parts) + " · " if parts else "Telegram id ") + f"<code>{uid}</code>"
+
+
+def owner_request(uid: int, profile: Optional[Tuple[Optional[str], Optional[str]]] = None) -> Screen:
+    return Screen(texts.OWNER_REQUEST_NOTICE.format(who=who(uid, *(profile or (None, None)))),
+                  [[Btn("Approve", f"ra:{uid}"), Btn("Decline", f"rd:{uid}")]])
 
 
 def requests_list(count: int, rows: Sequence[Dict]) -> Screen:
@@ -460,7 +471,7 @@ def requests_list(count: int, rows: Sequence[Dict]) -> Screen:
     for r in rows:
         when = r["requested_at"]
         stamp = f"{when:%d %b %H:%M} UTC" if hasattr(when, "strftime") else ""
-        lines.append(f"<code>{r['telegram_user_id']}</code> · asked {stamp}")
+        lines.append(f"{who(r['telegram_user_id'], r.get('first_name'), r.get('username'))} · asked {stamp}")
         kb.append([Btn(f"Approve {r['telegram_user_id']}", f"ra:{r['telegram_user_id']}"), Btn("Decline", f"rd:{r['telegram_user_id']}")])
     if count > len(rows):
         lines.append(f"...and {count - len(rows)} more (the oldest are shown first).")

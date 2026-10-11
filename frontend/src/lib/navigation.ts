@@ -7,6 +7,7 @@ import {
   ChartBarIcon,
   CpuChipIcon,
   FunnelIcon,
+  GlobeAltIcon,
   HeartIcon,
   PaperAirplaneIcon,
   PresentationChartLineIcon,
@@ -36,6 +37,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Markets',
     items: [
       { name: 'Dashboard', href: '/', icon: Squares2X2Icon, description: 'Overview & breakouts' },
+      { name: 'Markets', href: '/markets', icon: GlobeAltIcon, description: 'Futures, commodities, currencies, crypto' },
       { name: 'Screener', href: '/screener', icon: FunnelIcon, description: 'Search & filter the universe' },
       { name: 'Position Plans', href: '/strategy', icon: ChartBarIcon, description: 'Ranked position plans' },
       { name: 'Strategies', href: '/strategies', icon: PresentationChartLineIcon, description: 'Strategy intelligence: outcomes, signals, data health' },
@@ -55,9 +57,10 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-/** True when `href` is the current route. Exact match only — none of these routes has a nested child in the nav (e.g. `/stock/[symbol]` is deliberately unlisted). */
+/** True when `href` is the current route or a page inside its section (`/markets/GC=F` keeps Markets highlighted).
+ * `/stock/[symbol]` is deliberately unlisted, so a stock page highlights nothing. */
 export function isActiveRoute(pathname: string, href: string): boolean {
-  return pathname === href;
+  return pathname === href || (href !== '/' && pathname.startsWith(`${href}/`));
 }
 
 /** NAV_GROUPS filtered to what `role` may see, with any group left empty by the filter dropped entirely. */

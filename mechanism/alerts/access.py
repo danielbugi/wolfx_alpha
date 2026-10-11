@@ -30,6 +30,9 @@ PENDING_DAYS = 14               # an unanswered request is deleted after this
 MAX_PENDING = 100               # waiting-list cap (beyond it the button answers 'full' and stores nothing)
 MAX_MEMBERS = 25                # used by BOT_ACCESS_MODE=auto
 MODES = ('approve', 'auto', 'closed')
+MEMBERS_CAP_LIMIT = 10000       # the highest member cap the dashboard may set
+MODE_KEY, MAX_MEMBERS_KEY = "access_mode", "max_members"     # bot_settings keys (migration 34); no row = the .env value applies
+NAME_MAX, USERNAME_MAX = 64, 32
 _ID_RE = re.compile(r"^[0-9]{1,15}$")               # ASCII only: \d also matches e.g. full-width digits, which int() then accepts
 _CODE_RE = re.compile(r"^[A-Za-z0-9_-]{8,40}$")
 
@@ -52,6 +55,16 @@ def clean_note(text: Optional[str]) -> Optional[str]:
     return note or None
 
 
+Profile = Tuple[Optional[str], Optional[str]]           # (first_name, username) as Telegram shows them; either may be missing
+
+
+def clean_profile(first_name: Optional[str], username: Optional[str]) -> Profile:
+    """A person's public Telegram name, trimmed to the column sizes. Mirrored as-is (a removed @username becomes None)."""
+    name = " ".join((first_name or "").split())[:NAME_MAX] or None
+    user = (username or "").strip().lstrip("@")[:USERNAME_MAX] or None
+    return name, user
+
+
 class AccessStore(Protocol):
     def access_status(self, uid: int) -> Optional[str]: ...
     def set_access(self, uid: int, status: str, invited_by: Optional[int] = None) -> None: ...
@@ -61,12 +74,14 @@ class AccessStore(Protocol):
     def audit(self, actor: int, action: str, target: Optional[int] = None, detail: Optional[str] = None) -> None: ...
     def purge_revoked(self, days: int) -> int: ...
     def request_status(self, uid: int) -> Optional[Dict]: ...
-    def add_request(self, uid: int) -> bool: ...
+    def add_request(self, uid: int, profile: Optional[Profile] = None) -> bool: ...
     def pending_requests(self, limit: int) -> Tuple[int, List[Dict]]: ...
     def decide_request(self, uid: int, approve: bool) -> Optional[str]: ...
     def purge_requests(self, pending_days: int, cooldown_days: int) -> int: ...
     def count_event(self, event: str) -> None: ...
     def funnel_metrics(self, days: int) -> Dict[str, int]: ...
+    def get_setting(self, key: str) -> Optional[str]: ...                    # None also when migration 34 is not applied
+    def set_setting(self, key: str, value: str, by: Optional[int]) -> bool: ...   # False when migration 34 is not applied
 
 
 @dataclass
@@ -81,6 +96,31 @@ class Access:
         if mode not in MODES:
             raise ValueError(f"access mode must be one of {MODES}")
         self.store, self.owner_id, self.mode, self.max_members, self.max_pending = store, owner_id, mode, max_members, max_pending
+
+    # --- the access mode and member cap: the dashboard's setting (bot_settings) wins over the .env value given to __init__
+    def effective_mode(self) -> str:
+        value = self.store.get_setting(MODE_KEY)
+        return value if value in MODES else self.mode
+
+    def effective_max_members(self) -> int:
+        value = self.store.get_setting(MAX_MEMBERS_KEY)
+        return int(value) if value and value.isdigit() and 0 < int(value) <= MEMBERS_CAP_LIMIT else self.max_members
+
+    def set_mode(self, owner: int, mode: str) -> bool:
+        if mode not in MODES:
+            raise ValueError(f"access mode must be one of {MODES}")
+        if not self.store.set_setting(MODE_KEY, mode, owner):
+            return False
+        self.store.audit(owner, "mode", None, mode)
+        return True
+
+    def set_max_members(self, owner: int, n: int) -> bool:
+        if not 0 < n <= MEMBERS_CAP_LIMIT:
+            raise ValueError(f"the member cap must be between 1 and {MEMBERS_CAP_LIMIT}")
+        if not self.store.set_setting(MAX_MEMBERS_KEY, str(n), owner):
+            return False
+        self.store.audit(owner, "cap", None, str(n))
+        return True
 
     def is_owner(self, uid: int) -> bool:
         return self.owner_id is not None and uid == self.owner_id
@@ -129,10 +169,10 @@ class Access:
 
     # --- the request-access flow (FUNNEL_PLAN.md section 3). A person is stored ONLY after they tapped "Request access".
     def request_state(self, uid: int) -> Dict:
-        """Read-only: what may a person without access do? {'can_request', 'reason': None|member|closed|blocked|pending|cooldown, 'until'}"""
+        """Read-only: what may a person without access do? {'can_request', 'reason': None|member|closed|blocked|pending|cooldown, 'until', 'instant'}"""
         if self.role(uid) is not None:
             return {"can_request": False, "reason": "member", "until": None}
-        if self.mode == "closed":
+        if self.effective_mode() == "closed":
             return {"can_request": False, "reason": "closed", "until": None}
         if self.store.access_status(uid) == "revoked":
             return {"can_request": False, "reason": "blocked", "until": None}
@@ -141,20 +181,21 @@ class Access:
             return {"can_request": False, "reason": "pending", "until": None}
         if req and req.get("cooldown_active"):
             return {"can_request": False, "reason": "cooldown", "until": req.get("cooldown_until")}
-        return {"can_request": True, "reason": None, "until": None}
+        instant = self.effective_mode() == "auto" and self.store.access_counts()["active"] < self.effective_max_members()
+        return {"can_request": True, "reason": None, "until": None, "instant": instant}     # instant = the button lets them straight in
 
-    def request(self, uid: int) -> RequestResult:
+    def request(self, uid: int, profile: Optional[Profile] = None) -> RequestResult:
         st = self.request_state(uid)
         if not st["can_request"]:
             return RequestResult(st["reason"], st["until"])
-        if self.mode == "auto" and self.store.access_counts()["active"] < self.max_members:
+        if self.effective_mode() == "auto" and self.store.access_counts()["active"] < self.effective_max_members():
             self.store.set_access(uid, "active", self.owner_id)
             self.store.count_event("approved_auto")
             self.store.audit(uid, "approve", uid, "auto")
             return RequestResult("auto_approved")
         if self.store.pending_requests(0)[0] >= self.max_pending:
             return RequestResult("full")                       # nothing is stored when the waiting list is full
-        if not self.store.add_request(uid):
+        if not self.store.add_request(uid, profile):
             return RequestResult("pending")                    # lost a race with another tap of the same person
         self.store.count_event("requested")
         return RequestResult("sent")
