@@ -16,7 +16,7 @@ import re
 import time
 from collections import defaultdict, deque
 from datetime import date, timedelta
-from typing import Callable, Deque, Dict, List, Optional, Protocol
+from typing import Callable, Deque, Dict, List, Optional, Protocol, Tuple
 
 from alerts.levels import risk_framework
 from alerts.message_format import fmt_cap, fmt_price
@@ -55,7 +55,7 @@ def parse_symbols(text: Optional[str], limit: int = MAX_SYMBOLS_PER_COMMAND) -> 
 class Store(Protocol):
     def latest_session(self) -> Optional[Dict]: ...
     def stocks(self, session_date, symbols: List[str]) -> Dict[str, Dict]: ...
-    def touch_user(self, uid: int) -> None: ...
+    def touch_user(self, uid: int, profile: Optional[Tuple[Optional[str], Optional[str]]] = None) -> None: ...
     def is_acknowledged(self, uid: int) -> bool: ...
     def acknowledge(self, uid: int) -> None: ...
     # tracker (Watchlist + Portfolio)
@@ -78,7 +78,7 @@ class Store(Protocol):
     def dm_mark(self, uid: int, session_date) -> None: ...
     # request-access flow + funnel counters (aggregate only)
     def request_status(self, uid: int) -> Optional[Dict]: ...
-    def add_request(self, uid: int) -> bool: ...
+    def add_request(self, uid: int, profile: Optional[Tuple[Optional[str], Optional[str]]] = None) -> bool: ...
     def pending_requests(self, limit: int): ...
     def decide_request(self, uid: int, approve: bool) -> Optional[str]: ...
     def purge_requests(self, pending_days: int, cooldown_days: int) -> int: ...
@@ -109,7 +109,29 @@ class PgStore:
             "SELECT * FROM digest_stocks WHERE session_date = %s AND symbol = ANY(%s)", (session_date, symbols))
         return {r["symbol"]: r for r in rows}
 
-    def touch_user(self, uid: int) -> None:
+    # Migration 34 (add_bot_member_profiles.sql: names on bot_users/bot_requests + bot_settings) is applied by hand, possibly after
+    # this code ships: until then names are not stored and settings read as unset. Absence is re-checked every few minutes,
+    # presence is remembered.
+    _profiles = {"present": False, "checked_at": 0.0}
+
+    def has_member_profiles(self) -> bool:
+        c = PgStore._profiles
+        if c["present"] or (c["checked_at"] and time.monotonic() - c["checked_at"] < 300):
+            return c["present"]
+        rows = self.db.execute_dict_query(
+            "SELECT 1 AS present FROM information_schema.columns WHERE table_name = 'bot_requests' AND column_name = 'username' "
+            "AND to_regclass('bot_settings') IS NOT NULL")
+        c["present"], c["checked_at"] = bool(rows), time.monotonic()
+        return c["present"]
+
+    def touch_user(self, uid: int, profile=None) -> None:
+        """last_seen, and (with migration 34) the person's current public Telegram name, mirrored as-is."""
+        if profile is not None and self.has_member_profiles():
+            self.db.execute_insert(
+                "INSERT INTO bot_users (telegram_user_id, first_name, username) VALUES (%s, %s, %s) "
+                "ON CONFLICT (telegram_user_id) DO UPDATE SET last_seen = NOW(), first_name = EXCLUDED.first_name, "
+                "username = EXCLUDED.username", (uid, profile[0], profile[1]))
+            return
         self.db.execute_insert(
             "INSERT INTO bot_users (telegram_user_id) VALUES (%s) "
             "ON CONFLICT (telegram_user_id) DO UPDATE SET last_seen = NOW()", (uid,))
@@ -286,23 +308,34 @@ class PgStore:
             (COOLDOWN_DAYS, COOLDOWN_DAYS, uid))
         return rows[0] if rows else None
 
-    def add_request(self, uid: int) -> bool:
-        """True = a new pending request was stored. False = one is already pending, or a declined one is still cooling down."""
+    def add_request(self, uid: int, profile=None) -> bool:
+        """True = a new pending request was stored. False = one is already pending, or a declined one is still cooling down.
+        With migration 34 the person's public Telegram name is stored with the request, so the owner sees who is asking."""
         with self.db.get_sync_connection() as conn:
             cur = conn.cursor()
-            cur.execute(
-                "INSERT INTO bot_requests (telegram_user_id, status) VALUES (%s, 'pending') "
-                "ON CONFLICT (telegram_user_id) DO UPDATE SET status = 'pending', requested_at = NOW(), decided_at = NULL "
-                "WHERE bot_requests.status = 'declined' AND bot_requests.decided_at + make_interval(days => %s) <= NOW() RETURNING 1",
-                (uid, COOLDOWN_DAYS))
+            if profile is not None and self.has_member_profiles():
+                cur.execute(
+                    "INSERT INTO bot_requests (telegram_user_id, status, first_name, username) VALUES (%s, 'pending', %s, %s) "
+                    "ON CONFLICT (telegram_user_id) DO UPDATE SET status = 'pending', requested_at = NOW(), decided_at = NULL, "
+                    "first_name = EXCLUDED.first_name, username = EXCLUDED.username "
+                    "WHERE bot_requests.status = 'declined' AND bot_requests.decided_at + make_interval(days => %s) <= NOW() RETURNING 1",
+                    (uid, profile[0], profile[1], COOLDOWN_DAYS))
+            else:
+                cur.execute(
+                    "INSERT INTO bot_requests (telegram_user_id, status) VALUES (%s, 'pending') "
+                    "ON CONFLICT (telegram_user_id) DO UPDATE SET status = 'pending', requested_at = NOW(), decided_at = NULL "
+                    "WHERE bot_requests.status = 'declined' AND bot_requests.decided_at + make_interval(days => %s) <= NOW() RETURNING 1",
+                    (uid, COOLDOWN_DAYS))
             stored = cur.fetchone() is not None
             conn.commit()
             return stored
 
     def pending_requests(self, limit: int):
         n = self.db.execute_dict_query("SELECT COUNT(*) AS n FROM bot_requests WHERE status = 'pending'")[0]["n"]
+        names = "first_name, username" if self.has_member_profiles() else "NULL AS first_name, NULL AS username"
         rows = self.db.execute_dict_query(
-            "SELECT telegram_user_id, requested_at FROM bot_requests WHERE status = 'pending' ORDER BY requested_at LIMIT %s", (limit,))
+            "SELECT telegram_user_id, requested_at, " + names + " FROM bot_requests WHERE status = 'pending' "
+            "ORDER BY requested_at LIMIT %s", (limit,))
         return int(n), rows
 
     def decide_request(self, uid: int, approve: bool) -> Optional[str]:
@@ -457,6 +490,41 @@ class PgStore:
         self.db.execute_insert("INSERT INTO bot_audit (actor, action, target, detail) VALUES (%s, %s, %s, %s)",
                                (actor, action, target, detail))
 
+    def get_setting(self, key: str) -> Optional[str]:
+        if not self.has_member_profiles():
+            return None
+        rows = self.db.execute_dict_query("SELECT value FROM bot_settings WHERE key = %s", (key,))
+        return rows[0]["value"] if rows else None
+
+    def set_setting(self, key: str, value: str, by: Optional[int]) -> bool:
+        if not self.has_member_profiles():
+            return False
+        self.db.execute_insert(
+            "INSERT INTO bot_settings (key, value, updated_by) VALUES (%s, %s, %s) "
+            "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = NOW()",
+            (key, value, by))
+        return True
+
+    def members(self, status: str, limit: int = 500) -> List[Dict]:
+        """Everyone with a bot_access row of this status ('active' | 'revoked'), newest first, for the dashboard. How they joined
+        comes from the audit trail (invitation, auto, request button, or a typed /approve)."""
+        names = "u.first_name, u.username" if self.has_member_profiles() else "NULL AS first_name, NULL AS username"
+        return self.db.execute_dict_query(
+            "SELECT a.telegram_user_id, a.status, a.approved_at, a.revoked_at, a.created_at, " + names + ", "
+            "u.first_seen, u.last_seen, u.acknowledged_at, "
+            "(SELECT COUNT(*) FROM bot_tracked t WHERE t.telegram_user_id = a.telegram_user_id) AS tracked_n, "
+            "EXISTS (SELECT 1 FROM bot_user_settings s WHERE s.telegram_user_id = a.telegram_user_id AND s.morning_dm) AS morning_on, "
+            "(SELECT CASE WHEN l.action = 'redeem' THEN 'invite' WHEN l.detail = 'auto' THEN 'auto' "
+            "             WHEN l.detail = 'request' THEN 'request' ELSE 'manual' END "
+            " FROM bot_audit l WHERE l.target = a.telegram_user_id AND l.action IN ('approve', 'redeem') "
+            " ORDER BY l.at DESC LIMIT 1) AS joined_via "
+            "FROM bot_access a LEFT JOIN bot_users u ON u.telegram_user_id = a.telegram_user_id "
+            "WHERE a.status = %s ORDER BY COALESCE(a.approved_at, a.created_at) DESC LIMIT %s", (status, limit))
+
+    def audit_rows(self, limit: int = 50) -> List[Dict]:
+        return self.db.execute_dict_query(
+            "SELECT actor, action, target, detail, at AS created_at FROM bot_audit ORDER BY at DESC LIMIT %s", (limit,))
+
     def purge_revoked(self, days: int) -> int:
         """Delete the saved personal data (watchlist, acknowledgement) of users revoked more than `days` ago. The bot_access row
         stays, so they remain blocked."""
@@ -498,8 +566,8 @@ class BotService:
         self.store = store
 
     # --- user / acknowledgement
-    def touch_user(self, uid: int) -> None:
-        self.store.touch_user(uid)
+    def touch_user(self, uid: int, profile: Optional[Tuple[Optional[str], Optional[str]]] = None) -> None:
+        self.store.touch_user(uid, profile)
 
     def is_acknowledged(self, uid: int) -> bool:
         return self.store.is_acknowledged(uid)

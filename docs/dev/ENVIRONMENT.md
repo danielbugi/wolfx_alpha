@@ -113,8 +113,8 @@ All [optional], sane fallbacks, read by `mechanism/alerts/run_bot.py` / `backend
 
 | Variable | Default |
 |---|---|
-| `BOT_ACCESS_MODE` | `approve` (also: `auto`, `closed`) |
-| `BOT_MAX_MEMBERS` | `25` |
+| `BOT_ACCESS_MODE` | `approve` (also: `auto`, `closed`). Fallback only: once migration 34 is applied, a mode set on the dashboard's `/telegram` page (table `bot_settings`) wins, without a restart |
+| `BOT_MAX_MEMBERS` | `25`. Same fallback rule as `BOT_ACCESS_MODE` |
 | `BOT_MAX_PENDING` | `100` |
 | `BOT_MSG_LIMIT` | `120` (messages/hour/user) |
 | `BOT_POPUP_LIMIT` | `300` (popup taps/hour/user) |

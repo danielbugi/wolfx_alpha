@@ -115,7 +115,13 @@ watchlist/portfolio, one row per user+symbol — supersedes the dead `bot_watchl
 but never read) · `bot_access`, `bot_invites`, `bot_audit` (who may use the bot, one-time invite
 links, admin action audit) · `bot_requests`, `funnel_events` (the request-access flow) ·
 `news_items`, `news_fetched`, `bot_chart_cache` (shared per-symbol caches, not per-user) ·
-`bot_user_settings` (opt-in morning DM preferences).
+`bot_user_settings` (opt-in morning DM preferences) · `bot_settings` (access mode + member cap set from
+the dashboard; no row = the bot's `.env` value applies).
+
+Migration 34 (`add_bot_member_profiles.sql`) adds `first_name`/`username` to `bot_users` and
+`bot_requests` (the person's public Telegram name, mirrored on every visit, so the dashboard's Members
+list shows who has access) and creates `bot_settings`. The code detects whether it is applied and works
+either way (no names; mode/cap fixed by `.env`).
 
 ### Authentication (dashboard)
 `dashboard_users` (Owner + Collaborator roles) · `dashboard_login_challenges` (in-progress

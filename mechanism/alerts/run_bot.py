@@ -56,7 +56,7 @@ from alerts import chart as chart_mod  # noqa: E402
 from alerts import deeplink, insights, morning, screens, texts  # noqa: E402
 from alerts import strategy_intel as si  # noqa: E402
 from alerts import strategy_screens as ss  # noqa: E402
-from alerts.access import INVITE_TTL_HOURS, MODES, OWNER, RETENTION_DAYS, Access, parse_user_id  # noqa: E402
+from alerts.access import INVITE_TTL_HOURS, MODES, OWNER, RETENTION_DAYS, Access, clean_profile, parse_user_id  # noqa: E402
 from alerts.bot_service import SYMBOL_RE, BotService, PgStore, RateLimiter  # noqa: E402
 from alerts.performance import D, fmt_price, pct_change  # noqa: E402
 from alerts.tracker import SYMBOL_TOKEN, TrackerService, parse_add_args, parse_price_shares  # noqa: E402
@@ -95,6 +95,11 @@ ADD_USAGE = ("Send a symbol, and optionally your price and shares:\n<code>/add A
              "<code>/add AAPL 140.5</code> - watchlist at your price\n<code>/add AAPL 140.5 10</code> - portfolio: price and shares")
 BAD_NUMBER = "I could not read that. Use plain numbers with a dot, for example <code>/add AAPL 140.5 10</code>."
 MENU_LABELS = {texts.MENU_TODAY: "today", texts.MENU_PORTFOLIO: "portfolio", texts.MENU_WATCHLIST: "watchlist", texts.MENU_HELP: "help"}
+
+
+def profile_of(user) -> Tuple[Optional[str], Optional[str]]:
+    """The person's public Telegram name as shown to everyone, stored only for members and people who requested access."""
+    return clean_profile(getattr(user, "first_name", None), getattr(user, "username", None))
 
 
 def menu_keyboard() -> ReplyKeyboardMarkup:
@@ -285,7 +290,7 @@ def build_dispatcher(service: BotService, access: Access, msg_limit: RateLimiter
         have been accepted (otherwise the guide starts). False = the user was already answered."""
         if not keep_pending:
             pending.pop(uid, None)
-        await db(service.touch_user, uid)
+        await db(service.touch_user, uid, profile_of(message.from_user))
         return await gate_ack(uid, lambda s: send(message, s))
 
     async def command_gate(message: Message) -> Optional[str]:
@@ -301,7 +306,7 @@ def build_dispatcher(service: BotService, access: Access, msg_limit: RateLimiter
         role = await admit(uid, lambda t: safe_answer(cb, t, show_alert=True), limiter, texts.NOT_INVITED_POPUP)
         if role is None:
             return None
-        await db(service.touch_user, uid)
+        await db(service.touch_user, uid, profile_of(cb.from_user))
         if need_ack and not await db(service.is_acknowledged, uid):
             await safe_answer(cb)
             await show(cb, screens.onboarding(1))
@@ -334,10 +339,10 @@ def build_dispatcher(service: BotService, access: Access, msg_limit: RateLimiter
                 try:
                     await message.bot.send_message(
                         access.owner_id, f"Invitation used ({html.escape(note or 'no note', quote=False)}): "
-                                         f"Telegram id <code>{uid}</code>")
+                                         f"{screens.who(uid, *profile_of(message.from_user))}")
                 except Exception:                             # noqa: BLE001 - the owner may never have opened the bot
                     log.info("could not notify the owner about an accepted invitation")
-        await db(service.touch_user, uid)
+        await db(service.touch_user, uid, profile_of(message.from_user))
         pending.pop(uid, None)
         if await db(service.is_acknowledged, uid):
             await message.answer("Welcome back. Use the menu below, or type a ticker such as AAPL.", reply_markup=menu_keyboard())
@@ -348,7 +353,7 @@ def build_dispatcher(service: BotService, access: Access, msg_limit: RateLimiter
     async def on_guide(message: Message):
         uid = message.from_user.id
         if await admit(uid, message.answer, msg_limit, message=message):
-            await db(service.touch_user, uid)
+            await db(service.touch_user, uid, profile_of(message.from_user))
             await send(message, screens.onboarding(1))
 
     async def complete_onboarding(uid: int, target: Message, role: Optional[str]) -> None:
@@ -361,7 +366,7 @@ def build_dispatcher(service: BotService, access: Access, msg_limit: RateLimiter
         role = await admit(uid, lambda t: safe_answer(cb, t, show_alert=True), popup_limit, texts.NOT_INVITED_POPUP)
         if role is None:
             return
-        await db(service.touch_user, uid)
+        await db(service.touch_user, uid, profile_of(cb.from_user))
         arg = cb.data.split(":", 1)[1] if cb.data.startswith("ob:") else "ack"
         if arg == "ack":
             await safe_answer(cb, "Thanks")
@@ -380,7 +385,7 @@ def build_dispatcher(service: BotService, access: Access, msg_limit: RateLimiter
         uid = message.from_user.id
         role = await admit(uid, message.answer, msg_limit, message=message)
         if role is not None:
-            await db(service.touch_user, uid)
+            await db(service.touch_user, uid, profile_of(message.from_user))
             await complete_onboarding(uid, message, role)
 
     @router.callback_query(F.data.startswith("def:"))
@@ -780,20 +785,23 @@ def build_dispatcher(service: BotService, access: Access, msg_limit: RateLimiter
         if action in ("info", "back"):
             await safe_answer(cb)
             state = await db(access.request_state, uid)
-            await show(cb, screens.what_is_this(state["can_request"]) if action == "info" else screens.not_invited(uid, state))
+            await show(cb, screens.what_is_this(state["can_request"], bool(state.get("instant"))) if action == "info" else screens.not_invited(uid, state))
             return
-        res = await db(access.request, uid)
+        profile = profile_of(cb.from_user)
+        res = await db(access.request, uid, profile)
         if res.code == "sent":
             await safe_answer(cb, texts.REQUEST_POPUP_SENT)
             await show(cb, screens.Screen(texts.REQUEST_SENT))
-            await notify_owner(cb.bot, screens.owner_request(uid))
+            await notify_owner(cb.bot, screens.owner_request(uid, profile))
         elif res.code == "auto_approved":
             await safe_answer(cb, texts.ACCESS_GRANTED_USER)
-            await db(service.touch_user, uid)
+            await db(service.touch_user, uid, profile)
             await show(cb, screens.Screen(texts.ACCESS_GRANTED_USER))
             if isinstance(cb.message, Message):
                 await send(cb.message, screens.onboarding(1))
-            await notify_owner(cb.bot, screens.Screen(texts.OWNER_AUTO_NOTICE.format(uid=uid)))
+            members = (await db(access.summary))["active"]
+            await notify_owner(cb.bot, screens.Screen(texts.OWNER_AUTO_NOTICE.format(
+                who=screens.who(uid, *profile), n=members, cap=await db(access.effective_max_members))))
         else:
             popup = {"pending": texts.REQUEST_POPUP_ALREADY, "closed": texts.REQUEST_POPUP_CLOSED, "full": texts.REQUEST_POPUP_FULL,
                      "blocked": texts.REQUEST_POPUP_BLOCKED, "member": texts.REQUEST_POPUP_MEMBER,
@@ -1154,6 +1162,11 @@ async def main() -> None:
     if me.can_join_groups:
         log.warning("The bot can be added to groups. It never shows data there, but turn 'Allow Groups' off in BotFather.")
     await bot.set_my_commands(COMMANDS)
+    try:                                                       # the empty-chat welcome and the profile blurb (texts.py)
+        await bot.set_my_description(texts.BOT_DESCRIPTION)
+        await bot.set_my_short_description(texts.BOT_SHORT_DESCRIPTION)
+    except TelegramBadRequest as e:                            # never block the start over the profile text
+        log.warning("bot description not set: %s", e)
     if owner_id is not None:
         try:
             await bot.set_my_commands(COMMANDS + OWNER_COMMANDS, scope=BotCommandScopeChat(chat_id=owner_id))

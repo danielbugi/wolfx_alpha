@@ -59,6 +59,7 @@ class MemoryStore:
         self.facts = {}                                           # symbol -> {"jump_dates": [...], "ref_close": ...} (the price-guard inputs)
         self.news_fetched, self.news_rows, self.chart_ids = {}, {}, {}
         self.requests, self.events = {}, {}                          # request-access flow: uid -> row ; event -> count
+        self.settings = {}                                        # bot_settings (migration 34): key -> value
         self.prices = {}                                          # symbol -> [(date, close), ...] oldest first
         for s in stocks:                                          # a previous close consistent with the snapshot's 1-day change
             prev = s["close"] / (1 + s["ret1_pct"] / 100) if s["ret1_pct"] > -100 else s["close"]
@@ -76,9 +77,11 @@ class MemoryStore:
         self._check()
         return {s: self._stocks[s] for s in symbols if s in self._stocks}
 
-    def touch_user(self, uid):
+    def touch_user(self, uid, profile=None):
         self._check()
-        self.users.setdefault(uid, {"ack": False})
+        u = self.users.setdefault(uid, {"ack": False})
+        if profile is not None:
+            u["first_name"], u["username"] = profile
 
     def is_acknowledged(self, uid):
         self._check()
@@ -195,18 +198,20 @@ class MemoryStore:
         return {**r, "cooldown_active": active,
                 "cooldown_until": datetime.fromtimestamp(r["decided_at"] + self.COOLDOWN_S, timezone.utc) if r["decided_at"] else None}
 
-    def add_request(self, uid):
+    def add_request(self, uid, profile=None):
         self._check()
         r = self.requests.get(uid)
         if r and not (r["status"] == "declined" and r["decided_at"] + self.COOLDOWN_S <= self.clock()):
             return False
-        self.requests[uid] = {"status": "pending", "requested_at": self.clock(), "decided_at": None}
+        name, user = profile if profile is not None else (None, None)
+        self.requests[uid] = {"status": "pending", "requested_at": self.clock(), "decided_at": None, "first_name": name, "username": user}
         return True
 
     def pending_requests(self, limit):
         self._check()
         rows = sorted(((u, r) for u, r in self.requests.items() if r["status"] == "pending"), key=lambda x: x[1]["requested_at"])
-        return len(rows), [{"telegram_user_id": u, "requested_at": datetime.fromtimestamp(r["requested_at"], timezone.utc)} for u, r in rows[:limit]]
+        return len(rows), [{"telegram_user_id": u, "requested_at": datetime.fromtimestamp(r["requested_at"], timezone.utc),
+                            "first_name": r.get("first_name"), "username": r.get("username")} for u, r in rows[:limit]]
 
     def decide_request(self, uid, approve):
         self._check()
@@ -299,6 +304,31 @@ class MemoryStore:
     def audit(self, actor, action, target=None, detail=None):
         self._check()
         self.audit_log.append((actor, action, target, detail))
+
+    def get_setting(self, key):
+        self._check()
+        return self.settings.get(key)
+
+    def set_setting(self, key, value, by):
+        self._check()
+        self.settings[key] = value
+        return True
+
+    def members(self, status, limit=500):
+        self._check()
+        out = []
+        for u, a in self.access.items():
+            if a["status"] != status:
+                continue
+            prof = self.users.get(u, {})
+            out.append({"telegram_user_id": u, "status": a["status"], "first_name": prof.get("first_name"),
+                        "username": prof.get("username"), "tracked_n": len(self.tracked_rows.get(u, {})),
+                        "morning_on": bool(getattr(self, "dm", {}).get(u, {}).get("on"))})
+        return out[:limit]
+
+    def audit_rows(self, limit=50):
+        self._check()
+        return [{"actor": a, "action": b, "target": c, "detail": d, "created_at": None} for a, b, c, d in reversed(self.audit_log[-limit:])]
 
     def purge_revoked(self, days):
         self._check()
