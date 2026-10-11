@@ -26,7 +26,7 @@ import SegmentedControl from '@/components/ui/SegmentedControl';
  * earnings markers. All indicators are computed in the browser (lib/indicators.ts) from the bars the API returns.
  */
 
-type Overlay = 'sma20' | 'sma50' | 'sma200' | 'bollinger' | 'donchian' | 'volume';
+type Overlay = 'sma20' | 'sma50' | 'sma200' | 'bollinger' | 'donchian' | 'volume' | 'breakouts';
 type PanelKey = 'rsi' | 'macd';
 
 const OVERLAYS: { key: Overlay; label: string; color: string }[] = [
@@ -36,6 +36,8 @@ const OVERLAYS: { key: Overlay; label: string; color: string }[] = [
   { key: 'bollinger', label: 'Bollinger', color: '#8e8e93' },
   { key: 'donchian', label: 'Donchian', color: '#94a3b8' },
   { key: 'volume', label: 'Volume', color: '#8e8e93' },
+  // Past breakout signals as markers — off by default: on a busy chart they crowd the candles.
+  { key: 'breakouts', label: 'Breakouts', color: '#10b981' },
 ];
 const PANELS: { key: PanelKey; label: string }[] = [
   { key: 'rsi', label: 'RSI 14' },
@@ -176,6 +178,8 @@ export default function StockChart({ bars, earnings = [], breakouts = [], height
     if (!el) return;
     const registry = charts.current;
     const chart = createChart(el, baseOptions(el, height, true));
+    // The library's attribution link opens a new tab without rel=noopener; add it.
+    el.querySelectorAll('a[target="_blank"]').forEach((a) => a.setAttribute('rel', 'noopener noreferrer'));
     const addLine = (color: string, width: 1 | 2 = 2, style: LineStyle = LineStyle.Solid) =>
       chart.addLineSeries({ color, lineWidth: width, lineStyle: style, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
     const s = series.current;
@@ -320,7 +324,7 @@ export default function StockChart({ bars, earnings = [], breakouts = [], height
       const i = candleIndexFor(candles, e.date, interval);
       if (i >= 0) markers.push({ time: toTime(candles[i].date), position: 'aboveBar', color: '#7c3aed', shape: 'circle', text: 'E' });
     }
-    for (const b of breakouts) {
+    for (const b of on('breakouts') ? breakouts : []) {
       const i = candleIndexFor(candles, b.date, interval);
       if (i < 0) continue;
       const color = b.success == null ? '#8e8e93' : b.success ? t.up : t.down;
@@ -475,10 +479,12 @@ export default function StockChart({ bars, earnings = [], breakouts = [], height
         <span>
           <span className="font-semibold text-violet-600">E</span> earnings
         </span>
-        <span>
-          <span className="font-semibold" style={{ color: t.up }}>B</span>/<span className="font-semibold" style={{ color: t.down }}>B</span>/
-          <span className="font-semibold text-slate-400">B</span> past breakout signal: worked / failed / pending
-        </span>
+        {overlays.has('breakouts') && (
+          <span>
+            <span className="font-semibold" style={{ color: t.up }}>B</span>/<span className="font-semibold" style={{ color: t.down }}>B</span>/
+            <span className="font-semibold text-slate-400">B</span> past breakout signal: worked / failed / pending
+          </span>
+        )}
         {interval !== 'daily' && <span>Donchian on {interval} candles: 20 {interval === 'weekly' ? 'weeks' : 'months'}</span>}
       </div>
     </div>

@@ -19,6 +19,7 @@ import SectorTrendChart from '@/components/dashboard/SectorTrendChart';
 import MomentumBoard, { BoardCategory } from '@/components/dashboard/MomentumBoard';
 import MomentumLeaders from '@/components/dashboard/MomentumLeaders';
 import MarketMovers from '@/components/dashboard/MarketMovers';
+import WatchlistCard from '@/components/dashboard/WatchlistCard';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import { ResolvedTheme, useResolvedTheme } from '@/lib/theme';
 
@@ -352,6 +353,9 @@ export default function DashboardPage() {
             </Card>
           </div>
         )}
+
+        {/* Watchlist -- stocks starred on their stock page (this browser); renders nothing when empty */}
+        <WatchlistCard />
 
         {/* Market Overview */}
         {!marketOverview && marketOverviewError && (

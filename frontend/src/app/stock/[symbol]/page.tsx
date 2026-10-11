@@ -4,7 +4,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardBody, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip } from '@nextui-org/react';
-import { ExclamationTriangleIcon } from '@heroicons/react/20/solid';
+import { ExclamationTriangleIcon, StarIcon as StarSolid } from '@heroicons/react/20/solid';
+import { StarIcon as StarOutline } from '@heroicons/react/24/outline';
 import { clsx } from 'clsx';
 import { HoverTip, ProgressBar } from '@/components/ui/Field';
 import {
@@ -24,6 +25,9 @@ import KeyLevels from '@/components/stock/KeyLevels';
 import FinancialGrowth from '@/components/stock/FinancialGrowth';
 import EarningsPanel from '@/components/stock/EarningsPanel';
 import PeersPanel from '@/components/stock/PeersPanel';
+import NewsPanel from '@/components/stock/NewsPanel';
+import { reactionPct } from '@/components/stock/EarningsPanel';
+import { useWatchlist } from '@/lib/watchlist';
 import { StockNavButtons, StockNavCaption, useStockNav } from '@/components/stock/StockNavArrows';
 import { positionPct } from '@/lib/priceMath';
 import { gradeColor } from '@/lib/uiColors';
@@ -46,6 +50,24 @@ function fmtPct(v: number | null | undefined, decimals = 1): string {
 function fmtNum(v: number | null | undefined, decimals = 2): string {
   if (v === null || v === undefined) return UNKNOWN;
   return v.toFixed(decimals);
+}
+
+/** Trailing returns from daily bars: close now vs the close N trading days back (YTD: vs last close of the prior
+ * year). Null when the history doesn't reach back that far — never a partial-period figure. */
+function trailingReturns(bars: PriceBar[]) {
+  const last = bars[bars.length - 1];
+  const back = (n: number) => (bars.length > n ? (last.close / bars[bars.length - 1 - n].close - 1) * 100 : null);
+  const yearStart = last ? `${last.date.slice(0, 4)}-01-01` : '';
+  const prevYearClose = [...bars].reverse().find((b) => b.date < yearStart);
+  return [
+    { label: '1D', value: back(1) },
+    { label: '1W', value: back(5) },
+    { label: '1M', value: back(21) },
+    { label: '3M', value: back(63) },
+    { label: '6M', value: back(126) },
+    { label: 'YTD', value: last && prevYearClose ? (last.close / prevYearClose.close - 1) * 100 : null },
+    { label: '1Y', value: back(252) },
+  ];
 }
 
 /** Compact price for the narrow 52-week cell: whole dollars from $100 up, cents below. */
@@ -252,6 +274,7 @@ export default function StockDetailPage() {
   const symbol = (params?.symbol as string)?.toUpperCase();
   // Previous/next stock in the list this one was opened from (arrows in the header, ← / → keys).
   const nav = useStockNav(symbol);
+  const watchlist = useWatchlist();
 
   const [detail, setDetail] = useState<StockDetail | null>(null);
   const [bars, setBars] = useState<PriceBar[]>([]);
@@ -354,6 +377,15 @@ export default function StockDetailPage() {
     .filter((e) => daysUntil(e.date) >= 0)
     .sort((a, b) => a.date.localeCompare(b.date))[0];
   const daysToEarnings = nextEarnings ? daysUntil(nextEarnings.date) : null;
+  // Typical size of the move around past reports (same 2-day window as the Earnings section), for the header badge.
+  const pastMoves = earnings
+    .filter((e) => daysUntil(e.date) < 0)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 8)
+    .map((e) => reactionPct(bars, e.date))
+    .filter((v): v is number => v != null);
+  const avgEarningsMove = pastMoves.length >= 3 ? pastMoves.reduce((a, v) => a + Math.abs(v), 0) / pastMoves.length : null;
+  const performance = bars.length ? trailingReturns(bars) : [];
 
   const financials = [...detail.quarterly_financials].reverse();
 
@@ -384,6 +416,20 @@ export default function StockDetailPage() {
               <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="large-title">{detail.symbol}</h1>
+                <button
+                  type="button"
+                  onClick={() => watchlist.toggle(detail.symbol)}
+                  aria-pressed={watchlist.has(detail.symbol)}
+                  aria-label={watchlist.has(detail.symbol) ? `Remove ${detail.symbol} from watchlist` : `Add ${detail.symbol} to watchlist`}
+                  title={watchlist.has(detail.symbol) ? 'In your watchlist' : 'Add to watchlist'}
+                  className="press -ml-1 flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/[0.05]"
+                >
+                  {watchlist.has(detail.symbol) ? (
+                    <StarSolid className="h-5 w-5 text-amber-400" />
+                  ) : (
+                    <StarOutline className="h-5 w-5 text-slate-400" />
+                  )}
+                </button>
                 {hasSignal ? (
                   <Chip size="sm" className="bg-accent-soft text-accent text-xs font-medium">
                     Active breakout signal
@@ -410,6 +456,7 @@ export default function StockDetailPage() {
                     className={`text-xs ${daysToEarnings <= 3 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}
                   >
                     Earnings {daysToEarnings === 0 ? 'today' : `in ${daysToEarnings}d`}
+                    {avgEarningsMove != null && ` · avg move ±${avgEarningsMove.toFixed(1)}%`}
                   </Chip>
                 )}
               </div>
@@ -450,6 +497,23 @@ export default function StockDetailPage() {
               hint={daysToEarnings != null ? (daysToEarnings === 0 ? 'today' : `in ${daysToEarnings} days`) : undefined}
             />
           </CardBody>
+          {performance.length > 0 && (
+            <div className="grid grid-cols-4 gap-y-2 border-t border-black/[0.06] px-4 py-3 sm:grid-cols-7" aria-label="Performance">
+              {performance.map((p) => (
+                <div key={p.label} className="text-center">
+                  <p className="text-[11px] font-medium text-slate-500">{p.label}</p>
+                  <p
+                    className={clsx(
+                      'text-[13px] font-semibold tabular-nums',
+                      p.value == null ? 'text-slate-400' : p.value >= 0 ? 'text-emerald-600' : 'text-red-600',
+                    )}
+                  >
+                    {fmtPct(p.value)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
 
         {/* Chart */}
@@ -615,6 +679,10 @@ export default function StockDetailPage() {
             <KeyLevels bars={bars} price={snap.current_price} atr={timeframes.daily.atr} sector={snap.sector} sectorHistory={sectorHistory} />
           </Section>
         </div>
+
+        <Section>
+          <NewsPanel symbol={detail.symbol} />
+        </Section>
 
         <Section>
           <FinancialGrowth quarters={financials} />
