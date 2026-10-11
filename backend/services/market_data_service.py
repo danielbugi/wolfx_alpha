@@ -64,6 +64,44 @@ def _vix_regime(value: float) -> str:
     return 'fear'
 
 
+# ---- Markets pages (services/instruments.py registry) ---------------------------------------------------------------
+
+_instruments_cache: Dict[str, Any] = {"data": None, "ts": 0.0}
+
+
+def _close_on_or_before(rows: List[Any], target) -> Any:
+    """Last close dated on or before `target` (rows are (date, close) ascending); None if history doesn't reach back."""
+    found = None
+    for d, c in rows:
+        if d > target:
+            break
+        found = c
+    return found
+
+
+def instrument_performance(rows: List[Any]) -> Dict[str, Any]:
+    """Changes by CALENDAR offset (1W = vs the last close on/before 7 days ago, etc.), so 7-day crypto and 5-day futures
+    compare like for like. A window the history doesn't reach is None, never a shorter period passed off as it."""
+    from datetime import timedelta
+    if not rows:
+        return {"1d": None, "1w": None, "1m": None, "3m": None, "ytd": None, "1y": None}
+    last_date, last = rows[-1]
+
+    def change(base):
+        return round((last / base - 1) * 100, 4) if base not in (None, 0) and last is not None else None
+
+    prev = rows[-2][1] if len(rows) > 1 else None
+    year_start = last_date.replace(month=1, day=1)
+    return {
+        "1d": change(prev),
+        "1w": change(_close_on_or_before(rows, last_date - timedelta(days=7))),
+        "1m": change(_close_on_or_before(rows, last_date - timedelta(days=30))),
+        "3m": change(_close_on_or_before(rows, last_date - timedelta(days=91))),
+        "ytd": change(_close_on_or_before(rows, year_start - timedelta(days=1))),
+        "1y": change(_close_on_or_before(rows, last_date - timedelta(days=365))),
+    }
+
+
 class MarketDataService:
     """DB-backed reader for market_index_prices and sector_performance_daily."""
 
@@ -185,3 +223,66 @@ class MarketDataService:
         }
         _sector_history_cache[days] = {"data": data, "ts": now}
         return data
+
+    def get_instruments(self) -> Dict[str, Any]:
+        from services.instruments import GROUPS, INSTRUMENTS
+        now = time.time()
+        if _instruments_cache["data"] is not None and (now - _instruments_cache["ts"]) < _CACHE_TTL_SECONDS:
+            return _instruments_cache["data"]
+        conn = self.get_db_connection()
+        if not conn:
+            raise Exception("Database connection failed")
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT symbol, date, close FROM market_index_prices "
+                "WHERE symbol = ANY(%s) AND date >= CURRENT_DATE - 400 AND close IS NOT NULL ORDER BY symbol, date",
+                ([i.symbol for i in INSTRUMENTS],),
+            )
+            by_symbol: Dict[str, List[Any]] = {}
+            for symbol, d, c in cursor.fetchall():
+                by_symbol.setdefault(symbol, []).append((d, float(c)))
+            cursor.close()
+        finally:
+            conn.close()
+
+        items = []
+        for inst in INSTRUMENTS:
+            rows = by_symbol.get(inst.symbol, [])
+            items.append({
+                "symbol": inst.symbol,
+                "name": inst.name,
+                "group": inst.group,
+                "unit": inst.unit,
+                "has_data": bool(rows),
+                "latest_date": str(rows[-1][0]) if rows else None,
+                "close": rows[-1][1] if rows else None,
+                "change_pct": instrument_performance(rows),
+                "sparkline": [c for _, c in rows[-30:]],
+            })
+        data = {"groups": GROUPS, "instruments": items}
+        _instruments_cache["data"], _instruments_cache["ts"] = data, now
+        return data
+
+    def get_instrument_history(self, symbol: str, days: int) -> List[Dict[str, Any]]:
+        """Daily OHLCV for one instrument, oldest first, in the stock page's bar shape (Donchian computed client-side)."""
+        conn = self.get_db_connection()
+        if not conn:
+            raise Exception("Database connection failed")
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT date, open, high, low, close, volume FROM market_index_prices "
+                "WHERE symbol = %s AND date >= CURRENT_DATE - %s AND close IS NOT NULL ORDER BY date",
+                (symbol, days),
+            )
+            rows = cursor.fetchall()
+            cursor.close()
+        finally:
+            conn.close()
+        f = lambda v: float(v) if v is not None else None  # noqa: E731
+        return [
+            {"date": str(d), "open": f(o), "high": f(h), "low": f(lo), "close": float(c),
+             "volume": int(v) if v is not None else None, "donchian_high_20": None, "donchian_low_20": None}
+            for d, o, h, lo, c, v in rows
+        ]

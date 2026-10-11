@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { Card, CardBody, CardHeader } from '@nextui-org/react';
 import { clsx } from 'clsx';
 import type { MarketIndexEntry } from '@/services/api';
@@ -60,11 +61,14 @@ export default function CommoditiesCard({ indices, loading }: { indices: MarketI
 
   return (
     <Card className="h-full border border-black/[0.05] shadow-sm">
-      <CardHeader className="px-5 pt-5 pb-2">
+      <CardHeader className="items-start justify-between gap-3 px-5 pt-5 pb-2">
         <div>
           <h3 className="text-[17px] font-semibold text-slate-900">Commodities</h3>
           <p className="mt-0.5 text-xs text-slate-500">Futures · last close, day and 30-session change</p>
         </div>
+        <Link href="/markets" className="shrink-0 whitespace-nowrap text-[13px] font-medium text-accent hover:underline">
+          All markets →
+        </Link>
       </CardHeader>
       <CardBody className="px-5 pb-5 pt-1">
         {loading && rows.length === 0 ? (
@@ -80,7 +84,7 @@ export default function CommoditiesCard({ indices, loading }: { indices: MarketI
               return (
                 <li key={r.symbol}>
                   {newGroup && <p className="pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">{GROUP[r.symbol]}</p>}
-                  <div className="flex items-center gap-3 py-2">
+                  <Link href={`/markets/${encodeURIComponent(r.symbol)}`} className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-black/[0.03]">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[13px] font-semibold text-slate-800">{r.display_name}</p>
                       <p className="text-[11px] tabular-nums text-slate-500">
@@ -97,7 +101,7 @@ export default function CommoditiesCard({ indices, loading }: { indices: MarketI
                         {pct(windowChange)} <span className="text-slate-400">30d</span>
                       </p>
                     </div>
-                  </div>
+                  </Link>
                 </li>
               );
             })}
