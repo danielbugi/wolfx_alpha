@@ -55,7 +55,7 @@ class BackendNewsStore:
 
     def news_recent(self, symbol: str, limit: int) -> List[Dict]:
         return self._run(
-            "SELECT published_at, headline, source, url FROM news_items WHERE symbol = %s ORDER BY published_at DESC LIMIT %s",
+            "SELECT published_at, headline, source, url, image_url FROM news_items WHERE symbol = %s ORDER BY published_at DESC LIMIT %s",
             (symbol, limit), True)
 
     def save_news(self, symbol: str, items: List[Dict], ok: bool, now) -> None:
@@ -65,10 +65,13 @@ class BackendNewsStore:
         try:
             with conn.cursor() as cur:
                 for it in items:
+                    # same upsert as the bot's PgStore: fills image_url (migration 33) for rows stored without one
                     cur.execute(
-                        "INSERT INTO news_items (symbol, published_at, headline, source, url, url_hash, fetched_at) "
-                        "VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (symbol, url_hash) DO NOTHING",
-                        (symbol, it["published_at"], it["headline"], it.get("source"), it["url"], it["url_hash"], now))
+                        "INSERT INTO news_items (symbol, published_at, headline, source, url, url_hash, image_url, fetched_at) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (symbol, url_hash) "
+                        "DO UPDATE SET image_url = COALESCE(news_items.image_url, EXCLUDED.image_url)",
+                        (symbol, it["published_at"], it["headline"], it.get("source"), it["url"], it["url_hash"],
+                         it.get("image_url"), now))
                 cur.execute(
                     "INSERT INTO news_fetched (symbol, fetched_at, ok) VALUES (%s, %s, %s) "
                     "ON CONFLICT (symbol) DO UPDATE SET fetched_at = EXCLUDED.fetched_at, ok = EXCLUDED.ok",
@@ -101,6 +104,7 @@ class StockNewsService:
                     "headline": it["headline"],
                     "source": it.get("source"),
                     "url": it["url"],
+                    "image_url": it.get("image_url"),
                 }
                 for it in result.items
             ],

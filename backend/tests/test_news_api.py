@@ -39,9 +39,9 @@ class BrokenStore(FakeStore):
         raise RuntimeError("relation news_fetched does not exist")
 
 
-def _item(n):
+def _item(n, image=None):
     return {"published_at": NOW - timedelta(hours=n), "headline": f"Headline {n}", "source": "benzinga",
-            "url": f"https://example.com/{n}", "url_hash": f"h{n}"}
+            "url": f"https://example.com/{n}", "url_hash": f"h{n}", "image_url": image}
 
 
 def _client(service=None, authenticated=True):
@@ -75,7 +75,7 @@ def test_returns_newest_first_with_only_public_fields():
     body = _client(_service(FakeStore())).get("/api/news/aapl?limit=2").json()
     assert body["symbol"] == "AAPL" and body["status"] == "ok" and body["stale"] is False
     assert [i["headline"] for i in body["items"]] == ["Headline 1", "Headline 2"]
-    assert set(body["items"][0]) == {"published_at", "headline", "source", "url"}  # no url_hash / article text
+    assert set(body["items"][0]) == {"published_at", "headline", "source", "url", "image_url"}  # no url_hash / article text
     assert body["items"][0]["published_at"].startswith("2026-10-11T11:00")
 
 
@@ -103,3 +103,9 @@ def test_provider_failure_is_unavailable():
 def test_database_problem_is_unavailable_not_a_500():
     r = _client(_service(BrokenStore())).get("/api/news/AAPL")
     assert r.status_code == 200 and r.json()["status"] == "unavailable"
+
+
+def test_thumbnail_is_passed_through_and_missing_is_null():
+    svc = _service(FakeStore(), fetch=lambda s: [_item(1, image="https://img.test/t.jpg"), _item(2)])
+    items = _client(svc).get("/api/news/AAPL").json()["items"]
+    assert items[0]["image_url"] == "https://img.test/t.jpg" and items[1]["image_url"] is None
