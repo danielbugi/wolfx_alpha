@@ -5,7 +5,10 @@ import {
   createChart,
   IChartApi,
   ISeriesApi,
+  IPriceLine,
+  AutoscaleInfo,
   LogicalRange,
+  Logical,
   SeriesMarker,
   Time,
   UTCTimestamp,
@@ -26,7 +29,7 @@ import SegmentedControl from '@/components/ui/SegmentedControl';
  * earnings markers. All indicators are computed in the browser (lib/indicators.ts) from the bars the API returns.
  */
 
-type Overlay = 'sma20' | 'sma50' | 'sma200' | 'bollinger' | 'donchian' | 'volume' | 'breakouts';
+type Overlay = 'sma20' | 'sma50' | 'sma200' | 'bollinger' | 'donchian' | 'volume' | 'breakouts' | 'plan';
 type PanelKey = 'rsi' | 'macd';
 
 const OVERLAYS: { key: Overlay; label: string; color: string }[] = [
@@ -38,6 +41,8 @@ const OVERLAYS: { key: Overlay; label: string; color: string }[] = [
   { key: 'volume', label: 'Volume', color: '#8e8e93' },
   // Past breakout signals as markers — off by default: on a busy chart they crowd the candles.
   { key: 'breakouts', label: 'Breakouts', color: '#10b981' },
+  // The active signal's entry / stop / targets as price lines — only offered when the stock has a plan.
+  { key: 'plan', label: 'Trade plan', color: '#0a84ff' },
 ];
 const PANELS: { key: PanelKey; label: string }[] = [
   { key: 'rsi', label: 'RSI 14' },
@@ -93,6 +98,38 @@ function candleIndexFor(candles: PriceBar[], date: string, interval: Interval): 
   return date > prevEnd ? i : -1;
 }
 
+/** How many candles ahead of the last one `date` falls: trading days (weekdays) for daily, weeks, or months. */
+export function periodsAhead(lastDate: string, date: string, interval: Interval): number {
+  const a = new Date(`${lastDate}T00:00:00Z`);
+  const b = new Date(`${date}T00:00:00Z`);
+  if (b <= a) return 0;
+  if (interval === 'monthly') return (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth());
+  if (interval === 'weekly') return Math.max(1, Math.round((b.getTime() - a.getTime()) / (7 * 86_400_000)));
+  let n = 0;
+  for (const d = new Date(a); d < b; ) {
+    d.setUTCDate(d.getUTCDate() + 1);
+    if (d.getUTCDay() !== 0 && d.getUTCDay() !== 6) n++;
+  }
+  return n;
+}
+
+// Show the next report ahead of the last candle when it's this close (in candles); further out it would squash the chart.
+const MAX_AHEAD: Record<Interval, number> = { daily: 45, weekly: 12, monthly: 3 };
+
+interface EarningsBadge {
+  x: number;
+  next: boolean;
+  label: string;
+  title: string;
+}
+
+function earningsTitle(e: EarningsDateEntry, next: boolean): string {
+  const eps = (v: number | null) => (v == null ? '—' : `$${v.toFixed(2)}`);
+  if (next) return `Next earnings ${e.date}${e.eps_estimate != null ? ` · est. EPS ${eps(e.eps_estimate)}` : ''}`;
+  const surprise = e.surprise_pct != null ? ` (${e.surprise_pct >= 0 ? '+' : ''}${e.surprise_pct.toFixed(1)}%)` : '';
+  return `Earnings ${e.date} · EPS ${eps(e.eps_actual)} vs est. ${eps(e.eps_estimate)}${surprise}`;
+}
+
 function fmt(v: number | null | undefined, d = 2) {
   return v == null ? '—' : v.toFixed(d);
 }
@@ -102,10 +139,12 @@ export interface StockChartProps {
   bars: PriceBar[];
   earnings?: EarningsDateEntry[];
   breakouts?: BreakoutHistoryEntry[];
+  /** The active signal's plan, drawn as price lines by the "Trade plan" toggle (no toggle without one). */
+  plan?: { entry_price: number; stop_loss_price: number; tp1: number; tp2: number; tp3: number } | null;
   height?: number;
 }
 
-export default function StockChart({ bars, earnings = [], breakouts = [], height = 420 }: StockChartProps) {
+export default function StockChart({ bars, earnings = [], breakouts = [], plan = null, height = 420 }: StockChartProps) {
   const theme = useResolvedTheme();
   const [interval, setCandleInterval] = useState<Interval>('daily');
   const [range, setRange] = useState(DEFAULT_RANGE.daily);
@@ -318,12 +357,9 @@ export default function StockChart({ bars, earnings = [], breakouts = [], height
       }),
     );
 
-    // Markers: earnings (E) above the candle, past breakout signals (B) below — green worked, red failed, gray pending.
+    // Markers: past breakout signals (B) below the candle — green worked, red failed, gray pending. Earnings are drawn
+    // in the strip along the bottom instead (see earningsBadges).
     const markers: SeriesMarker<Time>[] = [];
-    for (const e of earnings) {
-      const i = candleIndexFor(candles, e.date, interval);
-      if (i >= 0) markers.push({ time: toTime(candles[i].date), position: 'aboveBar', color: '#7c3aed', shape: 'circle', text: 'E' });
-    }
     for (const b of on('breakouts') ? breakouts : []) {
       const i = candleIndexFor(candles, b.date, interval);
       if (i < 0) continue;
@@ -332,7 +368,91 @@ export default function StockChart({ bars, earnings = [], breakouts = [], height
     }
     markers.sort((a, b) => (a.time as number) - (b.time as number));
     s.candles.setMarkers(markers);
-  }, [candles, calc, overlays, theme, earnings, breakouts, interval, showRsi, showMacd]);
+  }, [candles, calc, overlays, theme, breakouts, interval, showRsi, showMacd]);
+
+  // --- trade plan price lines ----------------------------------------------------------------------------------------
+  useEffect(() => {
+    const target = series.current.candles;
+    if (!target || !plan || !overlays.has('plan')) return;
+    const t = THEME[theme];
+    const lines: IPriceLine[] = [
+      { price: plan.entry_price, color: '#0a84ff', title: 'Entry' },
+      { price: plan.stop_loss_price, color: t.down, title: 'Stop' },
+      { price: plan.tp1, color: t.up, title: 'TP1' },
+      { price: plan.tp2, color: t.up, title: 'TP2' },
+      { price: plan.tp3, color: t.up, title: 'TP3' },
+    ].map((l) => target.createPriceLine({ ...l, lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true }));
+    // Price lines don't count toward autoscale, so far targets (TP2/TP3) or a deep stop would sit off-screen: widen
+    // the price range to include the whole plan while it's shown.
+    const lo = Math.min(plan.stop_loss_price, plan.entry_price, plan.tp1, plan.tp2, plan.tp3);
+    const hi = Math.max(plan.stop_loss_price, plan.entry_price, plan.tp1, plan.tp2, plan.tp3);
+    target.applyOptions({
+      autoscaleInfoProvider: (original: () => AutoscaleInfo | null) => {
+        const base = original();
+        if (!base?.priceRange) return base;
+        return {
+          ...base,
+          priceRange: { minValue: Math.min(base.priceRange.minValue, lo), maxValue: Math.max(base.priceRange.maxValue, hi) },
+        };
+      },
+    });
+    return () => {
+      lines.forEach((l) => target.removePriceLine(l));
+      target.applyOptions({ autoscaleInfoProvider: undefined });
+    };
+  }, [plan, overlays, theme, candles]);
+
+  // --- earnings strip (Finviz-style, along the bottom) -------------------------------------------------------------
+  // The next report sits AHEAD of the last candle (placed by counting trading days / weeks / months), so the chart
+  // leaves room on the right for it when it's close enough to matter.
+  const nextEarnings = useMemo(() => {
+    const last = candles[candles.length - 1];
+    if (!last) return null;
+    const upcoming = [...earnings].sort((a, b) => a.date.localeCompare(b.date)).find((e) => e.date > last.date);
+    if (!upcoming) return null;
+    const ahead = periodsAhead(last.date, upcoming.date, interval);
+    return ahead >= 1 && ahead <= MAX_AHEAD[interval] ? { entry: upcoming, ahead } : null;
+  }, [candles, earnings, interval]);
+
+  const [earningsBadges, setEarningsBadges] = useState<EarningsBadge[]>([]);
+  useEffect(() => {
+    const main = charts.current.main;
+    if (!main) return;
+    const layout = () => {
+      const ts = main.timeScale();
+      const width = mainRef.current?.clientWidth ?? 0;
+      const inView = (x: number | null): x is number => x != null && x >= 0 && x <= width - PRICE_SCALE_WIDTH;
+      const out: EarningsBadge[] = [];
+      const lastDate = candles[candles.length - 1]?.date ?? '';
+      for (const e of earnings) {
+        if (e.date > lastDate) continue; // only the nearest upcoming report is drawn, below
+        const i = candleIndexFor(candles, e.date, interval);
+        const x = i >= 0 ? ts.logicalToCoordinate(i as Logical) : null;
+        if (inView(x)) out.push({ x, next: false, label: 'E', title: earningsTitle(e, false) });
+      }
+      if (nextEarnings) {
+        const x = ts.logicalToCoordinate((candles.length - 1 + nextEarnings.ahead) as Logical);
+        if (inView(x)) {
+          const d = new Date(`${nextEarnings.entry.date}T00:00:00Z`);
+          out.push({
+            x,
+            next: true,
+            label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+            title: earningsTitle(nextEarnings.entry, true),
+          });
+        }
+      }
+      setEarningsBadges(out);
+    };
+    layout();
+    main.timeScale().subscribeVisibleLogicalRangeChange(layout);
+    const ro = new ResizeObserver(() => layout());
+    if (mainRef.current) ro.observe(mainRef.current);
+    return () => {
+      main.timeScale().unsubscribeVisibleLogicalRangeChange(layout);
+      ro.disconnect();
+    };
+  }, [candles, earnings, interval, nextEarnings, showRsi, showMacd]);
 
   // --- visible range + panel sync ----------------------------------------------------------------------------------
   useEffect(() => {
@@ -340,11 +460,12 @@ export default function StockChart({ bars, earnings = [], breakouts = [], height
     if (!main || !candles.length) return;
     const n = RANGES[interval].find((r) => r.value === range)?.bars ?? null;
     const from = n == null ? 0 : Math.max(0, candles.length - n);
-    const r: LogicalRange = { from, to: candles.length - 1 + 4 } as LogicalRange;
+    const room = nextEarnings ? Math.max(4, nextEarnings.ahead + 3) : 4; // space on the right for the next report
+    const r: LogicalRange = { from, to: candles.length - 1 + room } as LogicalRange;
     main.timeScale().setVisibleLogicalRange(r);
     charts.current.rsi?.timeScale().setVisibleLogicalRange(r);
     charts.current.macd?.timeScale().setVisibleLogicalRange(r);
-  }, [candles, range, interval, showRsi, showMacd]);
+  }, [candles, range, interval, showRsi, showMacd, nextEarnings]);
 
   useEffect(() => {
     const list = (['main', 'rsi', 'macd'] as const).map((k) => charts.current[k]).filter((c): c is IChartApi => !!c);
@@ -398,7 +519,7 @@ export default function StockChart({ bars, earnings = [], breakouts = [], height
         )}
         <div className="mx-1 hidden h-6 w-px bg-slate-200 sm:block" />
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Indicators">
-          {OVERLAYS.map((o) => {
+          {OVERLAYS.filter((o) => o.key !== 'plan' || plan).map((o) => {
             const active = overlays.has(o.key);
             return (
               <button
@@ -455,7 +576,32 @@ export default function StockChart({ bars, earnings = [], breakouts = [], height
       </div>
 
       <div className="px-2">
-        <div ref={mainRef} style={{ height }} />
+        <div className="relative">
+          <div ref={mainRef} style={{ height }} />
+          {/* Earnings strip: past reports as outlined E badges, the next one filled with its date. */}
+          <div
+            className="pointer-events-none absolute inset-x-0 z-10"
+            style={{ bottom: showRsi || showMacd ? 6 : 34 }}
+            aria-label="Earnings dates"
+          >
+            {earningsBadges.map((b, i) => (
+              <span
+                key={i}
+                title={b.title}
+                data-next={b.next || undefined}
+                className={clsx(
+                  'pointer-events-auto absolute flex -translate-x-1/2 cursor-default items-center justify-center rounded-full text-[10px] font-bold leading-none',
+                  b.next
+                    ? 'h-5 bg-violet-600 px-1.5 text-white shadow-sm ring-2 ring-violet-600/25'
+                    : 'h-[18px] w-[18px] border border-violet-500 bg-white text-violet-600',
+                )}
+                style={{ left: b.x }}
+              >
+                {b.next ? `E · ${b.label}` : 'E'}
+              </span>
+            ))}
+          </div>
+        </div>
         {showRsi && (
           <div className="relative mt-1 border-t border-black/[0.06]">
             <span className="pointer-events-none absolute left-2 top-1 z-10 text-[10px] font-medium text-slate-500">
@@ -477,7 +623,7 @@ export default function StockChart({ bars, earnings = [], breakouts = [], height
 
       <div className="flex flex-wrap gap-x-4 gap-y-1 px-5 pb-1 pt-2 text-[11px] text-slate-500">
         <span>
-          <span className="font-semibold text-violet-600">E</span> earnings
+          <span className="font-semibold text-violet-600">E</span> earnings (bottom of chart; filled = next report)
         </span>
         {overlays.has('breakouts') && (
           <span>

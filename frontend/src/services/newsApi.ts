@@ -14,6 +14,8 @@ export interface StockNews {
   symbol: string;
   /** ok = headlines found · empty = provider has none · unavailable = provider or storage failing right now */
   status: 'ok' | 'empty' | 'unavailable';
+  /** why it's unavailable, as a short code (e.g. provider_keys_missing, storage_error:UndefinedTable); null otherwise */
+  reason?: string | null;
   /** true when `items` are older stored headlines shown because the latest fetch failed */
   stale: boolean;
   items: NewsItem[];
