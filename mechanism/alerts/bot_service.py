@@ -351,19 +351,39 @@ class PgStore:
                 "waiting": int(waiting["p"]), "declined_cooling": int(waiting["d"])}
 
     # --- news + chart caches (tables: add_tracker_tables.sql)
+    # news_items.image_url arrives with migration 33 (applied by hand, possibly after this code ships): without the
+    # column, read/write headlines without it. Absence is re-checked every few minutes, presence is remembered.
+    _image_col = {"present": False, "checked_at": 0.0}
+
+    def has_image_column(self) -> bool:
+        c = PgStore._image_col
+        if c["present"] or (c["checked_at"] and time.monotonic() - c["checked_at"] < 300):
+            return c["present"]
+        rows = self.db.execute_dict_query(
+            "SELECT 1 AS present FROM information_schema.columns WHERE table_name = 'news_items' AND column_name = 'image_url'")
+        c["present"], c["checked_at"] = bool(rows), time.monotonic()
+        return c["present"]
+
     def news_state(self, symbol: str) -> Optional[Dict]:
         rows = self.db.execute_dict_query("SELECT fetched_at, ok FROM news_fetched WHERE symbol = %s", (symbol,))
         return rows[0] if rows else None
 
     def news_recent(self, symbol: str, limit: int) -> List[Dict]:
         return self.db.execute_dict_query(
-            "SELECT published_at, headline, source, url, image_url FROM news_items WHERE symbol = %s ORDER BY published_at DESC LIMIT %s",
+            "SELECT published_at, headline, source, url, " + ("image_url" if self.has_image_column() else "NULL AS image_url")
+            + " FROM news_items WHERE symbol = %s ORDER BY published_at DESC LIMIT %s",
             (symbol, limit))
 
     def save_news(self, symbol: str, items: List[Dict], ok: bool, now) -> None:
+        with_image = self.has_image_column()
         with self.db.get_sync_connection() as conn:
             cur = conn.cursor()
             for it in items:
+                if not with_image:  # migration 33 not applied yet: store the headline without its thumbnail
+                    cur.execute("INSERT INTO news_items (symbol, published_at, headline, source, url, url_hash, fetched_at) "
+                                "VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (symbol, url_hash) DO NOTHING",
+                                (symbol, it["published_at"], it["headline"], it.get("source"), it["url"], it["url_hash"], now))
+                    continue
                 # image_url (migration 33) is filled in on a later fetch for rows stored before it existed
                 cur.execute("INSERT INTO news_items (symbol, published_at, headline, source, url, url_hash, image_url, fetched_at) "
                             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (symbol, url_hash) "

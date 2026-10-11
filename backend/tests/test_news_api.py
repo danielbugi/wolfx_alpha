@@ -109,3 +109,89 @@ def test_thumbnail_is_passed_through_and_missing_is_null():
     svc = _service(FakeStore(), fetch=lambda s: [_item(1, image="https://img.test/t.jpg"), _item(2)])
     items = _client(svc).get("/api/news/AAPL").json()["items"]
     assert items[0]["image_url"] == "https://img.test/t.jpg" and items[1]["image_url"] is None
+
+
+# ---- reason codes ------------------------------------------------------------------------------------------------
+
+def test_missing_provider_keys_are_named_in_the_reason():
+    def no_keys(_):
+        raise RuntimeError("Alpaca keys are not configured")
+    body = _client(_service(FakeStore(), fetch=no_keys)).get("/api/news/AAPL").json()
+    assert body["status"] == "unavailable" and body["reason"] == "provider_keys_missing"
+
+
+def test_ok_responses_have_no_reason():
+    assert _client(_service(FakeStore())).get("/api/news/AAPL").json()["reason"] is None
+
+
+# ---- the store works before and after migration 33 (news_items.image_url) -----------------------------------------
+
+import services.news_service as news_mod  # noqa: E402
+from services.news_service import BackendNewsStore  # noqa: E402
+
+
+class _Cursor:
+    def __init__(self, conn):
+        self.conn = conn
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def execute(self, sql, params=None):
+        self.conn.sql.append(sql)
+        if "information_schema.columns" in sql:
+            self.rows = [{"?column?": 1}] if self.conn.has_column else []
+        elif sql.startswith("SELECT published_at"):
+            if "image_url" in sql and "NULL AS image_url" not in sql and not self.conn.has_column:
+                raise RuntimeError("column image_url does not exist")
+            self.rows = [{"published_at": NOW, "headline": "H", "source": None, "url": "https://x/1", "image_url": None}]
+        else:
+            if "image_url" in sql and not self.conn.has_column:
+                raise RuntimeError("column image_url does not exist")
+            self.rows = []
+
+    def fetchall(self):
+        return self.rows
+
+
+class _Conn:
+    def __init__(self, has_column):
+        self.has_column, self.sql = has_column, []
+
+    def cursor(self, cursor_factory=None):
+        return _Cursor(self)
+
+    def commit(self):
+        pass
+
+    def close(self):
+        pass
+
+
+@pytest.fixture(autouse=False)
+def fresh_column_cache(monkeypatch):
+    monkeypatch.setattr(news_mod, "_image_column", {"present": False, "checked_at": 0.0})
+
+
+@pytest.mark.parametrize("has_column", [False, True])
+def test_store_reads_and_writes_with_or_without_the_image_column(fresh_column_cache, has_column):
+    conn = _Conn(has_column)
+    store = BackendNewsStore(lambda: conn)
+    rows = store.news_recent("AAPL", 5)
+    assert rows[0]["image_url"] is None
+    store.save_news("AAPL", [{**_item(1, image="https://img.test/t.jpg")}], True, NOW)
+    inserts = [q for q in conn.sql if q.startswith("INSERT INTO news_items")]
+    assert inserts and all(("image_url" in q) == has_column for q in inserts)
+
+
+def test_column_added_later_is_picked_up_after_the_recheck_window(fresh_column_cache, monkeypatch):
+    conn = _Conn(False)
+    store = BackendNewsStore(lambda: conn)
+    assert store.has_image_column() is False
+    conn.has_column = True
+    assert store.has_image_column() is False  # still inside the recheck window
+    monkeypatch.setattr(news_mod, "_IMAGE_COLUMN_RECHECK_S", 0)
+    assert store.has_image_column() is True
