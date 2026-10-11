@@ -1,0 +1,450 @@
+{
+ "generated_at": "2026-10-11",
+ "code_ref": "a2bd687",
+ "status": "research_only",
+ "use": "Research evidence only. Not a trading signal, not advice, and not used by the live signal path.",
+ "schema": "lab_report_v1",
+ "id": "ml_evaluation",
+ "kind": "ml",
+ "title": "ML evaluation runs (evaluate-only) and the promotion gate",
+ "headline": "No model passes the a-priori gate. The legacy momentum target is predictable (holdout AUC 0.627) but does not rank the trade's profit (AUC 0.506 bullish / 0.492 bearish within direction).",
+ "caveats": [
+  "Evaluate-only runs: nothing was promoted or registered.",
+  "The legacy momentum label mechanically contains a volume term.",
+  "Out-of-sample AUC for 'R>0' stays near 0.52-0.53 with or without market-regime features."
+ ],
+ "provenance": {
+  "source": "ml_training/models/momentum_predictor.py --no-promote on an isolated copy",
+  "evidence_files": [
+   "train_momentum.log",
+   "train_plan_profit.log",
+   "train_momentum_novol.log",
+   "experiments.json"
+  ]
+ },
+ "data": {
+  "trainer_runs": {
+   "train_momentum": {
+    "target": "momentum",
+    "dataset_rows": 592687,
+    "base_rate": 0.3284,
+    "holdout_range": [
+     "2025-03-11",
+     "2026-09-11"
+    ],
+    "holdout_auc": 0.6269,
+    "auc_ci95": [
+     0.6105,
+     0.6428
+    ],
+    "direction_only_baseline_auc": 0.541,
+    "auc_vs_plan_profit_bullish": 0.5063,
+    "auc_vs_plan_profit_bearish": 0.4924,
+    "top_decile_lift": 1.524,
+    "plan_r_by_score_quintile": [
+     -0.0663,
+     -0.0465,
+     -0.0293,
+     -0.0021,
+     0.008
+    ],
+    "walk_forward_auc": [
+     0.6095,
+     0.5944,
+     0.6018,
+     0.6412,
+     0.6135,
+     0.6277
+    ],
+    "gate": {
+     "holdout_auc": {
+      "value": 0.6269,
+      "required": 0.55,
+      "pass": true
+     },
+     "auc_ci_low": {
+      "value": 0.6105,
+      "required": 0.5,
+      "pass": true
+     },
+     "over_direction_baseline": {
+      "value": 0.0859,
+      "required": 0.02,
+      "pass": true
+     },
+     "5": {
+      "value": 1.0,
+      "required": 0.75,
+      "pass": true
+     },
+     "top_decile_lift": {
+      "value": 1.524,
+      "required": 1.15,
+      "pass": true
+     },
+     "plan_profit_auc_within_direction": {
+      "value": 0.4924,
+      "required": 0.52,
+      "pass": false
+     }
+    },
+    "promoted": false,
+    "not_promoted_because": [
+     "plan_profit_auc_within_direction"
+    ]
+   },
+   "train_plan_profit": {
+    "target": "plan_profit",
+    "dataset_rows": 592687,
+    "base_rate": 0.4259,
+    "holdout_range": [
+     "2025-03-11",
+     "2026-09-11"
+    ],
+    "holdout_auc": 0.5328,
+    "auc_ci95": [
+     0.5094,
+     0.5572
+    ],
+    "direction_only_baseline_auc": 0.539,
+    "auc_vs_plan_profit_bullish": 0.5204,
+    "auc_vs_plan_profit_bearish": 0.499,
+    "top_decile_lift": 1.102,
+    "plan_r_by_score_quintile": [
+     -0.1396,
+     -0.051,
+     -0.0309,
+     0.0436,
+     0.0416
+    ],
+    "walk_forward_auc": [
+     0.5507,
+     0.4659,
+     0.5145,
+     0.5258,
+     0.515,
+     0.5233
+    ],
+    "gate": {
+     "holdout_auc": {
+      "value": 0.5328,
+      "required": 0.55,
+      "pass": false
+     },
+     "auc_ci_low": {
+      "value": 0.5094,
+      "required": 0.5,
+      "pass": true
+     },
+     "over_direction_baseline": {
+      "value": -0.0062,
+      "required": 0.02,
+      "pass": false
+     },
+     "5": {
+      "value": 0.833,
+      "required": 0.75,
+      "pass": true
+     },
+     "top_decile_lift": {
+      "value": 1.102,
+      "required": 1.15,
+      "pass": false
+     },
+     "plan_profit_auc_within_direction": {
+      "value": 0.499,
+      "required": 0.52,
+      "pass": false
+     }
+    },
+    "promoted": false,
+    "not_promoted_because": [
+     "holdout_auc",
+     "over_direction_baseline",
+     "top_decile_lift",
+     "plan_profit_auc_within_direction"
+    ]
+   },
+   "train_momentum_novol": {
+    "target": "momentum",
+    "dataset_rows": 592687,
+    "base_rate": 0.3284,
+    "holdout_range": [
+     "2025-03-11",
+     "2026-09-11"
+    ],
+    "holdout_auc": 0.5858,
+    "auc_ci95": [
+     0.5622,
+     0.6078
+    ],
+    "direction_only_baseline_auc": 0.541,
+    "auc_vs_plan_profit_bullish": 0.5003,
+    "auc_vs_plan_profit_bearish": 0.4813,
+    "top_decile_lift": 1.36,
+    "plan_r_by_score_quintile": [
+     -0.09,
+     -0.0229,
+     0.0001,
+     0.0127,
+     -0.0362
+    ],
+    "walk_forward_auc": [
+     0.5944,
+     0.5479,
+     0.5643,
+     0.6058,
+     0.5691,
+     0.5855
+    ],
+    "gate": {
+     "holdout_auc": {
+      "value": 0.5858,
+      "required": 0.55,
+      "pass": true
+     },
+     "auc_ci_low": {
+      "value": 0.5622,
+      "required": 0.5,
+      "pass": true
+     },
+     "over_direction_baseline": {
+      "value": 0.0448,
+      "required": 0.02,
+      "pass": true
+     },
+     "5": {
+      "value": 1.0,
+      "required": 0.75,
+      "pass": true
+     },
+     "top_decile_lift": {
+      "value": 1.36,
+      "required": 1.15,
+      "pass": true
+     },
+     "plan_profit_auc_within_direction": {
+      "value": 0.4813,
+      "required": 0.52,
+      "pass": false
+     }
+    },
+    "promoted": false,
+    "not_promoted_because": [
+     "plan_profit_auc_within_direction"
+    ]
+   }
+  },
+  "out_of_sample_plan_outcome": {
+   "split": {
+    "train_until": "2024-01-01",
+    "test_from": "2024-02-15",
+    "n_train": 387694,
+    "n_test": 197150,
+    "note": "fixed a priori, no tuning on the test period; label = plan_r > 0 (the exact trade-plan outcome)"
+   },
+   "direction_only_baseline": {
+    "test_mean_r_bullish": 0.0373,
+    "test_mean_r_bearish": -0.1537
+   },
+   "price_features_only": {
+    "features": 33,
+    "auc_r_gt_0": 0.5224,
+    "auc_within_bullish": 0.5181,
+    "auc_within_bearish": 0.5108,
+    "mean_r_by_score_quintile_low_to_high": [
+     -0.1293,
+     -0.0669,
+     -0.021,
+     -0.0035,
+     -0.0104
+    ],
+    "mean_r_all_test": -0.0462,
+    "top_decile": {
+     "n": 19715,
+     "mean_r": -0.0075,
+     "ci95": [
+      -0.0818,
+      0.0569
+     ],
+     "win_rate_r_gt_0": 0.4451,
+     "stopped": 0.4776,
+     "tp3_hit": 0.0612
+    },
+    "spearman_score_vs_r": 0.0428,
+    "top_features": [
+     [
+      "rsi_14",
+      0.053
+     ],
+     [
+      "ret_60d",
+      0.0458
+     ],
+     [
+      "sector_healthcare",
+      0.0453
+     ],
+     [
+      "bollinger_pos",
+      0.0438
+     ],
+     [
+      "gap_pct",
+      0.0422
+     ],
+     [
+      "ret_20d",
+      0.0414
+     ]
+    ]
+   },
+   "price_plus_market_regime": {
+    "features": 38,
+    "auc_r_gt_0": 0.5307,
+    "auc_within_bullish": 0.5446,
+    "auc_within_bearish": 0.5244,
+    "mean_r_by_score_quintile_low_to_high": [
+     -0.1262,
+     -0.0543,
+     0.0003,
+     -0.0048,
+     -0.0461
+    ],
+    "mean_r_all_test": -0.0462,
+    "top_decile": {
+     "n": 19715,
+     "mean_r": -0.0575,
+     "ci95": [
+      -0.2,
+      0.0917
+     ],
+     "win_rate_r_gt_0": 0.437,
+     "stopped": 0.47,
+     "tp3_hit": 0.049
+    },
+    "spearman_score_vs_r": 0.0346,
+    "top_features": [
+     [
+      "is_bullish",
+      0.156
+     ],
+     [
+      "ret_20d",
+      0.0669
+     ],
+     [
+      "b50",
+      0.0597
+     ],
+     [
+      "b200",
+      0.0587
+     ],
+     [
+      "idx_ret20",
+      0.0531
+     ],
+     [
+      "b50_chg10",
+      0.0528
+     ]
+    ]
+   },
+   "no_volume_features": {
+    "features": 30,
+    "auc_r_gt_0": 0.5227,
+    "auc_within_bullish": 0.5169,
+    "auc_within_bearish": 0.5144,
+    "mean_r_by_score_quintile_low_to_high": [
+     -0.1296,
+     -0.0693,
+     -0.0135,
+     0.0006,
+     -0.0194
+    ],
+    "mean_r_all_test": -0.0462,
+    "top_decile": {
+     "n": 19715,
+     "mean_r": -0.0118,
+     "ci95": [
+      -0.0816,
+      0.0557
+     ],
+     "win_rate_r_gt_0": 0.4467,
+     "stopped": 0.4734,
+     "tp3_hit": 0.0575
+    },
+    "spearman_score_vs_r": 0.0418,
+    "top_features": [
+     [
+      "rsi_14",
+      0.0553
+     ],
+     [
+      "ret_60d",
+      0.0513
+     ],
+     [
+      "sector_healthcare",
+      0.0485
+     ],
+     [
+      "gap_pct",
+      0.0444
+     ],
+     [
+      "bollinger_pos",
+      0.0436
+     ],
+     [
+      "sma10_vs_20",
+      0.0421
+     ]
+    ]
+   }
+  },
+  "simple_rankers_test_period": {
+   "low_atr_pct": {
+    "mean_r_by_quintile_low_to_high": [
+     -0.0938,
+     -0.0184,
+     -0.0542,
+     -0.055,
+     -0.0098
+    ],
+    "spearman": 0.0095
+   },
+   "near_52w_high_bullish_far_bearish": {
+    "mean_r_by_quintile_low_to_high": [
+     0.0243,
+     0.0685,
+     -0.0113,
+     -0.1664,
+     -0.1499
+    ],
+    "spearman": -0.0646
+   },
+   "strong_ret_60d_in_direction": {
+    "mean_r_by_quintile_low_to_high": [
+     -0.063,
+     -0.0425,
+     -0.0357,
+     -0.0521,
+     -0.0378
+    ],
+    "spearman": 0.0035
+   },
+   "tight_channel_squeeze": {
+    "mean_r_by_quintile_low_to_high": [
+     -0.1099,
+     -0.0708,
+     -0.0504,
+     -0.0223,
+     0.0222
+    ],
+    "spearman": 0.0327
+   }
+  }
+ }
+}

@@ -1,6 +1,6 @@
 # File: backend/routers/lab_reports.py
 """
-Quant Lab reports API - internal, authenticated, READ-ONLY. Serves the versioned research artifacts in data/lab_reports (see services/lab_reports_service.py).
+Quant Lab reports API - internal, authenticated, READ-ONLY. Serves the versioned research artifacts in backend/lab_reports (see services/lab_reports_service.py).
 Nothing here reads or writes the database and nothing influences screening, scoring or any live signal.
 """
 from fastapi import APIRouter, Depends, HTTPException

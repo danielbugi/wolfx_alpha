@@ -1,6 +1,6 @@
 # File: backend/services/lab_reports_service.py
 """
-Quant Lab reports - read-only serving of versioned research artifacts (backend/data/lab_reports/*.json, produced offline by
+Quant Lab reports - read-only serving of versioned research artifacts (backend/lab_reports/*.json, produced offline by
 ml_training/experiments/build_lab_reports.py from evidence files). No database, no network, no write path.
 
 Every report must carry its provenance and its caveats and be marked research-only; a file that does not is reported as invalid and never
@@ -11,7 +11,7 @@ import os
 import re
 from typing import Any, Dict, List, Optional
 
-DEFAULT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "lab_reports")
+DEFAULT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lab_reports")
 ID_RE = re.compile(r"^[a-z0-9_]{1,64}$")
 REQUIRED = ("schema", "id", "kind", "title", "headline", "generated_at", "code_ref", "status", "use", "caveats", "provenance", "data")
 KINDS = ("strategy_lab", "ml", "catalyst")
