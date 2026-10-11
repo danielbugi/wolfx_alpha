@@ -142,9 +142,22 @@ export interface StockChartProps {
   /** The active signal's plan, drawn as price lines by the "Trade plan" toggle (no toggle without one). */
   plan?: { entry_price: number; stop_loss_price: number; tp1: number; tp2: number; tp3: number } | null;
   height?: number;
+  /** Decimals for prices on the axis and in the readout (e.g. 4 for EUR/USD); 2 for stocks. */
+  precision?: number;
 }
 
-export default function StockChart({ bars, earnings = [], breakouts = [], plan = null, height = 420 }: StockChartProps) {
+// Stable defaults: a fresh `[]` per render would re-run the effects keyed on these props on every render.
+const NO_EARNINGS: EarningsDateEntry[] = [];
+const NO_BREAKOUTS: BreakoutHistoryEntry[] = [];
+
+export default function StockChart({
+  bars,
+  earnings = NO_EARNINGS,
+  breakouts = NO_BREAKOUTS,
+  plan = null,
+  height = 420,
+  precision = 2,
+}: StockChartProps) {
   const theme = useResolvedTheme();
   const [interval, setCandleInterval] = useState<Interval>('daily');
   const [range, setRange] = useState(DEFAULT_RANGE.daily);
@@ -154,8 +167,8 @@ export default function StockChart({ bars, earnings = [], breakouts = [], plan =
 
   const candles = useMemo(() => {
     const agg = aggregateBars(bars.filter((b) => b.close != null), interval);
-    // Daily keeps the pipeline's stored channel; weekly/monthly get it recomputed on their own candles.
-    return interval === 'daily' ? agg : withDonchian(agg, 20);
+    // Daily keeps the pipeline's stored channel (when the bars carry one); otherwise it's computed on the candles shown.
+    return interval === 'daily' && agg.some((b) => b.donchian_high_20 != null) ? agg : withDonchian(agg, 20);
   }, [bars, interval]);
 
   const calc = useMemo(() => {
@@ -309,6 +322,12 @@ export default function StockChart({ bars, earnings = [], breakouts = [], plan =
     series.current.dcHigh?.applyOptions({ color: t.donchian });
     series.current.dcLow?.applyOptions({ color: t.donchian });
   }, [theme, showRsi, showMacd]);
+
+  useEffect(() => {
+    const priceFormat = { type: 'price' as const, precision, minMove: 1 / 10 ** precision };
+    const { candles: cs, sma20, sma50, sma200, bbUpper, bbMid, bbLower, dcHigh, dcLow } = series.current;
+    for (const s of [cs, sma20, sma50, sma200, bbUpper, bbMid, bbLower, dcHigh, dcLow]) s?.applyOptions({ priceFormat });
+  }, [precision]);
 
   // Only the bottom-most chart shows dates, so the stack reads as one chart.
   useEffect(() => {
@@ -519,7 +538,7 @@ export default function StockChart({ bars, earnings = [], breakouts = [], plan =
         )}
         <div className="mx-1 hidden h-6 w-px bg-slate-200 sm:block" />
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Indicators">
-          {OVERLAYS.filter((o) => o.key !== 'plan' || plan).map((o) => {
+          {OVERLAYS.filter((o) => (o.key !== 'plan' || plan) && (o.key !== 'breakouts' || breakouts.length > 0)).map((o) => {
             const active = overlays.has(o.key);
             return (
               <button
@@ -562,15 +581,15 @@ export default function StockChart({ bars, earnings = [], breakouts = [], plan =
         {c && (
           <>
             <span className="font-medium text-slate-700">{c.date}</span>
-            <span>O {fmt(c.open)}</span>
-            <span>H {fmt(c.high)}</span>
-            <span>L {fmt(c.low)}</span>
-            <span>C {fmt(c.close)}</span>
+            <span>O {fmt(c.open, precision)}</span>
+            <span>H {fmt(c.high, precision)}</span>
+            <span>L {fmt(c.low, precision)}</span>
+            <span>C {fmt(c.close, precision)}</span>
             {change != null && <span className={change >= 0 ? 'text-emerald-600' : 'text-red-600'}>{change >= 0 ? '+' : ''}{change.toFixed(2)}%</span>}
-            {overlays.has('sma20') && <span style={{ color: '#0a84ff' }}>SMA20 {fmt(calc.sma20[idx])}</span>}
-            {overlays.has('sma50') && <span style={{ color: '#ff9f0a' }}>SMA50 {fmt(calc.sma50[idx])}</span>}
-            {overlays.has('sma200') && <span style={{ color: '#bf5af2' }}>SMA200 {fmt(calc.sma200[idx])}</span>}
-            {overlays.has('donchian') && <span>Donchian {fmt(c.donchian_low_20)} – {fmt(c.donchian_high_20)}</span>}
+            {overlays.has('sma20') && <span style={{ color: '#0a84ff' }}>SMA20 {fmt(calc.sma20[idx], precision)}</span>}
+            {overlays.has('sma50') && <span style={{ color: '#ff9f0a' }}>SMA50 {fmt(calc.sma50[idx], precision)}</span>}
+            {overlays.has('sma200') && <span style={{ color: '#bf5af2' }}>SMA200 {fmt(calc.sma200[idx], precision)}</span>}
+            {overlays.has('donchian') && <span>Donchian {fmt(c.donchian_low_20, precision)} – {fmt(c.donchian_high_20, precision)}</span>}
           </>
         )}
       </div>
@@ -622,10 +641,12 @@ export default function StockChart({ bars, earnings = [], breakouts = [], plan =
       </div>
 
       <div className="flex flex-wrap gap-x-4 gap-y-1 px-5 pb-1 pt-2 text-[11px] text-slate-500">
-        <span>
-          <span className="font-semibold text-violet-600">E</span> earnings (bottom of chart; filled = next report)
-        </span>
-        {overlays.has('breakouts') && (
+        {earnings.length > 0 && (
+          <span>
+            <span className="font-semibold text-violet-600">E</span> earnings (bottom of chart; filled = next report)
+          </span>
+        )}
+        {overlays.has('breakouts') && breakouts.length > 0 && (
           <span>
             <span className="font-semibold" style={{ color: t.up }}>B</span>/<span className="font-semibold" style={{ color: t.down }}>B</span>/
             <span className="font-semibold text-slate-400">B</span> past breakout signal: worked / failed / pending
