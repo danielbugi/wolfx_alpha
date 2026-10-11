@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { sectorHref } from '@/lib/sectors';
 import { Card, CardBody, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip } from '@nextui-org/react';
 import { ExclamationTriangleIcon, StarIcon as StarSolid } from '@heroicons/react/20/solid';
 import { StarIcon as StarOutline } from '@heroicons/react/24/outline';
@@ -495,7 +496,13 @@ export default function StockDetailPage() {
                 )}
               </div>
               <p className="mt-0.5 truncate text-sm text-slate-500">
-                {snap.sector || 'Unknown sector'}
+                {sectorHref(snap.sector) ? (
+                  <Link href={sectorHref(snap.sector)!} className="hover:text-accent hover:underline">
+                    {snap.sector}
+                  </Link>
+                ) : (
+                  snap.sector || 'Unknown sector'
+                )}
                 {snap.industry ? ` · ${snap.industry}` : ''}
                 {asOfDate ? ` · data as of ${asOfDate}` : ''}
               </p>

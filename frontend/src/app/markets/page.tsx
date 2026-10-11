@@ -69,7 +69,7 @@ function Row({ inst, asOf }: { inst: Instrument; asOf: string | null }) {
 /**
  * Every macro market the pipeline tracks, by group: indices, index futures, metals, energy, agriculture, currencies,
  * crypto, rates & volatility. Daily closes; changes are over calendar windows ("—" where history doesn't reach).
- * Instruments the pipeline hasn't fetched yet are named as pending, never shown with numbers.
+ * Only instruments the pipeline stores are listed.
  */
 export default function MarketsPage() {
   const [data, setData] = useState<InstrumentsResponse | null>(null);
@@ -91,7 +91,10 @@ export default function MarketsPage() {
     () => data?.instruments.reduce<string | null>((m, i) => (i.latest_date && (!m || i.latest_date > m) ? i.latest_date : m), null) ?? null,
     [data],
   );
-  const groups = (data?.groups ?? []).filter((g) => group === 'all' || g.key === group);
+  // Only what the pipeline stores: instruments without history (and groups left empty) aren't shown at all.
+  const live = data?.instruments.filter((i) => i.has_data) ?? [];
+  const liveGroups = (data?.groups ?? []).filter((g) => live.some((i) => i.group === g.key));
+  const groups = liveGroups.filter((g) => group === 'all' || g.key === group);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -110,7 +113,7 @@ export default function MarketsPage() {
               aria-label="Market group"
               value={group}
               onChange={setGroup}
-              options={[{ value: 'all', label: 'All' }, ...data.groups.map((g) => ({ value: g.key, label: g.label }))]}
+              options={[{ value: 'all', label: 'All' }, ...liveGroups.map((g) => ({ value: g.key, label: g.label }))]}
             />
           </div>
         )}
@@ -128,10 +131,7 @@ export default function MarketsPage() {
         ) : (
           <div className="space-y-4">
             {groups.map((g) => {
-              const items = data.instruments.filter((i) => i.group === g.key);
-              const live = items.filter((i) => i.has_data);
-              const pending = items.filter((i) => !i.has_data);
-              if (items.length === 0) return null;
+              const items = live.filter((i) => i.group === g.key);
               return (
                 <Card key={g.key} className="overflow-hidden border border-black/[0.05] shadow-sm">
                   <div className="grid grid-cols-[minmax(0,1fr)_auto_4.5rem] items-end gap-x-4 border-b border-black/[0.06] px-5 pb-2 pt-4 md:grid-cols-[minmax(0,1fr)_8.5rem_repeat(6,4.5rem)_6rem]">
@@ -145,15 +145,10 @@ export default function MarketsPage() {
                     <span className="hidden text-right text-[11px] font-medium text-slate-400 md:block">30 sessions</span>
                   </div>
                   <div className="divide-y divide-black/[0.05]">
-                    {live.map((inst) => (
+                    {items.map((inst) => (
                       <Row key={inst.symbol} inst={inst} asOf={asOf} />
                     ))}
                   </div>
-                  {pending.length > 0 && (
-                    <p className={clsx('px-5 py-3 text-[12px] text-slate-400', live.length > 0 && 'border-t border-black/[0.05]')}>
-                      {pending.map((i) => i.name).join(', ')} {pending.length === 1 ? 'appears' : 'appear'} after the next data update.
-                    </p>
-                  )}
                 </Card>
               );
             })}

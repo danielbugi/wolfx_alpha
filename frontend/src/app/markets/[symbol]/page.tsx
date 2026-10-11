@@ -134,7 +134,7 @@ export default function InstrumentPage() {
 
             {bars.length === 0 ? (
               <Card className="border border-black/[0.05] shadow-sm">
-                <CardBody className="py-10 text-center text-sm text-slate-500">No price history yet: it appears after the next data update.</CardBody>
+                <CardBody className="py-10 text-center text-sm text-slate-500">No price history stored for this market.</CardBody>
               </Card>
             ) : (
               <>

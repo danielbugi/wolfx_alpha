@@ -10,6 +10,7 @@ import {
   HeartIcon,
   PaperAirplaneIcon,
   PresentationChartLineIcon,
+  RectangleGroupIcon,
   Squares2X2Icon,
   UsersIcon,
 } from '@heroicons/react/24/outline';
@@ -37,6 +38,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { name: 'Dashboard', href: '/', icon: Squares2X2Icon, description: 'Overview & breakouts' },
       { name: 'Markets', href: '/markets', icon: GlobeAltIcon, description: 'Futures, commodities, currencies, crypto' },
+      { name: 'Sectors', href: '/sectors', icon: RectangleGroupIcon, description: 'Sector & industry performance' },
       { name: 'Screener', href: '/screener', icon: FunnelIcon, description: 'Search & filter the universe' },
       { name: 'Position Plans', href: '/strategy', icon: ChartBarIcon, description: 'Ranked position plans' },
       { name: 'Strategies', href: '/strategies', icon: PresentationChartLineIcon, description: 'Strategy intelligence: outcomes, signals, data health' },
