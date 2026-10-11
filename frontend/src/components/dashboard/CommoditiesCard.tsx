@@ -16,14 +16,6 @@ const GROUP: Record<string, 'Metals' | 'Energy'> = {
   'CL=F': 'Energy',
   'NG=F': 'Energy',
 };
-const NAMES: Record<string, string> = {
-  'GC=F': 'Gold',
-  'SI=F': 'Silver',
-  'HG=F': 'Copper',
-  'PL=F': 'Platinum',
-  'CL=F': 'Crude oil',
-  'NG=F': 'Natural gas',
-};
 const UNITS: Record<string, string> = {
   'GC=F': '/oz',
   'SI=F': '/oz',
@@ -52,12 +44,11 @@ function pct(v: number | null) {
 
 /**
  * Metals and energy futures: last price, 1-day change, change over the sparkline window (last ~30 sessions) and a
- * mini chart. Symbols the pipeline hasn't loaded yet are listed as pending rather than shown with made-up values.
+ * mini chart. Only the futures the pipeline actually stores are shown.
  */
 export default function CommoditiesCard({ indices, loading }: { indices: MarketIndexEntry[]; loading: boolean }) {
   const bySymbol = new Map(indices.map((i) => [i.symbol, i]));
   const rows = COMMODITY_SYMBOLS.map((s) => bySymbol.get(s)).filter((r): r is MarketIndexEntry => !!r);
-  const pending = COMMODITY_SYMBOLS.filter((s) => !bySymbol.has(s));
 
   return (
     <Card className="h-full border border-black/[0.05] shadow-sm">
@@ -106,11 +97,6 @@ export default function CommoditiesCard({ indices, loading }: { indices: MarketI
               );
             })}
           </ul>
-        )}
-        {pending.length > 0 && rows.length > 0 && (
-          <p className="mt-2 text-[11px] text-slate-400">
-            {pending.map((s) => NAMES[s]).join(', ')} will appear after the next data update.
-          </p>
         )}
       </CardBody>
     </Card>

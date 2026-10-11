@@ -23,6 +23,8 @@ import WatchlistCard from '@/components/dashboard/WatchlistCard';
 import SummaryTiles from '@/components/dashboard/SummaryTiles';
 import CommoditiesCard, { COMMODITY_SYMBOLS } from '@/components/dashboard/CommoditiesCard';
 import SegmentedControl from '@/components/ui/SegmentedControl';
+import Link from 'next/link';
+import { sectorHref } from '@/lib/sectors';
 import { ResolvedTheme, useResolvedTheme } from '@/lib/theme';
 
 function timeAgo(date: Date | null): string {
@@ -402,6 +404,12 @@ export default function DashboardPage() {
                       ? 'Sector Performance — box size = # stocks, color = avg change. Click a sector to filter the Momentum Board below.'
                       : 'Sector Performance — 90-day cumulative return. Click a sector below to isolate it and filter the Momentum Board.'}
                   </p>
+                  <Link
+                    href={sectorHref(selectedSector) ?? '/sectors'}
+                    className="ml-3 shrink-0 whitespace-nowrap text-[13px] font-medium text-accent hover:underline"
+                  >
+                    {sectorHref(selectedSector) ? `${selectedSector} page →` : 'All sectors →'}
+                  </Link>
                   {selectedSector && (
                     <Chip
                       size="sm"

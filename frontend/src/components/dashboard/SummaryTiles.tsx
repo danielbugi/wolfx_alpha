@@ -3,6 +3,8 @@
 import React from 'react';
 import { Card, CardBody } from '@nextui-org/react';
 import { clsx } from 'clsx';
+import Link from 'next/link';
+import { sectorHref } from '@/lib/sectors';
 import type { MarketIndexEntry, MarketOverview } from '@/services/api';
 
 const UNKNOWN = '—';
@@ -23,6 +25,18 @@ function Tile({ label, children, foot }: { label: string; children: React.ReactN
         {foot && <div className="mt-1.5 text-xs text-slate-400">{foot}</div>}
       </CardBody>
     </Card>
+  );
+}
+
+/** A sector name that opens its sector page (plain text for the "Unknown" bucket). */
+function SectorName({ sector, className }: { sector: string; className?: string }) {
+  const href = sectorHref(sector);
+  return href ? (
+    <Link href={href} className={className}>
+      {sector}
+    </Link>
+  ) : (
+    <>{sector}</>
   );
 }
 
@@ -90,11 +104,22 @@ export default function SummaryTiles({
         )}
       </Tile>
 
-      <Tile label="Sectors today" foot={worst ? <>Weakest: {worst.sector} <span className="tabular-nums text-red-500">{pct(worst.avg_performance)}</span></> : undefined}>
+      <Tile
+        label="Sectors today"
+        foot={
+          worst ? (
+            <>
+              Weakest:{' '}
+              <SectorName sector={worst.sector} className="hover:text-accent hover:underline" />{' '}
+              <span className="tabular-nums text-red-500">{pct(worst.avg_performance)}</span>
+            </>
+          ) : undefined
+        }
+      >
         {best ? (
           <>
             <p className="truncate text-[19px] font-semibold leading-tight text-slate-900" title={best.sector}>
-              {best.sector}
+              <SectorName sector={best.sector} className="hover:text-accent" />
             </p>
             <p className={clsx('text-sm font-semibold tabular-nums', best.avg_performance >= 0 ? 'text-emerald-600' : 'text-red-600')}>
               {pct(best.avg_performance)} · strongest
