@@ -297,6 +297,18 @@ def test_a_straggler_covered_by_a_later_scan_keeps_verdict_b_ready(world):
     assert info.endswith("=1 symbols=S9999")                                                                              # still reported, as information
 
 
+def test_verdict_a_for_a_later_session_does_not_fail_on_the_earlier_captured_session(world):
+    """From the second captured night on, observations of EARLIER sessions are expected: the check must only reject another strategy or a LATER session."""
+    strat, p = build(world)
+    later = params(world, 1, strat_id=strat.id)                                   # the session after the captured one, same boundary (session 0)
+    later["LEGACY_STAMP_MD5"] = p["LEGACY_STAMP_MD5"]
+    a = lines(run_sql(world, "assert_forward_research.sql", later), "A")
+    key = "only_the_enabled_strategy_and_session_were_captured"
+    assert status(a[key]) == "PASS", a[key]
+    on_own = lines(run_sql(world, "assert_forward_research.sql", p), "A")
+    assert status(on_own[key]) == "PASS"
+
+
 # ---------------------------------------------------------------------------------------------------- candidate guard semantics
 def test_a_rejected_candidate_that_is_tracked_or_ledgered_or_a_near_miss_that_is_tracked_fails(world):
     strat, p = build(world)

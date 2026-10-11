@@ -72,41 +72,36 @@ if [ "$SELFTEST" != 1 ]; then
 fi
 # ---- POST-ACTIVATION block (R13_POST=1): the FIRST scheduled collector execution for the session, read-only
 if [ "${R13_POST:-0}" = 1 ]; then
-  say "== COLLECTOR EXECUTION (post-activation)"
+  say "== COLLECTOR EXECUTION (post-activation), target session $SESSION"
   CLOG=$BASE/logs/forward_collection_runs.log
+  HIST="${R13_HIST_SESSION:-2026-10-09}"
   for p in Result ExecMainStatus ExecMainStartTimestamp ExecMainExitTimestamp; do say "COLLSVC|$p=$(systemctl show donchian-forward-collection.service -p $p --value)"; done
   say "COLLSVC|timer=$(systemctl is-enabled donchian-forward-collection.timer)/$(systemctl is-active donchian-forward-collection.timer) armed=$([ -e $BASE/FORWARD_COLLECTION_ARMED ] && cat $BASE/FORWARD_COLLECTION_ARMED || echo absent)"
-  tail -n 6 "$CLOG" 2>/dev/null | cut -c1-200 | sed 's/^/COLLLOG|/'
-  RJ=$(python3 - "$CLOG" "$SESSION" <<'PY'
-import json, sys
-t = open(sys.argv[1], encoding="utf-8", errors="replace").read()
-best = None
-i = t.find('{"applied"')
-while i != -1:
-    try:
-        dec, end = json.JSONDecoder().raw_decode(t[i:])
-        if dec.get("session") == sys.argv[2]:
-            best = dec
-        i = t.find('{"applied"', i + end)
-    except ValueError:
-        i = t.find('{"applied"', i + 1)
-if best:
-    st = {s["name"]: s["outcome"] for s in best["steps"]}
-    print("%s|%s|%s|%s" % (best["verdict"], best["applied"], st.get("observe", "?"), st.get("verify", "?")))
-else:
-    print("none|?|?|?")
-PY
-)
-  IFS='|' read -r CV CA CO CVF <<< "$RJ"; say "COLLRESULT|verdict=$CV applied=$CA observe=$CO verify=$CVF"
-  [ "$CV" = COMPLETE ] && [ "$CA" = True ] && ev first_collector_execution_verdict_complete PASS "observe=$CO verify=$CVF" || ev first_collector_execution_verdict_complete FAIL "verdict=$CV observe=$CO verify=$CVF"
-  CST=$(systemctl show donchian-forward-collection.service -p ExecMainStartTimestamp --value)
-  case "$(systemctl show donchian-forward-collection.service -p ExecMainStatus --value)" in 0|3) [ -n "$CST" ] && ev collector_service_ran_and_exited_0_or_3 PASS "$CST" || ev collector_service_ran_and_exited_0_or_3 FAIL "never started" ;; *) ev collector_service_ran_and_exited_0_or_3 FAIL ;; esac
-  if [ -s "$CLOG" ] && ! grep -qE "forward-collection finished: exit (2|4|5)" "$CLOG"; then ev no_incomplete_missed_or_refused_exit_in_the_collector_log PASS; else ev no_incomplete_missed_or_refused_exit_in_the_collector_log FAIL "$(grep -E 'finished: exit (2|4|5)' $CLOG 2>/dev/null | tail -1 | cut -c1-100) (an empty or absent log is also a failure)"; fi
-  SN=$(qro -c "select (select count(*) from universe_snapshot where session_date='$SESSION' and provenance='observed')||'|'||(select count(*) from market_snapshot where session_date='$SESSION' and provenance='observed')||'|'||(select count(*) from sector_snapshot where session_date='$SESSION' and provenance='observed')||'|'||(select count(*) from stock_relative_strength where session_date='$SESSION' and provenance='observed')||'|'||(select n_symbols from universe_snapshot where session_date='$SESSION' and provenance='observed')")
+  RUNS=$(python3 "$DIR/r13_runs.py" "$CLOG" "$SESSION"); echo "$RUNS" | sed 's/^/COLLRUN|/'
+  NT=$(echo "$RUNS" | sed -n 's/^TARGET_COUNT=//p'); FIRST=$(echo "$RUNS" | sed -n 's/^FIRST=//p'); LATER=$(echo "$RUNS" | sed -n 's/^LATER=//p')
+  IFS='|' read -r F_START F_EXIT F_VERDICT F_OBS <<< "$FIRST"
+  if [ "${NT:-0}" -ge 1 ] && [ "$F_EXIT" = 0 ] && [ "$F_VERDICT" = COMPLETE ] && [ "$F_OBS" = ok ]; then ev first_collector_run_for_the_session_exit_0_complete_and_it_created_the_snapshot PASS "start=$F_START"; else ev first_collector_run_for_the_session_exit_0_complete_and_it_created_the_snapshot FAIL "runs=$NT first=$FIRST"; fi
+  if [ -z "$LATER" ]; then ev recovery_run_is_complete_and_idempotent REVIEW "no later run for the session yet"
+  else
+    bad=0
+    while IFS='|' read -r L_START L_EXIT L_VERDICT L_OBS; do [ -n "$L_START" ] || continue; { [ "$L_EXIT" = 0 ] && [ "$L_VERDICT" = COMPLETE ] && [ "$L_OBS" = already_present ]; } || bad=1; done <<< "$LATER"
+    if [ $bad = 0 ]; then ev recovery_run_is_complete_and_idempotent PASS "later runs: $(echo "$LATER" | wc -l), observe=already_present"; else ev recovery_run_is_complete_and_idempotent FAIL "$LATER"; fi
+    SECOND=$(echo "$LATER" | head -1 | cut -d'|' -f1)
+    LAST_WRITE=$(qro -c "select max(t) < timestamptz '$SECOND' from (select captured_at t from universe_snapshot where session_date='$SESSION' and provenance='observed' union all select captured_at from market_snapshot where session_date='$SESSION' and provenance='observed' union all select captured_at from sector_snapshot where session_date='$SESSION' and provenance='observed' union all select created_at from stock_relative_strength where session_date='$SESSION' and provenance='observed') q")
+    if [ "$LAST_WRITE" = t ]; then ev recovery_run_wrote_nothing_all_evidence_stamps_predate_it PASS "recovery start=$SECOND"; else ev recovery_run_wrote_nothing_all_evidence_stamps_predate_it FAIL "$LAST_WRITE"; fi
+  fi
+  OTHERS=$(echo "$RUNS" | grep '^OTHER=' | cut -d= -f2- | tr '\n' ';'); say "COLLRUN|earlier_runs_for_other_sessions=${OTHERS:-none} (expected: the expired session $HIST was refused as missed, exit 4)"
+  HS=$(qro -c "select (select count(*) from universe_snapshot where session_date='$HIST' and provenance='observed')+(select count(*) from market_snapshot where session_date='$HIST' and provenance='observed')+(select count(*) from sector_snapshot where session_date='$HIST' and provenance='observed')+(select count(*) from stock_relative_strength where session_date='$HIST' and provenance='observed')")
+  if [ "$HS" = 0 ]; then ev expired_session_has_no_snapshot_written PASS "$HIST"; else ev expired_session_has_no_snapshot_written FAIL "$HIST rows=$HS"; fi
+  case "$(systemctl show donchian-forward-collection.service -p ExecMainStatus --value)" in 0|3) ev last_collector_service_exit_0_or_3 PASS ;; *) ev last_collector_service_exit_0_or_3 FAIL "$(systemctl show donchian-forward-collection.service -p ExecMainStatus --value)" ;; esac
+  SN=$(qro -c "select (select count(*) from universe_snapshot where session_date='$SESSION' and provenance='observed')||'|'||(select count(*) from market_snapshot where session_date='$SESSION' and provenance='observed')||'|'||(select count(*) from sector_snapshot where session_date='$SESSION' and provenance='observed')||'|'||(select count(*) from stock_relative_strength where session_date='$SESSION' and provenance='observed')||'|'||coalesce((select n_symbols from universe_snapshot where session_date='$SESSION' and provenance='observed'),0)")
   IFS='|' read -r NU NM NS NR NN <<< "$SN"; say "SNAPSHOT|universe=$NU market=$NM sectors=$NS rs_rows=$NR n_symbols=$NN"
-  [ "$NU" = 1 ] && [ "$NM" = 1 ] && [ "${NS:-0}" -gt 0 ] && [ -n "${NN:-}" ] && [ "$NR" = "$((NN * 3))" ] && ev committed_snapshot_complete_one_universe_one_market_sectors_and_3_horizons_of_rs PASS "$SN" || ev committed_snapshot_complete_one_universe_one_market_sectors_and_3_horizons_of_rs FAIL "$SN"
-  WIN=$(qro -c "select bool_and(t >= (date '$SESSION' + time '13:00') at time zone 'America/New_York' and t < (date '$SESSION' + 1 + time '12:00') at time zone 'America/New_York') from (select captured_at t from universe_snapshot where session_date='$SESSION' and provenance='observed' union all select captured_at from market_snapshot where session_date='$SESSION' and provenance='observed' union all select created_at from stock_relative_strength where session_date='$SESSION' and provenance='observed') q")
-  [ "$WIN" = t ] && ev snapshot_stamped_by_the_database_inside_the_allowed_window PASS || ev snapshot_stamped_by_the_database_inside_the_allowed_window FAIL "$WIN"
+  if [ "$NU" = 1 ] && [ "$NM" = 1 ] && [ "${NS:-0}" -gt 0 ] && [ "${NN:-0}" -gt 0 ] && [ "$NR" = "$((NN * 3))" ]; then ev committed_snapshot_complete_one_universe_one_market_sectors_and_3_horizons_of_rs PASS "$SN"; else ev committed_snapshot_complete_one_universe_one_market_sectors_and_3_horizons_of_rs FAIL "$SN"; fi
+  WIN=$(qro -c "select bool_and(t >= (date '$SESSION' + time '13:00') at time zone 'America/New_York' and t < (date '$SESSION' + 1 + time '12:00') at time zone 'America/New_York') from (select captured_at t from universe_snapshot where session_date='$SESSION' and provenance='observed' union all select captured_at from market_snapshot where session_date='$SESSION' and provenance='observed' union all select captured_at from sector_snapshot where session_date='$SESSION' and provenance='observed' union all select created_at from stock_relative_strength where session_date='$SESSION' and provenance='observed') q")
+  if [ "$WIN" = t ]; then ev snapshot_stamped_by_the_database_inside_the_allowed_window PASS; else ev snapshot_stamped_by_the_database_inside_the_allowed_window FAIL "$WIN"; fi
+  LIN=$(qro -c "select (select count(*) from market_snapshot m join universe_snapshot u on u.id = m.universe_snapshot_id where m.session_date='$SESSION' and m.provenance='observed' and u.session_date = m.session_date)||'|'||(select count(*) from sector_snapshot s join market_snapshot m on m.id = s.market_snapshot_id where m.session_date='$SESSION' and s.session_date = m.session_date)||'|'||(select count(*) from sector_snapshot where session_date='$SESSION' and provenance='observed')")
+  IFS='|' read -r LM LS LT <<< "$LIN"
+  if [ "$LM" = 1 ] && [ "$LS" = "$LT" ] && [ "${LT:-0}" -gt 0 ]; then ev snapshot_lineage_market_points_at_the_universe_and_every_sector_row_at_the_market PASS "$LIN"; else ev snapshot_lineage_market_points_at_the_universe_and_every_sector_row_at_the_market FAIL "$LIN"; fi
 fi
 if [ "${R13_POST:-0}" != 1 ]; then ev collector_still_disabled_and_unarmed "$( [ "$(systemctl is-enabled donchian-forward-collection.timer)" = disabled ] && [ "$(systemctl is-active donchian-forward-collection.timer)" = inactive ] && [ ! -e $BASE/FORWARD_COLLECTION_ARMED ] && echo PASS || echo FAIL )"; fi
 ev bot_and_backend_images_unchanged "$( [ "$(docker inspect -f '{{.Config.Image}}' donchian-screener-bot-1)" = ghcr.io/danielbugi/wolfx_alpha-mechanism:e3feb64d3e86 ] && [ "$(docker inspect -f '{{.Config.Image}}' donchian-screener-backend-1)" = ghcr.io/danielbugi/wolfx_alpha-backend:963ab19318b7 ] && echo PASS || echo FAIL )"
@@ -114,7 +109,7 @@ say "EVID_VERDICT|$([ $EV_FAIL = 0 ] && echo PASS || echo FAIL)"
 
 say "== CORRECTED CHECKPOINT (Verdict A and Verdict B, separate)"
 export CHECKPOINT_SESSION="$SESSION" CHECKPOINT_PIN="$PIN" CHECKPOINT_DIR="$DIR" CHECKPOINT_OUT="$OUT/checkpoint" CHECKPOINT_PG="$PG" \
-  CHECKPOINT_PIPELINE_START="${CHECKPOINT_PIPELINE_START:-2026-10-09T20:00:00Z}" CHECKPOINT_FLAG_TIME="2026-10-08 08:55:00+00" CHECKPOINT_BOUNDARY="$SESSION" CHECKPOINT_STRATEGY_ID=1 \
+  CHECKPOINT_PIPELINE_START="${CHECKPOINT_PIPELINE_START:-2026-10-09T20:00:00Z}" CHECKPOINT_FLAG_TIME="2026-10-08 08:55:00+00" CHECKPOINT_BOUNDARY="${R13_BOUNDARY:-2026-10-09}" CHECKPOINT_STRATEGY_ID=1 \
   CHECKPOINT_LEGACY_COUNT=1040 CHECKPOINT_LEGACY_STAMP_MD5=4fd34882fe0914910b7736892bfb5732 CHECKPOINT_LEGACY_FROM="2026-10-08 03:08:00" CHECKPOINT_LEGACY_TO="2026-10-08 03:12:00" \
   CHECKPOINT_PRICE_WRITER_TZ=UTC CHECKPOINT_DEADLINE="${CHECKPOINT_DEADLINE:-}" CHECKPOINT_POLL_SECONDS=300 CHECKPOINT_SELFTEST="$SELFTEST" CHECKPOINT_PG_SINCE=
 bash "$DIR/checkpoint.sh"; CODE=$?

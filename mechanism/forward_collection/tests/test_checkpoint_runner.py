@@ -17,7 +17,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[3]
 OPS = REPO / "ops" / "checkpoint"
-BUNDLE = ("checkpoint.sh", "assert_forward_research.sql", "assert_collector_readiness.sql", "r13_confirm.sh")
+BUNDLE = ("checkpoint.sh", "assert_forward_research.sql", "assert_collector_readiness.sql", "r13_confirm.sh", "r13_runs.py")
 BASH = shutil.which("bash")
 PY3 = shutil.which("python3")
 
@@ -134,3 +134,25 @@ def test_the_confirmation_wrapper_executes_and_never_prints_contradictory_eviden
         assert re.search(r"^EVID\|first_collector_execution_verdict_complete\|FAIL", out, re.M)
         assert re.search(r"^EVID\|committed_snapshot_complete_[a-z0-9_]+\|FAIL", out, re.M)
     assert re.search(r"^EVID\|bot_and_backend_images_unchanged\|PASS", out, re.M)
+
+
+def test_the_run_log_parser_separates_the_expired_session_from_the_target_and_reads_the_recovery_run():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("r13_runs", OPS / "r13_runs.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    log = "\n".join([
+        '2026-10-12T03:45:07Z forward-collection starting (mechanism sha=5c511899505a)',
+        '{"applied": true, "session": "2026-10-09", "verdict": "MISSED", "steps": [{"name": "observe", "outcome": "refused"}]}',
+        '2026-10-12T03:45:10Z forward-collection finished: exit 4 (mechanism sha=5c511899505a)',
+        '2026-10-13T03:45:09Z forward-collection starting (mechanism sha=5c511899505a)',
+        '{"applied": true, "session": "2026-10-12", "verdict": "COMPLETE", "steps": [{"name": "capture_verify", "outcome": "already_present"}, {"name": "observe", "outcome": "ok"}]}',
+        '2026-10-13T03:46:30Z forward-collection finished: exit 0 (mechanism sha=5c511899505a)',
+        '2026-10-13T05:15:11Z forward-collection starting (mechanism sha=5c511899505a)',
+        '{"applied": true, "session": "2026-10-12", "verdict": "COMPLETE", "steps": [{"name": "observe", "outcome": "already_present"}]}',
+        '2026-10-13T05:15:20Z forward-collection finished: exit 0 (mechanism sha=5c511899505a)',
+    ])
+    runs = mod.parse(log)
+    assert [(r["session"], r["exit"], r["verdict"], r["observe"]) for r in runs] == [
+        ("2026-10-09", 4, "MISSED", "refused"), ("2026-10-12", 0, "COMPLETE", "ok"), ("2026-10-12", 0, "COMPLETE", "already_present")]
+    assert mod.parse("") == []
