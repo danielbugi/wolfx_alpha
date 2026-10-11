@@ -1,13 +1,13 @@
 {
  "generated_at": "2026-10-11",
- "code_ref": "24aa36f",
+ "code_ref": "pending",
  "status": "research_only",
  "use": "Research evidence only. Not a trading signal, not advice, and not used by the live signal path.",
  "schema": "lab_report_v1",
  "id": "research_insights",
  "kind": "strategy_lab",
  "title": "Research insights: what the evidence supports, and what it does not",
- "headline": "9 claims checked: 2 inconclusive, 4 not supported, 1 suggestive, 2 supported.",
+ "headline": "16 claims checked: 3 inconclusive, 7 not supported, 2 suggestive, 4 supported.",
  "caveats": [
   "Statuses are assigned by fixed rules from the intervals and counts in the other reports; they are not model opinions.",
   "'Supported' means the sample supports the sign of the effect, not that it is tradeable after costs.",
@@ -19,7 +19,8 @@
    "experiments.json",
    "ranker_stability.json",
    "exit_policy_study.json",
-   "catalyst_earnings_study.json"
+   "catalyst_earnings_study.json",
+   "sec_earnings_study.json"
   ]
  },
  "data": {
@@ -94,6 +95,62 @@
     "evidence": "+0.031 R after a surprise vs +0.037 R without",
     "reports": [
      "catalyst_earnings"
+    ]
+   },
+   {
+    "claim": "SEC-detected recurring operating improvements are followed by a larger price reaction than ordinary earnings",
+    "status": "supported",
+    "evidence": "reaction +2.22% (n=1,544) vs -0.51% without an anomaly (n=6,270); positive in 10 of 10 years",
+    "reports": [
+     "catalyst_sec_earnings"
+    ]
+   },
+   {
+    "claim": "A tradeable drift follows SEC-detected recurring operating improvements",
+    "status": "not_supported",
+    "evidence": "20-day drift after the reaction -0.10%, 95% CI -0.85% to +0.69%",
+    "reports": [
+     "catalyst_sec_earnings"
+    ]
+   },
+   {
+    "claim": "The market reacts less to net-income jumps without an operating move (suspected one-time) than to recurring operating improvements",
+    "status": "supported",
+    "evidence": "one-time suspected +0.73% (n=761) vs recurring +2.22%",
+    "reports": [
+     "catalyst_sec_earnings"
+    ]
+   },
+   {
+    "claim": "A recent recurring-operating catalyst improves a bullish Donchian breakout (fixed-3R exit, net of costs)",
+    "status": "inconclusive",
+    "evidence": "+0.155 R (n=1,194, CI -0.136 to +0.437) vs +0.085 R with no recent earnings (n=44,547)",
+    "reports": [
+     "catalyst_sec_earnings"
+    ]
+   },
+   {
+    "claim": "Within recurring-operating catalysts a different exit policy beats the fixed-3R exit",
+    "status": "not_supported",
+    "evidence": "best policy A_atr_stop_fixed_3R +0.155 R vs fixed 3R +0.155 R (intervals overlap)",
+    "reports": [
+     "catalyst_sec_earnings"
+    ]
+   },
+   {
+    "claim": "Financial-anomaly features predict how large the reaction will be beyond trailing volatility",
+    "status": "not_supported",
+    "evidence": "AUC 0.7016 vs trailing volatility alone 0.6986 (chronological test from 2022-02-15)",
+    "reports": [
+     "catalyst_sec_earnings"
+    ]
+   },
+   {
+    "claim": "Financial-anomaly features predict the direction of the reaction",
+    "status": "suggestive",
+    "evidence": "AUC 0.5629 vs best single-metric baseline 0.5456 (chronological test); modest lift on a coin-flip base rate 0.5064",
+    "reports": [
+     "catalyst_sec_earnings"
     ]
    }
   ]

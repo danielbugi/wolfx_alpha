@@ -29,7 +29,7 @@ def reports():
 
 
 def test_every_built_report_passes_the_serving_validator(reports):
-    assert set(reports) == {"strategy_baseline", "ranker_stability", "ml_evaluation", "exit_policies", "catalyst_earnings", "catalyst_radar_recent", "performance_attribution", "research_insights"}
+    assert set(reports) == {"strategy_baseline", "ranker_stability", "ml_evaluation", "exit_policies", "catalyst_earnings", "catalyst_radar_recent", "catalyst_sec_earnings", "performance_attribution", "research_insights"}
     for rid, r in reports.items():
         assert validate(r) == [], (rid, validate(r))
         assert r["status"] == "research_only" and r["caveats"] and r["headline"]
@@ -82,3 +82,23 @@ def test_every_headline_number_is_read_from_the_evidence(reports):
     assert f"{b['all']['n']:,}" in reports["strategy_baseline"]["headline"] and f"{b['bullish']['mean_r']:+.3f}" in reports["strategy_baseline"]["headline"]
     cat = _load("catalyst_earnings_study.json")
     assert f"{cat['design']['events']:,}" in reports["catalyst_earnings"]["headline"]
+
+
+def test_the_sec_claims_follow_the_sec_evidence(reports):
+    st = {c["claim"]: c["status"] for c in reports["research_insights"]["data"]["claims"]}
+    by = lambda text: next(v for k, v in st.items() if text in k)  # noqa: E731
+    assert by("larger price reaction than ordinary earnings") == "supported"
+    assert by("tradeable drift follows SEC-detected") == "not_supported"
+    assert by("reacts less to net-income jumps") == "supported"
+    assert by("recurring-operating catalyst improves") == "inconclusive"
+    assert by("different exit policy beats the fixed-3R exit") == "not_supported"
+    assert by("beyond trailing volatility") == "not_supported"
+    assert by("direction of the reaction") == "suggestive"
+
+
+def test_the_sec_report_carries_quality_and_a_payload_manifest(reports):
+    r = reports["catalyst_sec_earnings"]
+    q = r["data"]["quality"]
+    assert q["share_with_xbrl_facts"] > 0.8 and q["release_8k_matched_share"] > 0.9 and q["rejected_record_reasons"]
+    assert r["provenance"]["payload_manifest"]["payloads"] >= 900 and "sha256" in " ".join(r["provenance"]["evidence_files"] + ["sha256"])
+    assert any("reconstructed basis" in c for c in r["caveats"])

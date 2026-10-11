@@ -44,6 +44,13 @@
    "headline": "40 liquid events with surprise >= +25% in the last 40 days of data, each with its market-adjusted reaction so far."
   },
   {
+   "id": "catalyst_sec_earnings",
+   "file": "catalyst_sec_earnings.json",
+   "kind": "catalyst",
+   "title": "SEC earnings catalysts: anomalies from filings, decision time, reaction",
+   "headline": "9,614 earnings events from SEC filings: recurring operating improvements react +2.22% vs -0.51% without an anomaly; 20-day drift -0.10% (interval includes zero). Extraction: 86% of periodic filings carry usable facts; 97% of events matched to their 8-K 2.02 release."
+  },
+  {
    "id": "performance_attribution",
    "file": "performance_attribution.json",
    "kind": "strategy_lab",
@@ -55,7 +62,7 @@
    "file": "research_insights.json",
    "kind": "strategy_lab",
    "title": "Research insights: what the evidence supports, and what it does not",
-   "headline": "9 claims checked: 2 inconclusive, 4 not supported, 1 suggestive, 2 supported."
+   "headline": "16 claims checked: 3 inconclusive, 7 not supported, 2 suggestive, 4 supported."
   }
  ]
 }

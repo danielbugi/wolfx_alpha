@@ -79,7 +79,8 @@ def test_no_strategy_or_ml_path_imports_market_intelligence():
                 rel = os.path.relpath(os.path.join(base, f), ROOT).replace("\\", "/")
                 if re.search(r"^\s*(from|import)\s+market_intelligence", _src(os.path.join(base, f)), re.M):
                     offenders.append(rel)
-    allowed_prefixes = ("backend/routers/", "backend/services/", "mechanism/alerts/", "mechanism/forward_collection/")
+    # ml_training/experiments/ holds offline, read-only research runs (never imported by training or live scoring); the rest of ml_training stays barred.
+    allowed_prefixes = ("backend/routers/", "backend/services/", "mechanism/alerts/", "mechanism/forward_collection/", "ml_training/experiments/")
     bad = [o for o in offenders if not o.startswith(allowed_prefixes)]
     assert not bad, bad
-    assert not [o for o in offenders if o.startswith(("mechanism/screeners", "mechanism/research", "mechanism/ml_enhancement", "ml_training"))]
+    assert not [o for o in offenders if o.startswith(("mechanism/screeners", "mechanism/research", "mechanism/ml_enhancement")) or (o.startswith("ml_training") and not o.startswith("ml_training/experiments/"))]

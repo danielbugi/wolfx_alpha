@@ -99,7 +99,7 @@ log("symbols selected", len(syms))
 tickers = tr.get_json("https://www.sec.gov/files/company_tickers.json")
 t2c = {str(v["ticker"]).replace("-", ".").upper(): int(v["cik_str"]) for v in tickers.values()}
 now = datetime.now(timezone.utc)
-quality, per_symbol = Counter(), {}
+quality, per_symbol, reject_reasons, record_counts = Counter(), {}, Counter(), Counter()
 events, breakout_rows, errors = [], [], {}
 disc = pd.read_sql("SELECT symbol, date FROM price_discontinuities", conn)
 disc_by = defaultdict(list)
@@ -127,6 +127,8 @@ for n, sym in enumerate(syms):
                 rej += r2
                 cnt.update(c2)
         quality["rejected_filing_records"] += len(rej)
+        reject_reasons.update(r.reason.split("(")[0].strip()[:90] for r in rej)
+        record_counts.update({k: v for k, v in cnt.items() if k in ("records", "skipped_form", "skipped_before_since", "duplicate_identical", "already_known")})
         cf = tr.get_json(f"{E.BASE_URL}/api/xbrl/companyfacts/CIK{cik:010d}.json")
     except Exception as e:  # noqa: BLE001
         errors[sym] = f"{type(e).__name__}: {str(e)[:120]}"
@@ -183,6 +185,7 @@ res["quality"] = {
     "release_8k_matched_share": round(float((E_.release_source == "8k_item_2_02").mean()), 4),
     "timestamp_integrity": {"filing_date_inconsistent_with_acceptance": int(quality["filing_date_inconsistent"]), "timing_unknown_non_session_day": int(quality["timing_unknown_non_session_day"]),
                             "rejected_filing_records_without_explicit_utc_acceptance_or_other_defect": int(quality["rejected_filing_records"])},
+    "rejected_record_reasons": dict(reject_reasons.most_common(8)), "submission_record_counters": dict(record_counts),
     "timing_mix": E_.timing.value_counts().to_dict(), "events_by_year": {int(k): int(v) for k, v in E_.year.value_counts().sort_index().items()},
     "anomaly_counts": {"by_nature": E_.nature.value_counts().to_dict(), "by_rule": dict(Counter(r for rs in E_.anomaly_rules for r in rs))},
 }

@@ -47,6 +47,8 @@ def build(evidence_dir, code_ref):
     ex, rk = _load(evidence_dir, "experiments.json"), _load(evidence_dir, "ranker_stability.json")
     exitp, cat = _load(evidence_dir, "exit_policy_study.json"), _load(evidence_dir, "catalyst_earnings_study.json")
     radar = _load(evidence_dir, "catalyst_radar_recent.json")
+    sec = _load(evidence_dir, "sec_earnings_study.json")
+    manifest = _load(evidence_dir, "sec_raw_manifest.json")
     runs = {}
     for name in ("train_momentum", "train_plan_profit", "train_momentum_novol"):
         with open(os.path.join(evidence_dir, name + ".txt"), encoding="utf-8") as fh:
@@ -104,6 +106,21 @@ def build(evidence_dir, code_ref):
                     "caveats": ["Vendor-reported, unverified against SEC filings.", "Not an alert and not a recommendation."],
                     "provenance": {"source": "earnings_calendar (vendor), fetched 2026-10-07", "evidence_files": ["catalyst_radar_recent.json"]}, "data": radar})
 
+
+    reports.append({**base, "id": "catalyst_sec_earnings", "kind": "catalyst", "title": "SEC earnings catalysts: anomalies from filings, decision time, reaction",
+                    "headline": sec_headline(sec),
+                    "caveats": ["Facts are copied verbatim from SEC XBRL company facts; the anomaly rules, thresholds and the recurring-vs-one-time label are interpretation (v1, declared a priori, not tuned).",
+                                "'One-time suspected' means net income moved without a matching operating move; no specific item was identified in the filing text.",
+                                "Decision time is the acceptance timestamp of the 8-K Item 2.02 release matched to the periodic report; releases accepted during the session (intraday) are only partly reflected in the same-day bar.",
+                                f"Sample: {sec['design']['symbols_requested']} liquid symbols with Donchian breakouts, {sec['design']['events']:,} events; ticker-to-CIK uses today's SEC file projected back (reconstructed basis).",
+                                "The anomaly thresholds flag about a third of all earnings events: they select directionally, they do not isolate rare events.",
+                                "Market adjustment uses an equal-weight index of the stored universe; the no-anomaly group shows a negative average reaction against it, so compare groups, not absolute levels.",
+                                "The breakout, exit-policy and combination cells are many and small; none is a confirmed edge."],
+                    "provenance": {"source": "sec.gov submissions + XBRL companyfacts, fetched 2026-10-11 (payload sha256 in sec_raw_manifest.json) joined to stock_prices (isolated copy)", "design": sec["design"],
+                                   "payload_manifest": {"payloads": len(manifest["payloads"]), "total_mb": round(sum(x["bytes"] for x in manifest["payloads"]) / 1e6, 1)},
+                                   "evidence_files": ["sec_earnings_study.json", "sec_raw_manifest.json", "sec_earnings.txt"]},
+                    "data": {k: sec[k] for k in sec if k != "design"}})
+
     reports.append({**base, "id": "performance_attribution", "kind": "strategy_lab", "title": "Performance attribution: direction, year, regime and sector",
                     "headline": attribution_headline(exitp),
                     "caveats": ["Net of an assumed 10 bps round-trip cost; the 3R fixed-target exit and the 10-bar Donchian trail are shown as the two reference exits.", "Splits shrink the sample: read n beside every mean.",
@@ -112,11 +129,11 @@ def build(evidence_dir, code_ref):
                     "data": {p: {"by_year": exitp["by_year_10bps"][p], "by_regime": exitp["by_regime_10bps"][p], "by_sector": exitp["by_sector_10bps"][p]} for p in ("A_atr_stop_fixed_3R", "B_donchian_trail_10")}})
 
     reports.append({**base, "id": "research_insights", "kind": "strategy_lab", "title": "Research insights: what the evidence supports, and what it does not",
-                    "headline": insights_headline(insights(ex, rk, exitp, cat, runs)),
+                    "headline": insights_headline(insights(ex, rk, exitp, cat, runs, sec)),
                     "caveats": ["Statuses are assigned by fixed rules from the intervals and counts in the other reports; they are not model opinions.", "'Supported' means the sample supports the sign of the effect, not that it is tradeable after costs.",
                                 "'Suggestive' means a consistent pattern that was selected from several candidates and needs forward confirmation."],
-                    "provenance": {"source": "derived from the other lab reports (deterministic rules in build_lab_reports.insights)", "evidence_files": ["experiments.json", "ranker_stability.json", "exit_policy_study.json", "catalyst_earnings_study.json"]},
-                    "data": {"claims": insights(ex, rk, exitp, cat, runs)}})
+                    "provenance": {"source": "derived from the other lab reports (deterministic rules in build_lab_reports.insights)", "evidence_files": ["experiments.json", "ranker_stability.json", "exit_policy_study.json", "catalyst_earnings_study.json", "sec_earnings_study.json"]},
+                    "data": {"claims": insights(ex, rk, exitp, cat, runs, sec)}})
     return reports
 
 
@@ -131,7 +148,7 @@ def _excl(ci):
     return ci[0] > 0 or ci[1] < 0
 
 
-def insights(ex, rk, exitp, cat, runs):
+def insights(ex, rk, exitp, cat, runs, sec=None):
     """Fixed rules: 'supported' = the interval excludes zero in the claimed direction; 'not_supported' = a large sample whose interval includes zero around a near-zero estimate (the effect is
     absent or too small to matter); 'inconclusive' = the interval is wide; 'suggestive' = consistent in most years but chosen among several candidates."""
     out = []
@@ -168,7 +185,49 @@ def insights(ex, rk, exitp, cat, runs):
     x = cat["catalyst_x_breakout_plan_r"]["bullish"]
     add("A recent positive earnings surprise improves a bullish Donchian breakout", "supported" if x["after_positive_surprise_10pct_within_14d"]["ci95"][0] > x["no_recent_big_surprise"]["mean"] else "not_supported",
         f"{x['after_positive_surprise_10pct_within_14d']['mean']:+.3f} R after a surprise vs {x['no_recent_big_surprise']['mean']:+.3f} R without", ["catalyst_earnings"])
+    if sec is not None:
+        rn = sec["reaction_by_nature"]
+        rec, none = rn["recurring_operating"], rn["none"]
+        yrs = sec["by_year_recurring_operating"]
+        add("SEC-detected recurring operating improvements are followed by a larger price reaction than ordinary earnings",
+            "supported" if rec["ar_reaction"]["ci95"][0] > none["ar_reaction"]["ci95"][1] else "inconclusive",
+            f"reaction {rec['ar_reaction']['mean'] * 100:+.2f}% (n={rec['n']:,}) vs {none['ar_reaction']['mean'] * 100:+.2f}% without an anomaly (n={none['n']:,}); positive in "
+            f"{sum(1 for v in yrs.values() if v['mean_ar_react'] > 0)} of {len(yrs)} years", ["catalyst_sec_earnings"])
+        add("A tradeable drift follows SEC-detected recurring operating improvements", "supported" if _excl(rec["ar_drift_20d"]["ci95"]) and rec["ar_drift_20d"]["mean"] > 0 else "not_supported",
+            f"20-day drift after the reaction {rec['ar_drift_20d']['mean'] * 100:+.2f}%, 95% CI {rec['ar_drift_20d']['ci95'][0] * 100:+.2f}% to {rec['ar_drift_20d']['ci95'][1] * 100:+.2f}%", ["catalyst_sec_earnings"])
+        ot = rn["one_time_suspected"]
+        add("The market reacts less to net-income jumps without an operating move (suspected one-time) than to recurring operating improvements",
+            "supported" if ot["ar_reaction"]["ci95"][1] < rec["ar_reaction"]["ci95"][0] else "inconclusive",
+            f"one-time suspected {ot['ar_reaction']['mean'] * 100:+.2f}% (n={ot['n']:,}) vs recurring {rec['ar_reaction']['mean'] * 100:+.2f}%", ["catalyst_sec_earnings"])
+        bc = sec["breakouts_by_catalyst"]["bullish"]
+        r_, n_ = bc["recurring_operating"]["fixed_3R_net10"], bc["no_recent_earnings"]["fixed_3R_net10"]
+        add("A recent recurring-operating catalyst improves a bullish Donchian breakout (fixed-3R exit, net of costs)", "supported" if r_["ci95"][0] > n_["mean"] else "inconclusive",
+            f"{r_['mean']:+.3f} R (n={r_['n']:,}, CI {r_['ci95'][0]:+.3f} to {r_['ci95'][1]:+.3f}) vs {n_['mean']:+.3f} R with no recent earnings (n={n_['n']:,})", ["catalyst_sec_earnings"])
+        ex_ = sec["exit_policy_by_catalyst_net10"]["bullish"]["recurring_operating"]
+        best = max(ex_, key=lambda k: ex_[k]["mean"])
+        fixed = ex_["A_atr_stop_fixed_3R"]
+        add("Within recurring-operating catalysts a different exit policy beats the fixed-3R exit",
+            "supported" if best != "A_atr_stop_fixed_3R" and ex_[best]["ci95"][0] > fixed["mean"] else "not_supported",
+            (f"the fixed-3R exit is itself the best policy ({fixed['mean']:+.3f} R); the others range {min(v['mean'] for v in ex_.values()):+.3f} to "
+             f"{max(v['mean'] for k, v in ex_.items() if k != 'A_atr_stop_fixed_3R'):+.3f} R, all intervals overlap"
+             if best == "A_atr_stop_fixed_3R" else f"best policy {best} {ex_[best]['mean']:+.3f} R vs fixed 3R {fixed['mean']:+.3f} R"), ["catalyst_sec_earnings"])
+        m1 = sec["ml"]["event_significance"]
+        add("Financial-anomaly features predict how large the reaction will be beyond trailing volatility",
+            "supported" if m1["auc_model"] - m1["auc_baseline_trailing_volatility"] >= 0.02 else "not_supported",
+            f"AUC {m1['auc_model']} vs trailing volatility alone {m1['auc_baseline_trailing_volatility']} (chronological test from 2022-02-15)", ["catalyst_sec_earnings"])
+        m2 = sec["ml"]["reaction_direction"]
+        base2 = max(m2["auc_baseline_revenue_yoy"], m2["auc_baseline_operating_margin_change"])
+        add("Financial-anomaly features predict the direction of the reaction", "suggestive" if m2["auc_model"] - base2 >= 0.01 else "not_supported",
+            f"AUC {m2['auc_model']} vs best single-metric baseline {base2} (chronological test); modest lift on a coin-flip base rate {m2['base_rate_test']}", ["catalyst_sec_earnings"])
     return out
+
+
+def sec_headline(sec):
+    rn = sec["reaction_by_nature"]
+    q = sec["quality"]
+    return (f"{sec['design']['events']:,} earnings events from SEC filings: recurring operating improvements react {rn['recurring_operating']['ar_reaction']['mean'] * 100:+.2f}% "
+            f"vs {rn['none']['ar_reaction']['mean'] * 100:+.2f}% without an anomaly; 20-day drift {rn['recurring_operating']['ar_drift_20d']['mean'] * 100:+.2f}% (interval includes zero). "
+            f"Extraction: {q['share_with_xbrl_facts'] * 100:.0f}% of periodic filings carry usable facts; {q['release_8k_matched_share'] * 100:.0f}% of events matched to their 8-K 2.02 release.")
 
 
 def insights_headline(claims):

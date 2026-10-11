@@ -89,6 +89,49 @@ function CatalystEarnings({ d }: { d: any }) {
   );
 }
 
+const NATURE_LABEL: Record<string, string> = {
+  none: 'No anomaly',
+  recurring_operating: 'Recurring operating improvement',
+  one_time_suspected: 'Net income jump, no operating move (one-time suspected)',
+  unclassified: 'Anomaly, unclassified',
+};
+
+function SecEarnings({ d }: { d: any }) {
+  const q = d.quality;
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {([
+          ['Periodic filings seen', fmtInt(q.periodic_filings_seen)],
+          ['With usable XBRL facts', fmtPct(q.share_with_xbrl_facts, 0)],
+          ['Events matched to their 8-K 2.02 release', fmtPct(q.release_8k_matched_share, 0)],
+          ['Filing date inconsistent with acceptance', fmtInt(q.timestamp_integrity.filing_date_inconsistent_with_acceptance)],
+        ] as const).map(([label, value]) => (
+          <div key={label} className="rounded-md border border-slate-200 p-2">
+            <div className="text-[11px] text-slate-500">{label}</div>
+            <div className="text-base font-semibold text-slate-800">{value}</div>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-slate-500">
+        Release timing: {Object.keys(q.timing_mix).map((k) => `${k} ${fmtInt(q.timing_mix[k])}`).join(' · ')}. Filing records the contract refused: {fmtInt(q.timestamp_integrity.rejected_filing_records_without_explicit_utc_acceptance_or_other_defect)}
+        {' '}(all pre-2005 8-K item formats, outside the study window).
+      </p>
+      <Table head={['Earnings event', 'Events', 'Reaction (mkt-adj.)', '20-day drift after', 'Mean relative volume']} rows={Object.keys(d.reaction_by_nature).map((k) => [
+        NATURE_LABEL[k] ?? k, fmtInt(d.reaction_by_nature[k].n),
+        `${fmtPct(d.reaction_by_nature[k].ar_reaction.mean)} (${fmtInterval(d.reaction_by_nature[k].ar_reaction.ci95, (v) => fmtPct(v, 1))})`,
+        `${fmtPct(d.reaction_by_nature[k].ar_drift_20d.mean)} (${fmtInterval(d.reaction_by_nature[k].ar_drift_20d.ci95, (v) => fmtPct(v, 1))})`, String(d.reaction_by_nature[k].mean_relvol)])} />
+      <Table head={['Donchian breakout after earnings (15 days)', 'Trades', 'Plan R', 'Fixed 3R, net R']} rows={(['bullish', 'bearish'] as const).flatMap((dir) => Object.keys(d.breakouts_by_catalyst[dir]).map((k) => [
+        `${dir}: ${NATURE_LABEL[k] ?? k.replace(/_/g, ' ')}`, fmtInt(d.breakouts_by_catalyst[dir][k].n), fmtR(d.breakouts_by_catalyst[dir][k].plan_r.mean),
+        `${fmtR(d.breakouts_by_catalyst[dir][k].fixed_3R_net10.mean)} (${fmtInterval(d.breakouts_by_catalyst[dir][k].fixed_3R_net10.ci95)})`]))} />
+      <h3 className="text-sm font-semibold text-slate-700">Evidence: the most recent flagged filings</h3>
+      <Table head={['Symbol', 'Form', 'Release accepted (UTC)', 'Timing', 'Class', 'Revenue YoY', 'Op. margin change', 'Reaction', 'SEC filing']} rows={d.evidence_events_sample.map((e: any) => [
+        e.symbol, e.form, String(e.decision_accepted_at).replace('T', ' ').slice(0, 16), e.timing, NATURE_LABEL[e.nature] ?? e.nature, fmtPct(e.revenue_yoy, 0), fmtPct(e.operating_margin_change, 1), fmtPct(e.ar_react),
+        <a key={e.period_accession} className="text-cyan-700 underline" href={e.source_url} target="_blank" rel="noreferrer noopener">{e.release_accession ?? e.period_accession}</a>])} />
+    </div>
+  );
+}
+
 function Radar({ d }: { d: any }) {
   return (
     <Table head={['Symbol', 'Report date', 'EPS est.', 'EPS actual', 'Surprise', 'Reaction (mkt-adj.)', 'Since (mkt-adj.)', 'Verification']} rows={d.events.map((e: any) => [
@@ -142,6 +185,7 @@ export default function LabReportView({ report }: { report: LabReport }) {
   const body = (() => {
     switch (report.id) {
       case 'research_insights': return <Insights d={report.data} />;
+      case 'catalyst_sec_earnings': return <SecEarnings d={report.data} />;
       case 'performance_attribution': return <Attribution d={report.data} />;
       case 'strategy_baseline': return <StrategyBaseline d={report.data} />;
       case 'ranker_stability': return <RankerStability d={report.data} />;

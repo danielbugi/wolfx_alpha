@@ -1,0 +1,2567 @@
+{
+ "design": {
+  "symbols_requested": 400,
+  "symbols_with_events": 391,
+  "events": 9614,
+  "since": "2014-01-01",
+  "first_event": "2016-12-15",
+  "last_event": "2026-09-09",
+  "sec_requests": 0,
+  "cache_hits": 996,
+  "fetch_errors": {},
+  "n_fetch_errors": 0,
+  "sources": [
+   "sec.gov company_tickers.json (ticker->CIK, projected back: reconstructed basis)",
+   "data.sec.gov submissions (filing identity + acceptance timestamps)",
+   "data.sec.gov XBRL companyfacts (verbatim facts with filing dates)"
+  ],
+  "thresholds": {
+   "REV_YOY_MIN": 0.2,
+   "REV_ACCEL_MIN": 0.1,
+   "NI_YOY_MIN": 0.5,
+   "OP_MARGIN_UP_MIN": 0.03
+  }
+ },
+ "quality": {
+  "periodic_filings_seen": 16350,
+  "with_xbrl_facts": 14031,
+  "share_with_xbrl_facts": 0.8582,
+  "missing_a_measure": 3095,
+  "no_prior_year_comparison": 56,
+  "events_used": 9614,
+  "dropped": {
+   "no_reaction_bar": 0,
+   "outside_price_history": 2526,
+   "illiquid_or_penny": 1890,
+   "price_discontinuity": 1,
+   "no_matching_xbrl_facts": 2319
+  },
+  "release_8k_matched_share": 0.9743,
+  "timestamp_integrity": {
+   "filing_date_inconsistent_with_acceptance": 10,
+   "timing_unknown_non_session_day": 2241,
+   "rejected_filing_records_without_explicit_utc_acceptance_or_other_defect": 2562
+  },
+  "rejected_record_reasons": {
+   "FilingContractError: item '5' is not an 8-K style item number": 1387,
+   "FilingContractError: item '12' is not an 8-K style item number": 383,
+   "FilingContractError: item '7' is not an 8-K style item number": 318,
+   "FilingContractError: item '9' is not an 8-K style item number": 250,
+   "FilingContractError: item '2' is not an 8-K style item number": 130,
+   "FilingContractError: item '1' is not an 8-K style item number": 45,
+   "FilingContractError: item '4' is not an 8-K style item number": 38,
+   "FilingContractError: item '6' is not an 8-K style item number": 4
+  },
+  "submission_record_counters": {
+   "records": 640991,
+   "skipped_form": 543976,
+   "skipped_before_since": 26695
+  },
+  "timing_mix": {
+   "AMC": 5556,
+   "BMO": 2451,
+   "INTRADAY": 1605,
+   "UNKNOWN": 2
+  },
+  "events_by_year": {
+   "2016": 10,
+   "2017": 612,
+   "2018": 759,
+   "2019": 848,
+   "2020": 899,
+   "2021": 1000,
+   "2022": 1055,
+   "2023": 1090,
+   "2024": 1154,
+   "2025": 1235,
+   "2026": 952
+  },
+  "anomaly_counts": {
+   "by_nature": {
+    "none": 6270,
+    "recurring_operating": 1544,
+    "unclassified": 1039,
+    "one_time_suspected": 761
+   },
+   "by_rule": {
+    "net_income_turnaround": 807,
+    "revenue_acceleration": 809,
+    "operating_margin_expansion": 1835,
+    "net_income_surge": 1542
+   }
+  }
+ },
+ "reaction_by_nature": {
+  "none": {
+   "n": 6270,
+   "ar_reaction": {
+    "n": 6270,
+    "mean": -0.00513,
+    "ci95": [
+     -0.00732,
+     -0.00286
+    ]
+   },
+   "ar_drift_5d": {
+    "n": 6270,
+    "mean": -0.00222,
+    "ci95": [
+     -0.00452,
+     -0.00016
+    ]
+   },
+   "ar_drift_20d": {
+    "n": 6270,
+    "mean": -0.0047,
+    "ci95": [
+     -0.00814,
+     -0.00144
+    ]
+   },
+   "mean_relvol": 2.71
+  },
+  "one_time_suspected": {
+   "n": 761,
+   "ar_reaction": {
+    "n": 761,
+    "mean": 0.00733,
+    "ci95": [
+     0.00183,
+     0.01264
+    ]
+   },
+   "ar_drift_5d": {
+    "n": 761,
+    "mean": -0.00147,
+    "ci95": [
+     -0.00524,
+     0.00326
+    ]
+   },
+   "ar_drift_20d": {
+    "n": 761,
+    "mean": -0.0028,
+    "ci95": [
+     -0.01087,
+     0.00486
+    ]
+   },
+   "mean_relvol": 2.61
+  },
+  "recurring_operating": {
+   "n": 1544,
+   "ar_reaction": {
+    "n": 1544,
+    "mean": 0.02224,
+    "ci95": [
+     0.01733,
+     0.02687
+    ]
+   },
+   "ar_drift_5d": {
+    "n": 1544,
+    "mean": -0.00211,
+    "ci95": [
+     -0.00622,
+     0.00232
+    ]
+   },
+   "ar_drift_20d": {
+    "n": 1544,
+    "mean": -0.00097,
+    "ci95": [
+     -0.00855,
+     0.00695
+    ]
+   },
+   "mean_relvol": 3.04
+  },
+  "unclassified": {
+   "n": 1039,
+   "ar_reaction": {
+    "n": 1039,
+    "mean": 0.00644,
+    "ci95": [
+     0.00156,
+     0.01176
+    ]
+   },
+   "ar_drift_5d": {
+    "n": 1039,
+    "mean": -0.00296,
+    "ci95": [
+     -0.00667,
+     0.0007
+    ]
+   },
+   "ar_drift_20d": {
+    "n": 1039,
+    "mean": -0.00749,
+    "ci95": [
+     -0.01434,
+     -6e-05
+    ]
+   },
+   "mean_relvol": 2.7
+  }
+ },
+ "reaction_by_nature_and_timing": {
+  "one_time_suspected|AMC": {
+   "n": 419,
+   "ar_reaction": {
+    "n": 419,
+    "mean": 0.01161,
+    "ci95": [
+     0.00456,
+     0.01867
+    ]
+   },
+   "ar_drift_5d": {
+    "n": 419,
+    "mean": -0.00225,
+    "ci95": [
+     -0.00797,
+     0.0028
+    ]
+   },
+   "ar_drift_20d": {
+    "n": 419,
+    "mean": -0.00047,
+    "ci95": [
+     -0.00919,
+     0.00977
+    ]
+   },
+   "mean_relvol": 2.71
+  },
+  "one_time_suspected|BMO": {
+   "n": 216,
+   "ar_reaction": {
+    "n": 216,
+    "mean": 0.00557,
+    "ci95": [
+     -0.00558,
+     0.01584
+    ]
+   },
+   "ar_drift_5d": {
+    "n": 216,
+    "mean": 0.00417,
+    "ci95": [
+     -0.00286,
+     0.01141
+    ]
+   },
+   "ar_drift_20d": {
+    "n": 216,
+    "mean": -0.00055,
+    "ci95": [
+     -0.0155,
+     0.01453
+    ]
+   },
+   "mean_relvol": 2.69
+  },
+  "one_time_suspected|INTRADAY": {
+   "n": 126,
+   "ar_reaction": {
+    "n": 126,
+    "mean": -0.00389,
+    "ci95": [
+     -0.01454,
+     0.00647
+    ]
+   },
+   "ar_drift_5d": {
+    "n": 126,
+    "mean": -0.00854,
+    "ci95": [
+     -0.017,
+     -0.00092
+    ]
+   },
+   "ar_drift_20d": {
+    "n": 126,
+    "mean": -0.01441,
+    "ci95": [
+     -0.02503,
+     -0.00335
+    ]
+   },
+   "mean_relvol": 2.18
+  },
+  "recurring_operating|AMC": {
+   "n": 999,
+   "ar_reaction": {
+    "n": 999,
+    "mean": 0.02689,
+    "ci95": [
+     0.02071,
+     0.03359
+    ]
+   },
+   "ar_drift_5d": {
+    "n": 999,
+    "mean": -0.00088,
+    "ci95": [
+     -0.00571,
+     0.0036
+    ]
+   },
+   "ar_drift_20d": {
+    "n": 999,
+    "mean": 0.001,
+    "ci95": [
+     -0.00825,
+     0.00901
+    ]
+   },
+   "mean_relvol": 3.2
+  },
+  "recurring_operating|BMO": {
+   "n": 330,
+   "ar_reaction": {
+    "n": 330,
+    "mean": 0.01383,
+    "ci95": [
+     0.00396,
+     0.02336
+    ]
+   },
+   "ar_drift_5d": {
+    "n": 330,
+    "mean": -0.00388,
+    "ci95": [
+     -0.0107,
+     0.00456
+    ]
+   },
+   "ar_drift_20d": {
+    "n": 330,
+    "mean": -0.00439,
+    "ci95": [
+     -0.0152,
+     0.0087
+    ]
+   },
+   "mean_relvol": 2.95
+  },
+  "recurring_operating|INTRADAY": {
+   "n": 215,
+   "ar_reaction": {
+    "n": 215,
+    "mean": 0.01354,
+    "ci95": [
+     0.00298,
+     0.02473
+    ]
+   },
+   "ar_drift_5d": {
+    "n": 215,
+    "mean": -0.00507,
+    "ci95": [
+     -0.01218,
+     0.00165
+    ]
+   },
+   "ar_drift_20d": {
+    "n": 215,
+    "mean": -0.00484,
+    "ci95": [
+     -0.01791,
+     0.01006
+    ]
+   },
+   "mean_relvol": 2.44
+  },
+  "unclassified|AMC": {
+   "n": 532,
+   "ar_reaction": {
+    "n": 532,
+    "mean": 0.00832,
+    "ci95": [
+     0.001,
+     0.01598
+    ]
+   },
+   "ar_drift_5d": {
+    "n": 532,
+    "mean": 0.00067,
+    "ci95": [
+     -0.00401,
+     0.00555
+    ]
+   },
+   "ar_drift_20d": {
+    "n": 532,
+    "mean": -0.00393,
+    "ci95": [
+     -0.01454,
+     0.00651
+    ]
+   },
+   "mean_relvol": 2.78
+  },
+  "unclassified|BMO": {
+   "n": 308,
+   "ar_reaction": {
+    "n": 308,
+    "mean": 0.00023,
+    "ci95": [
+     -0.00775,
+     0.00769
+    ]
+   },
+   "ar_drift_5d": {
+    "n": 308,
+    "mean": -0.01,
+    "ci95": [
+     -0.01612,
+     -0.00321
+    ]
+   },
+   "ar_drift_20d": {
+    "n": 308,
+    "mean": -0.0148,
+    "ci95": [
+     -0.02749,
+     -0.00393
+    ]
+   },
+   "mean_relvol": 2.7
+  },
+  "unclassified|INTRADAY": {
+   "n": 199,
+   "ar_reaction": {
+    "n": 199,
+    "mean": 0.01106,
+    "ci95": [
+     0.00054,
+     0.02201
+    ]
+   },
+   "ar_drift_5d": {
+    "n": 199,
+    "mean": -0.00178,
+    "ci95": [
+     -0.00983,
+     0.00567
+    ]
+   },
+   "ar_drift_20d": {
+    "n": 199,
+    "mean": -0.00566,
+    "ci95": [
+     -0.01773,
+     0.00683
+    ]
+   },
+   "mean_relvol": 2.48
+  }
+ },
+ "relative_volume_split_anomalies": {
+  "relvol_ge_2": {
+   "n": 1961,
+   "ar_reaction": {
+    "n": 1961,
+    "mean": 0.01901,
+    "ci95": [
+     0.01448,
+     0.02415
+    ]
+   },
+   "ar_drift_5d": {
+    "n": 1961,
+    "mean": -0.00174,
+    "ci95": [
+     -0.00519,
+     0.00141
+    ]
+   },
+   "ar_drift_20d": {
+    "n": 1961,
+    "mean": -0.00154,
+    "ci95": [
+     -0.0073,
+     0.00462
+    ]
+   },
+   "mean_relvol": 3.81
+  },
+  "relvol_lt_2": {
+   "n": 1383,
+   "ar_reaction": {
+    "n": 1383,
+    "mean": 0.00675,
+    "ci95": [
+     0.00412,
+     0.00925
+    ]
+   },
+   "ar_drift_5d": {
+    "n": 1383,
+    "mean": -0.00292,
+    "ci95": [
+     -0.00646,
+     3e-05
+    ]
+   },
+   "ar_drift_20d": {
+    "n": 1383,
+    "mean": -0.00605,
+    "ci95": [
+     -0.01296,
+     3e-05
+    ]
+   },
+   "mean_relvol": 1.46
+  }
+ },
+ "regime_split_anomalies": {
+  "index_uptrend": {
+   "n": 2512,
+   "ar_reaction": {
+    "n": 2512,
+    "mean": 0.01418,
+    "ci95": [
+     0.01054,
+     0.01875
+    ]
+   },
+   "ar_drift_5d": {
+    "n": 2512,
+    "mean": -0.00297,
+    "ci95": [
+     -0.0059,
+     0.00015
+    ]
+   },
+   "ar_drift_20d": {
+    "n": 2512,
+    "mean": -0.00246,
+    "ci95": [
+     -0.00872,
+     0.00315
+    ]
+   },
+   "mean_relvol": 2.96
+  },
+  "index_downtrend": {
+   "n": 775,
+   "ar_reaction": {
+    "n": 775,
+    "mean": 0.01394,
+    "ci95": [
+     0.00884,
+     0.01868
+    ]
+   },
+   "ar_drift_5d": {
+    "n": 775,
+    "mean": 1e-05,
+    "ci95": [
+     -0.00727,
+     0.00604
+    ]
+   },
+   "ar_drift_20d": {
+    "n": 775,
+    "mean": -0.00711,
+    "ci95": [
+     -0.02048,
+     0.003
+    ]
+   },
+   "mean_relvol": 2.4
+  }
+ },
+ "stability_by_period": {
+  "2014_2021": {
+   "none": {
+    "n": 2619,
+    "ar_reaction": {
+     "n": 2619,
+     "mean": -0.00517,
+     "ci95": [
+      -0.00766,
+      -0.00202
+     ]
+    },
+    "ar_drift_5d": {
+     "n": 2619,
+     "mean": -0.00158,
+     "ci95": [
+      -0.00494,
+      0.00181
+     ]
+    },
+    "ar_drift_20d": {
+     "n": 2619,
+     "mean": -0.002,
+     "ci95": [
+      -0.00592,
+      0.00243
+     ]
+    },
+    "mean_relvol": 2.74
+   },
+   "one_time_suspected": {
+    "n": 373,
+    "ar_reaction": {
+     "n": 373,
+     "mean": 0.00624,
+     "ci95": [
+      0.00164,
+      0.01172
+     ]
+    },
+    "ar_drift_5d": {
+     "n": 373,
+     "mean": -0.00215,
+     "ci95": [
+      -0.00756,
+      0.0034
+     ]
+    },
+    "ar_drift_20d": {
+     "n": 373,
+     "mean": -0.01113,
+     "ci95": [
+      -0.02114,
+      -0.00358
+     ]
+    },
+    "mean_relvol": 2.61
+   },
+   "recurring_operating": {
+    "n": 650,
+    "ar_reaction": {
+     "n": 650,
+     "mean": 0.01651,
+     "ci95": [
+      0.01083,
+      0.02396
+     ]
+    },
+    "ar_drift_5d": {
+     "n": 650,
+     "mean": -0.00662,
+     "ci95": [
+      -0.01199,
+      -0.00171
+     ]
+    },
+    "ar_drift_20d": {
+     "n": 650,
+     "mean": -0.00479,
+     "ci95": [
+      -0.01663,
+      0.00441
+     ]
+    },
+    "mean_relvol": 3.02
+   },
+   "unclassified": {
+    "n": 486,
+    "ar_reaction": {
+     "n": 486,
+     "mean": 0.00475,
+     "ci95": [
+      -0.00164,
+      0.01097
+     ]
+    },
+    "ar_drift_5d": {
+     "n": 486,
+     "mean": -0.00013,
+     "ci95": [
+      -0.00531,
+      0.00429
+     ]
+    },
+    "ar_drift_20d": {
+     "n": 486,
+     "mean": -0.00728,
+     "ci95": [
+      -0.01808,
+      0.00187
+     ]
+    },
+    "mean_relvol": 2.73
+   }
+  },
+  "2022_plus": {
+   "none": {
+    "n": 3651,
+    "ar_reaction": {
+     "n": 3651,
+     "mean": -0.00511,
+     "ci95": [
+      -0.00846,
+      -0.00173
+     ]
+    },
+    "ar_drift_5d": {
+     "n": 3651,
+     "mean": -0.00268,
+     "ci95": [
+      -0.00591,
+      0.00016
+     ]
+    },
+    "ar_drift_20d": {
+     "n": 3651,
+     "mean": -0.00664,
+     "ci95": [
+      -0.0111,
+      -0.00166
+     ]
+    },
+    "mean_relvol": 2.69
+   },
+   "one_time_suspected": {
+    "n": 388,
+    "ar_reaction": {
+     "n": 388,
+     "mean": 0.00838,
+     "ci95": [
+      -0.00035,
+      0.01711
+     ]
+    },
+    "ar_drift_5d": {
+     "n": 388,
+     "mean": -0.00082,
+     "ci95": [
+      -0.0064,
+      0.00513
+     ]
+    },
+    "ar_drift_20d": {
+     "n": 388,
+     "mean": 0.00521,
+     "ci95": [
+      -0.00755,
+      0.01563
+     ]
+    },
+    "mean_relvol": 2.62
+   },
+   "recurring_operating": {
+    "n": 894,
+    "ar_reaction": {
+     "n": 894,
+     "mean": 0.02641,
+     "ci95": [
+      0.0192,
+      0.03296
+     ]
+    },
+    "ar_drift_5d": {
+     "n": 894,
+     "mean": 0.00118,
+     "ci95": [
+      -0.0043,
+      0.00638
+     ]
+    },
+    "ar_drift_20d": {
+     "n": 894,
+     "mean": 0.00181,
+     "ci95": [
+      -0.00654,
+      0.0094
+     ]
+    },
+    "mean_relvol": 3.06
+   },
+   "unclassified": {
+    "n": 553,
+    "ar_reaction": {
+     "n": 553,
+     "mean": 0.00793,
+     "ci95": [
+      0.00066,
+      0.01457
+     ]
+    },
+    "ar_drift_5d": {
+     "n": 553,
+     "mean": -0.00545,
+     "ci95": [
+      -0.01086,
+      -0.00071
+     ]
+    },
+    "ar_drift_20d": {
+     "n": 553,
+     "mean": -0.00766,
+     "ci95": [
+      -0.01859,
+      0.00451
+     ]
+    },
+    "mean_relvol": 2.66
+   }
+  }
+ },
+ "by_year_recurring_operating": {
+  "2017": {
+   "n": 65,
+   "mean_ar_react": 0.0267,
+   "mean_ar_d20": 0.0084
+  },
+  "2018": {
+   "n": 108,
+   "mean_ar_react": 0.0167,
+   "mean_ar_d20": -0.0003
+  },
+  "2019": {
+   "n": 86,
+   "mean_ar_react": 0.0269,
+   "mean_ar_d20": 0.0065
+  },
+  "2020": {
+   "n": 95,
+   "mean_ar_react": 0.0235,
+   "mean_ar_d20": -0.0536
+  },
+  "2021": {
+   "n": 296,
+   "mean_ar_react": 0.009,
+   "mean_ar_d20": 0.0031
+  },
+  "2022": {
+   "n": 223,
+   "mean_ar_react": 0.0108,
+   "mean_ar_d20": 0.0092
+  },
+  "2023": {
+   "n": 183,
+   "mean_ar_react": 0.0272,
+   "mean_ar_d20": -0.0036
+  },
+  "2024": {
+   "n": 157,
+   "mean_ar_react": 0.0349,
+   "mean_ar_d20": 0.014
+  },
+  "2025": {
+   "n": 165,
+   "mean_ar_react": 0.0273,
+   "mean_ar_d20": 0.0018
+  },
+  "2026": {
+   "n": 166,
+   "mean_ar_react": 0.0376,
+   "mean_ar_d20": -0.0136
+  }
+ },
+ "breakouts_by_catalyst": {
+  "bullish": {
+   "earnings_no_anomaly": {
+    "n": 3530,
+    "plan_r": {
+     "n": 3530,
+     "mean": 0.0084,
+     "ci95": [
+      -0.11526,
+      0.1356
+     ]
+    },
+    "fixed_3R_net10": {
+     "n": 3530,
+     "mean": 0.04112,
+     "ci95": [
+      -0.17708,
+      0.25537
+     ]
+    }
+   },
+   "no_recent_earnings": {
+    "n": 44547,
+    "plan_r": {
+     "n": 44547,
+     "mean": 0.06608,
+     "ci95": [
+      -0.00322,
+      0.14092
+     ]
+    },
+    "fixed_3R_net10": {
+     "n": 44547,
+     "mean": 0.08522,
+     "ci95": [
+      -0.01199,
+      0.18409
+     ]
+    }
+   },
+   "one_time_suspected": {
+    "n": 556,
+    "plan_r": {
+     "n": 556,
+     "mean": 0.04504,
+     "ci95": [
+      -0.15359,
+      0.23798
+     ]
+    },
+    "fixed_3R_net10": {
+     "n": 556,
+     "mean": 0.16718,
+     "ci95": [
+      -0.11448,
+      0.47577
+     ]
+    }
+   },
+   "recurring_operating": {
+    "n": 1194,
+    "plan_r": {
+     "n": 1194,
+     "mean": 0.07828,
+     "ci95": [
+      -0.09251,
+      0.25226
+     ]
+    },
+    "fixed_3R_net10": {
+     "n": 1194,
+     "mean": 0.1554,
+     "ci95": [
+      -0.1364,
+      0.43686
+     ]
+    }
+   },
+   "unclassified": {
+    "n": 679,
+    "plan_r": {
+     "n": 679,
+     "mean": 0.08244,
+     "ci95": [
+      -0.05055,
+      0.19829
+     ]
+    },
+    "fixed_3R_net10": {
+     "n": 679,
+     "mean": 0.13038,
+     "ci95": [
+      -0.10627,
+      0.37518
+     ]
+    }
+   }
+  },
+  "bearish": {
+   "earnings_no_anomaly": {
+    "n": 3228,
+    "plan_r": {
+     "n": 3228,
+     "mean": -0.09958,
+     "ci95": [
+      -0.23951,
+      0.04142
+     ]
+    },
+    "fixed_3R_net10": {
+     "n": 3228,
+     "mean": -0.17174,
+     "ci95": [
+      -0.37864,
+      0.03285
+     ]
+    }
+   },
+   "no_recent_earnings": {
+    "n": 33388,
+    "plan_r": {
+     "n": 33388,
+     "mean": -0.11145,
+     "ci95": [
+      -0.20516,
+      -0.02547
+     ]
+    },
+    "fixed_3R_net10": {
+     "n": 33388,
+     "mean": -0.22929,
+     "ci95": [
+      -0.3674,
+      -0.09637
+     ]
+    }
+   },
+   "one_time_suspected": {
+    "n": 306,
+    "plan_r": {
+     "n": 306,
+     "mean": -0.081,
+     "ci95": [
+      -0.33684,
+      0.17465
+     ]
+    },
+    "fixed_3R_net10": {
+     "n": 306,
+     "mean": -0.17152,
+     "ci95": [
+      -0.50617,
+      0.19837
+     ]
+    }
+   },
+   "recurring_operating": {
+    "n": 644,
+    "plan_r": {
+     "n": 644,
+     "mean": -0.0965,
+     "ci95": [
+      -0.22918,
+      0.03655
+     ]
+    },
+    "fixed_3R_net10": {
+     "n": 644,
+     "mean": -0.09295,
+     "ci95": [
+      -0.29216,
+      0.13326
+     ]
+    }
+   },
+   "unclassified": {
+    "n": 532,
+    "plan_r": {
+     "n": 532,
+     "mean": 0.0307,
+     "ci95": [
+      -0.20451,
+      0.24103
+     ]
+    },
+    "fixed_3R_net10": {
+     "n": 532,
+     "mean": 0.01716,
+     "ci95": [
+      -0.36144,
+      0.39281
+     ]
+    }
+   }
+  }
+ },
+ "exit_policy_by_catalyst_net10": {
+  "bullish": {
+   "earnings_no_anomaly": {
+    "A_atr_stop_fixed_2R": {
+     "n": 3530,
+     "mean": 0.00907,
+     "ci95": [
+      -0.15486,
+      0.17729
+     ]
+    },
+    "A_atr_stop_fixed_3R": {
+     "n": 3530,
+     "mean": 0.04112,
+     "ci95": [
+      -0.17708,
+      0.25537
+     ]
+    },
+    "B_donchian_trail_10": {
+     "n": 3530,
+     "mean": -0.04232,
+     "ci95": [
+      -0.19436,
+      0.12638
+     ]
+    },
+    "C_atr_trail_3x": {
+     "n": 3530,
+     "mean": -0.00681,
+     "ci95": [
+      -0.16274,
+      0.18036
+     ]
+    },
+    "D_hybrid_atr_stop_to_donchian_10": {
+     "n": 3530,
+     "mean": -0.02356,
+     "ci95": [
+      -0.1735,
+      0.15394
+     ]
+    }
+   },
+   "no_recent_earnings": {
+    "A_atr_stop_fixed_2R": {
+     "n": 44547,
+     "mean": 0.06199,
+     "ci95": [
+      -0.02611,
+      0.14696
+     ]
+    },
+    "A_atr_stop_fixed_3R": {
+     "n": 44547,
+     "mean": 0.08522,
+     "ci95": [
+      -0.01199,
+      0.18409
+     ]
+    },
+    "B_donchian_trail_10": {
+     "n": 44547,
+     "mean": 0.03286,
+     "ci95": [
+      -0.05557,
+      0.12879
+     ]
+    },
+    "C_atr_trail_3x": {
+     "n": 44547,
+     "mean": 0.02704,
+     "ci95": [
+      -0.05509,
+      0.12049
+     ]
+    },
+    "D_hybrid_atr_stop_to_donchian_10": {
+     "n": 44547,
+     "mean": 0.03883,
+     "ci95": [
+      -0.04441,
+      0.13203
+     ]
+    }
+   },
+   "one_time_suspected": {
+    "A_atr_stop_fixed_2R": {
+     "n": 556,
+     "mean": 0.09083,
+     "ci95": [
+      -0.16687,
+      0.34581
+     ]
+    },
+    "A_atr_stop_fixed_3R": {
+     "n": 556,
+     "mean": 0.16718,
+     "ci95": [
+      -0.11448,
+      0.47577
+     ]
+    },
+    "B_donchian_trail_10": {
+     "n": 556,
+     "mean": 0.0312,
+     "ci95": [
+      -0.18026,
+      0.25298
+     ]
+    },
+    "C_atr_trail_3x": {
+     "n": 556,
+     "mean": 0.05403,
+     "ci95": [
+      -0.21292,
+      0.32511
+     ]
+    },
+    "D_hybrid_atr_stop_to_donchian_10": {
+     "n": 556,
+     "mean": 0.06142,
+     "ci95": [
+      -0.1604,
+      0.32615
+     ]
+    }
+   },
+   "recurring_operating": {
+    "A_atr_stop_fixed_2R": {
+     "n": 1194,
+     "mean": 0.0795,
+     "ci95": [
+      -0.15392,
+      0.30635
+     ]
+    },
+    "A_atr_stop_fixed_3R": {
+     "n": 1194,
+     "mean": 0.1554,
+     "ci95": [
+      -0.1364,
+      0.43686
+     ]
+    },
+    "B_donchian_trail_10": {
+     "n": 1194,
+     "mean": 0.05155,
+     "ci95": [
+      -0.17897,
+      0.27485
+     ]
+    },
+    "C_atr_trail_3x": {
+     "n": 1194,
+     "mean": 0.07191,
+     "ci95": [
+      -0.20394,
+      0.33401
+     ]
+    },
+    "D_hybrid_atr_stop_to_donchian_10": {
+     "n": 1194,
+     "mean": 0.07317,
+     "ci95": [
+      -0.16008,
+      0.29193
+     ]
+    }
+   },
+   "unclassified": {
+    "A_atr_stop_fixed_2R": {
+     "n": 679,
+     "mean": 0.12473,
+     "ci95": [
+      -0.08618,
+      0.32219
+     ]
+    },
+    "A_atr_stop_fixed_3R": {
+     "n": 679,
+     "mean": 0.13038,
+     "ci95": [
+      -0.10627,
+      0.37518
+     ]
+    },
+    "B_donchian_trail_10": {
+     "n": 679,
+     "mean": 0.06135,
+     "ci95": [
+      -0.10959,
+      0.27381
+     ]
+    },
+    "C_atr_trail_3x": {
+     "n": 679,
+     "mean": 0.06878,
+     "ci95": [
+      -0.16579,
+      0.31206
+     ]
+    },
+    "D_hybrid_atr_stop_to_donchian_10": {
+     "n": 679,
+     "mean": 0.05088,
+     "ci95": [
+      -0.1318,
+      0.26253
+     ]
+    }
+   }
+  },
+  "bearish": {
+   "earnings_no_anomaly": {
+    "A_atr_stop_fixed_2R": {
+     "n": 3228,
+     "mean": -0.15757,
+     "ci95": [
+      -0.33565,
+      0.01852
+     ]
+    },
+    "A_atr_stop_fixed_3R": {
+     "n": 3228,
+     "mean": -0.17174,
+     "ci95": [
+      -0.37864,
+      0.03285
+     ]
+    },
+    "B_donchian_trail_10": {
+     "n": 3228,
+     "mean": -0.12343,
+     "ci95": [
+      -0.33181,
+      0.1383
+     ]
+    },
+    "C_atr_trail_3x": {
+     "n": 3228,
+     "mean": -0.15502,
+     "ci95": [
+      -0.35889,
+      0.05091
+     ]
+    },
+    "D_hybrid_atr_stop_to_donchian_10": {
+     "n": 3228,
+     "mean": -0.12905,
+     "ci95": [
+      -0.30905,
+      0.079
+     ]
+    }
+   },
+   "no_recent_earnings": {
+    "A_atr_stop_fixed_2R": {
+     "n": 33388,
+     "mean": -0.18426,
+     "ci95": [
+      -0.30322,
+      -0.07502
+     ]
+    },
+    "A_atr_stop_fixed_3R": {
+     "n": 33388,
+     "mean": -0.22929,
+     "ci95": [
+      -0.3674,
+      -0.09637
+     ]
+    },
+    "B_donchian_trail_10": {
+     "n": 33388,
+     "mean": -0.15299,
+     "ci95": [
+      -0.30649,
+      0.01786
+     ]
+    },
+    "C_atr_trail_3x": {
+     "n": 33388,
+     "mean": -0.20521,
+     "ci95": [
+      -0.33506,
+      -0.08492
+     ]
+    },
+    "D_hybrid_atr_stop_to_donchian_10": {
+     "n": 33388,
+     "mean": -0.18438,
+     "ci95": [
+      -0.30794,
+      -0.05044
+     ]
+    }
+   },
+   "one_time_suspected": {
+    "A_atr_stop_fixed_2R": {
+     "n": 306,
+     "mean": -0.18317,
+     "ci95": [
+      -0.47977,
+      0.11348
+     ]
+    },
+    "A_atr_stop_fixed_3R": {
+     "n": 306,
+     "mean": -0.17152,
+     "ci95": [
+      -0.50617,
+      0.19837
+     ]
+    },
+    "B_donchian_trail_10": {
+     "n": 306,
+     "mean": 0.03119,
+     "ci95": [
+      -0.42582,
+      0.63524
+     ]
+    },
+    "C_atr_trail_3x": {
+     "n": 306,
+     "mean": -0.05093,
+     "ci95": [
+      -0.43699,
+      0.40893
+     ]
+    },
+    "D_hybrid_atr_stop_to_donchian_10": {
+     "n": 306,
+     "mean": -0.04588,
+     "ci95": [
+      -0.44373,
+      0.45171
+     ]
+    }
+   },
+   "recurring_operating": {
+    "A_atr_stop_fixed_2R": {
+     "n": 644,
+     "mean": -0.0535,
+     "ci95": [
+      -0.24877,
+      0.14182
+     ]
+    },
+    "A_atr_stop_fixed_3R": {
+     "n": 644,
+     "mean": -0.09295,
+     "ci95": [
+      -0.29216,
+      0.13326
+     ]
+    },
+    "B_donchian_trail_10": {
+     "n": 644,
+     "mean": -0.25578,
+     "ci95": [
+      -0.39814,
+      -0.12659
+     ]
+    },
+    "C_atr_trail_3x": {
+     "n": 644,
+     "mean": -0.1645,
+     "ci95": [
+      -0.36577,
+      0.03419
+     ]
+    },
+    "D_hybrid_atr_stop_to_donchian_10": {
+     "n": 644,
+     "mean": -0.145,
+     "ci95": [
+      -0.32151,
+      0.01767
+     ]
+    }
+   },
+   "unclassified": {
+    "A_atr_stop_fixed_2R": {
+     "n": 532,
+     "mean": 0.01416,
+     "ci95": [
+      -0.31717,
+      0.32317
+     ]
+    },
+    "A_atr_stop_fixed_3R": {
+     "n": 532,
+     "mean": 0.01716,
+     "ci95": [
+      -0.36144,
+      0.39281
+     ]
+    },
+    "B_donchian_trail_10": {
+     "n": 532,
+     "mean": 0.09077,
+     "ci95": [
+      -0.26932,
+      0.56334
+     ]
+    },
+    "C_atr_trail_3x": {
+     "n": 532,
+     "mean": 0.04646,
+     "ci95": [
+      -0.32179,
+      0.40219
+     ]
+    },
+    "D_hybrid_atr_stop_to_donchian_10": {
+     "n": 532,
+     "mean": 0.05068,
+     "ci95": [
+      -0.28784,
+      0.45346
+     ]
+    }
+   }
+  }
+ },
+ "bullish_combinations_fixed3R_net10": {
+  "all": {
+   "n": 50506,
+   "mean": 0.0853,
+   "ci95": [
+    -0.02132,
+    0.19188
+   ]
+  },
+  "recurring_catalyst": {
+   "n": 1194,
+   "mean": 0.1554,
+   "ci95": [
+    -0.1364,
+    0.43686
+   ]
+  },
+  "recurring_catalyst_and_relvol_ge_1_5": {
+   "n": 368,
+   "mean": 0.18658,
+   "ci95": [
+    -0.05327,
+    0.4293
+   ]
+  },
+  "recurring_catalyst_and_relvol_and_index_uptrend": {
+   "n": 273,
+   "mean": 0.16116,
+   "ci95": [
+    -0.12714,
+    0.443
+   ]
+  },
+  "no_catalyst_relvol_ge_1_5": {
+   "n": 11502,
+   "mean": 0.09448,
+   "ci95": [
+    -0.01228,
+    0.21364
+   ]
+  }
+ },
+ "ml": {
+  "split": {
+   "train_until": "2022-01-01",
+   "test_from": "2022-02-15",
+   "n_train": 4128,
+   "n_test": 5363,
+   "big_move_threshold": 0.1111
+  },
+  "event_significance": {
+   "auc_model": 0.7016,
+   "auc_baseline_trailing_volatility": 0.6986,
+   "auc_baseline_abs_revenue_yoy": 0.5679,
+   "base_rate_test": 0.1771
+  },
+  "reaction_direction": {
+   "auc_model": 0.5629,
+   "auc_baseline_revenue_yoy": 0.542,
+   "auc_baseline_operating_margin_change": 0.5456,
+   "base_rate_test": 0.5064
+  }
+ },
+ "evidence_events_sample": [
+  {
+   "symbol": "AVO",
+   "cik": 1802974,
+   "period_accession": "0001802974-26-000043",
+   "form": "10-Q",
+   "period_end": "2026-07-31",
+   "release_accession": "0001802974-26-000042",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-09-09T00:17:40+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-09-09",
+   "nature": "unclassified",
+   "anomaly_rules": [
+    "revenue_acceleration"
+   ],
+   "revenue_yoy": 0.25803746155996654,
+   "revenue_acceleration": 0.4931150318991724,
+   "operating_margin_change": -0.05759730376168732,
+   "net_income_yoy": -1.4421768707482994,
+   "relvol": 3.4453311654202996,
+   "ar_react": 0.056954803763026085,
+   "ar_d20": -0.026504287910815716,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1802974/000180297426000042/avo-20260908.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1802974/000180297426000043/avo-20260731.htm"
+  },
+  {
+   "symbol": "FIVE",
+   "cik": 1177609,
+   "period_accession": "0001177609-26-000027",
+   "form": "10-Q",
+   "period_end": "2026-08-01",
+   "release_accession": "0001177609-26-000023",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-09-03T00:17:01+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-09-03",
+   "nature": "recurring_operating",
+   "anomaly_rules": [
+    "net_income_surge",
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.2285111608642767,
+   "revenue_acceleration": -0.09613204844365608,
+   "operating_margin_change": 0.16727719698907736,
+   "net_income_yoy": 4.177377110518685,
+   "relvol": 2.4036461337986648,
+   "ar_react": -0.01858551125156005,
+   "ar_d20": -0.023746823430095487,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1177609/000117760926000023/five-20260902.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1177609/000117760926000027/five-20260801.htm"
+  },
+  {
+   "symbol": "PHR",
+   "cik": 1412408,
+   "period_accession": "0001412408-26-000223",
+   "form": "10-Q",
+   "period_end": "2026-07-31",
+   "release_accession": "0001412408-26-000213",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-09-02T20:05:43+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-09-03",
+   "nature": "recurring_operating",
+   "anomaly_rules": [
+    "net_income_surge",
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.10407232100976493,
+   "revenue_acceleration": -0.02530078139156,
+   "operating_margin_change": 0.07162042506265906,
+   "net_income_yoy": 1.932721712538226,
+   "relvol": 1.6348793790937586,
+   "ar_react": -0.06904136992599763,
+   "ar_d20": -0.040848139801803574,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1412408/000141240826000213/phr-20260902.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1412408/000141240826000223/phr-20260731.htm"
+  },
+  {
+   "symbol": "DELL",
+   "cik": 1571996,
+   "period_accession": "0001571996-26-000046",
+   "form": "10-Q",
+   "period_end": "2026-07-31",
+   "release_accession": "0001571996-26-000039",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-09-02T00:10:14+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-09-02",
+   "nature": "recurring_operating",
+   "anomaly_rules": [
+    "net_income_surge",
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.5774785061794734,
+   "revenue_acceleration": -0.2978743897055467,
+   "operating_margin_change": 0.055100606939256,
+   "net_income_yoy": 2.5506872852233675,
+   "relvol": 6.302283656378315,
+   "ar_react": 0.14763324643040554,
+   "ar_d20": 0.16428119713424738,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1571996/000157199626000039/dell-20260901.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1571996/000157199626000046/dell-20260731.htm"
+  },
+  {
+   "symbol": "CRM",
+   "cik": 1108524,
+   "period_accession": "0001108524-26-000190",
+   "form": "10-Q",
+   "period_end": "2026-07-31",
+   "release_accession": "0001108524-26-000187",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-26T20:03:53+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-27",
+   "nature": "one_time_suspected",
+   "anomaly_rules": [
+    "net_income_surge"
+   ],
+   "revenue_yoy": 0.1083431027745212,
+   "revenue_acceleration": -0.024325530860640043,
+   "operating_margin_change": -0.022358405964758354,
+   "net_income_yoy": 0.8685744568097509,
+   "relvol": 4.667104981477571,
+   "ar_react": 0.22416730276832775,
+   "ar_d20": -0.012679841904846612,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1108524/000110852426000187/crm-20260826.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1108524/000110852426000190/crm-20260731.htm"
+  },
+  {
+   "symbol": "NCNO",
+   "cik": 1902733,
+   "period_accession": "0001902733-26-000101",
+   "form": "10-Q",
+   "period_end": "2026-07-31",
+   "release_accession": "0001902733-26-000099",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-26T00:06:18+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-26",
+   "nature": "one_time_suspected",
+   "anomaly_rules": [
+    "net_income_turnaround",
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.08188690656183861,
+   "revenue_acceleration": -0.024102534039811108,
+   "operating_margin_change": 0.14702530222420265,
+   "net_income_yoy": null,
+   "relvol": 2.5599341172232952,
+   "ar_react": 0.03538598494432299,
+   "ar_d20": -0.04275057743095689,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1902733/000190273326000099/ncno-20260825.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1902733/000190273326000101/ncno-20260731.htm"
+  },
+  {
+   "symbol": "SJM",
+   "cik": 91419,
+   "period_accession": "0000091419-26-000080",
+   "form": "10-Q",
+   "period_end": "2026-07-31",
+   "release_accession": "0000091419-26-000079",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-26T11:02:27+00:00",
+   "timing": "BMO",
+   "reaction_date": "2026-08-26",
+   "nature": "unclassified",
+   "anomaly_rules": [
+    "net_income_turnaround",
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.05015851985047082,
+   "revenue_acceleration": -0.007822635108014175,
+   "operating_margin_change": 0.20894551051900084,
+   "net_income_yoy": null,
+   "relvol": 2.4670127405405906,
+   "ar_react": 0.04519191377831966,
+   "ar_d20": -0.015478582108674366,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/91419/000009141926000079/sjm-20260826.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/91419/000009141926000080/sjm-20260731.htm"
+  },
+  {
+   "symbol": "MH",
+   "cik": 1951070,
+   "period_accession": "0001951070-26-000039",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001951070-26-000038",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-13T15:15:27+00:00",
+   "timing": "INTRADAY",
+   "reaction_date": "2026-08-13",
+   "nature": "one_time_suspected",
+   "anomaly_rules": [
+    "net_income_surge"
+   ],
+   "revenue_yoy": 0.026493811950495605,
+   "revenue_acceleration": 0.04665177941883236,
+   "operating_margin_change": 0.028200669836432185,
+   "net_income_yoy": 114.2589641434263,
+   "relvol": 3.5841163621954815,
+   "ar_react": 0.1634055190276753,
+   "ar_d20": -0.05474212397029343,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1951070/000195107026000038/mh-20260811.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1951070/000195107026000039/mh-20260630.htm"
+  },
+  {
+   "symbol": "LUNR",
+   "cik": 1844452,
+   "period_accession": "0001628280-26-056821",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001628280-26-056476",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-13T11:35:43+00:00",
+   "timing": "BMO",
+   "reaction_date": "2026-08-13",
+   "nature": "recurring_operating",
+   "anomaly_rules": [
+    "revenue_acceleration"
+   ],
+   "revenue_yoy": 3.09770834575557,
+   "revenue_acceleration": 1.1111751744933347,
+   "operating_margin_change": 0.34060749981781624,
+   "net_income_yoy": null,
+   "relvol": 2.1376503293293214,
+   "ar_react": 0.029566133410749318,
+   "ar_d20": -0.21540174934588996,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1844452/000162828026056476/lunr-20260813.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1844452/000162828026056821/lunr-20260630.htm"
+  },
+  {
+   "symbol": "REZI",
+   "cik": 1740332,
+   "period_accession": "0001740332-26-000025",
+   "form": "10-Q",
+   "period_end": "2026-07-04",
+   "release_accession": "0001740332-26-000022",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-13T00:18:24+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-13",
+   "nature": "one_time_suspected",
+   "anomaly_rules": [
+    "net_income_turnaround"
+   ],
+   "revenue_yoy": 0.019557385486361323,
+   "revenue_acceleration": -0.06066860321420364,
+   "operating_margin_change": -0.02496802485163349,
+   "net_income_yoy": null,
+   "relvol": 3.522833614367153,
+   "ar_react": -0.21062276729590734,
+   "ar_d20": -0.034492508050009696,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1740332/000174033226000022/rezi-20260812.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1740332/000174033226000025/rezi-20260704.htm"
+  },
+  {
+   "symbol": "TECH",
+   "cik": 842023,
+   "period_accession": "0001104659-26-100322",
+   "form": "10-K",
+   "period_end": "2026-06-30",
+   "release_accession": "0001104659-26-094391",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-12T10:30:30+00:00",
+   "timing": "BMO",
+   "reaction_date": "2026-08-12",
+   "nature": "unclassified",
+   "anomaly_rules": [
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.013335857271307594,
+   "revenue_acceleration": 0.028409501797702297,
+   "operating_margin_change": 0.30652438484967287,
+   "net_income_yoy": null,
+   "relvol": 0.6350496170159555,
+   "ar_react": -0.002732162292951257,
+   "ar_d20": 0.03502758744302892,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/842023/000110465926094391/tech-20260812x8k.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/842023/000110465926100322/tech-20260630x10k.htm"
+  },
+  {
+   "symbol": "ATRO",
+   "cik": 8063,
+   "period_accession": "0000008063-26-000043",
+   "form": "10-Q",
+   "period_end": "2026-07-04",
+   "release_accession": "0000008063-26-000037",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-12T00:20:29+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-12",
+   "nature": "recurring_operating",
+   "anomaly_rules": [
+    "revenue_acceleration",
+    "net_income_surge",
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.27007787842367037,
+   "revenue_acceleration": 0.1502202527535592,
+   "operating_margin_change": 0.1324217830428116,
+   "net_income_yoy": 25.681887366818874,
+   "relvol": 4.304597054581257,
+   "ar_react": 0.1694337956687273,
+   "ar_d20": -0.1153666656256811,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/8063/000000806326000037/atro-20260811.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/8063/000000806326000043/atro-20260704.htm"
+  },
+  {
+   "symbol": "SMCI",
+   "cik": 1375365,
+   "period_accession": "0001375365-26-000022",
+   "form": "10-K",
+   "period_end": "2026-06-30",
+   "release_accession": "0001375365-26-000021",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-12T00:06:16+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-12",
+   "nature": "recurring_operating",
+   "anomaly_rules": [
+    "net_income_surge",
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.931552702482286,
+   "revenue_acceleration": -0.29523158669883554,
+   "operating_margin_change": 0.09414889765571452,
+   "net_income_yoy": 5.037370486897527,
+   "relvol": 3.3716613593067355,
+   "ar_react": 0.18634907290436353,
+   "ar_d20": 0.012213964759138052,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1375365/000137536526000021/smci-20260811.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1375365/000137536526000022/smci-20260630.htm"
+  },
+  {
+   "symbol": "DJT",
+   "cik": 1849635,
+   "period_accession": "0001437749-26-026777",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001437749-26-026797",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-10T20:45:30+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-11",
+   "nature": "unclassified",
+   "anomaly_rules": [
+    "revenue_acceleration"
+   ],
+   "revenue_yoy": 0.8902977470847957,
+   "revenue_acceleration": 0.8294112395348687,
+   "operating_margin_change": -48.667979648939756,
+   "net_income_yoy": null,
+   "relvol": 1.1004512958514245,
+   "ar_react": -0.05485277784808429,
+   "ar_d20": -0.00017636254689223918,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1849635/000143774926026797/djt20260511_8k.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1849635/000143774926026777/djt20260630_10q.htm"
+  },
+  {
+   "symbol": "MLAB",
+   "cik": 724004,
+   "period_accession": "0001437749-26-026808",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001437749-26-026769",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-11T00:03:03+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-11",
+   "nature": "unclassified",
+   "anomaly_rules": [
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.009992778328266949,
+   "revenue_acceleration": -0.015580570026122675,
+   "operating_margin_change": 0.06545582039978366,
+   "net_income_yoy": -0.4032053985660059,
+   "relvol": 3.070586153078792,
+   "ar_react": 0.09083353130702854,
+   "ar_d20": 0.14310338476457352,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/724004/000143774926026769/mlab20260807_8k.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/724004/000143774926026808/mlab20260630_10q.htm"
+  },
+  {
+   "symbol": "QMCO",
+   "cik": 709283,
+   "period_accession": "0001628280-26-055417",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001628280-26-055272",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-11T00:27:46+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-11",
+   "nature": "recurring_operating",
+   "anomaly_rules": [
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.256929969200137,
+   "revenue_acceleration": -0.016171250132902548,
+   "operating_margin_change": 0.2582860771511568,
+   "net_income_yoy": null,
+   "relvol": 17.48021597556668,
+   "ar_react": 0.6431245162063861,
+   "ar_d20": 0.22824047582019458,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/709283/000162828026055272/qtm-20260810.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/709283/000162828026055417/qtm-20260630.htm"
+  },
+  {
+   "symbol": "CNNE",
+   "cik": 1704720,
+   "period_accession": "0001704720-26-000153",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001704720-26-000151",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-11T00:11:10+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-11",
+   "nature": "one_time_suspected",
+   "anomaly_rules": [
+    "net_income_turnaround"
+   ],
+   "revenue_yoy": -0.07259528130671511,
+   "revenue_acceleration": -0.0047658239423740145,
+   "operating_margin_change": -0.0031414151817900082,
+   "net_income_yoy": null,
+   "relvol": 2.056551764419925,
+   "ar_react": 0.009231855426248714,
+   "ar_d20": 0.07771473535289997,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1704720/000170472026000151/cnne-20260810.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1704720/000170472026000153/cnne-20260630.htm"
+  },
+  {
+   "symbol": "AMTM",
+   "cik": 2011286,
+   "period_accession": "0001628280-26-055727",
+   "form": "10-Q",
+   "period_end": "2026-07-03",
+   "release_accession": "0001628280-26-055294",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-10T20:42:44+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-11",
+   "nature": "unclassified",
+   "anomaly_rules": [
+    "net_income_surge"
+   ],
+   "revenue_yoy": -0.01993821960123565,
+   "revenue_acceleration": -0.016214358243458515,
+   "operating_margin_change": 0.02035920820026569,
+   "net_income_yoy": 5.6,
+   "relvol": 4.019259158993242,
+   "ar_react": -0.08597679284471171,
+   "ar_d20": -0.10594637772247562,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/2011286/000162828026055294/amtm-20260810.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/2011286/000162828026055727/amtm-20260703.htm"
+  },
+  {
+   "symbol": "TCMD",
+   "cik": 1027838,
+   "period_accession": "0001104659-26-093352",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001104659-26-093346",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-10T20:04:20+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-11",
+   "nature": "unclassified",
+   "anomaly_rules": [
+    "net_income_surge"
+   ],
+   "revenue_yoy": 0.08609086876623784,
+   "revenue_acceleration": -0.14239708579405463,
+   "operating_margin_change": 0.027906030278739884,
+   "net_income_yoy": 1.4199564811936587,
+   "relvol": 6.523233423863325,
+   "ar_react": -0.17497684564023464,
+   "ar_d20": -0.06968843632013455,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1027838/000110465926093346/tcmd-20260810x8k.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1027838/000110465926093352/tcmd-20260630x10q.htm"
+  },
+  {
+   "symbol": "CRC",
+   "cik": 1609253,
+   "period_accession": "0001609253-26-000130",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001609253-26-000127",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-10T12:06:09+00:00",
+   "timing": "BMO",
+   "reaction_date": "2026-08-10",
+   "nature": "recurring_operating",
+   "anomaly_rules": [
+    "revenue_acceleration",
+    "net_income_surge",
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.32617586912065444,
+   "revenue_acceleration": 1.1956934129803036,
+   "operating_margin_change": 0.12097998685025851,
+   "net_income_yoy": 1.9883720930232558,
+   "relvol": 2.3214691920967865,
+   "ar_react": 0.0371378316216423,
+   "ar_d20": 0.04430484398630108,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1609253/000160925326000127/crc-20260810.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1609253/000160925326000130/crc-20260630.htm"
+  },
+  {
+   "symbol": "UAA",
+   "cik": 1336917,
+   "period_accession": "0001336917-26-000111",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001336917-26-000108",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-07T11:25:41+00:00",
+   "timing": "BMO",
+   "reaction_date": "2026-08-07",
+   "nature": "unclassified",
+   "anomaly_rules": [
+    "net_income_turnaround",
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": -0.03186845938691507,
+   "revenue_acceleration": -0.02388765668181092,
+   "operating_margin_change": 0.03964006613421723,
+   "net_income_yoy": null,
+   "relvol": 2.1412983791343394,
+   "ar_react": -0.058757925570628644,
+   "ar_d20": -0.13507079040064662,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1336917/000133691726000108/ua-20260807.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1336917/000133691726000111/ua-20260630.htm"
+  },
+  {
+   "symbol": "WLDN",
+   "cik": 1370450,
+   "period_accession": "0001104659-26-092196",
+   "form": "10-Q",
+   "period_end": "2026-07-03",
+   "release_accession": "0001104659-26-092028",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-06T20:16:31+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-07",
+   "nature": "recurring_operating",
+   "anomaly_rules": [
+    "revenue_acceleration",
+    "net_income_surge"
+   ],
+   "revenue_yoy": 0.331780738212863,
+   "revenue_acceleration": 0.3138788312135323,
+   "operating_margin_change": 0.017303871380424926,
+   "net_income_yoy": 0.577157294635916,
+   "relvol": 2.4951150100029116,
+   "ar_react": 0.15686262165423215,
+   "ar_d20": 0.006366357996744898,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1370450/000110465926092028/wldn-20260806x8k.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1370450/000110465926092196/wldn-20260703x10q.htm"
+  },
+  {
+   "symbol": "INDI",
+   "cik": 1841925,
+   "period_accession": "0001193125-26-340396",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001193125-26-338258",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-06T20:33:18+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-07",
+   "nature": "recurring_operating",
+   "anomaly_rules": [
+    "revenue_acceleration"
+   ],
+   "revenue_yoy": 0.23966766084363011,
+   "revenue_acceleration": 0.21414849373006972,
+   "operating_margin_change": 0.2845698533432828,
+   "net_income_yoy": null,
+   "relvol": 1.9156275452155591,
+   "ar_react": 0.16439714002703898,
+   "ar_d20": -0.07477118860556409,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1841925/000119312526338258/indi-20260806.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1841925/000119312526340396/indi-20260630.htm"
+  },
+  {
+   "symbol": "FIGS",
+   "cik": 1846576,
+   "period_accession": "0001628280-26-054342",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001628280-26-054319",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-07T00:12:44+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-07",
+   "nature": "recurring_operating",
+   "anomaly_rules": [
+    "net_income_surge",
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.2881223794549266,
+   "revenue_acceleration": 0.007892437340772274,
+   "operating_margin_change": 0.11438501166064521,
+   "net_income_yoy": 2.9976052965206366,
+   "relvol": 3.7537604969997567,
+   "ar_react": 0.2552378484507236,
+   "ar_d20": 0.004236669415497496,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1846576/000162828026054319/figs-20260806.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1846576/000162828026054342/figs-20260630.htm"
+  },
+  {
+   "symbol": "WMS",
+   "cik": 1604028,
+   "period_accession": "0001604028-26-000037",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001604028-26-000034",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-06T15:03:14+00:00",
+   "timing": "INTRADAY",
+   "reaction_date": "2026-08-06",
+   "nature": "unclassified",
+   "anomaly_rules": [
+    "revenue_acceleration"
+   ],
+   "revenue_yoy": 0.2063334457993926,
+   "revenue_acceleration": 0.10726903606899407,
+   "operating_margin_change": 0.006342665816170601,
+   "net_income_yoy": 0.17091896999763767,
+   "relvol": 1.9684503391125465,
+   "ar_react": -0.00521373907463718,
+   "ar_d20": -0.10605842796778442,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1604028/000160402826000034/wms-20260806.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1604028/000160402826000037/wms-20260630.htm"
+  },
+  {
+   "symbol": "VISN",
+   "cik": 1517228,
+   "period_accession": "0001193125-26-336708",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001193125-26-336705",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-06T11:07:44+00:00",
+   "timing": "BMO",
+   "reaction_date": "2026-08-06",
+   "nature": "one_time_suspected",
+   "anomaly_rules": [
+    "net_income_surge"
+   ],
+   "revenue_yoy": -0.013884603517432925,
+   "revenue_acceleration": -0.22955066896448262,
+   "operating_margin_change": -0.05191395523330421,
+   "net_income_yoy": 8.283018867924529,
+   "relvol": 4.490216807602918,
+   "ar_react": -0.1797658657183473,
+   "ar_d20": 1.1091599407601382,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1517228/000119312526336705/visn-20260806.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1517228/000119312526336708/visn-20260630.htm"
+  },
+  {
+   "symbol": "ZVRA",
+   "cik": 1434647,
+   "period_accession": "0001434647-26-000068",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001434647-26-000067",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-05T20:13:22+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-06",
+   "nature": "recurring_operating",
+   "anomaly_rules": [
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.5325141996058884,
+   "revenue_acceleration": -0.24288896690555717,
+   "operating_margin_change": 3.167820795850105,
+   "net_income_yoy": -0.8828489967472928,
+   "relvol": 1.6748742469221072,
+   "ar_react": 0.13061182679347672,
+   "ar_d20": 0.044792822552735645,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1434647/000143464726000067/zvra-20260805.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1434647/000143464726000068/zvra-20260630.htm"
+  },
+  {
+   "symbol": "NTCT",
+   "cik": 1078075,
+   "period_accession": "0001078075-26-000108",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001078075-26-000105",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-06T12:15:17+00:00",
+   "timing": "BMO",
+   "reaction_date": "2026-08-06",
+   "nature": "recurring_operating",
+   "anomaly_rules": [
+    "net_income_turnaround",
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.12678115311089333,
+   "revenue_acceleration": 0.13630370819975257,
+   "operating_margin_change": 0.10394867238381689,
+   "net_income_yoy": null,
+   "relvol": 1.242223095758881,
+   "ar_react": -0.019290034712480586,
+   "ar_d20": -0.06801866849348515,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1078075/000107807526000105/ntct-20260806.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1078075/000107807526000108/ntct-20260630.htm"
+  },
+  {
+   "symbol": "DDOG",
+   "cik": 1561550,
+   "period_accession": "0001628280-26-054458",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001628280-26-053829",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-06T15:07:37+00:00",
+   "timing": "INTRADAY",
+   "reaction_date": "2026-08-06",
+   "nature": "recurring_operating",
+   "anomaly_rules": [
+    "net_income_surge",
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.3564444336929702,
+   "revenue_acceleration": 0.034900168224906825,
+   "operating_margin_change": 0.04780292138250917,
+   "net_income_yoy": 15.833396297695504,
+   "relvol": 3.5166336143279286,
+   "ar_react": -0.18786769488553667,
+   "ar_d20": -0.09349208908116258,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1561550/000162828026053829/ddog-20260806.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1561550/000162828026054458/ddog-20260630.htm"
+  },
+  {
+   "symbol": "RGLD",
+   "cik": 85535,
+   "period_accession": "0000085535-26-000041",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0000085535-26-000038",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-06T01:14:50+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-06",
+   "nature": "recurring_operating",
+   "anomaly_rules": [
+    "net_income_surge"
+   ],
+   "revenue_yoy": 1.149077240833226,
+   "revenue_acceleration": -0.27614350401261456,
+   "operating_margin_change": -0.05523853837244885,
+   "net_income_yoy": 0.7861336315348058,
+   "relvol": 1.16472693950559,
+   "ar_react": 0.01644733274149346,
+   "ar_d20": 0.15057139678819187,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/85535/000008553526000038/rgld-20260805.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/85535/000008553526000041/rgld-20260630.htm"
+  },
+  {
+   "symbol": "AXON",
+   "cik": 1069183,
+   "period_accession": "0001628280-26-053646",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001628280-26-053363",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-05T20:12:36+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-06",
+   "nature": "recurring_operating",
+   "anomaly_rules": [
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.35278622905504253,
+   "revenue_acceleration": 0.015309649742778264,
+   "operating_margin_change": 0.05327296830600663,
+   "net_income_yoy": -0.18523133150593907,
+   "relvol": 2.842547675757919,
+   "ar_react": -0.14038481562845584,
+   "ar_d20": 0.014372917297368115,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1069183/000162828026053363/axon-20260805.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1069183/000162828026053646/axon-20260630.htm"
+  },
+  {
+   "symbol": "RDN",
+   "cik": 890926,
+   "period_accession": "0001193125-26-340290",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001193125-26-336793",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-06T12:00:18+00:00",
+   "timing": "BMO",
+   "reaction_date": "2026-08-06",
+   "nature": "unclassified",
+   "anomaly_rules": [
+    "revenue_acceleration"
+   ],
+   "revenue_yoy": 0.9258317674367194,
+   "revenue_acceleration": 0.3441437046219247,
+   "operating_margin_change": null,
+   "net_income_yoy": -0.18252983158904346,
+   "relvol": 1.5631229969568872,
+   "ar_react": -0.07188417180173079,
+   "ar_d20": 0.014398937397597233,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/890926/000119312526336793/rdn-20260805.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/890926/000119312526340290/rdn-20260630.htm"
+  },
+  {
+   "symbol": "WRBY",
+   "cik": 1504776,
+   "period_accession": "0001504776-26-000019",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001504776-26-000015",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-06T10:46:12+00:00",
+   "timing": "BMO",
+   "reaction_date": "2026-08-06",
+   "nature": "one_time_suspected",
+   "anomaly_rules": [
+    "net_income_turnaround",
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.09808136146404012,
+   "revenue_acceleration": 0.014674295658926306,
+   "operating_margin_change": 0.03454538497405549,
+   "net_income_yoy": null,
+   "relvol": 2.3968885893434444,
+   "ar_react": -0.07651369772186689,
+   "ar_d20": -0.12423293514613487,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1504776/000150477626000015/wrby-20260806.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1504776/000150477626000019/wrby-20260630.htm"
+  },
+  {
+   "symbol": "APP",
+   "cik": 1751008,
+   "period_accession": "0001751008-26-000059",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001751008-26-000057",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-05T20:06:12+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-06",
+   "nature": "recurring_operating",
+   "anomaly_rules": [
+    "net_income_surge"
+   ],
+   "revenue_yoy": 0.5282461863080474,
+   "revenue_acceleration": -0.061478000774665365,
+   "operating_margin_change": 0.015960575584651804,
+   "net_income_yoy": 0.5454424542817782,
+   "relvol": 2.3343070359771736,
+   "ar_react": -0.19417061112921985,
+   "ar_d20": -0.07908808254085231,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1751008/000175100826000057/app-20260805.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1751008/000175100826000059/app-20260630.htm"
+  },
+  {
+   "symbol": "PR",
+   "cik": 1658566,
+   "period_accession": "0001658566-26-000101",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001658566-26-000094",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-05T20:10:40+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-06",
+   "nature": "recurring_operating",
+   "anomaly_rules": [
+    "revenue_acceleration",
+    "net_income_surge",
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.5514706127942979,
+   "revenue_acceleration": 0.5429741243613642,
+   "operating_margin_change": 0.25114530391133016,
+   "net_income_yoy": 2.8257964535548936,
+   "relvol": 1.7665443356806583,
+   "ar_react": 0.02716627727862464,
+   "ar_d20": 0.1782987340542843,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1658566/000165856626000094/pr-20260805.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1658566/000165856626000101/pr-20260630.htm"
+  },
+  {
+   "symbol": "GOLF",
+   "cik": 1672013,
+   "period_accession": "0001672013-26-000158",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001672013-26-000157",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-06T10:01:46+00:00",
+   "timing": "BMO",
+   "reaction_date": "2026-08-06",
+   "nature": "recurring_operating",
+   "anomaly_rules": [
+    "net_income_surge",
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.1380684436400379,
+   "revenue_acceleration": 0.06754672824619234,
+   "operating_margin_change": 0.06286802044775394,
+   "net_income_yoy": 0.6520254621971071,
+   "relvol": 4.033860605670605,
+   "ar_react": -0.0877534502136228,
+   "ar_d20": -0.056670359843208784,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1672013/000167201326000157/golf-20260806.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1672013/000167201326000158/golf-20260630.htm"
+  },
+  {
+   "symbol": "DIOD",
+   "cik": 29002,
+   "period_accession": "0001193125-26-335450",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001193125-26-335408",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-05T21:00:32+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-06",
+   "nature": "recurring_operating",
+   "anomaly_rules": [
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.21658765960700355,
+   "revenue_acceleration": -0.004282947686297334,
+   "operating_margin_change": 0.04908200917100759,
+   "net_income_yoy": 0.011952796216755601,
+   "relvol": 1.7061723078136188,
+   "ar_react": 0.15581247029064993,
+   "ar_d20": -0.11623479034468909,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/29002/000119312526335408/diod-20260805.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/29002/000119312526335450/diod-20260630.htm"
+  },
+  {
+   "symbol": "BAM",
+   "cik": 1937926,
+   "period_accession": "0001628280-26-054933",
+   "form": "10-Q",
+   "period_end": "2026-06-30",
+   "release_accession": "0001171843-26-005272",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-05T22:53:22+00:00",
+   "timing": "AMC",
+   "reaction_date": "2026-08-06",
+   "nature": "one_time_suspected",
+   "anomaly_rules": [
+    "revenue_acceleration",
+    "net_income_surge"
+   ],
+   "revenue_yoy": 0.608256880733945,
+   "revenue_acceleration": 0.3705140500216415,
+   "operating_margin_change": null,
+   "net_income_yoy": 1.006849315068493,
+   "relvol": 1.090726256024621,
+   "ar_react": 0.012667359276664292,
+   "ar_d20": -0.058754138573729686,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1937926/000117184326005272/f8k_080526.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1937926/000162828026054933/bam-20260630.htm"
+  },
+  {
+   "symbol": "FOX",
+   "cik": 1754301,
+   "period_accession": "0001628280-26-053960",
+   "form": "10-K",
+   "period_end": "2026-06-30",
+   "release_accession": "0001628280-26-053892",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-06T16:05:58+00:00",
+   "timing": "INTRADAY",
+   "reaction_date": "2026-08-06",
+   "nature": "unclassified",
+   "anomaly_rules": [
+    "revenue_acceleration"
+   ],
+   "revenue_yoy": 0.2814116215393976,
+   "revenue_acceleration": 0.3676619075151468,
+   "operating_margin_change": null,
+   "net_income_yoy": null,
+   "relvol": 1.4022959795486856,
+   "ar_react": 0.06313624623031167,
+   "ar_d20": 0.08906056110345273,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1754301/000162828026053892/fox-20260806.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1754301/000162828026053960/fox-20260630.htm"
+  },
+  {
+   "symbol": "ENOV",
+   "cik": 1420800,
+   "period_accession": "0001420800-26-000035",
+   "form": "10-Q",
+   "period_end": "2026-07-03",
+   "release_accession": "0001420800-26-000032",
+   "release_source": "8k_item_2_02",
+   "decision_accepted_at": "2026-08-06T10:19:39+00:00",
+   "timing": "BMO",
+   "reaction_date": "2026-08-06",
+   "nature": "unclassified",
+   "anomaly_rules": [
+    "operating_margin_expansion"
+   ],
+   "revenue_yoy": 0.0323038907438733,
+   "revenue_acceleration": -0.02194656645808646,
+   "operating_margin_change": 0.0596304898726009,
+   "net_income_yoy": null,
+   "relvol": 2.972309446873218,
+   "ar_react": -0.1258239177138386,
+   "ar_d20": -0.2538270755163752,
+   "source_url": "https://www.sec.gov/Archives/edgar/data/1420800/000142080026000032/cfx-20260806.htm",
+   "periodic_url": "https://www.sec.gov/Archives/edgar/data/1420800/000142080026000035/cfx-20260703.htm"
+  }
+ ]
+}

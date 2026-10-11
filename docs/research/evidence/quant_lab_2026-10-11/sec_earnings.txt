@@ -1,0 +1,12 @@
+[   15s] symbols selected 400
+[   18s] symbols 0 events 19 requests 0 cached 4
+[   27s] symbols 50 events 1236 requests 0 cached 134
+[   36s] symbols 100 events 2424 requests 0 cached 250
+[   45s] symbols 150 events 3686 requests 0 cached 407
+[   55s] symbols 200 events 4875 requests 0 cached 528
+[   63s] symbols 250 events 6072 requests 0 cached 650
+[   80s] symbols 350 events 8579 requests 0 cached 884
+[   89s] pipeline done: events 9614 breakout sims 443020 errors 0 sec requests 0
+[   90s] event statistics done
+[   92s] breakout combinations done
+[   92s] WROTE sec_earnings_study.json and sec_raw_manifest.json
