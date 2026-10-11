@@ -1,0 +1,6 @@
+[   15s] market panel 2528
+[   16s] earnings events 52968 symbols 2802 qf rows 15885
+[   52s] events analysed 39706 skipped {'short_history': 449, 'window': 511, 'illiquid_or_penny': 12293, 'discontinuity': 9}
+[   70s] interaction done
+[   70s] ml done 0.7028
+[   70s] WROTE catalyst_earnings_study.json and catalyst_radar_recent.json

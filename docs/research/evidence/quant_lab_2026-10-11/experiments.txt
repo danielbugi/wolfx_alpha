@@ -1,0 +1,12 @@
+[     0s] loading dataset
+[    19s] rows 600584 features (600584, 33)
+[    20s] data quality done
+[    20s] baseline done 0.042 -0.0948
+[    20s] computing breadth / equal-weight index from stock_prices (SQL)
+[    37s] market panel 2528 sessions 2016-09-20 2026-10-09
+[    38s] regime study done
+[    38s] ML train 387694 test 197150
+[    44s] ML price-only 0.5224
+[    50s] ML price+regime 0.5307
+[    56s] done
+WROTE experiments.json

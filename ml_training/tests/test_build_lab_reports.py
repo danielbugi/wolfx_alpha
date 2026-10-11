@@ -41,7 +41,7 @@ def test_the_build_is_deterministic(reports):
 
 
 def test_the_trainer_log_parser_reads_the_logged_numbers_back():
-    with open(os.path.join(EVIDENCE, "train_momentum.log"), encoding="utf-8") as fh:
+    with open(os.path.join(EVIDENCE, "train_momentum.txt"), encoding="utf-8") as fh:
         r = B.parse_trainer_log(fh.read())
     assert r["target"] == "momentum" and r["holdout_auc"] == 0.6269 and r["auc_ci95"] == [0.6105, 0.6428] and r["direction_only_baseline_auc"] == 0.541
     assert r["promoted"] is False and r["not_promoted_because"] == ["plan_profit_auc_within_direction"] and len(r["walk_forward_auc"]) == 6 and len(r["gate"]) == 6
@@ -64,7 +64,7 @@ def test_the_insight_statuses_for_the_committed_evidence(reports):
 
 def test_a_changed_interval_changes_the_status():
     ex, rk, exitp, cat = _load("experiments.json"), _load("ranker_stability.json"), _load("exit_policy_study.json"), _load("catalyst_earnings_study.json")
-    runs = {n: B.parse_trainer_log(open(os.path.join(EVIDENCE, n + ".log"), encoding="utf-8").read()) for n in ("train_momentum", "train_plan_profit", "train_momentum_novol")}
+    runs = {n: B.parse_trainer_log(open(os.path.join(EVIDENCE, n + ".txt"), encoding="utf-8").read()) for n in ("train_momentum", "train_plan_profit", "train_momentum_novol")}
     ex2 = copy.deepcopy(ex)
     ex2["strategy_baseline"]["bullish"]["ci95"] = [0.01, 0.08]                         # an interval that excludes zero on the positive side
     cat2 = copy.deepcopy(cat)

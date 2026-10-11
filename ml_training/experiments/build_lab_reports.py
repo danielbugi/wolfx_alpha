@@ -49,7 +49,7 @@ def build(evidence_dir, code_ref):
     radar = _load(evidence_dir, "catalyst_radar_recent.json")
     runs = {}
     for name in ("train_momentum", "train_plan_profit", "train_momentum_novol"):
-        with open(os.path.join(evidence_dir, name + ".log"), encoding="utf-8") as fh:
+        with open(os.path.join(evidence_dir, name + ".txt"), encoding="utf-8") as fh:
             runs[name] = parse_trainer_log(fh.read())
     base = {"generated_at": "2026-10-11", "code_ref": code_ref, "status": STATUS, "use": USE, "schema": "lab_report_v1"}
     reports = []
@@ -71,7 +71,7 @@ def build(evidence_dir, code_ref):
                     "headline": "No model passes the a-priori gate. The legacy momentum target is predictable (holdout AUC {:.3f}) but does not rank the trade's profit (AUC {:.3f} bullish / {:.3f} bearish within direction).".format(
                         runs["train_momentum"]["holdout_auc"], runs["train_momentum"]["auc_vs_plan_profit_bullish"], runs["train_momentum"]["auc_vs_plan_profit_bearish"]),
                     "caveats": ["Evaluate-only runs: nothing was promoted or registered.", "The legacy momentum label mechanically contains a volume term.", "Out-of-sample AUC for 'R>0' stays near 0.52-0.53 with or without market-regime features."],
-                    "provenance": {"source": "ml_training/models/momentum_predictor.py --no-promote on an isolated copy", "evidence_files": ["train_momentum.log", "train_plan_profit.log", "train_momentum_novol.log", "experiments.json"]},
+                    "provenance": {"source": "ml_training/models/momentum_predictor.py --no-promote on an isolated copy", "evidence_files": ["train_momentum.txt", "train_plan_profit.txt", "train_momentum_novol.txt", "experiments.json"]},
                     "data": {"trainer_runs": runs, "out_of_sample_plan_outcome": ex["ml_plan_outcome"], "simple_rankers_test_period": ex["simple_rankers_test_period"]}})
 
     ov = exitp["overall"]
