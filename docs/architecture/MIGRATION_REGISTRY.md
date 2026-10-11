@@ -52,9 +52,10 @@ migrated and later preflights passed, but this audit did not re-query it.
 | 29 | add_stock_relative_strength_table.sql | `stock_relative_strength`, `research_rs_guard()`, `research_rs_stamp()`; independent | not applied (lab slice 3; written only under the runner's opt-in `--with-stock-rs`) |
 | 30 | add_dataset_experiment_registry_tables.sql | `dataset_manifest`, `experiment_registration`, `experiment_result`, `research_registry_guard()`/`_stamp()`/`_consistency()`; logically after 22/26, no FK | not applied (lab slice 3; dormant) |
 | 31 | add_sector_history_tables.sql | `sector_observation` (hash-chained PIT sector history), `sector_poll`, `sector_reconstruction` (separate, never read by the forward path), `research_sector_guard()`/`_enc()`/`_row_hash()`/`_obs_stamp()`/`_poll_stamp()`/`_recon_stamp()`; independent | not applied (lab slice 10; the recorder is behind a default-OFF flag, nothing else writes to it) |
-| 32 | add_price_discontinuity_scan.sql | `price_discontinuity_scan` (append-only heartbeat proving a discontinuity scan completed for a session over a fingerprinted price input; database-stamped completion), `research_price_input_fingerprint(date)`, `research_discontinuity_result_fingerprint()`, `research_discontinuity_scan_stamp()`/`_guard()`; independent | not applied (lab; owner approved design + lab implementation 2026-10-08; production application needs a separate approval, see docs/research/LAB_DISCONTINUITY_PROVENANCE.md) |
+| 32 | add_price_discontinuity_scan.sql | `price_discontinuity_scan` (append-only heartbeat proving a discontinuity scan completed for a session over a fingerprinted price input; database-stamped completion), `research_price_input_fingerprint(date)`, `research_discontinuity_result_fingerprint()`, `research_discontinuity_scan_stamp()`/`_guard()`; independent | **applied to production 2026-10-08 14:02Z** (owner approved; verified: table, 4 functions, 3 ENABLE ALWAYS triggers; see docs/research/LAB_DISCONTINUITY_PROVENANCE.md) |
+| 33 | widen_news_items_image_url.sql | `news_items.image_url` (nullable `VARCHAR(1000)`, `ADD COLUMN IF NOT EXISTS`; an optional thumbnail per stored headline for the stock page News tab); independent, additive and idempotent | not applied (verified read-only 2026-10-11: column absent in production; the news feature works without it; production application needs a separate approval) |
 
-Next free number: **33**.
+Next free number: **34**.
 
 ## 3. Drift that already happened (do not repeat)
 

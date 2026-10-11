@@ -3,7 +3,7 @@
 Why: `bash -n` accepted a script whose production run aborted at once. An apostrophe inside a double-quoted `${VAR:?word}` is read as the start of a quote by some bash
 builds, so the assignment swallowed the next lines ("PIPELINE_START='...': command not found", "DIAG: unbound variable"). Nothing executed the file before it ran on the VPS.
 These tests (a) forbid that construct and (b) run both scripts end to end in self-test mode with stub `docker`/`systemctl`, asserting that they start, evaluate, print BOTH
-verdicts, produce no shell error, and never print two contradictory lines for the same evidence check (the `cmd && ev PASS || ev FAIL` trap).
+verdicts, produce no shell error, and never print two contradictory lines for the same evidence check (the `cmd && ev PASS || ev first_collector_run_for_the_session_exit_0_complete_and_it_created_the_snapshot|FAIL` trap).
 """
 import hashlib
 import os
@@ -131,7 +131,7 @@ def test_the_confirmation_wrapper_executes_and_never_prints_contradictory_eviden
     if post == "0":
         assert re.search(r"^EVID\|collector_still_disabled_and_unarmed\|PASS", out, re.M)
     else:                                                  # empty collector log + no snapshot rows: the first-execution checks must FAIL loudly, never pass by default
-        assert re.search(r"^EVID\|first_collector_execution_verdict_complete\|FAIL", out, re.M)
+        assert re.search(r"^EVID\|first_collector_run_for_the_session_exit_0_complete_and_it_created_the_snapshot\|FAIL", out, re.M)
         assert re.search(r"^EVID\|committed_snapshot_complete_[a-z0-9_]+\|FAIL", out, re.M)
     assert re.search(r"^EVID\|bot_and_backend_images_unchanged\|PASS", out, re.M)
 
