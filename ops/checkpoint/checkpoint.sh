@@ -12,7 +12,7 @@
 # CHECKPOINT_FLAG_TIME, CHECKPOINT_BOUNDARY, CHECKPOINT_STRATEGY_ID, CHECKPOINT_PIPELINE_START, CHECKPOINT_LEGACY_{COUNT,STAMP_MD5,FROM,TO}, CHECKPOINT_PRICE_WRITER_TZ,
 # CHECKPOINT_DEADLINE, CHECKPOINT_POLL_SECONDS, CHECKPOINT_SELFTEST=1 (skip the wait; installation test).
 set -u
-export LC_ALL=C PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export LC_ALL=C PATH="${CHECKPOINT_PATH_PREFIX:+$CHECKPOINT_PATH_PREFIX:}/usr/sbin:/usr/bin:/sbin:/bin"      # the optional prefix exists only so tests can put stub binaries first
 SESSION="${CHECKPOINT_SESSION:?CHECKPOINT_SESSION is required}"
 DIR="${CHECKPOINT_DIR:-/opt/donchian/checkpoint}"
 OUT="${CHECKPOINT_OUT:-/home/deploy/checkpoint/reports}"

@@ -65,11 +65,12 @@ def make_stubs(tmp_path):
     base = tmp_path / "base"
     (base / "logs").mkdir(parents=True)
     (base / "CURRENT_MECHANISM_SHA").write_text("5c511899505a\n", encoding="utf-8")
+    (base / "logs" / "discontinuity_scan_runs.log").write_text("", encoding="utf-8")
     return b, base
 
 
 def base_env(stubs, base):
-    return dict(os.environ, PATH=stubs.as_posix() + os.pathsep + os.environ.get("PATH", ""), DONCHIAN_BASE=base.as_posix(), CHECKPOINT_SELFTEST="1",
+    return dict(os.environ, PATH=stubs.as_posix() + os.pathsep + os.environ.get("PATH", ""), CHECKPOINT_PATH_PREFIX=stubs.as_posix(), DONCHIAN_BASE=base.as_posix(), CHECKPOINT_SELFTEST="1",
                 CHECKPOINT_SESSION="2026-10-09", CHECKPOINT_PIN="5c511899505a", CHECKPOINT_PIPELINE_START="2026-10-09T20:00:00Z")
 
 

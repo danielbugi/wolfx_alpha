@@ -3,7 +3,7 @@
 # Runs as an unprivileged user from a root-owned, hash-pinned bundle (/opt/donchian/checkpoint-r13). It writes only its own report files.
 # It never changes production: every SQL statement is read-only, the collector dry run has no --apply, no unit/flag/pin/arming file/data is touched.
 set -u
-export LC_ALL=C PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export LC_ALL=C PATH="${CHECKPOINT_PATH_PREFIX:+$CHECKPOINT_PATH_PREFIX:}/usr/sbin:/usr/bin:/sbin:/bin"      # the optional prefix exists only so tests can put stub binaries first
 DIR="${R13_DIR:-/opt/donchian/checkpoint-r13}"
 BASE="${R13_BASE:-/opt/donchian}"
 OUT="${R13_OUT:-/home/deploy/checkpoint-r13/reports}"
@@ -28,7 +28,7 @@ say "== SCAN SERVICE"
 for p in Result ExecMainStatus ExecMainStartTimestamp ExecMainExitTimestamp; do say "SCANSVC|$p=$(systemctl show donchian-discontinuity-scan.service -p $p --value)"; done
 say "SCANSVC|timer=$(systemctl is-enabled donchian-discontinuity-scan.timer)/$(systemctl is-active donchian-discontinuity-scan.timer)"
 LOG=$BASE/logs/discontinuity_scan_runs.log
-tail -n 14 "$LOG" 2>&1 | cut -c1-200 | sed 's/^/SCANLOG|/'
+{ [ -f "$LOG" ] && tail -n 14 "$LOG" || echo "(no scan log yet)"; } 2>&1 | cut -c1-200 | sed 's/^/SCANLOG|/'
 if [ "$SELFTEST" != 1 ]; then
   [ "$(systemctl show donchian-discontinuity-scan.service -p Result --value)" = success ] && [ "$(systemctl show donchian-discontinuity-scan.service -p ExecMainStatus --value)" = 0 ] && ev scan_service_exit_status_0 PASS || ev scan_service_exit_status_0 FAIL
   START=$(systemctl show donchian-discontinuity-scan.service -p ExecMainStartTimestamp --value)
