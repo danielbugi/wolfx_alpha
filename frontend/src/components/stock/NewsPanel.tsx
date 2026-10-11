@@ -5,6 +5,14 @@ import { ArrowTopRightOnSquareIcon } from '@heroicons/react/20/solid';
 import { newsApi, StockNews } from '@/services/newsApi';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 
+/** Plain words for the backend's reason code, so an "unavailable" says what to fix. */
+function reasonText(reason: string): string {
+  if (reason === 'provider_keys_missing') return 'news provider keys are not configured on the server';
+  if (reason.startsWith('provider_error')) return 'the news provider is not responding';
+  if (reason.startsWith('storage_error')) return `news storage problem: ${reason.split(':')[1] ?? 'database'}`;
+  return reason;
+}
+
 /** "3h ago" / "2d ago" / a date for anything older than a week. */
 function ago(iso: string): string {
   const then = new Date(iso);
@@ -72,6 +80,7 @@ export default function NewsPanel({ symbol }: { symbol: string }) {
           {news.status === 'unavailable' && (
             <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
               News is unavailable right now{news.stale ? ' — showing the last headlines we have.' : '.'}
+              {news.reason && <span className="ml-1 text-amber-700/80">({reasonText(news.reason)})</span>}
             </p>
           )}
           {news.items.length === 0 ? (

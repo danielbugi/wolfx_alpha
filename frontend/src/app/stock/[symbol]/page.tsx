@@ -555,7 +555,7 @@ export default function StockDetailPage() {
           <div className="px-5 pb-3 pt-4">
             <h3 className="text-[15px] font-semibold text-slate-900">Chart</h3>
           </div>
-          <StockChart bars={bars} earnings={earnings} breakouts={track.entries} height={420} />
+          <StockChart bars={bars} earnings={earnings} breakouts={track.entries} plan={hasSignal ? rating.plan : null} height={420} />
           <div className="mt-2 grid grid-cols-1 gap-5 border-t border-black/[0.06] px-5 py-4 md:grid-cols-3">
             <ChannelColumn
               title="Daily · 20-day channel"
