@@ -114,10 +114,12 @@ def test_the_checkpoint_runner_refuses_a_tampered_bundle(tmp_path):
 
 
 @needs_linux
-def test_the_confirmation_wrapper_executes_and_never_prints_contradictory_evidence_lines(tmp_path):
+@pytest.mark.parametrize("post", ["0", "1"])
+def test_the_confirmation_wrapper_executes_and_never_prints_contradictory_evidence_lines(tmp_path, post):
     bundle = make_bundle(tmp_path)
     stubs, base = make_stubs(tmp_path)
-    env = dict(base_env(stubs, base), R13_DIR=bundle.as_posix(), R13_BASE=base.as_posix(), R13_OUT=(tmp_path / "r13").as_posix())
+    (base / "logs" / "forward_collection_runs.log").write_text("", encoding="utf-8")          # the post-activation block reads it
+    env = dict(base_env(stubs, base), R13_DIR=bundle.as_posix(), R13_BASE=base.as_posix(), R13_OUT=(tmp_path / "r13").as_posix(), R13_POST=post)
     r = subprocess.run([BASH, (bundle / "r13_confirm.sh").as_posix()], capture_output=True, text=True, env=env, timeout=180)
     out = r.stdout + r.stderr
     for bad in ERRORS:
@@ -125,5 +127,9 @@ def test_the_confirmation_wrapper_executes_and_never_prints_contradictory_eviden
     assert "R13|bundle verified" in out and re.search(r"^EVID_VERDICT\|", out, re.M) and re.search(r"^VERDICT_A\|", out, re.M) and re.search(r"^VERDICT_B\|", out, re.M)
     names = [m.group(1) for m in re.finditer(r"^EVID\|([^|]+)\|(?:PASS|FAIL|REVIEW)", out, re.M)]
     assert names and len(names) == len(set(names)), [n for n in names if names.count(n) > 1]      # each check reports exactly once
-    assert re.search(r"^EVID\|collector_still_disabled_and_unarmed\|PASS", out, re.M)
+    if post == "0":
+        assert re.search(r"^EVID\|collector_still_disabled_and_unarmed\|PASS", out, re.M)
+    else:                                                  # empty collector log + no snapshot rows: the first-execution checks must FAIL loudly, never pass by default
+        assert re.search(r"^EVID\|first_collector_execution_verdict_complete\|FAIL", out, re.M)
+        assert re.search(r"^EVID\|committed_snapshot_complete_[a-z0-9_]+\|FAIL", out, re.M)
     assert re.search(r"^EVID\|bot_and_backend_images_unchanged\|PASS", out, re.M)
