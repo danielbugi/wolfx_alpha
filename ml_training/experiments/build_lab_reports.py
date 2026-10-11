@@ -103,7 +103,79 @@ def build(evidence_dir, code_ref):
                     "headline": f"{len(radar['events'])} liquid events with surprise >= +25% in the last 40 days of data, each with its market-adjusted reaction so far.",
                     "caveats": ["Vendor-reported, unverified against SEC filings.", "Not an alert and not a recommendation."],
                     "provenance": {"source": "earnings_calendar (vendor), fetched 2026-10-07", "evidence_files": ["catalyst_radar_recent.json"]}, "data": radar})
+
+    reports.append({**base, "id": "performance_attribution", "kind": "strategy_lab", "title": "Performance attribution: direction, year, regime and sector",
+                    "headline": attribution_headline(exitp),
+                    "caveats": ["Net of an assumed 10 bps round-trip cost; the 3R fixed-target exit and the 10-bar Donchian trail are shown as the two reference exits.", "Splits shrink the sample: read n beside every mean.",
+                                "Year-by-year signs flip for most cells: a pooled number is not evidence of a stable regime or sector effect.", "Sectors with fewer than 500 trades are omitted."],
+                    "provenance": {"source": "mechanism/research/exit_policies.py on ml_breakout_dataset_v2 + stock_prices (isolated copy)", "evidence_files": ["exit_policy_study.json"]},
+                    "data": {p: {"by_year": exitp["by_year_10bps"][p], "by_regime": exitp["by_regime_10bps"][p], "by_sector": exitp["by_sector_10bps"][p]} for p in ("A_atr_stop_fixed_3R", "B_donchian_trail_10")}})
+
+    reports.append({**base, "id": "research_insights", "kind": "strategy_lab", "title": "Research insights: what the evidence supports, and what it does not",
+                    "headline": insights_headline(insights(ex, rk, exitp, cat, runs)),
+                    "caveats": ["Statuses are assigned by fixed rules from the intervals and counts in the other reports; they are not model opinions.", "'Supported' means the sample supports the sign of the effect, not that it is tradeable after costs.",
+                                "'Suggestive' means a consistent pattern that was selected from several candidates and needs forward confirmation."],
+                    "provenance": {"source": "derived from the other lab reports (deterministic rules in build_lab_reports.insights)", "evidence_files": ["experiments.json", "ranker_stability.json", "exit_policy_study.json", "catalyst_earnings_study.json"]},
+                    "data": {"claims": insights(ex, rk, exitp, cat, runs)}})
     return reports
+
+
+def attribution_headline(exitp):
+    a = exitp["by_year_10bps"]["A_atr_stop_fixed_3R"]
+    pos_bull = sum(1 for v in a.values() if v["bullish"] > 0)
+    pos_bear = sum(1 for v in a.values() if v["bearish"] > 0)
+    return f"Fixed-3R exit by year: bullish positive in {pos_bull} of {len(a)} years, bearish positive in {pos_bear}; regime and sector cells change sign between years."
+
+
+def _excl(ci):
+    return ci[0] > 0 or ci[1] < 0
+
+
+def insights(ex, rk, exitp, cat, runs):
+    """Fixed rules: 'supported' = the interval excludes zero in the claimed direction; 'not_supported' = a large sample whose interval includes zero around a near-zero estimate (the effect is
+    absent or too small to matter); 'inconclusive' = the interval is wide; 'suggestive' = consistent in most years but chosen among several candidates."""
+    out = []
+    b = ex["strategy_baseline"]
+
+    def add(claim, status, evidence, refs):
+        out.append({"claim": claim, "status": status, "evidence": evidence, "reports": refs})
+
+    be = b["bearish"]
+    add("Bearish Donchian breakouts lose money on the plan simulation", "supported" if be["ci95"][1] < 0 else "inconclusive",
+        f"mean {be['mean_r']:+.3f} R, 95% CI {be['ci95'][0]:+.3f} to {be['ci95'][1]:+.3f} over {be['n']:,} trades", ["strategy_baseline"])
+    bu = b["bullish"]
+    add("Bullish Donchian breakouts make money on the plan simulation", "supported" if bu["ci95"][0] > 0 else "inconclusive",
+        f"mean {bu['mean_r']:+.3f} R, 95% CI {bu['ci95'][0]:+.3f} to {bu['ci95'][1]:+.3f}; positive in {sum(1 for v in b['by_year'].values() if v['bullish']['mean_r'] > 0)} of {len(b['by_year'])} years", ["strategy_baseline"])
+    f = ex["regime_filter_trend_following"]
+    add("A trend-regime filter (long in uptrend, short in downtrend) improves expectancy", "supported" if f["all_years"]["ci95"][0] > f["unfiltered_all"]["mean_r"] else "inconclusive",
+        f"filtered {f['all_years']['mean_r']:+.3f} R vs unfiltered {f['unfiltered_all']['mean_r']:+.3f} R; the filtered interval {f['all_years']['ci95'][0]:+.3f} to {f['all_years']['ci95'][1]:+.3f} contains the unfiltered mean", ["strategy_baseline"])
+    paired = exitp["paired_vs_A_3R_gross_r"]
+    all_zero = all(v["ci95"][0] <= 0 <= v["ci95"][1] for v in paired.values())
+    add("The choice among the four exit policies changes expectancy", "not_supported" if all_zero else "supported",
+        "paired differences vs the fixed-3R exit: " + ", ".join(f"{k.split('_')[0]} {v['mean']:+.3f}" for k, v in paired.items()) + (" (all intervals include zero)" if all_zero else ""), ["exit_policies"])
+    tr = runs["train_plan_profit"]
+    add("An ML model ranks which breakouts make money", "not_supported" if not tr["promoted"] else "supported",
+        f"holdout AUC for R>0 {tr['holdout_auc']} (direction-only baseline {tr['direction_only_baseline_auc']}); failed gates: {', '.join(tr['not_promoted_because']) or 'none'}", ["ml_evaluation"])
+    best = rk["less_extended_vs_52w_high_in_direction"]
+    add("Breakouts that are less extended in their own direction do better (an avoid-the-extended rule)", "suggestive",
+        f"top-minus-bottom quintile spread positive in {best['years_with_positive_spread']} of {best['n_years']} years (mean {best['mean_spread']:+.3f} R); selected from {rk['n_candidates_tried']} candidates", ["ranker_stability"])
+    bk = cat["by_surprise_bucket"]
+    up, dn = bk["surprise>=+10%"], bk["surprise<=-10%"]
+    add("Earnings surprises move the price at the release", "supported" if _excl(up["ar_reaction"]["ci95"]) and _excl(dn["ar_reaction"]["ci95"]) else "inconclusive",
+        f"reaction {up['ar_reaction']['mean'] * 100:+.2f}% for surprises >= +10% and {dn['ar_reaction']['mean'] * 100:+.2f}% for <= -10% (market-adjusted)", ["catalyst_earnings"])
+    add("A tradeable drift follows large positive earnings surprises", "supported" if _excl(up["ar_drift_20d"]["ci95"]) else "not_supported",
+        f"20-day market-adjusted drift after the reaction {up['ar_drift_20d']['mean'] * 100:+.2f}%, 95% CI {up['ar_drift_20d']['ci95'][0] * 100:+.2f}% to {up['ar_drift_20d']['ci95'][1] * 100:+.2f}%", ["catalyst_earnings"])
+    x = cat["catalyst_x_breakout_plan_r"]["bullish"]
+    add("A recent positive earnings surprise improves a bullish Donchian breakout", "supported" if x["after_positive_surprise_10pct_within_14d"]["ci95"][0] > x["no_recent_big_surprise"]["mean"] else "not_supported",
+        f"{x['after_positive_surprise_10pct_within_14d']['mean']:+.3f} R after a surprise vs {x['no_recent_big_surprise']['mean']:+.3f} R without", ["catalyst_earnings"])
+    return out
+
+
+def insights_headline(claims):
+    n = {}
+    for c in claims:
+        n[c["status"]] = n.get(c["status"], 0) + 1
+    return f"{len(claims)} claims checked: " + ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in sorted(n.items())) + "."
 
 
 def main(argv):

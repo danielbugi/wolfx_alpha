@@ -96,9 +96,53 @@ function Radar({ d }: { d: any }) {
   );
 }
 
+const STATUS_STYLE: Record<string, string> = {
+  supported: 'bg-emerald-100 text-emerald-800',
+  suggestive: 'bg-amber-100 text-amber-800',
+  inconclusive: 'bg-slate-100 text-slate-700',
+  not_supported: 'bg-rose-100 text-rose-800',
+};
+
+function Insights({ d }: { d: any }) {
+  return (
+    <ul className="space-y-2">
+      {d.claims.map((c: any) => (
+        <li key={c.claim} className="rounded-md border border-slate-200 p-3">
+          <div className="flex items-start gap-2">
+            <span className={`shrink-0 rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${STATUS_STYLE[c.status] ?? STATUS_STYLE.inconclusive}`}>{String(c.status).replace('_', ' ')}</span>
+            <span className="text-sm font-medium text-slate-800">{c.claim}</span>
+          </div>
+          <p className="mt-1 text-xs text-slate-600">{c.evidence}</p>
+          <p className="mt-0.5 text-[11px] text-slate-400">Evidence: {c.reports.join(', ')}</p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const POLICY_LABEL: Record<string, string> = { A_atr_stop_fixed_3R: 'Fixed 3R exit', B_donchian_trail_10: '10-bar Donchian trail' };
+
+function Attribution({ d }: { d: any }) {
+  return (
+    <div className="space-y-5">
+      {Object.keys(d).map((p) => (
+        <div key={p} className="space-y-3">
+          <h3 className="text-sm font-semibold text-slate-700">{POLICY_LABEL[p] ?? p}</h3>
+          <Table head={['Year', 'Bullish mean R', 'Bearish mean R', 'Trades']} rows={Object.keys(d[p].by_year).map((y) => [y, fmtR(d[p].by_year[y].bullish), fmtR(d[p].by_year[y].bearish), fmtInt(d[p].by_year[y].n)])} />
+          <Table head={['Regime', 'Bullish n', 'Bullish mean R', 'Bearish n', 'Bearish mean R']} rows={(['index_uptrend', 'index_downtrend', 'breadth50_ge_0.5', 'breadth50_lt_0.5'] as const).map((k) => [
+            k.replace(/_/g, ' '), fmtInt(d[p].by_regime.bullish[k].n), fmtR(d[p].by_regime.bullish[k].mean_r), fmtInt(d[p].by_regime.bearish[k].n), fmtR(d[p].by_regime.bearish[k].mean_r)])} />
+          <Table head={['Sector', 'Trades', 'Mean R']} rows={Object.keys(d[p].by_sector).map((s) => [s.replace(/_/g, ' '), fmtInt(d[p].by_sector[s].n), fmtR(d[p].by_sector[s].mean_r)])} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function LabReportView({ report }: { report: LabReport }) {
   const body = (() => {
     switch (report.id) {
+      case 'research_insights': return <Insights d={report.data} />;
+      case 'performance_attribution': return <Attribution d={report.data} />;
       case 'strategy_baseline': return <StrategyBaseline d={report.data} />;
       case 'ranker_stability': return <RankerStability d={report.data} />;
       case 'ml_evaluation': return <MlEvaluation d={report.data} />;
