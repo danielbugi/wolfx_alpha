@@ -371,6 +371,17 @@ except ImportError as e:
 except Exception as e:
     logger.error(f"❌ Error including ML stats router: {e}")
 
+# Import and include the Quant Lab reports router (read-only research artifacts; no database)
+try:
+    from routers.lab_reports import lab_reports_router
+
+    app.include_router(lab_reports_router)
+    logger.info("✅ Lab reports router included successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  Lab reports router not available: {e}")
+except Exception as e:
+    logger.error(f"❌ Error including lab reports router: {e}")
+
 # Import and include performance router (endpoint/DB/frontend-route latency
 # tracking and scoring — see services/performance_service.py)
 try:
