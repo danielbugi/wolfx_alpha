@@ -486,6 +486,19 @@ except Exception as e:
     logger.error(f"❌ Error including market intelligence router: {e}")
 
 
+# Import and include the stock news router (headlines for the stock page, through the same cached news service the
+# Telegram assistant uses -- mechanism/alerts/news_service.py)
+try:
+    from routers.news import news_router
+
+    app.include_router(news_router)
+    logger.info("✅ News router included successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  News router not available: {e}")
+except Exception as e:
+    logger.error(f"❌ Error including news router: {e}")
+
+
 # ============================================================================
 # HEALTH AND STATUS ENDPOINTS
 # ============================================================================
