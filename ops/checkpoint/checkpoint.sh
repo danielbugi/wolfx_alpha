@@ -22,7 +22,7 @@ DEADLINE="${CHECKPOINT_DEADLINE:-}"
 POLL="${CHECKPOINT_POLL_SECONDS:-600}"
 SELFTEST="${CHECKPOINT_SELFTEST:-0}"
 PG="${CHECKPOINT_PG:-donchian-screener-postgres-1}"
-PIPELINE_START="${CHECKPOINT_PIPELINE_START:?CHECKPOINT_PIPELINE_START is required (UTC instant of the night's first pipeline attempt)}"
+PIPELINE_START="${CHECKPOINT_PIPELINE_START:?CHECKPOINT_PIPELINE_START is required (UTC instant of the first pipeline attempt of the night)}"
 
 mkdir -p "$OUT"; TS=$(date -u +%Y%m%dT%H%M%SZ)
 [ "$SELFTEST" = 1 ] && TAG=selftest || TAG=checkpoint

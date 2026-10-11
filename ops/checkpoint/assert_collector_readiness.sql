@@ -17,7 +17,14 @@ select 'ASSERT|B|one_complete_scan_matches_both_fingerprints_and_finished_before
     where s.session_date = date '{{SESSION}}' and s.status = 'complete' and s.input_fingerprint = f.fingerprint and s.result_fingerprint = r.fingerprint
       and s.finished_at <= (((date '{{SESSION}}' + 1)::timestamp + interval '12 hours') at time zone 'America/New_York')) then 'PASS' else 'FAIL' end;
 -- late ingestion after the scan completed, in ONE explicit timezone
-select 'ASSERT|B|price_rows_created_or_changed_after_the_first_complete_scan=' || count(*) || ' symbols=' || coalesce(string_agg(distinct p.symbol, ',' order by p.symbol), 'none') || '|' || case when count(*) = 0 then 'PASS' else 'FAIL (late ingestion)' end
+-- READINESS is judged against the LATEST complete scan: the pipeline's own scan (~23:22Z) is always the first one of a night and a straggler bar normally lands after it; the 06:20
+-- scan exists precisely to cover that. A write after the LATEST complete scan is the real failure (the evidence cannot cover the final price state).
+select 'ASSERT|B|price_rows_created_or_changed_after_the_latest_complete_scan=' || count(*) || ' symbols=' || coalesce(string_agg(distinct p.symbol, ',' order by p.symbol), 'none') || '|' || case when count(*) = 0 then 'PASS' else 'FAIL (late ingestion)' end
+  from stock_prices p, (select max(finished_at) f from price_discontinuity_scan where session_date = date '{{SESSION}}' and status = 'complete') s
+  where p.date <= date '{{SESSION}}' and s.f is not null
+    and ((p.created_at at time zone '{{PRICE_WRITER_TZ}}') > s.f or (p.updated_at at time zone '{{PRICE_WRITER_TZ}}') > s.f);
+-- information only: stragglers that arrived after the FIRST complete scan (covered by a later one when the line above passes)
+select 'ASSERT|B|straggler_rows_after_the_first_complete_scan_covered_by_a_later_scan=' || count(*) || ' symbols=' || coalesce(string_agg(distinct p.symbol, ',' order by p.symbol), 'none') || '|INFO'
   from stock_prices p, (select min(finished_at) f from price_discontinuity_scan where session_date = date '{{SESSION}}' and status = 'complete') s
   where p.date <= date '{{SESSION}}' and s.f is not null
     and ((p.created_at at time zone '{{PRICE_WRITER_TZ}}') > s.f or (p.updated_at at time zone '{{PRICE_WRITER_TZ}}') > s.f);

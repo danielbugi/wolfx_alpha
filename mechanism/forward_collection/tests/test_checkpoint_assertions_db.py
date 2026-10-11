@@ -242,9 +242,9 @@ def test_a_late_price_row_after_the_scan_is_a_verdict_b_failure_only_and_verdict
     b = lines(run_sql(world, "assert_collector_readiness.sql", p), "B")
     assert a_after == a_before                                                   # a fingerprint mismatch cannot contaminate the forward-research verdict
     assert status(b["price_fingerprint_fresh (a complete scan matches the prices as stored now)"]) == "FAIL"
-    late = next(v for k, v in b.items() if k.startswith("price_rows_created_or_changed_after_the_first_complete_scan="))
+    late = next(v for k, v in b.items() if k.startswith("price_rows_created_or_changed_after_the_latest_complete_scan="))
     assert "FAIL" in late
-    assert next(k for k in b if k.startswith("price_rows_created_or_changed_after_the_first_complete_scan=")).endswith("symbols=S9999")
+    assert next(k for k in b if k.startswith("price_rows_created_or_changed_after_the_latest_complete_scan=")).endswith("symbols=S9999")
     assert status(b["a_complete_scan_finished_after_the_last_price_write (the evidence covers the final price state)"]) == "FAIL"
     assert status(b["result_fingerprint_fresh (a complete scan matches the discontinuity table as stored now)"]) == "PASS"          # checked independently
 
@@ -266,7 +266,7 @@ def test_late_rows_are_detected_identically_in_any_connection_timezone(world, tz
     late_bar(world, created="2026-06-10 02:47:09")
     out = run_sql(world, "assert_collector_readiness.sql", p, tz=tz)
     b = lines(out, "B")
-    late_key = next(k for k in b if k.startswith("price_rows_created_or_changed_after_the_first_complete_scan="))
+    late_key = next(k for k in b if k.startswith("price_rows_created_or_changed_after_the_latest_complete_scan="))
     assert late_key.endswith("=1 symbols=S9999") and "FAIL" in b[late_key], (tz, late_key)
     assert out == run_sql(world, "assert_collector_readiness.sql", p, tz="UTC")           # byte-identical to the UTC run: no dependence on the session zone
 
@@ -275,9 +275,26 @@ def test_a_row_created_before_the_scan_in_the_writers_frame_is_not_late_even_if_
     strat, p = build(world)
     late_bar(world, created="2026-06-09 22:00:00")                                 # 22:00 UTC: BEFORE the 23:30 UTC scan (22:00 would look 'after' if misread as a +03:00 local... it is not)
     b = lines(run_sql(world, "assert_collector_readiness.sql", p, tz="Asia/Jerusalem"), "B")
-    late_key = next(k for k in b if k.startswith("price_rows_created_or_changed_after_the_first_complete_scan="))
+    late_key = next(k for k in b if k.startswith("price_rows_created_or_changed_after_the_latest_complete_scan="))
     assert late_key.endswith("=0 symbols=none") and status(b[late_key]) == "PASS"
     assert status(b["price_fingerprint_fresh (a complete scan matches the prices as stored now)"]) == "FAIL"        # the row still changed the fingerprint: only the TIMING check is clean
+
+
+def test_a_straggler_covered_by_a_later_scan_keeps_verdict_b_ready(world):
+    """The nightly shape: the pipeline's scan (first) -> a straggler bar -> the 06:20 scan (latest). Readiness is judged against the LATEST scan."""
+    from datetime import datetime, timezone
+    strat, p = build(world)
+    late_bar(world, created="2026-06-10 02:47:09")
+    b_stale = lines(run_sql(world, "assert_collector_readiness.sql", p), "B")
+    assert status(b_stale["price_fingerprint_fresh (a complete scan matches the prices as stored now)"]) == "FAIL"          # before the later scan: not ready
+    world.record_scan(0, finished=datetime(2026, 6, 10, 3, 21, 32, tzinfo=timezone.utc))
+    out = run_sql(world, "assert_collector_readiness.sql", p)
+    b = lines(out, "B")
+    assert not [k for k, v in b.items() if status(v) in ("FAIL", "REVIEW")], {k: v for k, v in b.items() if status(v) in ("FAIL", "REVIEW")}
+    late = next(k for k in b if k.startswith("price_rows_created_or_changed_after_the_latest_complete_scan="))
+    assert late.endswith("=0 symbols=none") and status(b[late]) == "PASS"
+    info = next(k for k in b if k.startswith("straggler_rows_after_the_first_complete_scan_covered_by_a_later_scan="))
+    assert info.endswith("=1 symbols=S9999")                                                                              # still reported, as information
 
 
 # ---------------------------------------------------------------------------------------------------- candidate guard semantics
