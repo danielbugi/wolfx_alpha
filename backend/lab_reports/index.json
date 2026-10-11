@@ -42,6 +42,20 @@
    "kind": "catalyst",
    "title": "Recent large earnings surprises (research feed, not alerts)",
    "headline": "40 liquid events with surprise >= +25% in the last 40 days of data, each with its market-adjusted reaction so far."
+  },
+  {
+   "id": "performance_attribution",
+   "file": "performance_attribution.json",
+   "kind": "strategy_lab",
+   "title": "Performance attribution: direction, year, regime and sector",
+   "headline": "Fixed-3R exit by year: bullish positive in 7 of 9 years, bearish positive in 1; regime and sector cells change sign between years."
+  },
+  {
+   "id": "research_insights",
+   "file": "research_insights.json",
+   "kind": "strategy_lab",
+   "title": "Research insights: what the evidence supports, and what it does not",
+   "headline": "9 claims checked: 2 inconclusive, 4 not supported, 1 suggestive, 2 supported."
   }
  ]
 }

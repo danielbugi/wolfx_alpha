@@ -1,0 +1,101 @@
+{
+ "generated_at": "2026-10-11",
+ "code_ref": "f2f2612",
+ "status": "research_only",
+ "use": "Research evidence only. Not a trading signal, not advice, and not used by the live signal path.",
+ "schema": "lab_report_v1",
+ "id": "research_insights",
+ "kind": "strategy_lab",
+ "title": "Research insights: what the evidence supports, and what it does not",
+ "headline": "9 claims checked: 2 inconclusive, 4 not supported, 1 suggestive, 2 supported.",
+ "caveats": [
+  "Statuses are assigned by fixed rules from the intervals and counts in the other reports; they are not model opinions.",
+  "'Supported' means the sample supports the sign of the effect, not that it is tradeable after costs.",
+  "'Suggestive' means a consistent pattern that was selected from several candidates and needs forward confirmation."
+ ],
+ "provenance": {
+  "source": "derived from the other lab reports (deterministic rules in build_lab_reports.insights)",
+  "evidence_files": [
+   "experiments.json",
+   "ranker_stability.json",
+   "exit_policy_study.json",
+   "catalyst_earnings_study.json"
+  ]
+ },
+ "data": {
+  "claims": [
+   {
+    "claim": "Bearish Donchian breakouts lose money on the plan simulation",
+    "status": "supported",
+    "evidence": "mean -0.095 R, 95% CI -0.180 to -0.007 over 261,500 trades",
+    "reports": [
+     "strategy_baseline"
+    ]
+   },
+   {
+    "claim": "Bullish Donchian breakouts make money on the plan simulation",
+    "status": "inconclusive",
+    "evidence": "mean +0.042 R, 95% CI -0.024 to +0.116; positive in 7 of 9 years",
+    "reports": [
+     "strategy_baseline"
+    ]
+   },
+   {
+    "claim": "A trend-regime filter (long in uptrend, short in downtrend) improves expectancy",
+    "status": "inconclusive",
+    "evidence": "filtered -0.006 R vs unfiltered -0.018 R; the filtered interval -0.067 to +0.054 contains the unfiltered mean",
+    "reports": [
+     "strategy_baseline"
+    ]
+   },
+   {
+    "claim": "The choice among the four exit policies changes expectancy",
+    "status": "not_supported",
+    "evidence": "paired differences vs the fixed-3R exit: A +0.004, B -0.002, C -0.025, D -0.013 (all intervals include zero)",
+    "reports": [
+     "exit_policies"
+    ]
+   },
+   {
+    "claim": "An ML model ranks which breakouts make money",
+    "status": "not_supported",
+    "evidence": "holdout AUC for R>0 0.5328 (direction-only baseline 0.539); failed gates: holdout_auc, over_direction_baseline, top_decile_lift, plan_profit_auc_within_direction",
+    "reports": [
+     "ml_evaluation"
+    ]
+   },
+   {
+    "claim": "Breakouts that are less extended in their own direction do better (an avoid-the-extended rule)",
+    "status": "suggestive",
+    "evidence": "top-minus-bottom quintile spread positive in 8 of 9 years (mean +0.168 R); selected from 7 candidates",
+    "reports": [
+     "ranker_stability"
+    ]
+   },
+   {
+    "claim": "Earnings surprises move the price at the release",
+    "status": "supported",
+    "evidence": "reaction +2.45% for surprises >= +10% and -3.72% for <= -10% (market-adjusted)",
+    "reports": [
+     "catalyst_earnings"
+    ]
+   },
+   {
+    "claim": "A tradeable drift follows large positive earnings surprises",
+    "status": "not_supported",
+    "evidence": "20-day market-adjusted drift after the reaction -0.16%, 95% CI -0.46% to +0.15%",
+    "reports": [
+     "catalyst_earnings"
+    ]
+   },
+   {
+    "claim": "A recent positive earnings surprise improves a bullish Donchian breakout",
+    "status": "not_supported",
+    "evidence": "+0.031 R after a surprise vs +0.037 R without",
+    "reports": [
+     "catalyst_earnings"
+    ]
+   }
+  ]
+ }
+}

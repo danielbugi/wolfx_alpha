@@ -1,0 +1,291 @@
+{
+ "generated_at": "2026-10-11",
+ "code_ref": "f2f2612",
+ "status": "research_only",
+ "use": "Research evidence only. Not a trading signal, not advice, and not used by the live signal path.",
+ "schema": "lab_report_v1",
+ "id": "performance_attribution",
+ "kind": "strategy_lab",
+ "title": "Performance attribution: direction, year, regime and sector",
+ "headline": "Fixed-3R exit by year: bullish positive in 7 of 9 years, bearish positive in 1; regime and sector cells change sign between years.",
+ "caveats": [
+  "Net of an assumed 10 bps round-trip cost; the 3R fixed-target exit and the 10-bar Donchian trail are shown as the two reference exits.",
+  "Splits shrink the sample: read n beside every mean.",
+  "Year-by-year signs flip for most cells: a pooled number is not evidence of a stable regime or sector effect.",
+  "Sectors with fewer than 500 trades are omitted."
+ ],
+ "provenance": {
+  "source": "mechanism/research/exit_policies.py on ml_breakout_dataset_v2 + stock_prices (isolated copy)",
+  "evidence_files": [
+   "exit_policy_study.json"
+  ]
+ },
+ "data": {
+  "A_atr_stop_fixed_3R": {
+   "by_year": {
+    "2018": {
+     "bullish": -0.2397,
+     "bearish": -0.1103,
+     "n": 6822
+    },
+    "2019": {
+     "bullish": 0.2202,
+     "bearish": -0.4476,
+     "n": 6893
+    },
+    "2020": {
+     "bullish": 0.2817,
+     "bearish": 0.0317,
+     "n": 7867
+    },
+    "2021": {
+     "bullish": 0.0086,
+     "bearish": -0.2913,
+     "n": 7939
+    },
+    "2022": {
+     "bullish": -0.3181,
+     "bearish": -0.1772,
+     "n": 9284
+    },
+    "2023": {
+     "bullish": 0.1611,
+     "bearish": -0.1499,
+     "n": 9615
+    },
+    "2024": {
+     "bullish": 0.048,
+     "bearish": -0.3183,
+     "n": 8841
+    },
+    "2025": {
+     "bullish": 0.1328,
+     "bearish": -0.1629,
+     "n": 9362
+    },
+    "2026": {
+     "bullish": 0.1729,
+     "bearish": -0.4013,
+     "n": 5639
+    }
+   },
+   "by_regime": {
+    "bullish": {
+     "index_uptrend": {
+      "n": 33702,
+      "mean_r": 0.0512
+     },
+     "index_downtrend": {
+      "n": 6768,
+      "mean_r": 0.1426
+     },
+     "breadth50_ge_0.5": {
+      "n": 33010,
+      "mean_r": 0.0666
+     },
+     "breadth50_lt_0.5": {
+      "n": 7460,
+      "mean_r": 0.0662
+     }
+    },
+    "bearish": {
+     "index_uptrend": {
+      "n": 18919,
+      "mean_r": -0.1494
+     },
+     "index_downtrend": {
+      "n": 12873,
+      "mean_r": -0.2825
+     },
+     "breadth50_ge_0.5": {
+      "n": 11140,
+      "mean_r": -0.0857
+     },
+     "breadth50_lt_0.5": {
+      "n": 20652,
+      "mean_r": -0.2667
+     }
+    }
+   },
+   "by_sector": {
+    "basic_materials": {
+     "n": 2950,
+     "mean_r": -0.0736
+    },
+    "communication_services": {
+     "n": 2985,
+     "mean_r": -0.087
+    },
+    "consumer_cyclical": {
+     "n": 8612,
+     "mean_r": -0.078
+    },
+    "consumer_defensive": {
+     "n": 3177,
+     "mean_r": -0.1053
+    },
+    "energy": {
+     "n": 3075,
+     "mean_r": -0.0842
+    },
+    "financial_services": {
+     "n": 12618,
+     "mean_r": -0.0463
+    },
+    "healthcare": {
+     "n": 10208,
+     "mean_r": -0.0649
+    },
+    "industrials": {
+     "n": 10727,
+     "mean_r": -0.039
+    },
+    "real_estate": {
+     "n": 5213,
+     "mean_r": -0.0342
+    },
+    "technology": {
+     "n": 10555,
+     "mean_r": 0.0254
+    },
+    "utilities": {
+     "n": 2045,
+     "mean_r": -0.2093
+    }
+   }
+  },
+  "B_donchian_trail_10": {
+   "by_year": {
+    "2018": {
+     "bullish": -0.1953,
+     "bearish": -0.1439,
+     "n": 6822
+    },
+    "2019": {
+     "bullish": 0.1086,
+     "bearish": -0.3167,
+     "n": 6893
+    },
+    "2020": {
+     "bullish": 0.1911,
+     "bearish": 0.4679,
+     "n": 7867
+    },
+    "2021": {
+     "bullish": -0.0652,
+     "bearish": -0.3004,
+     "n": 7939
+    },
+    "2022": {
+     "bullish": -0.2002,
+     "bearish": -0.1165,
+     "n": 9284
+    },
+    "2023": {
+     "bullish": 0.1347,
+     "bearish": -0.0942,
+     "n": 9615
+    },
+    "2024": {
+     "bullish": 0.0199,
+     "bearish": -0.3262,
+     "n": 8841
+    },
+    "2025": {
+     "bullish": -0.0051,
+     "bearish": -0.2661,
+     "n": 9362
+    },
+    "2026": {
+     "bullish": 0.0451,
+     "bearish": -0.2561,
+     "n": 5639
+    }
+   },
+   "by_regime": {
+    "bullish": {
+     "index_uptrend": {
+      "n": 33702,
+      "mean_r": -0.0042
+     },
+     "index_downtrend": {
+      "n": 6768,
+      "mean_r": 0.1069
+     },
+     "breadth50_ge_0.5": {
+      "n": 33010,
+      "mean_r": 0.0094
+     },
+     "breadth50_lt_0.5": {
+      "n": 7460,
+      "mean_r": 0.0364
+     }
+    },
+    "bearish": {
+     "index_uptrend": {
+      "n": 18919,
+      "mean_r": -0.1143
+     },
+     "index_downtrend": {
+      "n": 12873,
+      "mean_r": -0.1794
+     },
+     "breadth50_ge_0.5": {
+      "n": 11140,
+      "mean_r": -0.0477
+     },
+     "breadth50_lt_0.5": {
+      "n": 20652,
+      "mean_r": -0.1909
+     }
+    }
+   },
+   "by_sector": {
+    "basic_materials": {
+     "n": 2950,
+     "mean_r": -0.0685
+    },
+    "communication_services": {
+     "n": 2985,
+     "mean_r": -0.0521
+    },
+    "consumer_cyclical": {
+     "n": 8612,
+     "mean_r": -0.0786
+    },
+    "consumer_defensive": {
+     "n": 3177,
+     "mean_r": -0.0508
+    },
+    "energy": {
+     "n": 3075,
+     "mean_r": -0.0481
+    },
+    "financial_services": {
+     "n": 12618,
+     "mean_r": -0.0586
+    },
+    "healthcare": {
+     "n": 10208,
+     "mean_r": -0.0734
+    },
+    "industrials": {
+     "n": 10727,
+     "mean_r": -0.0229
+    },
+    "real_estate": {
+     "n": 5213,
+     "mean_r": -0.0208
+    },
+    "technology": {
+     "n": 10555,
+     "mean_r": -0.0333
+    },
+    "utilities": {
+     "n": 2045,
+     "mean_r": -0.1592
+    }
+   }
+  }
+ }
+}
