@@ -75,7 +75,11 @@ fi
 
 # ---------------------------------------------------------------- state, units, errors (Verdict A)
 [ "$(cat $BASE/CURRENT_MECHANISM_SHA 2>/dev/null)" = "$PIN_EXPECTED" ] && A "production_pin_unchanged" PASS || A "production_pin_unchanged" FAIL
-[ ! -e "$BASE/FORWARD_COLLECTION_ARMED" ] && A "collector_arming_file_absent" PASS || A "collector_arming_file_absent" REVIEW "armed: expected only after an owner approval"
+if [ "${CHECKPOINT_EXPECT_ARMED:-0}" = 1 ]; then
+  if [ -f "$BASE/FORWARD_COLLECTION_ARMED" ] && [ "$(cat $BASE/FORWARD_COLLECTION_ARMED)" = "$PIN_EXPECTED" ]; then A "collector_armed_for_exactly_the_pinned_image" PASS "$PIN_EXPECTED"; else A "collector_armed_for_exactly_the_pinned_image" FAIL "arming file missing or not equal to the pin"; fi
+else
+  [ ! -e "$BASE/FORWARD_COLLECTION_ARMED" ] && A "collector_arming_file_absent" PASS || A "collector_arming_file_absent" REVIEW "armed: expected only after an owner approval"
+fi
 unit_ok() { local u="$1" label="$2" res; res=$(systemctl show "$u.service" -p Result --value 2>/dev/null); say "UNIT|$u|Result=$res"; [ "$res" = success ] && A "$label" PASS || A "$label" FAIL "Result=$res"; }
 unit_ok donchian-pipeline pipeline_unit_succeeded; unit_ok donchian-signal-ledger-eval ledger_evaluator_succeeded; unit_ok donchian-postmarket-retry post_market_retry_succeeded
 [ "$(docker inspect -f '{{.State.Health.Status}}' donchian-screener-backend-1 2>/dev/null)" = healthy ] && [ "$(docker inspect -f '{{.State.Health.Status}}' $PG 2>/dev/null)" = healthy ] && A "postgres_and_backend_healthy" PASS || A "postgres_and_backend_healthy" FAIL
