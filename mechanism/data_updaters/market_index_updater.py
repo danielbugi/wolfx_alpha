@@ -48,7 +48,11 @@ MARKET_INDEX_SYMBOLS: List[Tuple[str, str, str]] = [
     ('^VIX', 'CBOE Volatility Index', 'volatility'),
     ('^TNX', '10-Year Treasury Yield', 'rates'),
     ('GC=F', 'Gold Futures', 'commodity'),
+    ('SI=F', 'Silver Futures', 'commodity'),
+    ('HG=F', 'Copper Futures', 'commodity'),
+    ('PL=F', 'Platinum Futures', 'commodity'),
     ('CL=F', 'Crude Oil WTI Futures', 'commodity'),
+    ('NG=F', 'Natural Gas Futures', 'commodity'),
     ('DX-Y.NYB', 'US Dollar Index', 'currency'),
     ('BTC-USD', 'Bitcoin', 'crypto'),
 ]

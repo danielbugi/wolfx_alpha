@@ -10,6 +10,7 @@ from auth.dependencies import require_authenticated_user
 import logging
 
 from services.market_data_service import MarketDataService
+from services.market_calendar_service import get_market_calendar
 
 logger = logging.getLogger(__name__)
 
@@ -58,3 +59,17 @@ def get_sector_history(
     except Exception as e:
         logger.error(f"Error getting sector history: {e}")
         raise HTTPException(status_code=500, detail=f"Error getting sector history: {str(e)}")
+
+
+@market_router.get("/calendar")
+def get_calendar():
+    """
+    US market sessions around today (New York dates): each trading day's close time, holidays and early closes
+    included, from the pipeline's official calendar (mechanism/shared/market_calendar.py). `holidays_known` is false
+    only on the calendar's weekday fallback, when holidays cannot be detected. Drives the sidebar's market clock.
+    """
+    try:
+        return get_market_calendar()
+    except Exception as e:
+        logger.error(f"Error getting market calendar: {e}")
+        raise HTTPException(status_code=500, detail="Error getting market calendar")

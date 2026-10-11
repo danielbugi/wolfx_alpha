@@ -46,6 +46,18 @@ export interface MomentumLeadersProps {
  * overlap, and earlier lists say nothing about later ones (see mechanism/alerts/board.py).
  */
 export default function MomentumLeaders({ board, sessionDate, loading, error, onRetry }: MomentumLeadersProps) {
+  // Nothing to rank yet: a slim one-line note instead of a large empty card.
+  if (!loading && !error && (!board || board.top.length === 0)) {
+    return (
+      <div className="mb-6 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-2xl border border-black/[0.05] bg-white px-5 py-3 shadow-sm">
+        <span className="text-[15px] font-semibold text-slate-900">Momentum Leaders</span>
+        <span className="text-xs text-slate-400">
+          No leaderboard yet — not enough stored sessions, or nobody in the pool closed higher today.
+        </span>
+      </div>
+    );
+  }
+
   return (
     <Card className="mb-6 border border-black/[0.05] shadow-sm" data-stock-list="Momentum Leaders">
       <CardHeader className="px-5 pt-5 pb-2">

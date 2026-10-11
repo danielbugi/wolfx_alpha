@@ -38,14 +38,20 @@ DISPLAY_NAMES = {
     '^VIX': 'VIX',
     '^TNX': '10-Year Yield',
     'GC=F': 'Gold',
+    'SI=F': 'Silver',
+    'HG=F': 'Copper',
+    'PL=F': 'Platinum',
     'CL=F': 'Crude Oil (WTI)',
+    'NG=F': 'Natural Gas',
     'DX-Y.NYB': 'US Dollar Index',
     'BTC-USD': 'Bitcoin',
 }
 
-# Display order on the dashboard's macro strip -- indices first, then the
-# volatility/rates regime gauges, then commodities/currency/crypto.
-DISPLAY_ORDER = ['^GSPC', '^IXIC', '^RUT', '^DJI', '^VIX', '^TNX', 'GC=F', 'CL=F', 'DX-Y.NYB', 'BTC-USD']
+# Display order on the dashboard -- indices first, then the volatility/rates regime gauges, then commodities
+# (metals, then energy; the dashboard shows these in their own Commodities card), then currency/crypto.
+# A symbol with no rows yet (e.g. just added to the updater) is simply skipped until its history lands.
+DISPLAY_ORDER = ['^GSPC', '^IXIC', '^RUT', '^DJI', '^VIX', '^TNX', 'GC=F', 'SI=F', 'HG=F', 'PL=F', 'CL=F', 'NG=F',
+                 'DX-Y.NYB', 'BTC-USD']
 
 
 def _vix_regime(value: float) -> str:
