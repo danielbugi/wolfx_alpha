@@ -68,6 +68,8 @@ _cache_lock = threading.Lock()
 # real close. Overriding close() to return the connection to the pool means
 # none of those call sites need to change.
 db_pool: Optional[ThreadedConnectionPool] = None
+# Set by _shutdown_db_pool() before closeall(): from then on close() must really close (see the guard in close()).
+_pool_shutting_down = False
 
 
 class _PooledConnection(_PGConnection):
@@ -94,6 +96,13 @@ class _PooledConnection(_PGConnection):
         if getattr(self, '_pool_is_closing_me', False):
             super().close()
             return
+        # Same deadlock, shutdown path: ThreadedConnectionPool.closeall() holds the pool lock while it calls
+        # conn.close() on every connection; handing the connection back via putconn() here would wait on that
+        # same lock forever -- which is what hung every `uvicorn --reload` at "Waiting for application shutdown."
+        if _pool_shutting_down:
+            if not self.closed:
+                super().close()
+            return
         if db_pool is not None and not self.closed:
             try:
                 self.rollback()  # never hand back a connection mid-transaction
@@ -109,6 +118,15 @@ class _PooledConnection(_PGConnection):
                 self._pool_is_closing_me = False
         if not self.closed:
             super().close()
+
+
+def _shutdown_db_pool():
+    """Close every pooled connection. Sets the shutdown flag first so _PooledConnection.close() really closes
+    instead of re-entering the pool lock that closeall() is holding."""
+    global _pool_shutting_down
+    _pool_shutting_down = True
+    if db_pool is not None and not db_pool.closed:
+        db_pool.closeall()
 
 
 def _init_db_pool():
@@ -179,8 +197,7 @@ async def lifespan(app: FastAPI):
     yield
 
     _main_page_prewarm_stop.set()
-    if db_pool is not None:
-        db_pool.closeall()
+    _shutdown_db_pool()
     logger.info("🔄 Trading System Backend Shutting Down...")
 
 
@@ -507,6 +524,19 @@ except ImportError as e:
     logger.warning(f"⚠️  Market intelligence router not available: {e}")
 except Exception as e:
     logger.error(f"❌ Error including market intelligence router: {e}")
+
+
+# Import and include the stock news router (headlines for the stock page, through the same cached news service the
+# Telegram assistant uses -- mechanism/alerts/news_service.py)
+try:
+    from routers.news import news_router
+
+    app.include_router(news_router)
+    logger.info("✅ News router included successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  News router not available: {e}")
+except Exception as e:
+    logger.error(f"❌ Error including news router: {e}")
 
 
 # ============================================================================

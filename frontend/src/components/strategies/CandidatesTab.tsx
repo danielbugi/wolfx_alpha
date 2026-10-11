@@ -18,6 +18,7 @@ import CandidateDetailDialog from '@/components/strategies/CandidateDetailDialog
 import SignalDetailDialog from '@/components/strategies/SignalDetailDialog';
 import { DirectionTag, EmptyState, Section } from '@/components/strategies/ui';
 import { AvailabilityNotice } from '@/components/strategies/ResearchUi';
+import SymbolHoverLink from '@/components/dashboard/SymbolHoverLink';
 
 export const CANDIDATE_PAGE_SIZE = 50;
 
@@ -167,10 +168,8 @@ export default function CandidatesTab({ strategyKey, version, strategyName, cand
                 {page.items.map((c) => (
                   <tr key={c.id} className="cursor-pointer border-b border-slate-100 hover:bg-slate-50" onClick={() => onCandidateChange(c.id)}>
                     <td className="px-3 py-2">
-                      <button type="button" className="font-semibold text-slate-800 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-                              onClick={(e) => { e.stopPropagation(); onCandidateChange(c.id); }} aria-label={`Open ${c.symbol} candidate details`}>
-                        {c.symbol}
-                      </button>
+                      <SymbolHoverLink symbol={c.symbol} onSelect={() => onCandidateChange(c.id)} ariaLabel={`Open ${c.symbol} candidate details`}
+                                       className="font-semibold text-slate-800 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400" />
                       <span className="block sm:hidden"><DirectionTag direction={c.direction} /></span>
                     </td>
                     <td className="hidden whitespace-nowrap px-3 py-2 text-xs text-slate-500 sm:table-cell">{formatSession(c.session_date)}</td>

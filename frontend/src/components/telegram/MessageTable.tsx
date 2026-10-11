@@ -1,11 +1,12 @@
 // File: frontend/src/components/telegram/MessageTable.tsx
 import React from 'react';
-import { Card, CardBody, Spinner } from '@nextui-org/react';
+import { Card, CardBody } from '@nextui-org/react';
 import { EyeIcon, InboxIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
 import type { MessageList, MessageSummary } from '@/services/telegramApi';
 import { formatWhen } from '@/lib/telegramFormat';
 import { ChannelChip, StatusChip, TypeLabel } from '@/components/telegram/StatusChips';
 import { Btn } from '@/components/telegram/ui';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 export type RowMode = 'view' | 'edit' | 'delete';
 
@@ -105,7 +106,7 @@ export default function MessageTable({ data, loading, filtered, trackingSince, o
         </div>
         <div className="flex items-center justify-between border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
           <span>
-            {from}–{to} of {total} {loading && <Spinner size="sm" className="ml-2 align-middle" />}
+            {from}–{to} of {total} {loading && <LoadingSpinner size="small" className="ml-2 inline-flex align-middle" />}
           </span>
           <div className="flex gap-2">
             <Btn size="sm" disabled={offset === 0 || loading} onClick={() => onPage(Math.max(0, offset - limit))}>

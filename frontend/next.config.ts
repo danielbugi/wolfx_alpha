@@ -17,6 +17,10 @@ export default function config(phase: string): NextConfig {
   return {
     reactStrictMode: true,
 
+    // Dev-only badge. Its default bottom-left spot covers the sidebar's Collapse button; bottom-right stacks it
+    // under the QA panel's button (components/dev/DevQAPanel.tsx sits just above it).
+    devIndicators: { position: 'bottom-right' },
+
     // Verification builds use their own output dir (NEXT_DIST_DIR=.next-build npm run build)
     // so they never overwrite the .next cache a running `next dev` is using.
     distDir: process.env.NEXT_DIST_DIR || '.next',

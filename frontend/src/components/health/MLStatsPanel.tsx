@@ -64,10 +64,10 @@ export default function MLStatsPanel({ report }: { report: MLStatsReport }) {
   return (
     <div className="space-y-4">
       {/* Current model */}
-      <Card className="shadow-sm border border-slate-200">
+      <Card className="border border-black/[0.05] shadow-sm">
         <CardHeader className="flex items-center justify-between p-4 pb-2">
           <div>
-            <h3 className="text-sm font-semibold text-slate-800">Current Model</h3>
+            <h3 className="text-[15px] font-semibold text-slate-900">Current Model</h3>
             <p className="text-xs text-slate-500 mt-0.5 font-mono">{model?.found ? model.version : 'none served'}</p>
           </div>
           {model?.found && (
@@ -111,10 +111,10 @@ export default function MLStatsPanel({ report }: { report: MLStatsReport }) {
 
       {/* Latest honest evaluation */}
       {evaluations.length > 0 && (
-        <Card className="shadow-sm border border-slate-200">
+        <Card className="border border-black/[0.05] shadow-sm">
           <CardHeader className="p-4 pb-2">
             <div>
-              <h3 className="text-sm font-semibold text-slate-800">Latest honest evaluation</h3>
+              <h3 className="text-[15px] font-semibold text-slate-900">Latest honest evaluation</h3>
               <p className="text-xs text-slate-500 mt-0.5">
                 Trained on the past, scored on an untouched later period (30-day embargo). A model is served only if every gate check passes.
               </p>
@@ -161,9 +161,9 @@ export default function MLStatsPanel({ report }: { report: MLStatsReport }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Feature importance */}
-        <Card className="shadow-sm border border-slate-200">
+        <Card className="border border-black/[0.05] shadow-sm">
           <CardHeader className="p-4 pb-2">
-            <h3 className="text-sm font-semibold text-slate-800">Feature Importance</h3>
+            <h3 className="text-[15px] font-semibold text-slate-900">Feature Importance</h3>
             <p className="text-xs text-slate-500 mt-0.5">What the model actually weighs most</p>
           </CardHeader>
           <Divider className="bg-slate-100" />
@@ -181,9 +181,9 @@ export default function MLStatsPanel({ report }: { report: MLStatsReport }) {
         </Card>
 
         {/* Training dataset */}
-        <Card className="shadow-sm border border-slate-200">
+        <Card className="border border-black/[0.05] shadow-sm">
           <CardHeader className="p-4 pb-2">
-            <h3 className="text-sm font-semibold text-slate-800">Training Dataset</h3>
+            <h3 className="text-[15px] font-semibold text-slate-900">Training Dataset</h3>
             <p className="text-xs text-slate-500 mt-0.5">What the model is learning from</p>
           </CardHeader>
           <Divider className="bg-slate-100" />
@@ -221,7 +221,7 @@ export default function MLStatsPanel({ report }: { report: MLStatsReport }) {
                 <span>{dataset?.bullish_pct}% / {dataset?.bearish_pct}%</span>
               </div>
               <div className="h-2 rounded-full overflow-hidden flex">
-                <div className="h-full bg-cyan-500" style={{ width: `${dataset?.bullish_pct ?? 0}%` }} />
+                <div className="h-full bg-accent" style={{ width: `${dataset?.bullish_pct ?? 0}%` }} />
                 <div className="h-full bg-rose-400" style={{ width: `${dataset?.bearish_pct ?? 0}%` }} />
               </div>
             </div>
@@ -230,9 +230,9 @@ export default function MLStatsPanel({ report }: { report: MLStatsReport }) {
       </div>
 
       {/* Prediction track record */}
-      <Card className="shadow-sm border border-slate-200">
+      <Card className="border border-black/[0.05] shadow-sm">
         <CardHeader className="p-4 pb-2">
-          <h3 className="text-sm font-semibold text-slate-800">Live Prediction Track Record</h3>
+          <h3 className="text-[15px] font-semibold text-slate-900">Live Prediction Track Record</h3>
           <p className="text-xs text-slate-500 mt-0.5">Is the model actually right, in production</p>
         </CardHeader>
         <Divider className="bg-slate-100" />
@@ -273,9 +273,9 @@ export default function MLStatsPanel({ report }: { report: MLStatsReport }) {
       </Card>
 
       {/* Retraining history */}
-      <Card className="shadow-sm border border-slate-200">
+      <Card className="border border-black/[0.05] shadow-sm">
         <CardHeader className="p-4 pb-2">
-          <h3 className="text-sm font-semibold text-slate-800">Retraining History</h3>
+          <h3 className="text-[15px] font-semibold text-slate-900">Retraining History</h3>
           <p className="text-xs text-slate-500 mt-0.5">Actual cadence — is this happening on a schedule?</p>
         </CardHeader>
         <Divider className="bg-slate-100" />

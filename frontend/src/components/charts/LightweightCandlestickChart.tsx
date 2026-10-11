@@ -13,6 +13,7 @@ import {
 } from 'lightweight-charts';
 import { PriceBar } from '@/services/api';
 import { nearestBarDate } from '@/lib/priceMath';
+import { useResolvedTheme } from '@/lib/theme';
 
 export interface EarningsMarker {
   date: string; // YYYY-MM-DD
@@ -33,8 +34,13 @@ export interface LightweightCandlestickChartProps {
 // Soft slate tint (slate-100) so the plot area separates from the white card /
 // popover around it. Grid lines are one step darker (slate-200 would be
 // near-invisible on this fill).
-const CHART_BG = '#f1f5f9';
-const CHART_GRID = '#dde4ee';
+// Canvas-drawn, so CSS theming can't reach it: colors come from here and follow <html data-theme>.
+const CHART_THEME = {
+  light: { bg: '#f1f5f9', grid: '#dde4ee', text: '#475569' },
+  dark: { bg: '#1c1c1e', grid: '#2f2f33', text: '#98989f' },
+} as const;
+const CHART_BG = CHART_THEME.light.bg;
+const CHART_GRID = CHART_THEME.light.grid;
 
 /** Chart options that differ between the full chart and the hover-card mini chart. */
 function variantOptions(isMini: boolean): DeepPartial<ChartOptions> {
@@ -105,6 +111,7 @@ export default function LightweightCandlestickChart({
         textColor: '#475569',
         fontSize: 10,
       },
+      localization: { locale: 'en-US' }, // match the English UI, not the browser's language
       ...variantOptions(initialRef.current.isMini),
     });
     chartRef.current = chart;
@@ -164,6 +171,16 @@ export default function LightweightCandlestickChart({
   useEffect(() => {
     chartRef.current?.applyOptions({ ...variantOptions(isMini), height: resolvedHeight });
   }, [isMini, resolvedHeight]);
+
+  // Re-color on a light/dark switch (the chart was created with the light colors).
+  const theme = useResolvedTheme();
+  useEffect(() => {
+    const colors = CHART_THEME[theme];
+    chartRef.current?.applyOptions({
+      layout: { background: { color: colors.bg }, textColor: colors.text },
+      grid: { vertLines: { color: colors.grid }, horzLines: { color: colors.grid } },
+    });
+  }, [theme]);
 
   // Data updates.
   useEffect(() => {

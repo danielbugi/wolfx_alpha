@@ -13,7 +13,16 @@ vi.mock('@/services/strategyApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/strategyApi')>();
   return { ...actual, strategyApi: api };
 });
-vi.mock('@/components/dashboard/SymbolHoverLink', () => ({ default: ({ symbol }: { symbol: string }) => <span>{symbol}</span> }));
+// Stand-in for the hover card (no network): keeps its contract — a button calling onSelect (without bubbling to the
+// row) when one is given, plain text otherwise.
+vi.mock('@/components/dashboard/SymbolHoverLink', () => ({
+  default: ({ symbol, onSelect, ariaLabel }: { symbol: string; onSelect?: () => void; ariaLabel?: string }) =>
+    onSelect ? (
+      <button type="button" aria-label={ariaLabel ?? symbol} onClick={(e) => { e.stopPropagation(); onSelect(); }}>{symbol}</button>
+    ) : (
+      <span>{symbol}</span>
+    ),
+}));
 
 import CandidatesTab, { CANDIDATE_PAGE_SIZE } from '@/components/strategies/CandidatesTab';
 import CandidateDetailDialog from '@/components/strategies/CandidateDetailDialog';

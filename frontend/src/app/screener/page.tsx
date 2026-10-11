@@ -1,8 +1,7 @@
 'use client';
 
 import React, { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Card,
   CardBody,
@@ -15,10 +14,6 @@ import {
   TableCell,
   Button,
   Chip,
-  Divider,
-  Select,
-  SelectItem,
-  Input,
 } from '@nextui-org/react';
 import {
   screenerApi,
@@ -30,6 +25,40 @@ import {
 import { useTopProgress } from '@/lib/topProgress';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import ErrorAlert from '@/components/common/ErrorAlert';
+import { MultiSelect, SelectField, TextField } from '@/components/ui/Field';
+import SortHeader from '@/components/ui/SortHeader';
+import { XMarkIcon } from '@heroicons/react/20/solid';
+import SymbolHoverLink from '@/components/dashboard/SymbolHoverLink';
+
+const DEFAULT_FILTERS: ScreenerFilterRequest = { limit: 50, sort_by: 'price_change_pct', sort_order: 'desc' };
+
+/** Columns the backend can sort by (its own `sort_by` values): the screener returns only the top `limit`
+ * matches, so re-sorting them in the browser would rank a partial list — sorting has to go to the server. */
+const SERVER_SORT: Record<string, string> = { change: 'price_change_pct', volume: 'volume', rsi: 'rsi_14', grade: 'quality_score' };
+
+/** One removable chip per active filter, in plain words. */
+function activeFilterChips(f: ScreenerFilterRequest): { id: string; label: string; clear: (f: ScreenerFilterRequest) => ScreenerFilterRequest }[] {
+  const chips: { id: string; label: string; clear: (f: ScreenerFilterRequest) => ScreenerFilterRequest }[] = [];
+  const num = (key: keyof ScreenerFilterRequest, label: (v: number) => string) => {
+    const v = f[key];
+    if (typeof v === 'number') chips.push({ id: key, label: label(v), clear: (x) => ({ ...x, [key]: undefined }) });
+  };
+  num('min_price', (v) => `Price ≥ $${v}`);
+  num('max_price', (v) => `Price ≤ $${v}`);
+  num('min_price_change', (v) => `Change ≥ ${v}%`);
+  num('max_price_change', (v) => `Change ≤ ${v}%`);
+  num('min_rsi', (v) => `RSI ≥ ${v}`);
+  num('max_rsi', (v) => `RSI ≤ ${v}`);
+  num('min_volume_ratio', (v) => `Vol ratio ≥ ${v}×`);
+  num('min_quality_score', (v) => `Quality ≥ ${v}`);
+  for (const sector of f.sectors ?? []) {
+    chips.push({ id: `sector:${sector}`, label: sector, clear: (x) => ({ ...x, sectors: (x.sectors ?? []).filter((v) => v !== sector) }) });
+  }
+  if (f.quality_grades?.length) {
+    chips.push({ id: 'grades', label: `Grade ${f.quality_grades.join(', ')}`, clear: (x) => ({ ...x, quality_grades: [] }) });
+  }
+  return chips;
+}
 
 const QUALITY_GRADES = ['A', 'B', 'C', 'D', 'F'];
 
@@ -77,7 +106,7 @@ export default function ScreenerPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-cyan-50">
+        <div className="min-h-screen flex items-center justify-center bg-slate-50">
           <LoadingSpinner size="large" />
         </div>
       }
@@ -106,6 +135,13 @@ function ScreenerPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const hasLoadedOnceRef = useRef(false);
+  const router = useRouter();
+  // Each search gets an id; only the newest one may write results, so a slow older response can't overwrite a
+  // newer one while the user is still typing.
+  const requestIdRef = useRef(0);
+  // JSON of the filters the results on screen were (or are being) fetched for — the live-filter effect below
+  // only searches when the filters actually differ from it.
+  const lastSearchedRef = useRef<string | null>(null);
 
   const [filters, setFilters] = useState<ScreenerFilterRequest>({
     limit: 50,
@@ -114,7 +150,7 @@ function ScreenerPageContent() {
     ...quickFilterFromParam(initialFilter),
   });
   // The first search runs with the filters the page was opened with; later
-  // changes only apply through the Apply button / presets.
+  // changes re-run automatically (see the live-filter effect below).
   const initialFiltersRef = useRef(filters);
 
   // Load filter options + presets once
@@ -135,21 +171,26 @@ function ScreenerPageContent() {
 
   const runSearch = useCallback(async (f: ScreenerFilterRequest) => {
     const isFirstLoad = !hasLoadedOnceRef.current;
+    const requestId = ++requestIdRef.current;
+    lastSearchedRef.current = JSON.stringify(f);
     try {
       setSearching(true);
       if (isFirstLoad) setLoading(true);
       else startProgress();
       setError(null);
       const resp = await screenerApi.search(f);
+      if (requestId !== requestIdRef.current) return;
       setResults(resp.results);
       setTotalMatches(resp.total_matches);
       hasLoadedOnceRef.current = true;
     } catch {
-      setError('Failed to load screener results');
+      if (requestId === requestIdRef.current) setError('Failed to load screener results');
     } finally {
-      setSearching(false);
-      if (isFirstLoad) setLoading(false);
-      else doneProgress();
+      if (requestId === requestIdRef.current) {
+        setSearching(false);
+        if (isFirstLoad) setLoading(false);
+      }
+      if (!isFirstLoad) doneProgress();
     }
   }, [startProgress, doneProgress]);
 
@@ -157,45 +198,75 @@ function ScreenerPageContent() {
     runSearch(initialFiltersRef.current);
   }, [runSearch]);
 
-  const applyFilters = () => {
-    setActivePreset(null);
-    runSearch(filters);
-  };
+  // Live filters: re-run shortly after the last edit (typing a number shouldn't fire a search per keystroke).
+  useEffect(() => {
+    if (JSON.stringify(filters) === lastSearchedRef.current) return;
+    const timer = setTimeout(() => runSearch(filters), 450);
+    return () => clearTimeout(timer);
+  }, [filters, runSearch]);
 
   const applyPreset = async (preset: FilterPreset) => {
     setActivePreset(preset.name);
-    setFilters({ ...filters, ...preset.filters });
+    const merged = { ...filters, ...preset.filters };
+    // The preset endpoint does this search; mark it so the live-filter effect doesn't repeat it.
+    lastSearchedRef.current = JSON.stringify(merged);
+    setFilters(merged);
     const isFirstLoad = !hasLoadedOnceRef.current;
+    const requestId = ++requestIdRef.current;
     try {
       setSearching(true);
       if (isFirstLoad) setLoading(true);
       else startProgress();
       setError(null);
       const resp = await screenerApi.searchWithPreset(preset.name.toLowerCase().replace(/ /g, '-'));
+      if (requestId !== requestIdRef.current) return;
       setResults(resp.results);
       setTotalMatches(resp.total_matches);
       hasLoadedOnceRef.current = true;
     } catch {
-      setError('Failed to apply preset');
+      if (requestId === requestIdRef.current) setError('Failed to apply preset');
     } finally {
-      setSearching(false);
-      if (isFirstLoad) setLoading(false);
-      else doneProgress();
+      if (requestId === requestIdRef.current) {
+        setSearching(false);
+        if (isFirstLoad) setLoading(false);
+      }
+      if (!isFirstLoad) doneProgress();
     }
   };
 
   const updateFilter = <K extends keyof ScreenerFilterRequest>(key: K, value: ScreenerFilterRequest[K]) => {
+    setActivePreset(null);
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
+
+  const sortBy = (column: keyof typeof SERVER_SORT) => {
+    const key = SERVER_SORT[column];
+    setActivePreset(null);
+    setFilters((prev) => ({
+      ...prev,
+      sort_by: key,
+      sort_order: prev.sort_by === key && prev.sort_order !== 'asc' ? 'asc' : 'desc',
+    }));
+  };
+  const sortHeader = (column: keyof typeof SERVER_SORT, label: string, align: 'start' | 'end' = 'end') => (
+    <SortHeader
+      label={label}
+      align={align}
+      active={filters.sort_by === SERVER_SORT[column]}
+      dir={filters.sort_order ?? 'desc'}
+      onClick={() => sortBy(column)}
+    />
+  );
+  const chips = activeFilterChips(filters);
 
   const sectorItems = useMemo(() => filterOptions?.sectors || [], [filterOptions]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-cyan-50">
-      <div className="container mx-auto p-4 max-w-7xl">
-        <div className="mb-6 p-4 bg-white rounded-lg shadow-sm border border-slate-200">
-          <h1 className="text-2xl font-bold text-slate-800">Stock Screener</h1>
-          <p className="text-slate-600 text-sm mt-1">Filter the full universe by technicals, fundamentals, and quality</p>
+    <div className="min-h-screen bg-slate-50">
+      <div className="container mx-auto px-4 pb-12 pt-6 sm:px-6 lg:px-8 max-w-7xl">
+        <div className="mb-6 px-1 pt-2 pb-1">
+          <h1 className="large-title">Stock Screener</h1>
+          <p className="mt-1.5 max-w-3xl text-[15px] leading-relaxed text-slate-500">Filter the full universe by technicals, fundamentals, and quality</p>
         </div>
 
         {/* Presets */}
@@ -206,7 +277,7 @@ function ScreenerPageContent() {
                 key={p.name}
                 size="sm"
                 variant={activePreset === p.name ? 'solid' : 'bordered'}
-                className={activePreset === p.name ? 'bg-slate-700 text-white text-xs' : 'text-xs border-slate-300'}
+                className={activePreset === p.name ? 'rounded-full bg-slate-900 text-white text-xs' : 'rounded-full text-xs border-slate-300 text-slate-700'}
                 onClick={() => applyPreset(p)}
               >
                 {p.name}
@@ -217,120 +288,128 @@ function ScreenerPageContent() {
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
           {/* Filter sidebar */}
-          <Card className="shadow-sm border border-slate-200 lg:col-span-1 h-fit">
-            <CardHeader className="p-3 pb-2">
-              <h3 className="text-sm font-semibold text-slate-700">Filters</h3>
+          <Card className="border border-black/[0.05] shadow-sm lg:col-span-1 h-fit overflow-visible">
+            <CardHeader className="px-5 pt-5 pb-1">
+              <h3 className="text-[15px] font-semibold text-slate-900">Filters</h3>
             </CardHeader>
-            <Divider className="bg-slate-200" />
-            <CardBody className="p-4 space-y-4">
+            <CardBody className="px-5 pb-5 pt-3 space-y-4">
               <div className="grid grid-cols-2 gap-2">
-                <Input
+                <TextField
                   type="number"
                   label="Min Price"
-                  size="sm"
+                  placeholder="Any"
                   value={filters.min_price?.toString() || ''}
                   onChange={(e) => updateFilter('min_price', e.target.value ? Number(e.target.value) : undefined)}
                 />
-                <Input
+                <TextField
                   type="number"
                   label="Max Price"
-                  size="sm"
+                  placeholder="Any"
                   value={filters.max_price?.toString() || ''}
                   onChange={(e) => updateFilter('max_price', e.target.value ? Number(e.target.value) : undefined)}
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                <Input
+                <TextField
                   type="number"
                   label="Min RSI"
-                  size="sm"
+                  placeholder="Any"
                   value={filters.min_rsi?.toString() || ''}
                   onChange={(e) => updateFilter('min_rsi', e.target.value ? Number(e.target.value) : undefined)}
                 />
-                <Input
+                <TextField
                   type="number"
                   label="Max RSI"
-                  size="sm"
+                  placeholder="Any"
                   value={filters.max_rsi?.toString() || ''}
                   onChange={(e) => updateFilter('max_rsi', e.target.value ? Number(e.target.value) : undefined)}
                 />
               </div>
 
-              <Input
-                type="number"
-                label="Min Volume Ratio"
-                size="sm"
-                value={filters.min_volume_ratio?.toString() || ''}
-                onChange={(e) => updateFilter('min_volume_ratio', e.target.value ? Number(e.target.value) : undefined)}
-              />
+              <TextField
+                  type="number"
+                  label="Min Volume Ratio"
+                  placeholder="Any"
+                  value={filters.min_volume_ratio?.toString() || ''}
+                  onChange={(e) => updateFilter('min_volume_ratio', e.target.value ? Number(e.target.value) : undefined)}
+                />
 
-              <Input
-                type="number"
-                label="Min Quality Score"
-                size="sm"
-                value={filters.min_quality_score?.toString() || ''}
-                onChange={(e) => updateFilter('min_quality_score', e.target.value ? Number(e.target.value) : undefined)}
-              />
+              <TextField
+                  type="number"
+                  label="Min Quality Score"
+                  placeholder="Any"
+                  value={filters.min_quality_score?.toString() || ''}
+                  onChange={(e) => updateFilter('min_quality_score', e.target.value ? Number(e.target.value) : undefined)}
+                />
 
-              <Select
+              <MultiSelect
                 label="Sectors"
-                selectionMode="multiple"
-                size="sm"
-                selectedKeys={new Set(filters.sectors || [])}
-                onSelectionChange={(keys) => updateFilter('sectors', Array.from(keys as Set<string>))}
-              >
-                {sectorItems.map((s) => (
-                  <SelectItem key={s.name} value={s.name}>
-                    {`${s.name} (${s.stock_count})`}
-                  </SelectItem>
-                ))}
-              </Select>
+                placeholder="All sectors"
+                options={sectorItems.map((s) => ({ value: s.name, label: s.name, hint: String(s.stock_count) }))}
+                selected={filters.sectors || []}
+                onChange={(v) => updateFilter('sectors', v)}
+              />
 
-              <Select
+              <MultiSelect
                 label="Quality Grades"
-                selectionMode="multiple"
-                size="sm"
-                selectedKeys={new Set(filters.quality_grades || [])}
-                onSelectionChange={(keys) => updateFilter('quality_grades', Array.from(keys as Set<string>))}
-              >
-                {QUALITY_GRADES.map((g) => (
-                  <SelectItem key={g} value={g}>
-                    {g}
-                  </SelectItem>
-                ))}
-              </Select>
+                placeholder="All grades"
+                options={QUALITY_GRADES.map((g) => ({ value: g, label: g }))}
+                selected={filters.quality_grades || []}
+                onChange={(v) => updateFilter('quality_grades', v)}
+              />
 
-              <Select
+              <SelectField
                 label="Sort By"
-                size="sm"
-                selectedKeys={new Set([filters.sort_by || 'price_change_pct'])}
-                onSelectionChange={(keys) => updateFilter('sort_by', Array.from(keys as Set<string>)[0])}
-              >
-                {SORT_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </Select>
+                value={filters.sort_by || 'price_change_pct'}
+                options={SORT_OPTIONS}
+                onChange={(v) => updateFilter('sort_by', v)}
+              />
 
-              <Button className="w-full bg-slate-700 text-white" size="sm" onClick={applyFilters} isLoading={searching}>
-                Apply Filters
-              </Button>
+              <p className="text-xs text-slate-400">Results update as you change filters.</p>
             </CardBody>
           </Card>
 
           {/* Results */}
-          <Card className="shadow-sm border border-slate-200 lg:col-span-3">
-            <CardHeader className="p-3 pb-2 flex justify-between items-center">
-              <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                Results {!loading && `(${totalMatches})`}
+          <Card className="border border-black/[0.05] shadow-sm lg:col-span-3">
+            <CardHeader className="px-5 pt-5 pb-3 flex flex-col items-start gap-2.5">
+              <h3 className="text-[15px] font-semibold text-slate-900 flex items-center gap-2">
+                Results {!loading && <span className="font-normal tabular-nums text-slate-400">{totalMatches.toLocaleString()}</span>}
                 {searching && !loading && (
-                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-500 animate-pulse" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
                 )}
               </h3>
+              {chips.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {chips.map((chip) => (
+                    <span key={chip.id} className="inline-flex items-center gap-1 rounded-full bg-accent-soft py-0.5 pl-2.5 pr-1 text-xs font-medium text-accent">
+                      {chip.label}
+                      <button
+                        type="button"
+                        aria-label={`Remove filter ${chip.label}`}
+                        onClick={() => {
+                          setActivePreset(null);
+                          setFilters((prev) => chip.clear(prev));
+                        }}
+                        className="flex h-4 w-4 items-center justify-center rounded-full hover:bg-accent/15"
+                      >
+                        <XMarkIcon className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActivePreset(null);
+                      setFilters({ ...DEFAULT_FILTERS, sort_by: filters.sort_by, sort_order: filters.sort_order });
+                    }}
+                    className="ml-1 text-xs font-medium text-slate-500 hover:text-slate-800"
+                  >
+                    Clear all
+                  </button>
+                </div>
+              )}
             </CardHeader>
-            <Divider className="bg-slate-200" />
             <CardBody className="p-0">
               {loading ? (
                 <div className="flex justify-center py-12">
@@ -353,28 +432,28 @@ function ScreenerPageContent() {
                   <div className={searching ? 'opacity-50 pointer-events-none transition-opacity' : 'transition-opacity'}>
                     <Table
                       removeWrapper
+                      aria-label="Screener results"
+                      onRowAction={(key) => router.push(`/stock/${key}`)}
                       className="text-xs"
-                      classNames={{ th: 'bg-slate-50 text-slate-600 font-medium text-xs h-8', td: 'text-xs py-2' }}
+                      classNames={{ th: 'bg-slate-50/70 text-slate-500 font-medium text-[11px] h-8 first:pl-5 last:pr-5', td: 'text-[13px] py-2 first:pl-5 last:pr-5', tr: 'cursor-pointer' }}
                     >
                       <TableHeader>
                         <TableColumn>SYMBOL</TableColumn>
                         <TableColumn align="end">PRICE</TableColumn>
-                        <TableColumn align="end">CHANGE</TableColumn>
-                        <TableColumn align="end">VOLUME</TableColumn>
-                        <TableColumn align="end">RSI</TableColumn>
+                        <TableColumn align="end">{sortHeader('change', 'Change')}</TableColumn>
+                        <TableColumn align="end">{sortHeader('volume', 'Volume')}</TableColumn>
+                        <TableColumn align="end">{sortHeader('rsi', 'RSI')}</TableColumn>
                         <TableColumn>SECTOR</TableColumn>
-                        <TableColumn>GRADE</TableColumn>
+                        <TableColumn>{sortHeader('grade', 'Grade', 'start')}</TableColumn>
                         <TableColumn>STRENGTH</TableColumn>
                       </TableHeader>
                       <TableBody>
                         {results.map((stock) => (
-                          <TableRow key={stock.symbol} className="hover:bg-slate-50">
+                          <TableRow key={stock.symbol}>
                             <TableCell>
-                              <Link href={`/stock/${stock.symbol}`} className="font-semibold text-slate-800 hover:text-cyan-700">
-                                {stock.symbol}
-                              </Link>
+                              <SymbolHoverLink symbol={stock.symbol} />
                             </TableCell>
-                            <TableCell className="text-right text-slate-700">${stock.current_price.toFixed(2)}</TableCell>
+                            <TableCell className="text-right tabular-nums text-slate-800">${stock.current_price.toFixed(2)}</TableCell>
                             <TableCell className="text-right">
                               <span className={`font-semibold ${stock.price_change_pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                                 {stock.price_change_pct >= 0 ? '+' : ''}

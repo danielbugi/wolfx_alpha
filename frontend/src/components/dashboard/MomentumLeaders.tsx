@@ -47,11 +47,11 @@ export interface MomentumLeadersProps {
  */
 export default function MomentumLeaders({ board, sessionDate, loading, error, onRetry }: MomentumLeadersProps) {
   return (
-    <Card className="mb-6 shadow-sm border border-slate-200">
-      <CardHeader className="p-3 pb-2">
+    <Card className="mb-6 border border-black/[0.05] shadow-sm" data-stock-list="Momentum Leaders">
+      <CardHeader className="px-5 pt-5 pb-2">
         <div className="flex justify-between items-center w-full">
           <div>
-            <h3 className="text-sm font-semibold text-slate-700">Momentum Leaders</h3>
+            <h3 className="text-[17px] font-semibold text-slate-900">Momentum Leaders</h3>
             <p className="text-xs text-slate-500 mt-0.5">
               Of stocks that made a Momentum Board list in the last few sessions, who moved most today
             </p>
@@ -61,7 +61,7 @@ export default function MomentumLeaders({ board, sessionDate, loading, error, on
           )}
         </div>
       </CardHeader>
-      <CardBody className="p-3 pt-1">
+      <CardBody className="px-5 pb-4 pt-1">
         {loading ? (
           <div className="flex justify-center py-8">
             <LoadingSpinner size="medium" />

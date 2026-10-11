@@ -14,6 +14,7 @@ import SignalFilters, { DEFAULT_SIGNAL_FILTERS } from '@/components/strategies/S
 import type { SignalFilterState } from '@/components/strategies/SignalFilters';
 import SignalDetailDialog from '@/components/strategies/SignalDetailDialog';
 import { DirectionTag, EmptyState, Section, StatusChip } from '@/components/strategies/ui';
+import SymbolHoverLink from '@/components/dashboard/SymbolHoverLink';
 
 export const SIGNAL_PAGE_SIZE = 50;
 
@@ -139,10 +140,8 @@ export default function SignalsTab({ strategyKey, version }: { strategyKey: stri
                   <tr key={s.id} className="cursor-pointer border-b border-slate-100 hover:bg-slate-50" onClick={() => setOpenId(s.id)}>
                     <td className="hidden whitespace-nowrap px-3 py-2 text-xs text-slate-500 sm:table-cell">{formatSession(s.signal_date)}</td>
                     <td className="px-3 py-2">
-                      <button type="button" className="font-semibold text-slate-800 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-                              onClick={(e) => { e.stopPropagation(); setOpenId(s.id); }} aria-label={`Open ${s.symbol} signal details`}>
-                        {s.symbol}
-                      </button>
+                      <SymbolHoverLink symbol={s.symbol} onSelect={() => setOpenId(s.id)} ariaLabel={`Open ${s.symbol} signal details`}
+                                       className="font-semibold text-slate-800 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400" />
                       <span className="block"><DirectionTag direction={s.direction} /></span>
                     </td>
                     <td className="hidden px-3 py-2 md:table-cell">

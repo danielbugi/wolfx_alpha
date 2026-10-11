@@ -13,9 +13,9 @@ import React, { useEffect, useRef } from 'react';
  */
 const VARIANT_CLASS: Record<'center' | 'drawer-left', string> = {
   center:
-    'm-auto max-h-[90vh] w-[min(64rem,calc(100vw-1.5rem))] rounded-xl open:flex open:flex-col',
+    'm-auto max-h-[90vh] w-[min(64rem,calc(100vw-1.5rem))] rounded-2xl open:flex open:flex-col',
   'drawer-left':
-    'inset-y-0 left-0 m-0 h-dvh max-h-none w-72 max-w-[85vw] rounded-none rounded-r-xl open:flex open:flex-col',
+    'inset-y-0 left-0 m-0 h-dvh max-h-none w-80 max-w-[85vw] rounded-none rounded-r-2xl open:flex open:flex-col',
 };
 
 interface DialogProps {
@@ -54,6 +54,7 @@ export default function Dialog({ open, onClose, labelledBy, dismissable = true, 
     <dialog
       ref={ref}
       aria-labelledby={labelledBy}
+      data-variant={variant}
       onClose={onClose}
       onCancel={(e) => {
         if (!dismissable) e.preventDefault();
@@ -66,7 +67,7 @@ export default function Dialog({ open, onClose, labelledBy, dismissable = true, 
         if (dismissable && pressStartedOnBackdrop.current && e.target === ref.current) onClose();
         pressStartedOnBackdrop.current = false;
       }}
-      className={`bg-white p-0 text-slate-800 shadow-2xl backdrop:bg-slate-900/50 ${VARIANT_CLASS[variant]}`}
+      className={`bg-white p-0 text-slate-800 shadow-2xl ring-1 ring-black/[0.06] backdrop:bg-black/30 backdrop:backdrop-blur-[2px] ${VARIANT_CLASS[variant]}`}
     >
       {open && children}
     </dialog>

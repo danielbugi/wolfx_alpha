@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Card, Spinner } from '@nextui-org/react';
+import { Card } from '@nextui-org/react';
 import { ExclamationTriangleIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 import { telegramApi, toControlError } from '@/services/telegramApi';
 import type { ControlErrorInfo, ControlOverview, MessageFilters as ApiFilters, MessageList } from '@/services/telegramApi';
@@ -24,6 +24,7 @@ import { SideTabs } from '@/components/telegram/SideTabs';
 import type { SideTab } from '@/components/telegram/SideTabs';
 import { Btn } from '@/components/telegram/ui';
 import { useAuth } from '@/contexts/AuthContext';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 const PAGE_SIZE = 25;
 
@@ -144,13 +145,13 @@ export default function TelegramControlPage() {
   const copy = TAB_COPY[tab];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-cyan-50">
-      <div className="container mx-auto max-w-6xl space-y-4 p-4">
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="min-h-screen bg-slate-50">
+      <div className="container mx-auto px-4 pb-12 pt-6 sm:px-6 lg:px-8 max-w-7xl space-y-4">
+        <div className="px-1 pt-2 pb-1">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-slate-800">{copy.title}</h1>
-              <p className="mt-1 text-sm text-slate-600">{copy.description}</p>
+              <h1 className="large-title">Telegram</h1>
+              <p className="mt-1.5 max-w-3xl text-[15px] leading-relaxed text-slate-500">{copy.description}</p>
               {tab === 'messages' && overview && (
                 <p className="mt-2 text-xs text-slate-400">
                   Updated {formatWhen(overview.generated_at, timezone)} ({timezone})
@@ -202,7 +203,7 @@ export default function TelegramControlPage() {
                 )}
 
                 {overviewLoading && !overview && !everythingFailed && (
-                  <div className="flex justify-center py-10"><Spinner color="primary" /></div>
+                  <div className="flex justify-center py-10"><LoadingSpinner /></div>
                 )}
                 {overviewError && overview === null && !everythingFailed && (
                   <ErrorAlert title="Cannot load the overview" message={overviewError.message} onRetry={loadOverview} />
@@ -230,7 +231,7 @@ export default function TelegramControlPage() {
                     {listError && list === null ? (
                       <ErrorAlert title="Cannot load the messages" message={listError.message} onRetry={loadList} />
                     ) : list === null ? (
-                      <div className="flex justify-center py-10"><Spinner color="primary" /></div>
+                      <div className="flex justify-center py-10"><LoadingSpinner /></div>
                     ) : (
                       <>
                         {listError && <ErrorAlert title="The list may be out of date" message={listError.message} onRetry={loadList} />}

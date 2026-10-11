@@ -95,11 +95,11 @@ export default function TrackRecordPanel({ summary, signals }: TrackRecordPanelP
         </div>
       )}
 
-      <Card className="shadow-sm border border-slate-200">
-        <CardHeader className="bg-slate-700 text-white p-4">
+      <Card className="border border-black/[0.05] shadow-sm">
+        <CardHeader className="px-5 pt-5 pb-3">
           <div>
-            <h3 className="text-base font-semibold">Recent signals</h3>
-            <p className="text-slate-300 text-xs mt-1">
+            <h3 className="text-[17px] font-semibold text-slate-900">Recent signals</h3>
+            <p className="text-slate-500 text-xs mt-0.5">
               A disclosed history of what actually happened -- not a prediction of what happens next.
             </p>
           </div>
@@ -110,8 +110,9 @@ export default function TrackRecordPanel({ summary, signals }: TrackRecordPanelP
           ) : (
             <Table
               removeWrapper
+              aria-label="Recent signals"
               className="text-xs"
-              classNames={{ th: 'bg-slate-50 text-slate-600 font-medium text-xs h-8', td: 'text-xs py-2' }}
+              classNames={{ th: 'bg-slate-50/70 text-slate-500 font-medium text-[11px] h-8', td: 'text-xs py-2' }}
             >
               <TableHeader>
                 <TableColumn>SYMBOL</TableColumn>

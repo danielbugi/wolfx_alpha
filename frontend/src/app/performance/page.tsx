@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardBody, CardHeader, Chip, Divider, Spinner, Button } from '@nextui-org/react';
+import { Card, CardBody, CardHeader, Chip, Divider, Button } from '@nextui-org/react';
 import {
   performanceApi,
   PerformanceReport,
@@ -9,6 +9,8 @@ import {
   RoutePerfStat,
   HealthStatus,
 } from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
+import ErrorAlert from '@/components/common/ErrorAlert';
 
 function statusColor(status: HealthStatus): string {
   switch (status) {
@@ -44,9 +46,9 @@ function EndpointTable({ rows, title, subtitle, emptyText }: {
   emptyText: string;
 }) {
   return (
-    <Card className="shadow-sm border border-slate-200">
+    <Card className="border border-black/[0.05] shadow-sm">
       <CardHeader className="p-4 pb-2">
-        <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
+        <h3 className="text-[15px] font-semibold text-slate-900">{title}</h3>
         <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>
       </CardHeader>
       <Divider className="bg-slate-100" />
@@ -105,9 +107,9 @@ function EndpointTable({ rows, title, subtitle, emptyText }: {
 
 function DatabaseCard({ db }: { db: PerformanceReport['database'] }) {
   return (
-    <Card className="shadow-sm border border-slate-200">
+    <Card className="border border-black/[0.05] shadow-sm">
       <CardHeader className="p-4 pb-2">
-        <h3 className="text-sm font-semibold text-slate-800">Database</h3>
+        <h3 className="text-[15px] font-semibold text-slate-900">Database</h3>
         <p className="text-xs text-slate-500 mt-0.5">
           Connection cost isolated from query cost — every request in this backend pays the first
           number, since {db.pooling_active ? 'a connection pool is active' : 'there is currently no connection pooling'}.
@@ -208,12 +210,12 @@ export default function PerformancePage() {
       }));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-cyan-50">
-      <div className="container mx-auto p-4 max-w-6xl space-y-4">
-        <div className="p-4 bg-white rounded-lg shadow-sm border border-slate-200 flex items-center justify-between">
+    <div className="min-h-screen bg-slate-50">
+      <div className="container mx-auto px-4 pb-12 pt-6 sm:px-6 lg:px-8 max-w-5xl space-y-4">
+        <div className="px-1 pt-2 pb-1 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">Performance</h1>
-            <p className="text-slate-600 text-sm mt-1">
+            <h1 className="large-title">Performance</h1>
+            <p className="mt-1.5 max-w-3xl text-[15px] leading-relaxed text-slate-500">
               Scored, tracked latency across the database, every backend endpoint, and every
               frontend route — where the app is actually slow, with numbers instead of guesses.
             </p>
@@ -229,7 +231,7 @@ export default function PerformancePage() {
           </div>
           <div className="flex flex-col items-end gap-2 shrink-0">
             {report && <StatusBadge status={report.overall} />}
-            <Button size="sm" className="bg-slate-700 text-white" onClick={fetchReport} isLoading={loading}>
+            <Button size="sm" className="rounded-full bg-slate-900 px-4 font-medium text-white" onClick={fetchReport} isLoading={loading}>
               Refresh
             </Button>
           </div>
@@ -237,10 +239,10 @@ export default function PerformancePage() {
 
         {loading && !report ? (
           <div className="flex justify-center py-16">
-            <Spinner color="primary" />
+            <LoadingSpinner />
           </div>
         ) : error ? (
-          <p className="text-center text-red-500 text-sm py-16">{error}</p>
+          <ErrorAlert title="Couldn’t load the performance report" message={error} onRetry={fetchReport} className="my-4" />
         ) : report ? (
           <>
             <DatabaseCard db={report.database} />
