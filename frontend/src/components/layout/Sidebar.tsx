@@ -12,6 +12,7 @@ import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
 import SearchBox from '@/components/layout/SearchBox';
 import Logo from '@/components/brand/Logo';
 import ThemeSwitch from '@/components/layout/ThemeSwitch';
+import MarketClock from '@/components/layout/MarketClock';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSearchShortcut } from '@/hooks/useSearchShortcut';
 
@@ -119,6 +120,10 @@ export default function Sidebar() {
           </div>
         ))}
       </nav>
+
+      <div className={clsx('shrink-0 px-3 pb-3', collapsed && 'flex justify-center px-0')}>
+        <MarketClock compact={collapsed} />
+      </div>
 
       {user && (
         <div className={clsx('shrink-0 border-t border-black/[0.06] p-3', collapsed && 'flex justify-center px-0')}>
