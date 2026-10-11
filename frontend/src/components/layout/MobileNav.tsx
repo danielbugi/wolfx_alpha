@@ -12,6 +12,7 @@ import Dialog from '@/components/common/Dialog';
 import SearchBox from '@/components/layout/SearchBox';
 import Logo from '@/components/brand/Logo';
 import ThemeSwitch from '@/components/layout/ThemeSwitch';
+import MarketClock from '@/components/layout/MarketClock';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSearchShortcut } from '@/hooks/useSearchShortcut';
 
@@ -103,7 +104,8 @@ export default function MobileNav() {
             </div>
           ))}
         </nav>
-        <div className="shrink-0 px-4 pb-3">
+        <div className="shrink-0 space-y-3 px-4 pb-3">
+          <MarketClock />
           <ThemeSwitch />
         </div>
         {user && (

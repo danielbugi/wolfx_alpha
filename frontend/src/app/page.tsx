@@ -20,6 +20,8 @@ import MomentumBoard, { BoardCategory } from '@/components/dashboard/MomentumBoa
 import MomentumLeaders from '@/components/dashboard/MomentumLeaders';
 import MarketMovers from '@/components/dashboard/MarketMovers';
 import WatchlistCard from '@/components/dashboard/WatchlistCard';
+import SummaryTiles from '@/components/dashboard/SummaryTiles';
+import CommoditiesCard, { COMMODITY_SYMBOLS } from '@/components/dashboard/CommoditiesCard';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import { ResolvedTheme, useResolvedTheme } from '@/lib/theme';
 
@@ -279,13 +281,22 @@ export default function DashboardPage() {
         {/* Market Indices Strip -- real S&P 500/Nasdaq/Russell/VIX/etc. data,
             placed above everything else: traders orient top-down (macro
             regime -> sector -> single name), not the other way around. */}
-        <MarketIndicesStrip indices={marketIndices} loading={marketIndicesLoading} error={marketIndicesError} />
+        <MarketIndicesStrip
+          indices={marketIndices.filter((i) => !(COMMODITY_SYMBOLS as readonly string[]).includes(i.symbol))}
+          loading={marketIndicesLoading}
+          error={marketIndicesError}
+        />
 
         {/* Header */}
         <div className="px-1 pt-2 pb-1 flex flex-wrap justify-between items-end gap-x-6 gap-y-3 mb-6">
           <div>
             <h1 className="large-title">Dashboard</h1>
-            <p className="mt-1.5 max-w-3xl text-[15px] leading-relaxed text-slate-500">Professional market analysis and confirmed momentum signals</p>
+            <p className="mt-1.5 max-w-3xl text-[15px] leading-relaxed text-slate-500">
+              Professional market analysis and confirmed momentum signals
+              {data.market_summary?.last_updated && (
+                <span className="text-slate-400"> · data as of {data.market_summary.last_updated}</span>
+              )}
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <div className="text-right">
@@ -311,212 +322,183 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Market Summary Cards */}
-        {data?.market_summary && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-            <Card className="border border-black/[0.05] shadow-sm">
-              <CardBody className="p-5">
-                <p className="text-[13px] font-medium text-slate-500">Total Symbols</p>
-                <p className="mt-1 text-[28px] font-semibold leading-tight tracking-[-0.02em] tabular-nums text-slate-900">
-                  {data.market_summary.total_symbols.toLocaleString()}
-                </p>
-                <p className="mt-1 text-xs text-slate-400">tracked, incl. illiquid</p>
-              </CardBody>
-            </Card>
-
-            <Card className="border border-black/[0.05] shadow-sm">
-              <CardBody className="p-5">
-                <p className="text-[13px] font-medium text-slate-500">Volume Ratio</p>
-                <p className="mt-1 text-[28px] font-semibold leading-tight tracking-[-0.02em] tabular-nums text-slate-900">
-                  {data.market_summary.avg_volume_ratio != null ? `${data.market_summary.avg_volume_ratio.toFixed(2)}x` : '—'}
-                </p>
-              </CardBody>
-            </Card>
-
-            <Card className="border border-black/[0.05] shadow-sm">
-              <CardBody className="p-5">
-                <p className="text-[13px] font-medium text-slate-500">Confirmed Today</p>
-                <p className="mt-1 text-[28px] font-semibold leading-tight tracking-[-0.02em] tabular-nums text-slate-900">
-                  {boardStarredTotal}
-                </p>
-                <p className="mt-1 text-xs text-slate-400">★ on 2+ Momentum Board lists</p>
-              </CardBody>
-            </Card>
-
-            <Card className="border border-black/[0.05] shadow-sm">
-              <CardBody className="p-5">
-                <p className="text-[13px] font-medium text-slate-500">Data Updated</p>
-                <p className="mt-2 text-[15px] font-semibold tabular-nums text-slate-900">
-                  {data.market_summary.last_updated}
-                </p>
-              </CardBody>
-            </Card>
-          </div>
-        )}
+        {/* First read: breadth, confirmed names, market mood, sector leaders */}
+        <SummaryTiles
+          overview={marketOverview}
+          starredTotal={boardLoading && boardStarredTotal === 0 ? null : boardStarredTotal}
+          indices={marketIndices}
+        />
 
         {/* Watchlist -- stocks starred on their stock page (this browser); renders nothing when empty */}
         <WatchlistCard />
 
-        {/* Market Overview */}
-        {!marketOverview && marketOverviewError && (
-          <ErrorAlert
-            title="Market overview unavailable"
-            message="Couldn't load sector performance and market breadth."
-            onRetry={fetchMarketOverview}
-            className="mb-6"
-          />
-        )}
-        {marketOverview && (
-          <Card className="mb-6 border border-black/[0.05] shadow-sm">
-            <CardHeader className="px-5 pt-5 pb-3 flex items-center justify-between flex-wrap gap-2">
-              <h3 className="text-[17px] font-semibold text-slate-900">Market Overview <span className="font-normal text-slate-400">Today</span></h3>
-              <div className="flex items-center gap-2">
-                {marketOverviewError && (
-                  <Chip size="sm" className="bg-amber-100 text-amber-800 text-[10px]">
-                    showing stale data — last refresh failed
-                  </Chip>
-                )}
-                <SegmentedControl
-                  aria-label="Sector view"
-                  options={[
-                    { value: 'heatmap', label: 'Heatmap' },
-                    { value: 'trend', label: 'Trend' },
-                  ]}
-                  value={sectorView}
-                  onChange={setSectorView}
-                />
-              </div>
-            </CardHeader>
-            <CardBody className="px-5 pb-5 pt-1">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-                <div className="bg-slate-50 rounded-xl p-4">
-                  <p className="text-xs font-medium text-slate-500 mb-1">Advance/Decline</p>
-                  <p className="text-xl font-semibold tracking-[-0.01em] tabular-nums text-slate-900">
-                    {marketOverview.market_breadth.gainers} / {marketOverview.market_breadth.losers}
-                  </p>
-                  <p className="text-xs text-slate-500">ratio {marketOverview.market_breadth.advance_decline_ratio.toFixed(2)}</p>
+        {/* Sectors and commodities side by side */}
+        <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="min-w-0 lg:col-span-2">
+          {/* Market Overview */}
+          {!marketOverview && marketOverviewError && (
+            <ErrorAlert
+              title="Market overview unavailable"
+              message="Couldn't load sector performance and market breadth."
+              onRetry={fetchMarketOverview}
+            />
+          )}
+          {marketOverview && (
+            <Card className="h-full border border-black/[0.05] shadow-sm">
+              <CardHeader className="px-5 pt-5 pb-3 flex items-center justify-between flex-wrap gap-2">
+                <h3 className="text-[17px] font-semibold text-slate-900">Market Overview <span className="font-normal text-slate-400">Today</span></h3>
+                <div className="flex items-center gap-2">
+                  {marketOverviewError && (
+                    <Chip size="sm" className="bg-amber-100 text-amber-800 text-[10px]">
+                      showing stale data — last refresh failed
+                    </Chip>
+                  )}
+                  <SegmentedControl
+                    aria-label="Sector view"
+                    options={[
+                      { value: 'heatmap', label: 'Heatmap' },
+                      { value: 'trend', label: 'Trend' },
+                    ]}
+                    value={sectorView}
+                    onChange={setSectorView}
+                  />
                 </div>
-                <div className="bg-slate-50 rounded-xl p-4">
-                  <p className="text-xs font-medium text-slate-500 mb-1">Unusual Volume</p>
-                  <p className="text-xl font-semibold tracking-[-0.01em] tabular-nums text-slate-900">{marketOverview.market_breadth.unusual_volume_count}</p>
-                  <p className="text-xs text-slate-500">stocks</p>
+              </CardHeader>
+              <CardBody className="px-5 pb-5 pt-1">
+                <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
+                  <div className="bg-slate-50 rounded-xl p-4">
+                    <p className="text-xs font-medium text-slate-500 mb-1">Advance/Decline</p>
+                    <p className="text-xl font-semibold tracking-[-0.01em] tabular-nums text-slate-900">
+                      {marketOverview.market_breadth.gainers} / {marketOverview.market_breadth.losers}
+                    </p>
+                    <p className="text-xs text-slate-500">ratio {marketOverview.market_breadth.advance_decline_ratio.toFixed(2)}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-4">
+                    <p className="text-xs font-medium text-slate-500 mb-1">Unusual Volume</p>
+                    <p className="text-xl font-semibold tracking-[-0.01em] tabular-nums text-slate-900">{marketOverview.market_breadth.unusual_volume_count}</p>
+                    <p className="text-xs text-slate-500">stocks</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-4">
+                    <p className="text-xs font-medium text-slate-500 mb-1">Overbought / Oversold</p>
+                    <p className="text-xl font-semibold tracking-[-0.01em] tabular-nums text-slate-900">
+                      <span className="text-red-600">{marketOverview.market_breadth.overbought_count}</span>
+                      {' / '}
+                      <span className="text-emerald-600">{marketOverview.market_breadth.oversold_count}</span>
+                    </p>
+                    <p className="text-xs text-slate-500">RSI &gt;70 / &lt;30</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-4">
+                    <p className="text-xs font-medium text-slate-500 mb-1">Avg RSI / Vol Ratio</p>
+                    <p className="text-xl font-semibold tracking-[-0.01em] tabular-nums text-slate-900">
+                      {marketOverview.market_indicators.avg_rsi.toFixed(0)} / {marketOverview.market_indicators.avg_volume_ratio.toFixed(2)}x
+                    </p>
+                    <p className="text-xs text-slate-500">across {marketOverview.market_breadth.total_stocks} stocks</p>
+                  </div>
                 </div>
-                <div className="bg-slate-50 rounded-xl p-4">
-                  <p className="text-xs font-medium text-slate-500 mb-1">Overbought / Oversold</p>
-                  <p className="text-xl font-semibold tracking-[-0.01em] tabular-nums text-slate-900">
-                    <span className="text-red-600">{marketOverview.market_breadth.overbought_count}</span>
-                    {' / '}
-                    <span className="text-emerald-600">{marketOverview.market_breadth.oversold_count}</span>
-                  </p>
-                  <p className="text-xs text-slate-500">RSI &gt;70 / &lt;30</p>
-                </div>
-                <div className="bg-slate-50 rounded-xl p-4">
-                  <p className="text-xs font-medium text-slate-500 mb-1">Avg RSI / Vol Ratio</p>
-                  <p className="text-xl font-semibold tracking-[-0.01em] tabular-nums text-slate-900">
-                    {marketOverview.market_indicators.avg_rsi.toFixed(0)} / {marketOverview.market_indicators.avg_volume_ratio.toFixed(2)}x
-                  </p>
-                  <p className="text-xs text-slate-500">across {marketOverview.market_breadth.total_stocks} stocks</p>
-                </div>
-              </div>
 
-              <div className="flex justify-between items-center mb-2">
-                <p className="text-xs text-slate-500">
-                  {sectorView === 'heatmap'
-                    ? 'Sector Performance — box size = # stocks, color = avg change. Click a sector to filter the Momentum Board below.'
-                    : 'Sector Performance — 90-day cumulative return. Click a sector below to isolate it and filter the Momentum Board.'}
-                </p>
-                {selectedSector && (
-                  <Chip
-                    size="sm"
-                    className="bg-accent text-white text-xs cursor-pointer"
-                    onClose={() => setSelectedSector(null)}
-                  >
-                    {selectedSector}
-                  </Chip>
-                )}
-              </div>
-              {sectorView === 'trend' ? (
-                <SectorTrendChart
-                  sectors={sectorHistory}
-                  selectedSector={selectedSector}
-                  onSelectSector={setSelectedSector}
-                />
-              ) : (
-              <div className="overflow-hidden rounded-xl">
-              <ResponsiveContainer width="100%" height={280}>
-                <Treemap
-                  data={marketOverview.sector_performance.map((s) => ({
-                    name: s.sector,
-                    size: Math.max(s.stock_count, 1),
-                    stock_count: s.stock_count,
-                    avg_performance: s.avg_performance,
-                  }))}
-                  dataKey="size"
-                  stroke={palette.gap}
-                  isAnimationActive={false}
-                  content={(node) => {
-                    // Treemap hands back our own datum's fields on the node (see the
-                    // `data` mapping above); recharts types them as an index signature.
-                    const { x, y, width, height, name } = node;
-                    const avgPerformance: number | undefined = node.avg_performance;
-                    const stockCount: number | undefined = node.stock_count;
-                    const isSelected = selectedSector === name;
-                    const perf = avgPerformance ?? 0;
+                <div className="flex justify-between items-center mb-2">
+                  <p className="text-xs text-slate-500">
+                    {sectorView === 'heatmap'
+                      ? 'Sector Performance — box size = # stocks, color = avg change. Click a sector to filter the Momentum Board below.'
+                      : 'Sector Performance — 90-day cumulative return. Click a sector below to isolate it and filter the Momentum Board.'}
+                  </p>
+                  {selectedSector && (
+                    <Chip
+                      size="sm"
+                      className="bg-accent text-white text-xs cursor-pointer"
+                      onClose={() => setSelectedSector(null)}
+                    >
+                      {selectedSector}
+                    </Chip>
+                  )}
+                </div>
+                {sectorView === 'trend' ? (
+                  <SectorTrendChart
+                    sectors={sectorHistory}
+                    selectedSector={selectedSector}
+                    onSelectSector={setSelectedSector}
+                  />
+                ) : (
+                <div className="overflow-hidden rounded-xl">
+                <ResponsiveContainer width="100%" height={280}>
+                  <Treemap
+                    data={marketOverview.sector_performance.map((s) => ({
+                      name: s.sector,
+                      size: Math.max(s.stock_count, 1),
+                      stock_count: s.stock_count,
+                      avg_performance: s.avg_performance,
+                    }))}
+                    dataKey="size"
+                    stroke={palette.gap}
+                    isAnimationActive={false}
+                    content={(node) => {
+                      // Treemap hands back our own datum's fields on the node (see the
+                      // `data` mapping above); recharts types them as an index signature.
+                      const { x, y, width, height, name } = node;
+                      const avgPerformance: number | undefined = node.avg_performance;
+                      const stockCount: number | undefined = node.stock_count;
+                      const isSelected = selectedSector === name;
+                      const perf = avgPerformance ?? 0;
 
-                    // Always show a label — scale font down and abbreviate/truncate
-                    // as the box shrinks, instead of hiding small sectors entirely.
-                    const nameFontSize = width < 55 ? 8 : width < 90 ? 9.5 : 11;
-                    const label = fitSectorLabel(name, width - 6, nameFontSize);
-                    const canShowPerf = height > 32 && width > 34;
-                    const nameY = canShowPerf ? y + height / 2 - 5 : y + height / 2 + nameFontSize / 3;
+                      // Always show a label — scale font down and abbreviate/truncate
+                      // as the box shrinks, instead of hiding small sectors entirely.
+                      const nameFontSize = width < 55 ? 8 : width < 90 ? 9.5 : 11;
+                      const label = fitSectorLabel(name, width - 6, nameFontSize);
+                      const canShowPerf = height > 32 && width > 34;
+                      const nameY = canShowPerf ? y + height / 2 - 5 : y + height / 2 + nameFontSize / 3;
 
-                    return (
-                      <g
-                        onClick={() => setSelectedSector(isSelected ? null : name)}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <title>
-                          {name}: {perf >= 0 ? '+' : ''}{perf.toFixed(2)}% ({stockCount} stocks)
-                        </title>
-                        <rect
-                          x={x}
-                          y={y}
-                          width={width}
-                          height={height}
-                          rx={6}
-                          style={{
-                            fill: sectorColor(perf, theme),
-                            stroke: isSelected ? palette.label : palette.gap,
-                            strokeWidth: isSelected ? 3 : 2,
-                          }}
-                        />
-                        <text
-                          x={x + width / 2}
-                          y={nameY}
-                          textAnchor="middle"
-                          fontSize={nameFontSize}
-                          fontWeight={600}
-                          fill={palette.label}
-                          stroke="none"
+                      return (
+                        <g
+                          onClick={() => setSelectedSector(isSelected ? null : name)}
+                          style={{ cursor: 'pointer' }}
                         >
-                          {label}
-                        </text>
-                        {canShowPerf && (
-                          <text x={x + width / 2} y={y + height / 2 + 11} textAnchor="middle" fontSize={10} fill={palette.sub} stroke="none">
-                            {perf >= 0 ? '+' : ''}
-                            {perf.toFixed(2)}%
+                          <title>
+                            {name}: {perf >= 0 ? '+' : ''}{perf.toFixed(2)}% ({stockCount} stocks)
+                          </title>
+                          <rect
+                            x={x}
+                            y={y}
+                            width={width}
+                            height={height}
+                            rx={6}
+                            style={{
+                              fill: sectorColor(perf, theme),
+                              stroke: isSelected ? palette.label : palette.gap,
+                              strokeWidth: isSelected ? 3 : 2,
+                            }}
+                          />
+                          <text
+                            x={x + width / 2}
+                            y={nameY}
+                            textAnchor="middle"
+                            fontSize={nameFontSize}
+                            fontWeight={600}
+                            fill={palette.label}
+                            stroke="none"
+                          >
+                            {label}
                           </text>
-                        )}
-                      </g>
-                    );
-                  }}
-                />
-              </ResponsiveContainer>
-              </div>
-              )}
-            </CardBody>
-          </Card>
-        )}
+                          {canShowPerf && (
+                            <text x={x + width / 2} y={y + height / 2 + 11} textAnchor="middle" fontSize={10} fill={palette.sub} stroke="none">
+                              {perf >= 0 ? '+' : ''}
+                              {perf.toFixed(2)}%
+                            </text>
+                          )}
+                        </g>
+                      );
+                    }}
+                  />
+                </ResponsiveContainer>
+                </div>
+                )}
+              </CardBody>
+            </Card>
+          )}
+          </div>
+          <div className="min-w-0">
+            <CommoditiesCard indices={marketIndices} loading={marketIndicesLoading} />
+          </div>
+        </div>
 
         {/* Momentum Board -- replaces the old ML/alignment-based Alpha Finder. See
             CLAUDE.md's 2026-09-22 dashboard reframe entry for why. */}
