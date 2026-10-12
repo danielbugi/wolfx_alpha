@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // The fixture is the real report served at /api/lab/reports/strategy_experiments (backend/lab_reports/strategy_experiments.json): a snapshot, so this test needs no network.
 import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
