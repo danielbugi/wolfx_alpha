@@ -232,6 +232,88 @@ function SecEarnings({ d }: { d: any }) {
   );
 }
 
+const vlabel = (key: string) => key.replace('donchian_breakout__exit_', '').replace(/_/g, ' ');
+
+function reasonMix(r: Record<string, number> | undefined): string {
+  if (!r) return '—';
+  const total = Object.values(r).reduce((a, b) => a + b, 0) || 1;
+  return Object.keys(r).sort((a, b) => r[b] - r[a]).map((k) => `${k} ${Math.round((r[k] / total) * 100)}%`).join(' · ');
+}
+
+function StrategyExperiments({ d }: { d: any }) {
+  const keys: string[] = d.variants.map((v: any) => v.key);
+  const caps: number[] = d.design.hold_caps;
+  const reg: number = d.design.registered_hold_cap;
+  const cell = (k: string, cap: number, part: string, basis: 'std' | 'actual' = 'std') => d.position_accounting_primary_cost[k][String(cap)][`${part}|all`][basis] ?? {};
+  const rv = d.paper_tracker_replay_validation;
+  const sel = d.strategy_selection_baselines_cap60_std_net;
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {([
+          ['Analysis signals', fmtInt(d.design.n_analysis_signals)],
+          ['Registered variants verified', `${d.variants.filter((v: any) => v.registry_verified).length} of ${d.variants.length}`],
+          ['Train / test split', `${d.design.train_end} / ${d.design.test_start}`],
+          ['Manifest hash', String(d.manifest.manifest_hash).slice(0, 12)],
+        ] as const).map(([label, value]) => (
+          <div key={label} className="rounded-md border border-slate-200 p-2">
+            <div className="text-[11px] text-slate-500">{label}</div>
+            <div className="text-base font-semibold text-slate-800">{value}</div>
+          </div>
+        ))}
+      </div>
+      <Table head={['Registered variant (immutable identity)', 'Version', 'Definition hash', 'Exit policy']} rows={d.variants.map((v: any) => [vlabel(v.key), v.version, <span key="h" className="font-mono text-xs">{String(v.definition_hash).slice(0, 16)}…</span>, v.policy.replace(/_/g, ' ')])} />
+
+      <h3 className="text-sm font-semibold text-slate-700">Out of sample (test period), registered {reg}-bar cap, position-level, net of {d.design.primary_cost_bps} bps, standardised R (1R = 2 x ATR)</h3>
+      <Table head={['Variant', 'Positions', 'Net expectancy', '95% interval', 'Win rate', 'Profit factor', 'Avg bars', 'Avg MFE / MAE', 'Max drawdown (cum R)', 'Exits']} rows={keys.map((k) => {
+        const c = cell(k, reg, 'test');
+        return [vlabel(k), fmtInt(c.n_positions), fmtR(c.expectancy_r), <Sig key="c" ci={c.expectancy_ci95} />, fmtPct(c.win_rate, 0), String(c.profit_factor ?? '—'), String(c.avg_duration_bars ?? '—'),
+          `${fmtR(c.avg_mfe_r, 2)} / ${fmtR(c.avg_mae_r, 2)}`, String(c.max_drawdown_r_cumulative ?? '—'), reasonMix(c.exit_reasons)];
+      })} />
+      <Table head={['Variant', 'Train expectancy', 'Test expectancy', 'Test bullish', 'Test bearish', ...COSTS_LABEL(d)]} rows={keys.map((k) => [vlabel(k), fmtR(cell(k, reg, 'train').expectancy_r), fmtR(cell(k, reg, 'test').expectancy_r),
+        fmtR(d.position_accounting_primary_cost[k][String(reg)]['test|bullish'].std.expectancy_r), fmtR(d.position_accounting_primary_cost[k][String(reg)]['test|bearish'].std.expectancy_r),
+        ...d.design.costs_bps.map((b: number) => fmtR(d.cost_sensitivity_test[k][String(reg)][`${Math.trunc(b)}bps`].std_expectancy))])} />
+
+      <h3 className="text-sm font-semibold text-slate-700">Longer holding periods (test period; the registered definition is {reg} bars, longer caps are research conditions)</h3>
+      <Table head={['Variant', ...caps.map((c) => `Expectancy, ${c}-bar cap`), ...caps.slice(1).map((c) => `Paired ${c} minus ${caps[0]} (95% interval)`), `Avg bars at ${caps[caps.length - 1]}`]} rows={keys.map((k) => [
+        vlabel(k), ...caps.map((c) => fmtR(cell(k, c, 'test').expectancy_r)),
+        ...caps.slice(1).map((c) => { const p = d.longer_hold_paired_effect[k][`cap${c}_minus_cap${caps[0]}_std_net_r`]['test|all']; return `${fmtR(p.mean)} (${fmtInterval(p.ci95)})`; }),
+        String(cell(k, caps[caps.length - 1], 'test').avg_duration_bars ?? '—')])} />
+
+      <h3 className="text-sm font-semibold text-slate-700">Actual initial risk vs the standardised 2 x ATR unit ({reg}-bar cap, all positions)</h3>
+      <Table head={['Variant', 'Median initial risk (ATR)', 'Under 0.5 ATR', 'Over 3 ATR', 'Expectancy, standardised R', 'Expectancy, actual R', 'Actual R, winsorised', 'Worst loss, std R', 'Worst loss, actual R', 'Invalid risk']} rows={keys.map((k) => {
+        const r = d.risk_actual_vs_standardised_cap60[k];
+        return [vlabel(k), String(r.initial_risk_atr?.median ?? '—'), fmtPct(r.initial_risk_atr?.share_below_0_5_atr, 1), fmtPct(r.initial_risk_atr?.share_above_3_atr, 1), fmtR(r.std_expectancy), fmtR(r.actual_expectancy),
+          fmtR(r.actual_winsorised_mean), String(r.std_max_loss_r), String(r.actual_max_loss_r), fmtInt(r.n_invalid_actual_risk)];
+      })} />
+
+      <h3 className="text-sm font-semibold text-slate-700">Strategy-selection baselines (fitted on train only, judged on test, {reg}-bar cap, net standardised R per signal)</h3>
+      <Table head={['Grouping', 'Best single variant (picked on train)', 'Best single, test', 'Best variant per group, test', 'Per-signal oracle (not attainable)', 'Group rule minus best single (95% interval)']} rows={Object.keys(sel.rules).map((g) => {
+        const r = sel.rules[g];
+        return [g.replace(/_/g, ' '), vlabel(String(r.best_single_variant_on_train ?? '—')), fmtR(r.rules_test_mean?.best_single_variant), fmtR(r.rules_test_mean?.best_variant_per_group), fmtR(r.rules_test_mean?.per_signal_oracle_UPPER_BOUND),
+          r.group_rule_minus_best_single_ci95 ? `${fmtR(r.group_rule_minus_best_single_ci95.mean)} (${fmtInterval(r.group_rule_minus_best_single_ci95.ci95)})` : '—'];
+      })} />
+
+      <div className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">
+        <div className="font-semibold text-slate-800">Forward paper tracker: replay validation (not activated)</div>
+        <p className="mt-1">
+          Real history replayed day by day through the tracker ({fmtInt(rv.symbols)} symbols, {fmtInt(rv.sessions_replayed)} sessions, {fmtInt(rv.signals_registered)} signals, {rv.variants} variants in parallel): {fmtInt(rv.batch_positions_compared)} batch
+          positions compared field by field, <b>{rv.mismatches} mismatches</b>, {rv.tracker_extra_closed} unexpected closes. The tracker is a pure state machine: it opens no trade, writes nothing and changes no signal.
+          No forward paper observation exists in production; activation needs separate approval.
+        </p>
+      </div>
+      {d.ml_ready_table && (
+        <p className="text-xs text-slate-500">
+          ML-ready strategy-selection table: {fmtInt(d.ml_ready_table.rows)} signals with point-in-time features, the catalyst class with its SEC acceptance timestamp, and realised net R under every variant at {reg} and {caps[caps.length - 1]} bars on both risk bases.
+          {' '}<span className="font-mono">{d.ml_ready_table.file}</span>; csv sha256 <span className="font-mono">{String(d.ml_ready_table.sha256_of_csv).slice(0, 16)}…</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+const COSTS_LABEL = (d: any): string[] => d.design.costs_bps.map((b: number) => `Test, ${Math.trunc(b)} bps`);
+
 function Radar({ d }: { d: any }) {
   return (
     <Table head={['Symbol', 'Report date', 'EPS est.', 'EPS actual', 'Surprise', 'Reaction (mkt-adj.)', 'Since (mkt-adj.)', 'Verification']} rows={d.events.map((e: any) => [
@@ -286,6 +368,7 @@ export default function LabReportView({ report }: { report: LabReport }) {
     switch (report.id) {
       case 'research_insights': return <Insights d={report.data} />;
       case 'catalyst_sec_earnings': return <SecEarnings d={report.data} />;
+      case 'strategy_experiments': return <StrategyExperiments d={report.data} />;
       case 'performance_attribution': return <Attribution d={report.data} />;
       case 'strategy_baseline': return <StrategyBaseline d={report.data} />;
       case 'ranker_stability': return <RankerStability d={report.data} />;
