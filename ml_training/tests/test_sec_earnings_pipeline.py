@@ -58,6 +58,7 @@ def test_the_q3_2025_event_is_an_after_close_release_reacting_the_next_session()
     assert abs(e["ar_react"] - 0.10) < 1e-9 and abs(e["gap"] - 0.10) < 1e-9 and abs(e["relvol"] - 3.0) < 1e-9
     assert e["nature"] == "recurring_operating" and "revenue_acceleration" in e["anomaly_rules"]
     assert abs(e["ar_d5"]) < 1e-9 and abs(e["ar_d20"]) < 1e-9                                                           # the drift starts AFTER the reaction bar: flat afterwards
+    assert abs(e["prev_gap"]) < 1e-9 and abs(e["prev_ar_react"]) < 1e-9                                           # placebo: nothing happens on the bar BEFORE the reaction bar
 
 
 def test_a_report_without_a_matching_8k_uses_its_own_acceptance_and_says_so():

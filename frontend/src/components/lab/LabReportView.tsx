@@ -104,6 +104,36 @@ const COMBO_LABEL: Record<string, string> = {
   no_catalyst_relvol_ge_1_5: 'No recent earnings, relative volume ≥ 1.5',
 };
 
+type YearStat = { n: number; mean: number };
+
+/** Paired horizontal bars per calendar year: the plain bullish breakout (grey) and the cell (blue), each with its mean net R and trade count. Zero is the centre line; the scale is shared by every row. */
+function YearBars({ plain, cell }: { plain: Record<string, YearStat>; cell: Record<string, YearStat> }) {
+  const years = Object.keys(plain).sort();
+  const max = Math.max(0.05, ...years.flatMap((y) => [Math.abs(plain[y]?.mean ?? 0), Math.abs(cell[y]?.mean ?? 0)]));
+  const bar = (s: YearStat | undefined, color: string) => {
+    if (!s) return <div className="h-2" />;
+    const w = (Math.abs(s.mean) / max) * 50;
+    return (
+      <div className="relative h-2">
+        <div className="absolute inset-y-0 left-1/2 w-px bg-slate-300" />
+        <div className={`absolute inset-y-0 rounded-sm ${color}`} style={s.mean >= 0 ? { left: '50%', width: `${w}%` } : { right: '50%', width: `${w}%` }} />
+      </div>
+    );
+  };
+  return (
+    <div className="space-y-1" role="img" aria-label="Mean net R by calendar year, plain bullish breakouts against the catalyst and relative-volume cell">
+      {years.map((y) => (
+        <div key={y} className="grid grid-cols-[3rem_1fr_9rem] items-center gap-2 text-[11px] text-slate-600">
+          <span className="font-mono">{y}</span>
+          <div className="space-y-0.5">{bar(plain[y], 'bg-slate-400')}{bar(cell[y], 'bg-cyan-600')}</div>
+          <span className="font-mono">{plain[y] ? `${fmtR(plain[y].mean)} (${plain[y].n})` : '-'} / {cell[y] ? `${fmtR(cell[y].mean)} (${cell[y].n})` : '-'}</span>
+        </div>
+      ))}
+      <div className="flex gap-4 pt-1 text-[11px] text-slate-500"><span><span className="mr-1 inline-block h-2 w-3 bg-slate-400 align-middle" />every bullish breakout</span><span><span className="mr-1 inline-block h-2 w-3 bg-cyan-600 align-middle" />catalyst + relative volume ≥ 1.5</span></div>
+    </div>
+  );
+}
+
 function SecEarnings({ d }: { d: any }) {
   const q = d.quality;
   return (
@@ -155,6 +185,43 @@ function SecEarnings({ d }: { d: any }) {
         <p className="text-xs text-slate-500">
           ML-ready outcome table: {fmtInt(d.outcome_table.rows)} events with point-in-time features and realised outcomes, split {Object.keys(d.outcome_table.split_counts).map((k) => `${k} ${fmtInt(d.outcome_table.split_counts[k])}`).join(' · ')}.
           {' '}Committed as <span className="font-mono">{d.outcome_table.file}</span>; csv sha256 <span className="font-mono">{String(d.outcome_table.sha256_of_csv).slice(0, 16)}…</span>
+        </p>
+      )}
+      {d.bullish_combinations_by_year && (
+        <>
+          <h3 className="text-sm font-semibold text-slate-700">Walk-forward by year: catalyst + relative volume cell vs every bullish breakout (net R). Exploratory, not a validated edge.</h3>
+          <YearBars plain={d.bullish_combinations_by_year.cells.all_bullish} cell={d.bullish_combinations_by_year.cells.recurring_catalyst_and_relvol_ge_1_5} />
+          <p className="text-xs text-slate-500">
+            Better than the plain breakout in {d.bullish_combinations_by_year.wins_vs_plain.recurring_catalyst_and_relvol_ge_1_5.years_better_than_plain} of {d.bullish_combinations_by_year.wins_vs_plain.recurring_catalyst_and_relvol_ge_1_5.years_evaluable} years with at least 30 trades on both sides. {d.bullish_combinations_by_year.rule}.
+          </p>
+        </>
+      )}
+      {d.timing_quality && (
+        <>
+          <h3 className="text-sm font-semibold text-slate-700">Timestamp check: does the information land on the bar the acceptance time says?</h3>
+          <Table head={['Release timing', 'Events', 'Gap, reaction bar', 'Gap, bar before (placebo)', 'Abs. excess return, reaction bar', 'Abs. excess return, bar before']} rows={Object.keys(d.timing_quality.by_timing_class).map((k) => {
+            const t = d.timing_quality.by_timing_class[k];
+            return [k, fmtInt(t.n), fmtPct(t.mean_abs_gap_on_reaction_bar), fmtPct(t.mean_abs_gap_on_bar_before), fmtPct(t.mean_abs_ar_on_reaction_bar), fmtPct(t.mean_abs_ar_on_bar_before)];
+          })} />
+          <p className="text-xs text-slate-500">
+            8-K release to periodic filing lag (days): median {d.timing_quality.release_to_periodic_filing_lag_days.median}, 10th to 90th percentile {d.timing_quality.release_to_periodic_filing_lag_days.p10} to {d.timing_quality.release_to_periodic_filing_lag_days.p90}; {fmtPct(d.timing_quality.release_to_periodic_filing_lag_days.share_released_same_day_or_before_periodic, 1)} of releases came on or before the periodic filing.
+          </p>
+        </>
+      )}
+      {d.strategy_variant_outcomes && (
+        <>
+          <h3 className="text-sm font-semibold text-slate-700">Outcomes by registered strategy variant (donchian_breakout v1 × exit policy; net of 10 bps)</h3>
+          <Table head={['Variant (key, version, definition hash)', 'Bullish R (95% CI)', 'Bearish R (95% CI)', 'Bullish after recurring-operating catalyst']} rows={Object.keys(d.strategy_variant_outcomes).map((k) => {
+            const v = d.strategy_variant_outcomes[k];
+            return [`${k} ${v.version} ${String(v.definition_hash).slice(0, 10)}`, `${fmtR(v.bullish.all.mean)} (${fmtInterval(v.bullish.all.ci95)}), n=${fmtInt(v.bullish.all.n)}`,
+              `${fmtR(v.bearish.all.mean)} (${fmtInterval(v.bearish.all.ci95)}), n=${fmtInt(v.bearish.all.n)}`, `${fmtR(v.bullish_after_recurring_operating.mean)} (${fmtInterval(v.bullish_after_recurring_operating.ci95)}), n=${fmtInt(v.bullish_after_recurring_operating.n)}`];
+          })} />
+        </>
+      )}
+      {d.breakout_outcome_table && (
+        <p className="text-xs text-slate-500">
+          Breakout-level ML-ready table: {fmtInt(d.breakout_outcome_table.rows)} signals with the catalyst class, relative volume, regime and the realised net R under each registered variant, split {Object.keys(d.breakout_outcome_table.split_counts).map((k) => `${k} ${fmtInt(d.breakout_outcome_table.split_counts[k])}`).join(' · ')}.
+          {' '}<span className="font-mono">{d.breakout_outcome_table.file}</span>; csv sha256 <span className="font-mono">{String(d.breakout_outcome_table.sha256_of_csv).slice(0, 16)}…</span>
         </p>
       )}
       <h3 className="text-sm font-semibold text-slate-700">Evidence: the most recent flagged filings</h3>

@@ -1,6 +1,6 @@
 {
  "generated_at": "2026-10-11",
- "code_ref": "02dca23",
+ "code_ref": "34ddab4",
  "status": "research_only",
  "use": "Research evidence only. Not a trading signal, not advice, and not used by the live signal path.",
  "schema": "lab_report_v1",
@@ -50,7 +50,8 @@
    "sec_earnings_study.json",
    "sec_raw_manifest.json",
    "sec_earnings.txt",
-   "sec_event_outcomes.csv.gz"
+   "sec_event_outcomes.csv.gz",
+   "sec_breakout_outcomes.csv.gz"
   ]
  },
  "data": {
@@ -1762,6 +1763,880 @@
     "embargo": 123
    },
    "label_note": "labels are realised outcomes on the reaction session (ar_react), +5 and +20 sessions after it (ar_d5, ar_d20); features are known at the release acceptance time"
+  },
+  "bullish_combinations_by_year": {
+   "cells": {
+    "all_bullish": {
+     "2018": {
+      "n": 4219,
+      "mean": -0.2171
+     },
+     "2019": {
+      "n": 6350,
+      "mean": 0.2997
+     },
+     "2020": {
+      "n": 5752,
+      "mean": 0.2785
+     },
+     "2021": {
+      "n": 6135,
+      "mean": -0.005
+     },
+     "2022": {
+      "n": 4934,
+      "mean": -0.3251
+     },
+     "2023": {
+      "n": 6925,
+      "mean": 0.233
+     },
+     "2024": {
+      "n": 6305,
+      "mean": 0.06
+     },
+     "2025": {
+      "n": 6082,
+      "mean": 0.1231
+     },
+     "2026": {
+      "n": 3804,
+      "mean": 0.1615
+     }
+    },
+    "recurring_catalyst": {
+     "2018": {
+      "n": 75,
+      "mean": 0.3008
+     },
+     "2019": {
+      "n": 70,
+      "mean": 0.483
+     },
+     "2020": {
+      "n": 78,
+      "mean": 0.0261
+     },
+     "2021": {
+      "n": 243,
+      "mean": -0.1306
+     },
+     "2022": {
+      "n": 222,
+      "mean": -0.4175
+     },
+     "2023": {
+      "n": 156,
+      "mean": 0.7739
+     },
+     "2024": {
+      "n": 154,
+      "mean": 0.3356
+     },
+     "2025": {
+      "n": 141,
+      "mean": 0.4097
+     },
+     "2026": {
+      "n": 55,
+      "mean": 0.3887
+     }
+    },
+    "recurring_catalyst_and_relvol_ge_1_5": {
+     "2018": {
+      "n": 26,
+      "mean": 0.5992
+     },
+     "2019": {
+      "n": 21,
+      "mean": -0.2483
+     },
+     "2020": {
+      "n": 24,
+      "mean": 0.1066
+     },
+     "2021": {
+      "n": 63,
+      "mean": -0.1457
+     },
+     "2022": {
+      "n": 53,
+      "mean": 0.048
+     },
+     "2023": {
+      "n": 43,
+      "mean": 0.4895
+     },
+     "2024": {
+      "n": 66,
+      "mean": 0.3897
+     },
+     "2025": {
+      "n": 55,
+      "mean": 0.3021
+     },
+     "2026": {
+      "n": 17,
+      "mean": -0.0592
+     }
+    },
+    "recurring_catalyst_and_relvol_and_index_uptrend": {
+     "2018": {
+      "n": 25,
+      "mean": 0.6637
+     },
+     "2019": {
+      "n": 20,
+      "mean": -0.3705
+     },
+     "2020": {
+      "n": 20,
+      "mean": 0.3391
+     },
+     "2021": {
+      "n": 63,
+      "mean": -0.1457
+     },
+     "2022": {
+      "n": 4,
+      "mean": -0.0126
+     },
+     "2023": {
+      "n": 22,
+      "mean": 0.3592
+     },
+     "2024": {
+      "n": 66,
+      "mean": 0.3897
+     },
+     "2025": {
+      "n": 36,
+      "mean": 0.129
+     },
+     "2026": {
+      "n": 17,
+      "mean": -0.0592
+     }
+    },
+    "no_catalyst_relvol_ge_1_5": {
+     "2018": {
+      "n": 1072,
+      "mean": -0.2457
+     },
+     "2019": {
+      "n": 1347,
+      "mean": 0.0437
+     },
+     "2020": {
+      "n": 1203,
+      "mean": 0.4743
+     },
+     "2021": {
+      "n": 1323,
+      "mean": 0.007
+     },
+     "2022": {
+      "n": 875,
+      "mean": -0.2579
+     },
+     "2023": {
+      "n": 1631,
+      "mean": 0.1167
+     },
+     "2024": {
+      "n": 1673,
+      "mean": 0.1696
+     },
+     "2025": {
+      "n": 1461,
+      "mean": 0.1921
+     },
+     "2026": {
+      "n": 917,
+      "mean": 0.199
+     }
+    }
+   },
+   "wins_vs_plain": {
+    "all_bullish": {
+     "years_evaluable": 9,
+     "years_better_than_plain": 0,
+     "years": [
+      2018,
+      2019,
+      2020,
+      2021,
+      2022,
+      2023,
+      2024,
+      2025,
+      2026
+     ]
+    },
+    "recurring_catalyst": {
+     "years_evaluable": 9,
+     "years_better_than_plain": 6,
+     "years": [
+      2018,
+      2019,
+      2020,
+      2021,
+      2022,
+      2023,
+      2024,
+      2025,
+      2026
+     ]
+    },
+    "recurring_catalyst_and_relvol_ge_1_5": {
+     "years_evaluable": 5,
+     "years_better_than_plain": 4,
+     "years": [
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+     ]
+    },
+    "recurring_catalyst_and_relvol_and_index_uptrend": {
+     "years_evaluable": 3,
+     "years_better_than_plain": 2,
+     "years": [
+      2021,
+      2024,
+      2025
+     ]
+    },
+    "no_catalyst_relvol_ge_1_5": {
+     "years_evaluable": 9,
+     "years_better_than_plain": 6,
+     "years": [
+      2018,
+      2019,
+      2020,
+      2021,
+      2022,
+      2023,
+      2024,
+      2025,
+      2026
+     ]
+    }
+   },
+   "rule": "a year counts when the cell and the plain bullish breakout both have >= 30 trades; better = higher mean net R (fixed 3R, 10 bps)"
+  },
+  "timing_quality": {
+   "by_timing_class": {
+    "AMC": {
+     "n": 5556,
+     "mean_abs_gap_on_reaction_bar": 0.0489,
+     "mean_abs_gap_on_bar_before": 0.0098,
+     "mean_abs_ar_on_reaction_bar": 0.0629,
+     "mean_abs_ar_on_bar_before": 0.0185
+    },
+    "BMO": {
+     "n": 2451,
+     "mean_abs_gap_on_reaction_bar": 0.0402,
+     "mean_abs_gap_on_bar_before": 0.0075,
+     "mean_abs_ar_on_reaction_bar": 0.0551,
+     "mean_abs_ar_on_bar_before": 0.014
+    },
+    "INTRADAY": {
+     "n": 1605,
+     "mean_abs_gap_on_reaction_bar": 0.0345,
+     "mean_abs_gap_on_bar_before": 0.0078,
+     "mean_abs_ar_on_reaction_bar": 0.0503,
+     "mean_abs_ar_on_bar_before": 0.0144
+    }
+   },
+   "release_to_periodic_filing_lag_days": {
+    "n": 9367,
+    "p10": 0.0,
+    "median": 1.0,
+    "p90": 14.0,
+    "share_released_same_day_or_before_periodic": 0.9264
+   },
+   "reading": "a correct mapping puts the large absolute gap on the reaction bar and a baseline-sized one on the bar before it (placebo); INTRADAY releases show their move in the bar's own range, not the gap"
+  },
+  "strategy_variant_outcomes": {
+   "donchian_breakout__exit_a_atr_stop_fixed_2r": {
+    "version": "v1",
+    "definition_hash": "15a7230d0671626fba0854f4f9f2f2be4f9ee89690fd56745a865b1427d587d8",
+    "policy": "A_atr_stop_fixed_2R",
+    "net_bps_per_side_round_trip": 10,
+    "bullish": {
+     "all": {
+      "n": 50506,
+      "mean": 0.05986,
+      "ci95": [
+       -0.03062,
+       0.14763
+      ]
+     },
+     "by_year": {
+      "2018": {
+       "n": 4219,
+       "mean": -0.1735
+      },
+      "2019": {
+       "n": 6350,
+       "mean": 0.238
+      },
+      "2020": {
+       "n": 5752,
+       "mean": 0.1907
+      },
+      "2021": {
+       "n": 6135,
+       "mean": -0.021
+      },
+      "2022": {
+       "n": 4934,
+       "mean": -0.2237
+      },
+      "2023": {
+       "n": 6925,
+       "mean": 0.1907
+      },
+      "2024": {
+       "n": 6305,
+       "mean": 0.0158
+      },
+      "2025": {
+       "n": 6082,
+       "mean": 0.0845
+      },
+      "2026": {
+       "n": 3804,
+       "mean": 0.1173
+      }
+     }
+    },
+    "bearish": {
+     "all": {
+      "n": 38098,
+      "mean": -0.17701,
+      "ci95": [
+       -0.30199,
+       -0.06834
+      ]
+     },
+     "by_year": {
+      "2018": {
+       "n": 4367,
+       "mean": -0.154
+      },
+      "2019": {
+       "n": 2548,
+       "mean": -0.4533
+      },
+      "2020": {
+       "n": 4130,
+       "mean": 0.0624
+      },
+      "2021": {
+       "n": 3564,
+       "mean": -0.2696
+      },
+      "2022": {
+       "n": 6239,
+       "mean": -0.1356
+      },
+      "2023": {
+       "n": 4848,
+       "mean": -0.1064
+      },
+      "2024": {
+       "n": 4551,
+       "mean": -0.3887
+      },
+      "2025": {
+       "n": 5205,
+       "mean": -0.0616
+      },
+      "2026": {
+       "n": 2646,
+       "mean": -0.2876
+      }
+     }
+    },
+    "bullish_after_recurring_operating": {
+     "n": 1194,
+     "mean": 0.0795,
+     "ci95": [
+      -0.15392,
+      0.30635
+     ]
+    }
+   },
+   "donchian_breakout__exit_a_atr_stop_fixed_3r": {
+    "version": "v1",
+    "definition_hash": "c5f4c0edf79947fd0e02a56aff657c9d45b1e0db227f7dcd36fc6982c2f369da",
+    "policy": "A_atr_stop_fixed_3R",
+    "net_bps_per_side_round_trip": 10,
+    "bullish": {
+     "all": {
+      "n": 50506,
+      "mean": 0.0853,
+      "ci95": [
+       -0.02132,
+       0.19188
+      ]
+     },
+     "by_year": {
+      "2018": {
+       "n": 4219,
+       "mean": -0.2171
+      },
+      "2019": {
+       "n": 6350,
+       "mean": 0.2997
+      },
+      "2020": {
+       "n": 5752,
+       "mean": 0.2785
+      },
+      "2021": {
+       "n": 6135,
+       "mean": -0.005
+      },
+      "2022": {
+       "n": 4934,
+       "mean": -0.3251
+      },
+      "2023": {
+       "n": 6925,
+       "mean": 0.233
+      },
+      "2024": {
+       "n": 6305,
+       "mean": 0.06
+      },
+      "2025": {
+       "n": 6082,
+       "mean": 0.1231
+      },
+      "2026": {
+       "n": 3804,
+       "mean": 0.1615
+      }
+     }
+    },
+    "bearish": {
+     "all": {
+      "n": 38098,
+      "mean": -0.21821,
+      "ci95": [
+       -0.35716,
+       -0.09133
+      ]
+     },
+     "by_year": {
+      "2018": {
+       "n": 4367,
+       "mean": -0.1864
+      },
+      "2019": {
+       "n": 2548,
+       "mean": -0.5047
+      },
+      "2020": {
+       "n": 4130,
+       "mean": 0.1013
+      },
+      "2021": {
+       "n": 3564,
+       "mean": -0.3107
+      },
+      "2022": {
+       "n": 6239,
+       "mean": -0.2245
+      },
+      "2023": {
+       "n": 4848,
+       "mean": -0.2019
+      },
+      "2024": {
+       "n": 4551,
+       "mean": -0.4275
+      },
+      "2025": {
+       "n": 5205,
+       "mean": -0.0818
+      },
+      "2026": {
+       "n": 2646,
+       "mean": -0.2924
+      }
+     }
+    },
+    "bullish_after_recurring_operating": {
+     "n": 1194,
+     "mean": 0.1554,
+     "ci95": [
+      -0.1364,
+      0.43686
+     ]
+    }
+   },
+   "donchian_breakout__exit_b_donchian_trail_10": {
+    "version": "v1",
+    "definition_hash": "cf6f60238e13d46a453dedced0b77cf861e7dcc28d12231151d4bc4bc84a39d9",
+    "policy": "B_donchian_trail_10",
+    "net_bps_per_side_round_trip": 10,
+    "bullish": {
+     "all": {
+      "n": 50506,
+      "mean": 0.02841,
+      "ci95": [
+       -0.0592,
+       0.12295
+      ]
+     },
+     "by_year": {
+      "2018": {
+       "n": 4219,
+       "mean": -0.1769
+      },
+      "2019": {
+       "n": 6350,
+       "mean": 0.146
+      },
+      "2020": {
+       "n": 5752,
+       "mean": 0.08
+      },
+      "2021": {
+       "n": 6135,
+       "mean": -0.1382
+      },
+      "2022": {
+       "n": 4934,
+       "mean": -0.1686
+      },
+      "2023": {
+       "n": 6925,
+       "mean": 0.1866
+      },
+      "2024": {
+       "n": 6305,
+       "mean": 0.0454
+      },
+      "2025": {
+       "n": 6082,
+       "mean": 0.0737
+      },
+      "2026": {
+       "n": 3804,
+       "mean": 0.1178
+      }
+     }
+    },
+    "bearish": {
+     "all": {
+      "n": 38098,
+      "mean": -0.14734,
+      "ci95": [
+       -0.29915,
+       0.03353
+      ]
+     },
+     "by_year": {
+      "2018": {
+       "n": 4367,
+       "mean": -0.1801
+      },
+      "2019": {
+       "n": 2548,
+       "mean": -0.3661
+      },
+      "2020": {
+       "n": 4130,
+       "mean": 0.6085
+      },
+      "2021": {
+       "n": 3564,
+       "mean": -0.3205
+      },
+      "2022": {
+       "n": 6239,
+       "mean": -0.1687
+      },
+      "2023": {
+       "n": 4848,
+       "mean": -0.2093
+      },
+      "2024": {
+       "n": 4551,
+       "mean": -0.3812
+      },
+      "2025": {
+       "n": 5205,
+       "mean": -0.192
+      },
+      "2026": {
+       "n": 2646,
+       "mean": -0.1752
+      }
+     }
+    },
+    "bullish_after_recurring_operating": {
+     "n": 1194,
+     "mean": 0.05155,
+     "ci95": [
+      -0.17897,
+      0.27485
+     ]
+    }
+   },
+   "donchian_breakout__exit_c_atr_trail_3x": {
+    "version": "v1",
+    "definition_hash": "eafa7e67ca563cda7ebbbd9fe0e66390168269a5e705464ee97d4fc975cc0134",
+    "policy": "C_atr_trail_3x",
+    "net_bps_per_side_round_trip": 10,
+    "bullish": {
+     "all": {
+      "n": 50506,
+      "mean": 0.02659,
+      "ci95": [
+       -0.06145,
+       0.12541
+      ]
+     },
+     "by_year": {
+      "2018": {
+       "n": 4219,
+       "mean": -0.1934
+      },
+      "2019": {
+       "n": 6350,
+       "mean": 0.2453
+      },
+      "2020": {
+       "n": 5752,
+       "mean": 0.0713
+      },
+      "2021": {
+       "n": 6135,
+       "mean": -0.1044
+      },
+      "2022": {
+       "n": 4934,
+       "mean": -0.2757
+      },
+      "2023": {
+       "n": 6925,
+       "mean": 0.1652
+      },
+      "2024": {
+       "n": 6305,
+       "mean": -0.0007
+      },
+      "2025": {
+       "n": 6082,
+       "mean": 0.0909
+      },
+      "2026": {
+       "n": 3804,
+       "mean": 0.1314
+      }
+     }
+    },
+    "bearish": {
+     "all": {
+      "n": 38098,
+      "mean": -0.19552,
+      "ci95": [
+       -0.33382,
+       -0.06466
+      ]
+     },
+     "by_year": {
+      "2018": {
+       "n": 4367,
+       "mean": -0.146
+      },
+      "2019": {
+       "n": 2548,
+       "mean": -0.4885
+      },
+      "2020": {
+       "n": 4130,
+       "mean": 0.3171
+      },
+      "2021": {
+       "n": 3564,
+       "mean": -0.3217
+      },
+      "2022": {
+       "n": 6239,
+       "mean": -0.2303
+      },
+      "2023": {
+       "n": 4848,
+       "mean": -0.1683
+      },
+      "2024": {
+       "n": 4551,
+       "mean": -0.4308
+      },
+      "2025": {
+       "n": 5205,
+       "mean": -0.1035
+      },
+      "2026": {
+       "n": 2646,
+       "mean": -0.3695
+      }
+     }
+    },
+    "bullish_after_recurring_operating": {
+     "n": 1194,
+     "mean": 0.07191,
+     "ci95": [
+      -0.20394,
+      0.33401
+     ]
+    }
+   },
+   "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10": {
+    "version": "v1",
+    "definition_hash": "0d14824dd24c000c903c9623c9a66d589af08c1d400f244d92a06f8f584bc16b",
+    "policy": "D_hybrid_atr_stop_to_donchian_10",
+    "net_bps_per_side_round_trip": 10,
+    "bullish": {
+     "all": {
+      "n": 50506,
+      "mean": 0.03569,
+      "ci95": [
+       -0.0543,
+       0.13203
+      ]
+     },
+     "by_year": {
+      "2018": {
+       "n": 4219,
+       "mean": -0.1629
+      },
+      "2019": {
+       "n": 6350,
+       "mean": 0.1696
+      },
+      "2020": {
+       "n": 5752,
+       "mean": 0.1067
+      },
+      "2021": {
+       "n": 6135,
+       "mean": -0.1293
+      },
+      "2022": {
+       "n": 4934,
+       "mean": -0.2235
+      },
+      "2023": {
+       "n": 6925,
+       "mean": 0.18
+      },
+      "2024": {
+       "n": 6305,
+       "mean": 0.0466
+      },
+      "2025": {
+       "n": 6082,
+       "mean": 0.1158
+      },
+      "2026": {
+       "n": 3804,
+       "mean": 0.1182
+      }
+     }
+    },
+    "bearish": {
+     "all": {
+      "n": 38098,
+      "mean": -0.17463,
+      "ci95": [
+       -0.30471,
+       -0.03687
+      ]
+     },
+     "by_year": {
+      "2018": {
+       "n": 4367,
+       "mean": -0.1876
+      },
+      "2019": {
+       "n": 2548,
+       "mean": -0.3983
+      },
+      "2020": {
+       "n": 4130,
+       "mean": 0.3972
+      },
+      "2021": {
+       "n": 3564,
+       "mean": -0.3064
+      },
+      "2022": {
+       "n": 6239,
+       "mean": -0.1953
+      },
+      "2023": {
+       "n": 4848,
+       "mean": -0.179
+      },
+      "2024": {
+       "n": 4551,
+       "mean": -0.4029
+      },
+      "2025": {
+       "n": 5205,
+       "mean": -0.1337
+      },
+      "2026": {
+       "n": 2646,
+       "mean": -0.2839
+      }
+     }
+    },
+    "bullish_after_recurring_operating": {
+     "n": 1194,
+     "mean": 0.07317,
+     "ci95": [
+      -0.16008,
+      0.29193
+     ]
+    }
+   }
+  },
+  "breakout_outcome_table": {
+   "file": "sec_breakout_outcomes.csv.gz",
+   "rows": 88604,
+   "columns": [
+    "symbol",
+    "date",
+    "direction",
+    "catalyst",
+    "plan_r",
+    "relvol",
+    "regime_up",
+    "px_per_r",
+    "r_net10__donchian_breakout__exit_a_atr_stop_fixed_2r",
+    "r_net10__donchian_breakout__exit_a_atr_stop_fixed_3r",
+    "r_net10__donchian_breakout__exit_b_donchian_trail_10",
+    "r_net10__donchian_breakout__exit_c_atr_trail_3x",
+    "r_net10__donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10",
+    "split"
+   ],
+   "sha256_of_csv": "2daef01cc1387dad285d1914adca7d79c50ca425132c0f46c38c1dc0c1891e03",
+   "split_counts": {
+    "test": 50298,
+    "train": 37065,
+    "embargo": 1241
+   },
+   "label_note": "r_net10__<variant key> = realised R net of 10 bps round trip under that registered exit policy; catalyst = class of the most recent earnings event within 15 days before the signal"
   },
   "evidence_events_sample": [
    {

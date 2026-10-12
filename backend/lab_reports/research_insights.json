@@ -1,13 +1,13 @@
 {
  "generated_at": "2026-10-11",
- "code_ref": "02dca23",
+ "code_ref": "34ddab4",
  "status": "research_only",
  "use": "Research evidence only. Not a trading signal, not advice, and not used by the live signal path.",
  "schema": "lab_report_v1",
  "id": "research_insights",
  "kind": "strategy_lab",
  "title": "Research insights: what the evidence supports, and what it does not",
- "headline": "20 claims checked: 6 inconclusive, 8 not supported, 2 suggestive, 4 supported.",
+ "headline": "23 claims checked: 7 inconclusive, 8 not supported, 3 suggestive, 5 supported.",
  "caveats": [
   "Statuses are assigned by fixed rules from the intervals and counts in the other reports; they are not model opinions.",
   "'Supported' means the sample supports the sign of the effect, not that it is tradeable after costs.",
@@ -181,6 +181,30 @@
     "claim": "An exit policy chosen on the train period beats the fixed-3R exit out of sample for bullish breakouts after a recurring-operating catalyst",
     "status": "not_supported",
     "evidence": "picked A_atr_stop_fixed_3R: test +0.239 R (n=717, CI -0.189 to +0.644) vs fixed 3R +0.239 R (n=717); the fixed-3R exit was already the best on the train period, so there is nothing better to test",
+    "reports": [
+     "catalyst_sec_earnings"
+    ]
+   },
+   {
+    "claim": "Walk-forward by year, a bullish Donchian breakout with a recent recurring-operating catalyst beats a plain bullish breakout in most years",
+    "status": "inconclusive",
+    "evidence": "better in 6 of 9 evaluable years (2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026); exploratory cell, year counting never upgrades it to supported",
+    "reports": [
+     "catalyst_sec_earnings"
+    ]
+   },
+   {
+    "claim": "Walk-forward by year, a bullish Donchian breakout with a recent recurring-operating catalyst and relative volume of 1.5 or more beats a plain bullish breakout in most years",
+    "status": "suggestive",
+    "evidence": "better in 4 of 5 evaluable years (2021, 2022, 2023, 2024, 2025); exploratory cell, year counting never upgrades it to supported",
+    "reports": [
+     "catalyst_sec_earnings"
+    ]
+   },
+   {
+    "claim": "SEC acceptance timestamps place the information on the right trading bar (placebo: the bar before shows no comparable gap)",
+    "status": "supported",
+    "evidence": "BMO: gap on reaction bar 4.02% vs 0.75% the bar before (x5.4, n=2,451); AMC: gap on reaction bar 4.89% vs 0.98% the bar before (x5.0, n=5,556)",
     "reports": [
      "catalyst_sec_earnings"
     ]

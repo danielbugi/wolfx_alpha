@@ -10,6 +10,7 @@ import pytest
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "backend"))
+sys.path.insert(0, os.path.join(ROOT, "mechanism"))
 sys.path.insert(0, os.path.join(ROOT, "ml_training", "experiments"))
 
 import build_lab_reports as B  # noqa: E402
@@ -122,3 +123,51 @@ def test_the_outcome_table_on_disk_matches_its_recorded_hash():
     assert hashlib.sha256(raw).hexdigest() == _load("sec_earnings_study.json")["outcome_table"]["sha256_of_csv"]
     header = raw.split(b"\n", 1)[0].decode().split(",")
     assert {"decision_accepted_at", "reaction_date", "ar_react", "ar_d20", "split", "source_url"} <= set(header)
+
+
+def test_the_walk_forward_and_timestamp_claims_follow_the_evidence(reports):
+    st = {c["claim"]: c["status"] for c in reports["research_insights"]["data"]["claims"]}
+    wf = {k: v for k, v in st.items() if k.startswith("Walk-forward by year")}
+    assert len(wf) == 2
+    assert next(v for k, v in wf.items() if "relative volume" not in k) == "inconclusive"                  # 6 of 9 years: below the 75% bar
+    assert next(v for k, v in wf.items() if "relative volume" in k) == "suggestive"                        # 4 of 5 years, never upgraded to supported
+    assert next(v for k, v in st.items() if k.startswith("SEC acceptance timestamps place the information")) == "supported"
+
+
+def test_the_walk_forward_rule_cannot_reach_supported_and_follows_the_counts():
+    ex, rk, exitp, cat = _load("experiments.json"), _load("ranker_stability.json"), _load("exit_policy_study.json"), _load("catalyst_earnings_study.json")
+    runs = {n: B.parse_trainer_log(open(os.path.join(EVIDENCE, n + ".txt"), encoding="utf-8").read()) for n in ("train_momentum", "train_plan_profit", "train_momentum_novol")}
+    sec = copy.deepcopy(_load("sec_earnings_study.json"))
+    w = sec["bullish_combinations_by_year"]["wins_vs_plain"]["recurring_catalyst_and_relvol_ge_1_5"]
+    w.update(years_evaluable=10, years_better_than_plain=10)
+    st = {c["claim"]: c["status"] for c in B.insights(ex, rk, exitp, cat, runs, sec)}
+    assert next(v for k, v in st.items() if k.startswith("Walk-forward") and "relative volume" in k) == "suggestive"      # even 10 of 10 is only suggestive
+    w.update(years_evaluable=6, years_better_than_plain=2)
+    st = {c["claim"]: c["status"] for c in B.insights(ex, rk, exitp, cat, runs, sec)}
+    assert next(v for k, v in st.items() if k.startswith("Walk-forward") and "relative volume" in k) == "not_supported"
+    w.update(years_evaluable=3, years_better_than_plain=3)
+    st = {c["claim"]: c["status"] for c in B.insights(ex, rk, exitp, cat, runs, sec)}
+    assert next(v for k, v in st.items() if k.startswith("Walk-forward") and "relative volume" in k) == "inconclusive"     # too few evaluable years
+
+
+def test_a_failed_placebo_is_not_reported_as_supported():
+    ex, rk, exitp, cat = _load("experiments.json"), _load("ranker_stability.json"), _load("exit_policy_study.json"), _load("catalyst_earnings_study.json")
+    runs = {n: B.parse_trainer_log(open(os.path.join(EVIDENCE, n + ".txt"), encoding="utf-8").read()) for n in ("train_momentum", "train_plan_profit", "train_momentum_novol")}
+    sec = copy.deepcopy(_load("sec_earnings_study.json"))
+    sec["timing_quality"]["by_timing_class"]["AMC"]["mean_abs_gap_on_bar_before"] = sec["timing_quality"]["by_timing_class"]["AMC"]["mean_abs_gap_on_reaction_bar"]
+    st = {c["claim"]: c["status"] for c in B.insights(ex, rk, exitp, cat, runs, sec)}
+    assert next(v for k, v in st.items() if k.startswith("SEC acceptance timestamps")) == "not_supported"
+
+
+def test_the_breakout_outcome_table_matches_its_recorded_hash_and_carries_every_registered_variant():
+    import gzip
+    import hashlib
+    sec = _load("sec_earnings_study.json")
+    with open(os.path.join(EVIDENCE, "sec_breakout_outcomes.csv.gz"), "rb") as fh:
+        raw = gzip.decompress(fh.read())
+    assert hashlib.sha256(raw).hexdigest() == sec["breakout_outcome_table"]["sha256_of_csv"]
+    header = raw.split(b"\n", 1)[0].decode().split(",")
+    from research import strategy_variants as V
+    for spec in V.build_specs():
+        assert "r_net10__" + spec.key in header
+        assert sec["strategy_variant_outcomes"][spec.key]["definition_hash"] == spec.definition_hash        # the evidence names the exact registered definition
