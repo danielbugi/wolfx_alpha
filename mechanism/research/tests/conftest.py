@@ -108,6 +108,12 @@ def registry_env():
 
 
 @pytest.fixture
+def variant_env():
+    """Migrations 19-22 (strategies, signal_ledger, ...) + 35 (strategy_variant) in a throwaway schema."""
+    yield from _schema_env(MIGRATIONS + ["research/migrations_proposed/035_add_strategy_variant_registry.sql"])
+
+
+@pytest.fixture
 def conn(schema_env):
     _, connect = schema_env
     with connect() as c:
