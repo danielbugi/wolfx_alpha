@@ -15,7 +15,7 @@ image change, no change to the R1-R3 collector, the bot, the timers, the arming 
 
 Not rebuilt: the signal ledger, `strategy_variant`, `candidate_observation`, the dataset/manifest framework and the fwd_v1 labels all stay as they are. The ledger and `candidate_observation` are the future SOURCE of forward signals; the experiment uses their historical twin (`ml_breakout_dataset_v2`).
 
-## Conventions (all recorded in the manifest, hash `4f26b501fd1cee58…`)
+## Conventions (all recorded in the manifest, hash `db062f711ef9d9bb…`)
 
 - Identities: the five registered variants (key, version, definition hash) from `strategy_variants`; before a run the hashes are compared with the production registry rows and the run refuses on any mismatch.
 - Signal at the close of bar s, entry at the OPEN of bar s+1, costs round-trip bps charged in R (0 / 10 / 25; 10 is primary).

@@ -51,6 +51,13 @@
    "headline": "9,614 earnings events from SEC filings: recurring operating improvements react +2.22% vs -0.51% without an anomaly; 20-day drift -0.10% (interval includes zero). Extraction: 86% of periodic filings carry usable facts; 97% of events matched to their 8-K 2.02 release."
   },
   {
+   "id": "strategy_experiments",
+   "file": "strategy_experiments.json",
+   "kind": "strategy_lab",
+   "title": "Strategy experiments: registered variants, hold caps, risk bases and the paper tracker",
+   "headline": "74,032 breakout signals x 5 registered variants x 3 hold caps. Test-period net expectancy at the registered 60-bar cap runs from -0.049 R (a_atr_stop_fixed_3r) to -0.024 R (b_donchian_trail_10). Paper tracker replay: 12,157 positions, 0 mismatches."
+  },
+  {
    "id": "performance_attribution",
    "file": "performance_attribution.json",
    "kind": "strategy_lab",
@@ -62,7 +69,7 @@
    "file": "research_insights.json",
    "kind": "strategy_lab",
    "title": "Research insights: what the evidence supports, and what it does not",
-   "headline": "23 claims checked: 7 inconclusive, 8 not supported, 3 suggestive, 5 supported."
+   "headline": "30 claims checked: 7 inconclusive, 13 not supported, 3 suggestive, 7 supported."
   }
  ]
 }
