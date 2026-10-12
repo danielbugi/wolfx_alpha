@@ -1,4 +1,4 @@
--- mechanism/research/migrations_proposed/035_add_strategy_variant_registry.sql   (PROPOSED migration 35 -- versioned, append-only registry of strategy VARIANTS, e.g. donchian_breakout v1 x an exit policy)
+-- mechanism/add_strategy_variant_registry.sql   (migration 35 -- versioned, append-only registry of strategy VARIANTS, e.g. donchian_breakout v1 x an exit policy)
 --
 -- WHY. The Quant Lab compares exit policies (and later other variations) on top of the live strategy. A variant needs a durable, versioned identity so a
 -- result can always be traced to the exact definition that produced it, and so a changed definition can never silently reuse an old name. This table is that
@@ -21,7 +21,7 @@
 --   see deploy/db/research_roles.sql).
 --
 -- Additive and forward-safe (IF NOT EXISTS; refuses to adopt same-named objects it did not create). Independent of migrations 24-34 except that it needs
--- `strategies` (migration at add_strategy_identity_release_a.sql). NOT applied to production by committing this file, and deliberately NOT in docker-compose.yml's init list (held: promoting it means moving it to mechanism/, mounting it, extending the frozen deploy/db/research_roles*.sql and refreshing their checksums). Rollback while empty: deploy/db/rollback_35.sql.
+-- `strategies` (migration at add_strategy_identity_release_a.sql). NOT applied to production by committing this file; production application is a separate, owner-approved step (backup + preflight_35.sql first; deploy/db/research_roles.sql is re-run afterwards). Rollback while empty: deploy/db/rollback_35.sql.
 
 DO $guard$
 BEGIN
@@ -62,21 +62,21 @@ COMMENT ON TABLE strategy_variant IS 'strategy_variant_migration_35';
 
 DO $mk$
 BEGIN
-    IF to_regprocedure('strategy_variant_guard()') IS NULL THEN
+    IF to_regprocedure('research_strategy_variant_guard()') IS NULL THEN
         EXECUTE $f$
-CREATE FUNCTION strategy_variant_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
+CREATE FUNCTION research_strategy_variant_guard() RETURNS trigger LANGUAGE plpgsql AS $fn$
 BEGIN
     RAISE EXCEPTION 'append-only: % on % is not permitted (a variant definition is immutable; register a new version)',
         TG_OP, TG_TABLE_NAME USING ERRCODE = 'integrity_constraint_violation';
 END;
 $fn$ $f$;
-        COMMENT ON FUNCTION strategy_variant_guard() IS 'strategy_variant_migration_35';
-        REVOKE ALL ON FUNCTION strategy_variant_guard() FROM PUBLIC;
+        COMMENT ON FUNCTION research_strategy_variant_guard() IS 'strategy_variant_migration_35';
+        REVOKE ALL ON FUNCTION research_strategy_variant_guard() FROM PUBLIC;
     END IF;
 
-    IF to_regprocedure('strategy_variant_stamp()') IS NULL THEN
+    IF to_regprocedure('research_strategy_variant_stamp()') IS NULL THEN
         EXECUTE $f$
-CREATE FUNCTION strategy_variant_stamp() RETURNS trigger LANGUAGE plpgsql AS $fn$
+CREATE FUNCTION research_strategy_variant_stamp() RETURNS trigger LANGUAGE plpgsql AS $fn$
 DECLARE
     parent_row RECORD;
     prev       RECORD;
@@ -114,8 +114,8 @@ BEGIN
     RETURN NEW;
 END;
 $fn$ $f$;
-        COMMENT ON FUNCTION strategy_variant_stamp() IS 'strategy_variant_migration_35';
-        REVOKE ALL ON FUNCTION strategy_variant_stamp() FROM PUBLIC;
+        COMMENT ON FUNCTION research_strategy_variant_stamp() IS 'strategy_variant_migration_35';
+        REVOKE ALL ON FUNCTION research_strategy_variant_stamp() FROM PUBLIC;
     END IF;
 END;
 $mk$;
@@ -127,9 +127,9 @@ DECLARE
     cur_fn   NAME;
 BEGIN
     FOR r IN SELECT * FROM (VALUES
-        ('strategy_variant', 'strategy_variant_immutable_row',      'BEFORE UPDATE OR DELETE', 'ROW',       'strategy_variant_guard'),
-        ('strategy_variant', 'strategy_variant_immutable_truncate', 'BEFORE TRUNCATE',         'STATEMENT', 'strategy_variant_guard'),
-        ('strategy_variant', 'strategy_variant_stamp',              'BEFORE INSERT',           'ROW',       'strategy_variant_stamp')
+        ('strategy_variant', 'strategy_variant_immutable_row',      'BEFORE UPDATE OR DELETE', 'ROW',       'research_strategy_variant_guard'),
+        ('strategy_variant', 'strategy_variant_immutable_truncate', 'BEFORE TRUNCATE',         'STATEMENT', 'research_strategy_variant_guard'),
+        ('strategy_variant', 'strategy_variant_stamp',              'BEFORE INSERT',           'ROW',       'research_strategy_variant_stamp')
     ) AS v(tbl, trg, timing, lvl, fn) LOOP
         SELECT t.tgenabled, p.proname INTO cur_mode, cur_fn
         FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid

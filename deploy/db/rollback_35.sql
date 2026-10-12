@@ -23,7 +23,7 @@ BEGIN
         END IF;
         EXECUTE 'DROP TABLE strategy_variant';        -- DDL: the immutability triggers go with the table and do not block it
     END IF;
-    FOREACH f IN ARRAY ARRAY['strategy_variant_stamp()', 'strategy_variant_guard()'] LOOP
+    FOREACH f IN ARRAY ARRAY['research_strategy_variant_stamp()', 'research_strategy_variant_guard()'] LOOP
         IF to_regprocedure(f) IS NOT NULL THEN
             IF coalesce(obj_description(to_regprocedure(f), 'pg_proc'), '') <> 'strategy_variant_migration_35' THEN
                 RAISE EXCEPTION 'rollback_35 refused: function % is not a migration-35 object', f;

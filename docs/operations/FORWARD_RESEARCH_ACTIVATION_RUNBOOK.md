@@ -63,7 +63,9 @@ Each step: **Action**, **Expected**, **Verify**, **Rollback**, **Reversible**. `
 git fetch origin && test "$(git rev-parse origin/lab/first-light-algo)" = "$CAND" && echo "branch tip is the candidate"
 gh run list --branch lab/first-light-algo --limit 10 --json databaseId,headSha,status,conclusion -q ".[]|select(.headSha==\"$CAND\")"
 git diff --quiet "$CAND" -- docs/operations deploy mechanism && echo "no drift"        # in a clean checkout of CAND
-while read -r h f; do [ "$(git show "$CAND:$f" | sha256sum | cut -c1-64)" = "$h" ] || echo "MISMATCH $f"; done < <(sed -n '/^```manifest/,/^```$/p' docs/operations/FORWARD_RESEARCH_ACTIVATION_RUNBOOK.md | grep -E '^[0-9a-f]{64}  ')
+while read -r h f; do [ "$(git show "$CAND:$f" | sha256sum | cut -c1-64)" = "$h" ] || echo "MISMATCH $f"; done < <(sed -n '/^> **2026-10-12 note.** The three `deploy/db/research_roles*.sql` digests below are the versions extended for migration 35 (`strategy_variant`, listed as append-only; two `research_strategy_variant_*` functions). The R1-R3 activation applied the previous versions (candidate `66b23b9`); the extension changes nothing for migrations 24-34 and is applied to production only with migration 35, under its own approval (`docs/operations/MIGRATION_35_STRATEGY_VARIANT.md`).
+
+```manifest/,/^```$/p' docs/operations/FORWARD_RESEARCH_ACTIVATION_RUNBOOK.md | grep -E '^[0-9a-f]{64}  ')
 ```
 **Expected:** the tip equals `CAND`; a completed, successful CI run for exactly `CAND` (all 6 jobs); no `MISMATCH`.
 **Rollback:** none. **Reversible:** n/a.
@@ -290,9 +292,9 @@ a3da3cd6761e4224a46dea3ba83a52746f246d1dc9b39c25c8dc7bda0f22a6ea  mechanism/add_
 13b48ef0389874872a18f6b5a624100f356db1b0603a08f6e56388df2e2dad69  mechanism/add_dataset_experiment_registry_tables.sql
 6f2ac75347d04132c8f47891f27fc393d7b6d0ebcda244cd55570f7f2a0f364b  mechanism/add_sector_history_tables.sql
 18748a7a1ef5e13d7549e9ce71c6621ef57bcfcc3d9688a1f193c917a0b11946  mechanism/add_price_discontinuity_scan.sql
-57cc36fbf94d7b366febb45c066f73c6dbf3668fdcc24538cd3e2e757b11db67  deploy/db/research_roles.sql
-e49796921842fde116bf7fcefb641de718566e1ac447a2096238879ef2b1538f  deploy/db/research_roles_verify.sql
-85f01023d5e775d5a2cb7272c035da78505394fc556fb0511d26e3d516367ebb  deploy/db/research_roles_rollback.sql
+143cb0ff24d553428429be42fddc8a971959d46ed6595b28a96b806f42e99122  deploy/db/research_roles.sql
+2f12877f75592c697981134c4de3d13f35e19240dcc3355b7e7f074088562039  deploy/db/research_roles_verify.sql
+7c15617f69c87651432f1fc01b9f4fdac7ce0d6167303f57f37f1a498cd51286  deploy/db/research_roles_rollback.sql
 0a1f3a27d525051d776e93dc4f700e2ef8e51164f0b53e9a59310c9aee1f72d5  deploy/db/rollback_24_31.sql
 584dc1c714a444bb6f971bce8968c909ee66268efa9485d1dcb6fc77636a5401  deploy/db/rollback_32.sql
 e147ae29a396264330cd5b1ccc5e4e8d664b8cdd5b9a8028c15121e9b9ce00d1  deploy/db/pre_activation_backup.sh

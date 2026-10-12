@@ -1,9 +1,9 @@
 # Strategy variant registry (proposed migration 35; isolated research databases only)
 
-Status: implemented and tested; **not applied to production**, not mounted in `docker-compose.yml`, not in the frozen `deploy/db/research_roles*.sql`.
+Status (2026-10-12): implemented, tested, and **promoted into the normal migration path** as migration 35 (`mechanism/add_strategy_variant_registry.sql`, mounted in `docker-compose.yml`, CI-validated, role scripts extended). **Not applied to production; automatic production registry writes are not enabled.** Procedure, gates and rollback: `docs/operations/MIGRATION_35_STRATEGY_VARIANT.md`.
 
 **What it is.** A versioned, append-only identity for a *variant* of the live strategy: today, `donchian_breakout v1` exited by one of the five lab exit policies
-(`research/exit_policies.py`). Table `strategy_variant` (`mechanism/research/migrations_proposed/035_add_strategy_variant_registry.sql`), writer and audit
+(`research/exit_policies.py`). Table `strategy_variant` (`mechanism/add_strategy_variant_registry.sql`), writer and audit
 `mechanism/research/strategy_variants.py`.
 
 **Why a separate table.** `strategy_analytics` lists every row of `strategies`, so a variant row there would appear on the production dashboards as a strategy with
@@ -23,6 +23,4 @@ no signals. The variant table only *references* its parent (`parent_strategy_id`
 definition refused, missing parent, immutability, DB-enforced lineage/consistency/DB-stamped time, tamper detection, concurrency). CLI smoke on a scratch
 database: dry run writes nothing; `--apply` requires `--confirm-database <name>`; second apply = all `unchanged`; `verify` OK.
 
-**Before it can go to production (held, needs the owner):** move the file into `mechanism/`, mount it in `docker-compose.yml` as the next number, extend and
-re-checksum `deploy/db/research_roles.sql` / `_verify.sql` / `_rollback.sql` (and the activation runbook hashes), apply manually, verify with a real query,
-then register the five variants.
+**Production:** held until CI is green on the final integration commit, a production backup and the read-only preflight (`deploy/db/preflight_35.sql`) are done; then the exact steps in `docs/operations/MIGRATION_35_STRATEGY_VARIANT.md`. Registering the five variants is a separate, manual owner decision.

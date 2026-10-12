@@ -136,8 +136,7 @@ annotations, not just the original findings). Still genuinely open: no required 
 `production` GitHub Environment (settings-only fix); off-box backups aren't yet at a genuinely
 independent third location; `donchian-nightly-backup.timer` hardcodes a UTC offset instead of the
 `Asia/Jerusalem` tag every other timer uses; `session_state.json` and `telegram_post_delivery` are two
-coexisting idempotency mechanisms (deliberate, not yet unified); a proposed (not yet applied) fix for
-`donchian-bot.service`'s dual mechanism-image pin — see `deploy/vps/donchian-bot.service.proposed`.
+coexisting idempotency mechanisms (deliberate, not yet unified); the bot's separate image pin (`mechanism_image_tag.env`) — the older `deploy/vps/donchian-bot.service.proposed` is now UNSAFE as written (it would downgrade the bot); current findings and the replacement proposal are in `docs/operations/BOT_DUAL_PIN.md`.
 
 ## Things an agent must not assume
 
