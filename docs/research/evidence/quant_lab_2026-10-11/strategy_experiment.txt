@@ -1,0 +1,20 @@
+[    0s] identities verified against the production registry rows: ['donchian_breakout__exit_a_atr_stop_fixed_2r v1 15a7230d06', 'donchian_breakout__exit_a_atr_stop_fixed_3r v1 c5f4c0edf7', 'donchian_breakout__exit_b_donchian_trail_10 v1 cf6f60238e', 'donchian_breakout__exit_c_atr_trail_3x v1 eafa7e67ca', 'donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10 v1 0d14824dd2']
+[   15s] universe 356 symbols; raw signals 84829 ; discontinuity symbols 123
+[   15s] symbols 0 analysis signals 154 skipped {'window_shorter_than_longest_cap': 32}
+[   22s] symbols 50 analysis signals 10268 skipped {'window_shorter_than_longest_cap': 1633, 'price_discontinuity_in_window': 27}
+[   28s] symbols 100 analysis signals 20750 skipped {'window_shorter_than_longest_cap': 3216, 'price_discontinuity_in_window': 28}
+[   35s] symbols 150 analysis signals 30778 skipped {'window_shorter_than_longest_cap': 4685, 'price_discontinuity_in_window': 30}
+[   41s] symbols 200 analysis signals 41048 skipped {'window_shorter_than_longest_cap': 6141, 'price_discontinuity_in_window': 30}
+[   48s] symbols 250 analysis signals 51627 skipped {'window_shorter_than_longest_cap': 7574, 'price_discontinuity_in_window': 32}
+[   54s] symbols 300 analysis signals 61071 skipped {'window_shorter_than_longest_cap': 9115, 'price_discontinuity_in_window': 37}
+[   61s] symbols 350 analysis signals 72829 skipped {'window_shorter_than_longest_cap': 10614, 'price_discontinuity_in_window': 37}
+[   62s] analysis set: 74032 signals; 355 symbols; skipped {'window_shorter_than_longest_cap': 10760, 'price_discontinuity_in_window': 37}
+[   66s] accounted donchian_breakout__exit_a_atr_stop_fixed_2r
+[   69s] accounted donchian_breakout__exit_a_atr_stop_fixed_3r
+[   73s] accounted donchian_breakout__exit_b_donchian_trail_10
+[   77s] accounted donchian_breakout__exit_c_atr_trail_3x
+[   80s] accounted donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10
+[   90s] paired hold-cap effects done
+[   97s] table written 74032
+[   99s] paper tracker replay: compared 12157 mismatches 0 extra 0
+[   99s] WROTE strategy_experiment.json

@@ -49,6 +49,7 @@ def build(evidence_dir, code_ref):
     radar = _load(evidence_dir, "catalyst_radar_recent.json")
     sec = _load(evidence_dir, "sec_earnings_study.json")
     manifest = _load(evidence_dir, "sec_raw_manifest.json")
+    exp = _load(evidence_dir, "strategy_experiment.json") if os.path.exists(os.path.join(evidence_dir, "strategy_experiment.json")) else None
     runs = {}
     for name in ("train_momentum", "train_plan_profit", "train_momentum_novol"):
         with open(os.path.join(evidence_dir, name + ".txt"), encoding="utf-8") as fh:
@@ -121,6 +122,21 @@ def build(evidence_dir, code_ref):
                                    "evidence_files": ["sec_earnings_study.json", "sec_raw_manifest.json", "sec_earnings.txt", "sec_event_outcomes.csv.gz", "sec_breakout_outcomes.csv.gz"]},
                     "data": {k: sec[k] for k in sec if k != "design"}})
 
+    if exp is not None:
+        reports.append({**base, "id": "strategy_experiments", "kind": "strategy_lab", "title": "Strategy experiments: registered variants, hold caps, risk bases and the paper tracker",
+                        "headline": exp_headline(exp),
+                        "caveats": ["Historical, point-in-time research on the parent strategy's breakout signals; not signals, not advice, not a live rule. No variant, job or paper trade is active in production.",
+                                    "Each registered variant is accounted on its own: one open position per symbol, direction and hold cap (the live ledger's rule); entry is the next bar's open; costs are round-trip bps charged in R.",
+                                    "The registered definition has a 60-bar cap. 120 and 250 bars are research conditions, not registered identities. Positions whose history ends before their cap are excluded, so every cap is compared on the same signals.",
+                                    "Standardised R uses 1R = 2 x ATR14 for every variant. The variant's ACTUAL initial risk differs (B starts at the 10-bar channel low, C at 3 x ATR); both bases are shown, and actual-risk multiples blow up when that risk is tiny.",
+                                    "The one-open-position rule skips most signals (breakouts cluster on consecutive days), so each variant's accounted positions are a minority of the signals; 'max drawdown (cum R)' is the drawdown of the running SUM of R over all of a variant's positions in exit order, with every position counted at 1R: it is not a sized portfolio.",
+                                    "Train/test is chronological by signal date with an embargo and a purge. The selection rules are simple baselines fitted on train only; the per-signal oracle is an unattainable upper bound.",
+                                    f"Universe: {exp['design']['n_analysis_signals']:,} signals of the SEC study's liquid symbols; catalysts use only events whose reaction session completed before the signal session."],
+                        "provenance": {"source": "ml_breakout_dataset_v2 signals, stock_prices and the committed SEC event table on an isolated copy of the production backup; identities checked against the production registry rows",
+                                       "manifest_hash": exp["manifest"]["manifest_hash"], "variants": exp["variants"], "design": exp["design"],
+                                       "evidence_files": ["strategy_experiment.json", "strategy_signal_outcomes.csv.gz"]},
+                        "data": exp})
+
     reports.append({**base, "id": "performance_attribution", "kind": "strategy_lab", "title": "Performance attribution: direction, year, regime and sector",
                     "headline": attribution_headline(exitp),
                     "caveats": ["Net of an assumed 10 bps round-trip cost; the 3R fixed-target exit and the 10-bar Donchian trail are shown as the two reference exits.", "Splits shrink the sample: read n beside every mean.",
@@ -129,11 +145,11 @@ def build(evidence_dir, code_ref):
                     "data": {p: {"by_year": exitp["by_year_10bps"][p], "by_regime": exitp["by_regime_10bps"][p], "by_sector": exitp["by_sector_10bps"][p]} for p in ("A_atr_stop_fixed_3R", "B_donchian_trail_10")}})
 
     reports.append({**base, "id": "research_insights", "kind": "strategy_lab", "title": "Research insights: what the evidence supports, and what it does not",
-                    "headline": insights_headline(insights(ex, rk, exitp, cat, runs, sec)),
+                    "headline": insights_headline(insights(ex, rk, exitp, cat, runs, sec, exp)),
                     "caveats": ["Statuses are assigned by fixed rules from the intervals and counts in the other reports; they are not model opinions.", "'Supported' means the sample supports the sign of the effect, not that it is tradeable after costs.",
                                 "'Suggestive' means a consistent pattern that was selected from several candidates and needs forward confirmation."],
                     "provenance": {"source": "derived from the other lab reports (deterministic rules in build_lab_reports.insights)", "evidence_files": ["experiments.json", "ranker_stability.json", "exit_policy_study.json", "catalyst_earnings_study.json", "sec_earnings_study.json"]},
-                    "data": {"claims": insights(ex, rk, exitp, cat, runs, sec)}})
+                    "data": {"claims": insights(ex, rk, exitp, cat, runs, sec, exp)}})
     return reports
 
 
@@ -148,7 +164,7 @@ def _excl(ci):
     return ci[0] > 0 or ci[1] < 0
 
 
-def insights(ex, rk, exitp, cat, runs, sec=None):
+def insights(ex, rk, exitp, cat, runs, sec=None, exp=None):
     """Fixed rules: 'supported' = the interval excludes zero in the claimed direction; 'not_supported' = a large sample whose interval includes zero around a near-zero estimate (the effect is
     absent or too small to matter); 'inconclusive' = the interval is wide; 'suggestive' = consistent in most years but chosen among several candidates."""
     out = []
@@ -273,7 +289,53 @@ def insights(ex, rk, exitp, cat, runs, sec=None):
         add("SEC acceptance timestamps place the information on the right trading bar (placebo: the bar before shows no comparable gap)", st,
             "; ".join(f"{k}: gap on reaction bar {tqs[k]['mean_abs_gap_on_reaction_bar'] * 100:.2f}% vs {tqs[k]['mean_abs_gap_on_bar_before'] * 100:.2f}% the bar before (x{ratios[k]:.1f}, n={tqs[k]['n']:,})" for k in ratios),
             ["catalyst_sec_earnings"])
+    if exp is not None:
+        # Rules fixed before the full experiment was read. A paired interval that excludes zero in the claimed direction = 'supported'; wholly on the wrong side, or tight around zero (|bound| < 0.05 R) = 'not_supported';
+        # otherwise 'inconclusive'. Fewer than 200 paired signals = 'inconclusive'.
+        def judge(ci, n):
+            if n is None or n < 200 or not ci:
+                return "inconclusive"
+            if ci[0] > 0:
+                return "supported"
+            if ci[1] < 0 or max(abs(ci[0]), abs(ci[1])) < 0.05:
+                return "not_supported"
+            return "inconclusive"
+        names = {v["policy"]: v["key"] for v in exp["variants"]}
+        for pol, label in (("B_donchian_trail_10", "10-bar Donchian trail"), ("C_atr_trail_3x", "3 x ATR trail"), ("D_hybrid_atr_stop_to_donchian_10", "hybrid stop-to-channel")):
+            pe = exp["longer_hold_paired_effect"][names[pol]]["cap250_minus_cap60_std_net_r"]["test|all"]
+            add(f"Out of sample, a 250-bar holding cap does better than the registered 60-bar cap for the {label} variant (net, standardised R)", judge(pe.get("ci95"), pe.get("n")),
+                f"paired difference {pe['mean']:+.3f} R (n={pe['n']:,}, 95% CI {pe['ci95'][0]:+.3f} to {pe['ci95'][1]:+.3f}); the longer cap changes the outcome of {pe['share_signals_changed'] * 100:.0f}% of signals" if pe.get("n") else "no paired signals",
+                ["strategy_experiments"])
+        rk_ = exp["risk_actual_vs_standardised_cap60"][names["B_donchian_trail_10"]]["initial_risk_atr"]
+        add("Standardising risk at 2 x ATR understates the real initial risk of the Donchian-trail variant (its stop starts at the 10-bar channel low)",
+            "supported" if rk_["median"] > 2.5 else "not_supported",
+            f"median actual initial risk {rk_['median']:.2f} ATR (10th to 90th percentile {rk_['p10']:.2f} to {rk_['p90']:.2f}) against the standard 2.00; {rk_['share_above_3_atr'] * 100:.0f}% of positions start with more than 3 ATR at risk and {rk_['share_below_0_5_atr'] * 100:.0f}% with less than 0.5 ATR",
+            ["strategy_experiments"])
+        sel = exp["strategy_selection_baselines_cap60_std_net"]["rules"]["direction_x_catalyst"]
+        gd = sel.get("group_rule_minus_best_single_ci95") or {}
+        add("Out of sample, choosing the variant per direction and catalyst class (fitted on train) beats always using the best single variant", judge(gd.get("ci95"), gd.get("n")),
+            f"test difference {gd['mean']:+.3f} R per signal (n={gd['n']:,}, 95% CI {gd['ci95'][0]:+.3f} to {gd['ci95'][1]:+.3f}); best single variant on train: {sel['best_single_variant_on_train']}; the per-signal oracle ({sel['rules_test_mean']['per_signal_oracle_UPPER_BOUND']:+.3f} R) is not attainable" if gd.get("n") else "not enough test signals",
+            ["strategy_experiments"])
+        tests = {k: v_["test|all"]["std"] for k, v_ in ((vk, exp["position_accounting_primary_cost"][vk]["60"]) for vk in names.values())}
+        pos = [k for k, t in tests.items() if t.get("expectancy_ci95") and t["expectancy_ci95"][0] > 0]
+        add("A registered variant earns a positive net expectancy out of sample at the registered 60-bar cap (position-level, standardised R, 10 bps)",
+            "suggestive" if len(pos) == 1 else ("supported" if len(pos) >= 2 else ("not_supported" if all((t.get("expectancy_r") or 0) <= 0 for t in tests.values()) else "inconclusive")),
+            "; ".join(f"{k.split('__exit_')[1]} {t['expectancy_r']:+.3f} R" + (f" (CI {t['expectancy_ci95'][0]:+.3f} to {t['expectancy_ci95'][1]:+.3f})" if t.get("expectancy_ci95") else "") for k, t in tests.items())
+            + ("; one variant of five clears zero: chosen among several, so only suggestive" if len(pos) == 1 else ""), ["strategy_experiments"])
+        rv = exp["paper_tracker_replay_validation"]
+        add("The forward paper tracker reproduces the batch experiment exactly when real history is replayed day by day", "supported" if rv["mismatches"] == 0 and rv["tracker_extra_closed"] == 0 and rv["batch_positions_compared"] >= 1000 else "not_supported",
+            f"{rv['batch_positions_compared']:,} positions of {rv['variants']} variants over {rv['symbols']} symbols and {rv['sessions_replayed']:,} sessions compared field by field: {rv['mismatches']} mismatches; the tracker writes nothing and opens no trade",
+            ["strategy_experiments"])
     return out
+
+
+def exp_headline(exp):
+    acc = exp["position_accounting_primary_cost"]
+    rows = [(v["key"].split("__exit_")[1], acc[v["key"]]["60"]["test|all"]["std"]) for v in exp["variants"]]
+    lo, hi = min(rows, key=lambda r: r[1]["expectancy_r"]), max(rows, key=lambda r: r[1]["expectancy_r"])
+    rv = exp["paper_tracker_replay_validation"]
+    return (f"{exp['design']['n_analysis_signals']:,} breakout signals x {len(exp['variants'])} registered variants x {len(exp['design']['hold_caps'])} hold caps. Test-period net expectancy at the registered 60-bar cap "
+            f"runs from {lo[1]['expectancy_r']:+.3f} R ({lo[0]}) to {hi[1]['expectancy_r']:+.3f} R ({hi[0]}). Paper tracker replay: {rv['batch_positions_compared']:,} positions, {rv['mismatches']} mismatches.")
 
 
 def sec_headline(sec):

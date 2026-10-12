@@ -30,7 +30,7 @@ def reports():
 
 
 def test_every_built_report_passes_the_serving_validator(reports):
-    assert set(reports) == {"strategy_baseline", "ranker_stability", "ml_evaluation", "exit_policies", "catalyst_earnings", "catalyst_radar_recent", "catalyst_sec_earnings", "performance_attribution", "research_insights"}
+    assert set(reports) == {"strategy_baseline", "ranker_stability", "ml_evaluation", "exit_policies", "catalyst_earnings", "catalyst_radar_recent", "catalyst_sec_earnings", "strategy_experiments", "performance_attribution", "research_insights"}
     for rid, r in reports.items():
         assert validate(r) == [], (rid, validate(r))
         assert r["status"] == "research_only" and r["caveats"] and r["headline"]
@@ -171,3 +171,42 @@ def test_the_breakout_outcome_table_matches_its_recorded_hash_and_carries_every_
     for spec in V.build_specs():
         assert "r_net10__" + spec.key in header
         assert sec["strategy_variant_outcomes"][spec.key]["definition_hash"] == spec.definition_hash        # the evidence names the exact registered definition
+
+
+def test_the_strategy_experiment_report_is_built_from_the_registered_identities_and_the_claims_follow_the_evidence(reports):
+    from research import strategy_variants as V
+    r = reports["strategy_experiments"]
+    assert r["kind"] == "strategy_lab" and r["status"] == "research_only" and len(r["caveats"]) >= 6
+    assert [(v["key"], v["version"], v["definition_hash"]) for v in r["data"]["variants"]] == [(s.key, s.version, s.definition_hash) for s in V.build_specs()]
+    assert all(v["registry_verified"] for v in r["data"]["variants"]) and len(r["provenance"]["manifest_hash"]) == 64
+    assert r["data"]["design"]["registered_hold_cap"] == 60 and r["data"]["paper_tracker_replay_validation"]["mismatches"] == 0
+    st = {c["claim"]: c["status"] for c in reports["research_insights"]["data"]["claims"]}
+    by = lambda text: next(v for k, v in st.items() if text in k)  # noqa: E731
+    assert by("250-bar holding cap does better than the registered 60-bar cap for the 10-bar Donchian trail") == "not_supported"
+    assert by("Standardising risk at 2 x ATR understates") == "supported"
+    assert by("choosing the variant per direction and catalyst class") == "not_supported"
+    assert by("A registered variant earns a positive net expectancy out of sample") == "not_supported"
+    assert by("forward paper tracker reproduces the batch experiment exactly") == "supported"
+
+
+def test_the_strategy_selection_table_matches_its_recorded_hash_and_is_point_in_time():
+    import gzip
+    import hashlib
+    exp = _load("strategy_experiment.json")
+    with open(os.path.join(EVIDENCE, "strategy_signal_outcomes.csv.gz"), "rb") as fh:
+        raw = gzip.decompress(fh.read())
+    assert hashlib.sha256(raw).hexdigest() == exp["ml_ready_table"]["sha256_of_csv"]
+    lines = raw.decode().split(chr(10))
+    header = lines[0].split(",")
+    assert len(lines) - 2 == exp["ml_ready_table"]["rows"] and header == exp["ml_ready_table"]["columns"]
+    i_sig, i_cat, i_acc = header.index("signal_date"), header.index("catalyst_class"), header.index("catalyst_decision_accepted_at")
+    checked = 0
+    for line in lines[1:-1]:
+        cells = line.split(",")
+        if len(cells) == len(header) and cells[i_cat] not in ("none", ""):
+            assert cells[i_acc][:10] < cells[i_sig], line[:160]              # the catalyst was accepted by the SEC strictly before the signal date
+            checked += 1
+    assert checked == 3526                                                      # every signal that carries a catalyst (3,526 of 74,032) is point-in-time: accepted by the SEC strictly before the signal date
+    from research import strategy_variants as V
+    for s in V.build_specs():
+        assert f"{s.key}__cap60__r_std_net10" in header and f"{s.key}__cap250__r_actual_net10" in header

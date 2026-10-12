@@ -1,0 +1,7017 @@
+{
+ "generated_at": "2026-10-11",
+ "code_ref": "cc8ddda",
+ "status": "research_only",
+ "use": "Research evidence only. Not a trading signal, not advice, and not used by the live signal path.",
+ "schema": "lab_report_v1",
+ "id": "strategy_experiments",
+ "kind": "strategy_lab",
+ "title": "Strategy experiments: registered variants, hold caps, risk bases and the paper tracker",
+ "headline": "74,032 breakout signals x 5 registered variants x 3 hold caps. Test-period net expectancy at the registered 60-bar cap runs from -0.049 R (a_atr_stop_fixed_3r) to -0.024 R (b_donchian_trail_10). Paper tracker replay: 12,157 positions, 0 mismatches.",
+ "caveats": [
+  "Historical, point-in-time research on the parent strategy's breakout signals; not signals, not advice, not a live rule. No variant, job or paper trade is active in production.",
+  "Each registered variant is accounted on its own: one open position per symbol, direction and hold cap (the live ledger's rule); entry is the next bar's open; costs are round-trip bps charged in R.",
+  "The registered definition has a 60-bar cap. 120 and 250 bars are research conditions, not registered identities. Positions whose history ends before their cap are excluded, so every cap is compared on the same signals.",
+  "Standardised R uses 1R = 2 x ATR14 for every variant. The variant's ACTUAL initial risk differs (B starts at the 10-bar channel low, C at 3 x ATR); both bases are shown, and actual-risk multiples blow up when that risk is tiny.",
+  "The one-open-position rule skips most signals (breakouts cluster on consecutive days), so each variant's accounted positions are a minority of the signals; 'max drawdown (cum R)' is the drawdown of the running SUM of R over all of a variant's positions in exit order, with every position counted at 1R: it is not a sized portfolio.",
+  "Train/test is chronological by signal date with an embargo and a purge. The selection rules are simple baselines fitted on train only; the per-signal oracle is an unattainable upper bound.",
+  "Universe: 74,032 signals of the SEC study's liquid symbols; catalysts use only events whose reaction session completed before the signal session."
+ ],
+ "provenance": {
+  "source": "ml_breakout_dataset_v2 signals, stock_prices and the committed SEC event table on an isolated copy of the production backup; identities checked against the production registry rows",
+  "manifest_hash": "db062f711ef9d9bb8fd21af9b94c2212e32f39c5d93023e9f746e068348a5736",
+  "variants": [
+   {
+    "key": "donchian_breakout__exit_a_atr_stop_fixed_2r",
+    "version": "v1",
+    "definition_hash": "15a7230d0671626fba0854f4f9f2f2be4f9ee89690fd56745a865b1427d587d8",
+    "policy": "A_atr_stop_fixed_2R",
+    "registry_verified": true
+   },
+   {
+    "key": "donchian_breakout__exit_a_atr_stop_fixed_3r",
+    "version": "v1",
+    "definition_hash": "c5f4c0edf79947fd0e02a56aff657c9d45b1e0db227f7dcd36fc6982c2f369da",
+    "policy": "A_atr_stop_fixed_3R",
+    "registry_verified": true
+   },
+   {
+    "key": "donchian_breakout__exit_b_donchian_trail_10",
+    "version": "v1",
+    "definition_hash": "cf6f60238e13d46a453dedced0b77cf861e7dcc28d12231151d4bc4bc84a39d9",
+    "policy": "B_donchian_trail_10",
+    "registry_verified": true
+   },
+   {
+    "key": "donchian_breakout__exit_c_atr_trail_3x",
+    "version": "v1",
+    "definition_hash": "eafa7e67ca563cda7ebbbd9fe0e66390168269a5e705464ee97d4fc975cc0134",
+    "policy": "C_atr_trail_3x",
+    "registry_verified": true
+   },
+   {
+    "key": "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10",
+    "version": "v1",
+    "definition_hash": "0d14824dd24c000c903c9623c9a66d589af08c1d400f244d92a06f8f584bc16b",
+    "policy": "D_hybrid_atr_stop_to_donchian_10",
+    "registry_verified": true
+   }
+  ],
+  "design": {
+   "train_end": "2022-01-01",
+   "test_start": "2022-02-15",
+   "hold_caps": [
+    60,
+    120,
+    250
+   ],
+   "costs_bps": [
+    0.0,
+    10.0,
+    25.0
+   ],
+   "primary_cost_bps": 10.0,
+   "registered_hold_cap": 60,
+   "n_analysis_signals": 74032,
+   "skipped_by_reason": {
+    "window_shorter_than_longest_cap": 10760,
+    "price_discontinuity_in_window": 37
+   }
+  },
+  "evidence_files": [
+   "strategy_experiment.json",
+   "strategy_signal_outcomes.csv.gz"
+  ]
+ },
+ "data": {
+  "manifest": {
+   "document": {
+    "schema": "strategy_experiment_manifest_v1",
+    "variants": [
+     {
+      "key": "donchian_breakout__exit_a_atr_stop_fixed_2r",
+      "version": "v1",
+      "definition_hash": "15a7230d0671626fba0854f4f9f2f2be4f9ee89690fd56745a865b1427d587d8",
+      "policy": "A_atr_stop_fixed_2R"
+     },
+     {
+      "key": "donchian_breakout__exit_a_atr_stop_fixed_3r",
+      "version": "v1",
+      "definition_hash": "c5f4c0edf79947fd0e02a56aff657c9d45b1e0db227f7dcd36fc6982c2f369da",
+      "policy": "A_atr_stop_fixed_3R"
+     },
+     {
+      "key": "donchian_breakout__exit_b_donchian_trail_10",
+      "version": "v1",
+      "definition_hash": "cf6f60238e13d46a453dedced0b77cf861e7dcc28d12231151d4bc4bc84a39d9",
+      "policy": "B_donchian_trail_10"
+     },
+     {
+      "key": "donchian_breakout__exit_c_atr_trail_3x",
+      "version": "v1",
+      "definition_hash": "eafa7e67ca563cda7ebbbd9fe0e66390168269a5e705464ee97d4fc975cc0134",
+      "policy": "C_atr_trail_3x"
+     },
+     {
+      "key": "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10",
+      "version": "v1",
+      "definition_hash": "0d14824dd24c000c903c9623c9a66d589af08c1d400f244d92a06f8f584bc16b",
+      "policy": "D_hybrid_atr_stop_to_donchian_10"
+     }
+    ],
+    "hold_caps": [
+     60,
+     120,
+     250
+    ],
+    "registered_hold_cap": 60,
+    "cost_bps_round_trip": [
+     0.0,
+     10.0,
+     25.0
+    ],
+    "primary_cost_bps": 10.0,
+    "split": {
+     "basis": "signal date",
+     "train_end_exclusive": "2022-01-01",
+     "test_start_inclusive": "2022-02-15",
+     "purge": "a train signal whose position is still open at test_start is dropped from train"
+    },
+    "execution": {
+     "entry": "open of the bar after the signal",
+     "one_open_position_per": "variant, hold cap, symbol, direction (the live ledger's rule); a signal on or before the previous exit bar is skipped",
+     "risk_bases": [
+      "standardised: 1R = 2 x ATR14",
+      "actual: distance from entry to the variant's own initial stop"
+     ],
+     "censoring": "a trade whose price history ends before its hold cap is excluded and counted"
+    },
+    "universe": {
+     "definition": "symbols of the SEC earnings study (391 liquid names)",
+     "n_symbols": 355
+    },
+    "signal_source": {
+     "table": "ml_breakout_dataset_v2",
+     "feature_set_version": "price_v1",
+     "since": "2017-03-01",
+     "analysis_set": "full longest-cap window, finite bars, no price discontinuity in [i-5, i+251]",
+     "fingerprint": {
+      "n_signals": 74032,
+      "n_symbols": 355,
+      "signal_list_md5": "be62e0fc6522280978fc69b114d2133f",
+      "skipped_by_reason": {
+       "window_shorter_than_longest_cap": 10760,
+       "price_discontinuity_in_window": 37
+      },
+      "sec_event_table_sha256": "472d2dcbeadfd28fd77c689493296316870cd69087e7d24ebbb9c4a525a8b4f1"
+     }
+    },
+    "code_ref": "cc8ddda"
+   },
+   "manifest_hash": "db062f711ef9d9bb8fd21af9b94c2212e32f39c5d93023e9f746e068348a5736"
+  },
+  "design": {
+   "train_end": "2022-01-01",
+   "test_start": "2022-02-15",
+   "hold_caps": [
+    60,
+    120,
+    250
+   ],
+   "costs_bps": [
+    0.0,
+    10.0,
+    25.0
+   ],
+   "primary_cost_bps": 10.0,
+   "registered_hold_cap": 60,
+   "n_analysis_signals": 74032,
+   "skipped_by_reason": {
+    "window_shorter_than_longest_cap": 10760,
+    "price_discontinuity_in_window": 37
+   }
+  },
+  "variants": [
+   {
+    "key": "donchian_breakout__exit_a_atr_stop_fixed_2r",
+    "version": "v1",
+    "definition_hash": "15a7230d0671626fba0854f4f9f2f2be4f9ee89690fd56745a865b1427d587d8",
+    "policy": "A_atr_stop_fixed_2R",
+    "registry_verified": true
+   },
+   {
+    "key": "donchian_breakout__exit_a_atr_stop_fixed_3r",
+    "version": "v1",
+    "definition_hash": "c5f4c0edf79947fd0e02a56aff657c9d45b1e0db227f7dcd36fc6982c2f369da",
+    "policy": "A_atr_stop_fixed_3R",
+    "registry_verified": true
+   },
+   {
+    "key": "donchian_breakout__exit_b_donchian_trail_10",
+    "version": "v1",
+    "definition_hash": "cf6f60238e13d46a453dedced0b77cf861e7dcc28d12231151d4bc4bc84a39d9",
+    "policy": "B_donchian_trail_10",
+    "registry_verified": true
+   },
+   {
+    "key": "donchian_breakout__exit_c_atr_trail_3x",
+    "version": "v1",
+    "definition_hash": "eafa7e67ca563cda7ebbbd9fe0e66390168269a5e705464ee97d4fc975cc0134",
+    "policy": "C_atr_trail_3x",
+    "registry_verified": true
+   },
+   {
+    "key": "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10",
+    "version": "v1",
+    "definition_hash": "0d14824dd24c000c903c9623c9a66d589af08c1d400f244d92a06f8f584bc16b",
+    "policy": "D_hybrid_atr_stop_to_donchian_10",
+    "registry_verified": true
+   }
+  ],
+  "position_accounting_primary_cost": {
+   "donchian_breakout__exit_a_atr_stop_fixed_2r": {
+    "60": {
+     "registered_definition_cap": true,
+     "train|all": {
+      "std": {
+       "n_positions": 10973,
+       "n_censored": 0,
+       "n": 10973,
+       "expectancy_r": -0.0057,
+       "median_r": -1.0116,
+       "win_rate": 0.3531,
+       "profit_factor": 0.992,
+       "avg_duration_bars": 17.7,
+       "median_duration_bars": 12.0,
+       "avg_mfe_r": 1.196,
+       "avg_mae_r": 0.982,
+       "max_win_r": 10.733,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.046,
+       "top5pct_share_of_gross_profit": 0.172,
+       "max_drawdown_r_cumulative": 527.24,
+       "total_r": -62.4,
+       "exit_reasons": {
+        "stop": 6973,
+        "target": 3461,
+        "time": 539
+       },
+       "expectancy_ci95": [
+        -0.1102,
+        0.10541
+       ]
+      },
+      "actual": {
+       "n_positions": 10973,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 10973,
+       "expectancy_r": -0.0057,
+       "median_r": -1.0116,
+       "win_rate": 0.3531,
+       "profit_factor": 0.992,
+       "avg_duration_bars": 17.7,
+       "median_duration_bars": 12.0,
+       "avg_mfe_r": 1.196,
+       "avg_mae_r": 0.982,
+       "max_win_r": 10.733,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.046,
+       "top5pct_share_of_gross_profit": 0.172,
+       "max_drawdown_r_cumulative": 527.24,
+       "total_r": -62.4,
+       "exit_reasons": {
+        "stop": 6973,
+        "target": 3461,
+        "time": 539
+       },
+       "winsorised_mean_r": -0.0046,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "train|bullish": {
+      "std": {
+       "n_positions": 6185,
+       "n_censored": 0,
+       "n": 6185,
+       "expectancy_r": 0.0993,
+       "median_r": -1.0115,
+       "win_rate": 0.3887,
+       "profit_factor": 1.154,
+       "avg_duration_bars": 17.94,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.261,
+       "avg_mae_r": 0.966,
+       "max_win_r": 7.278,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.042,
+       "top5pct_share_of_gross_profit": 0.156,
+       "max_drawdown_r_cumulative": 226.48,
+       "total_r": 614.1,
+       "exit_reasons": {
+        "stop": 3717,
+        "target": 2170,
+        "time": 298
+       },
+       "expectancy_ci95": [
+        -0.02325,
+        0.22794
+       ]
+      },
+      "actual": {
+       "n_positions": 6185,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 6185,
+       "expectancy_r": 0.0993,
+       "median_r": -1.0115,
+       "win_rate": 0.3887,
+       "profit_factor": 1.154,
+       "avg_duration_bars": 17.94,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.261,
+       "avg_mae_r": 0.966,
+       "max_win_r": 7.278,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.042,
+       "top5pct_share_of_gross_profit": 0.156,
+       "max_drawdown_r_cumulative": 226.48,
+       "total_r": 614.1,
+       "exit_reasons": {
+        "stop": 3717,
+        "target": 2170,
+        "time": 298
+       },
+       "winsorised_mean_r": 0.102,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "train|bearish": {
+      "std": {
+       "n_positions": 4788,
+       "n_censored": 0,
+       "n": 4788,
+       "expectancy_r": -0.1413,
+       "median_r": -1.0117,
+       "win_rate": 0.3072,
+       "profit_factor": 0.804,
+       "avg_duration_bars": 17.39,
+       "median_duration_bars": 11.0,
+       "avg_mfe_r": 1.112,
+       "avg_mae_r": 1.001,
+       "max_win_r": 10.733,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.053,
+       "top5pct_share_of_gross_profit": 0.2,
+       "max_drawdown_r_cumulative": 976.73,
+       "total_r": -676.5,
+       "exit_reasons": {
+        "stop": 3256,
+        "target": 1291,
+        "time": 241
+       },
+       "expectancy_ci95": [
+        -0.39329,
+        0.08828
+       ]
+      },
+      "actual": {
+       "n_positions": 4788,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4788,
+       "expectancy_r": -0.1413,
+       "median_r": -1.0117,
+       "win_rate": 0.3072,
+       "profit_factor": 0.804,
+       "avg_duration_bars": 17.39,
+       "median_duration_bars": 11.0,
+       "avg_mfe_r": 1.112,
+       "avg_mae_r": 1.001,
+       "max_win_r": 10.733,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.053,
+       "top5pct_share_of_gross_profit": 0.2,
+       "max_drawdown_r_cumulative": 976.73,
+       "total_r": -676.5,
+       "exit_reasons": {
+        "stop": 3256,
+        "target": 1291,
+        "time": 241
+       },
+       "winsorised_mean_r": -0.1424,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|all": {
+      "std": {
+       "n_positions": 11738,
+       "n_censored": 0,
+       "n": 11738,
+       "expectancy_r": -0.0374,
+       "median_r": -1.0111,
+       "win_rate": 0.3402,
+       "profit_factor": 0.946,
+       "avg_duration_bars": 18.33,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.194,
+       "avg_mae_r": 1.004,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.053,
+       "top5pct_share_of_gross_profit": 0.184,
+       "max_drawdown_r_cumulative": 656.59,
+       "total_r": -439.4,
+       "exit_reasons": {
+        "stop": 7626,
+        "target": 3606,
+        "time": 506
+       },
+       "expectancy_ci95": [
+        -0.11158,
+        0.04569
+       ]
+      },
+      "actual": {
+       "n_positions": 11738,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 11738,
+       "expectancy_r": -0.0374,
+       "median_r": -1.0111,
+       "win_rate": 0.3402,
+       "profit_factor": 0.946,
+       "avg_duration_bars": 18.33,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.194,
+       "avg_mae_r": 1.004,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.053,
+       "top5pct_share_of_gross_profit": 0.184,
+       "max_drawdown_r_cumulative": 656.59,
+       "total_r": -439.4,
+       "exit_reasons": {
+        "stop": 7626,
+        "target": 3606,
+        "time": 506
+       },
+       "winsorised_mean_r": -0.039,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|bullish": {
+      "std": {
+       "n_positions": 6395,
+       "n_censored": 0,
+       "n": 6395,
+       "expectancy_r": 0.0685,
+       "median_r": -1.0114,
+       "win_rate": 0.3712,
+       "profit_factor": 1.103,
+       "avg_duration_bars": 17.09,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.273,
+       "avg_mae_r": 0.986,
+       "max_win_r": 7.771,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.047,
+       "top5pct_share_of_gross_profit": 0.167,
+       "max_drawdown_r_cumulative": 292.01,
+       "total_r": 438.1,
+       "exit_reasons": {
+        "stop": 3974,
+        "target": 2238,
+        "time": 183
+       },
+       "expectancy_ci95": [
+        -0.10546,
+        0.23311
+       ]
+      },
+      "actual": {
+       "n_positions": 6395,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 6395,
+       "expectancy_r": 0.0685,
+       "median_r": -1.0114,
+       "win_rate": 0.3712,
+       "profit_factor": 1.103,
+       "avg_duration_bars": 17.09,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.273,
+       "avg_mae_r": 0.986,
+       "max_win_r": 7.771,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.047,
+       "top5pct_share_of_gross_profit": 0.167,
+       "max_drawdown_r_cumulative": 292.01,
+       "total_r": 438.1,
+       "exit_reasons": {
+        "stop": 3974,
+        "target": 2238,
+        "time": 183
+       },
+       "winsorised_mean_r": 0.0687,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|bearish": {
+      "std": {
+       "n_positions": 5343,
+       "n_censored": 0,
+       "n": 5343,
+       "expectancy_r": -0.1642,
+       "median_r": -1.0108,
+       "win_rate": 0.303,
+       "profit_factor": 0.775,
+       "avg_duration_bars": 19.81,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.1,
+       "avg_mae_r": 1.026,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.061,
+       "top5pct_share_of_gross_profit": 0.21,
+       "max_drawdown_r_cumulative": 1043.85,
+       "total_r": -877.5,
+       "exit_reasons": {
+        "stop": 3652,
+        "target": 1368,
+        "time": 323
+       },
+       "expectancy_ci95": [
+        -0.33697,
+        0.00103
+       ]
+      },
+      "actual": {
+       "n_positions": 5343,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5343,
+       "expectancy_r": -0.1642,
+       "median_r": -1.0108,
+       "win_rate": 0.303,
+       "profit_factor": 0.775,
+       "avg_duration_bars": 19.81,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.1,
+       "avg_mae_r": 1.026,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.061,
+       "top5pct_share_of_gross_profit": 0.21,
+       "max_drawdown_r_cumulative": 1043.85,
+       "total_r": -877.5,
+       "exit_reasons": {
+        "stop": 3652,
+        "target": 1368,
+        "time": 323
+       },
+       "winsorised_mean_r": -0.1676,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     }
+    },
+    "120": {
+     "registered_definition_cap": false,
+     "train|all": {
+      "std": {
+       "n_positions": 10696,
+       "n_censored": 0,
+       "n": 10696,
+       "expectancy_r": -0.0013,
+       "median_r": -1.012,
+       "win_rate": 0.3442,
+       "profit_factor": 0.998,
+       "avg_duration_bars": 18.82,
+       "median_duration_bars": 12.0,
+       "avg_mfe_r": 1.213,
+       "avg_mae_r": 0.992,
+       "max_win_r": 10.733,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.045,
+       "top5pct_share_of_gross_profit": 0.168,
+       "max_drawdown_r_cumulative": 500.8,
+       "total_r": -13.7,
+       "exit_reasons": {
+        "stop": 7000,
+        "target": 3608,
+        "time": 88
+       },
+       "expectancy_ci95": [
+        -0.10785,
+        0.10933
+       ]
+      },
+      "actual": {
+       "n_positions": 10696,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 10696,
+       "expectancy_r": -0.0013,
+       "median_r": -1.012,
+       "win_rate": 0.3442,
+       "profit_factor": 0.998,
+       "avg_duration_bars": 18.82,
+       "median_duration_bars": 12.0,
+       "avg_mfe_r": 1.213,
+       "avg_mae_r": 0.992,
+       "max_win_r": 10.733,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.045,
+       "top5pct_share_of_gross_profit": 0.168,
+       "max_drawdown_r_cumulative": 500.8,
+       "total_r": -13.7,
+       "exit_reasons": {
+        "stop": 7000,
+        "target": 3608,
+        "time": 88
+       },
+       "winsorised_mean_r": -0.0003,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "train|bullish": {
+      "std": {
+       "n_positions": 6022,
+       "n_censored": 0,
+       "n": 6022,
+       "expectancy_r": 0.1135,
+       "median_r": -1.0118,
+       "win_rate": 0.3828,
+       "profit_factor": 1.173,
+       "avg_duration_bars": 19.05,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.28,
+       "avg_mae_r": 0.974,
+       "max_win_r": 7.278,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.041,
+       "top5pct_share_of_gross_profit": 0.152,
+       "max_drawdown_r_cumulative": 228.15,
+       "total_r": 683.5,
+       "exit_reasons": {
+        "stop": 3711,
+        "target": 2268,
+        "time": 43
+       },
+       "expectancy_ci95": [
+        -0.00431,
+        0.24805
+       ]
+      },
+      "actual": {
+       "n_positions": 6022,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 6022,
+       "expectancy_r": 0.1135,
+       "median_r": -1.0118,
+       "win_rate": 0.3828,
+       "profit_factor": 1.173,
+       "avg_duration_bars": 19.05,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.28,
+       "avg_mae_r": 0.974,
+       "max_win_r": 7.278,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.041,
+       "top5pct_share_of_gross_profit": 0.152,
+       "max_drawdown_r_cumulative": 228.15,
+       "total_r": 683.5,
+       "exit_reasons": {
+        "stop": 3711,
+        "target": 2268,
+        "time": 43
+       },
+       "winsorised_mean_r": 0.1162,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "train|bearish": {
+      "std": {
+       "n_positions": 4674,
+       "n_censored": 0,
+       "n": 4674,
+       "expectancy_r": -0.1492,
+       "median_r": -1.0122,
+       "win_rate": 0.2946,
+       "profit_factor": 0.799,
+       "avg_duration_bars": 18.53,
+       "median_duration_bars": 11.0,
+       "avg_mfe_r": 1.126,
+       "avg_mae_r": 1.015,
+       "max_win_r": 10.733,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.053,
+       "top5pct_share_of_gross_profit": 0.197,
+       "max_drawdown_r_cumulative": 999.14,
+       "total_r": -697.2,
+       "exit_reasons": {
+        "stop": 3289,
+        "target": 1340,
+        "time": 45
+       },
+       "expectancy_ci95": [
+        -0.41261,
+        0.08897
+       ]
+      },
+      "actual": {
+       "n_positions": 4674,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4674,
+       "expectancy_r": -0.1492,
+       "median_r": -1.0122,
+       "win_rate": 0.2946,
+       "profit_factor": 0.799,
+       "avg_duration_bars": 18.53,
+       "median_duration_bars": 11.0,
+       "avg_mfe_r": 1.126,
+       "avg_mae_r": 1.015,
+       "max_win_r": 10.733,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.053,
+       "top5pct_share_of_gross_profit": 0.197,
+       "max_drawdown_r_cumulative": 999.14,
+       "total_r": -697.2,
+       "exit_reasons": {
+        "stop": 3289,
+        "target": 1340,
+        "time": 45
+       },
+       "winsorised_mean_r": -0.1504,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|all": {
+      "std": {
+       "n_positions": 11501,
+       "n_censored": 0,
+       "n": 11501,
+       "expectancy_r": -0.0398,
+       "median_r": -1.0115,
+       "win_rate": 0.3296,
+       "profit_factor": 0.944,
+       "avg_duration_bars": 19.34,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.208,
+       "avg_mae_r": 1.017,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.053,
+       "top5pct_share_of_gross_profit": 0.182,
+       "max_drawdown_r_cumulative": 704.36,
+       "total_r": -458.1,
+       "exit_reasons": {
+        "stop": 7694,
+        "target": 3748,
+        "time": 59
+       },
+       "expectancy_ci95": [
+        -0.11595,
+        0.03987
+       ]
+      },
+      "actual": {
+       "n_positions": 11501,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 11501,
+       "expectancy_r": -0.0398,
+       "median_r": -1.0115,
+       "win_rate": 0.3296,
+       "profit_factor": 0.944,
+       "avg_duration_bars": 19.34,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.208,
+       "avg_mae_r": 1.017,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.053,
+       "top5pct_share_of_gross_profit": 0.182,
+       "max_drawdown_r_cumulative": 704.36,
+       "total_r": -458.1,
+       "exit_reasons": {
+        "stop": 7694,
+        "target": 3748,
+        "time": 59
+       },
+       "winsorised_mean_r": -0.0412,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|bullish": {
+      "std": {
+       "n_positions": 6319,
+       "n_censored": 0,
+       "n": 6319,
+       "expectancy_r": 0.0718,
+       "median_r": -1.0117,
+       "win_rate": 0.3664,
+       "profit_factor": 1.106,
+       "avg_duration_bars": 17.66,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.284,
+       "avg_mae_r": 0.994,
+       "max_win_r": 7.771,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.047,
+       "top5pct_share_of_gross_profit": 0.164,
+       "max_drawdown_r_cumulative": 295.53,
+       "total_r": 454.0,
+       "exit_reasons": {
+        "stop": 4001,
+        "target": 2308,
+        "time": 10
+       },
+       "expectancy_ci95": [
+        -0.09608,
+        0.25023
+       ]
+      },
+      "actual": {
+       "n_positions": 6319,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 6319,
+       "expectancy_r": 0.0718,
+       "median_r": -1.0117,
+       "win_rate": 0.3664,
+       "profit_factor": 1.106,
+       "avg_duration_bars": 17.66,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.284,
+       "avg_mae_r": 0.994,
+       "max_win_r": 7.771,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.047,
+       "top5pct_share_of_gross_profit": 0.164,
+       "max_drawdown_r_cumulative": 295.53,
+       "total_r": 454.0,
+       "exit_reasons": {
+        "stop": 4001,
+        "target": 2308,
+        "time": 10
+       },
+       "winsorised_mean_r": 0.0726,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|bearish": {
+      "std": {
+       "n_positions": 5182,
+       "n_censored": 0,
+       "n": 5182,
+       "expectancy_r": -0.176,
+       "median_r": -1.0113,
+       "win_rate": 0.2848,
+       "profit_factor": 0.767,
+       "avg_duration_bars": 21.4,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.116,
+       "avg_mae_r": 1.045,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.061,
+       "top5pct_share_of_gross_profit": 0.209,
+       "max_drawdown_r_cumulative": 1058.0,
+       "total_r": -912.1,
+       "exit_reasons": {
+        "stop": 3693,
+        "target": 1440,
+        "time": 49
+       },
+       "expectancy_ci95": [
+        -0.34903,
+        0.00476
+       ]
+      },
+      "actual": {
+       "n_positions": 5182,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5182,
+       "expectancy_r": -0.176,
+       "median_r": -1.0113,
+       "win_rate": 0.2848,
+       "profit_factor": 0.767,
+       "avg_duration_bars": 21.4,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.116,
+       "avg_mae_r": 1.045,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.061,
+       "top5pct_share_of_gross_profit": 0.209,
+       "max_drawdown_r_cumulative": 1058.0,
+       "total_r": -912.1,
+       "exit_reasons": {
+        "stop": 3693,
+        "target": 1440,
+        "time": 49
+       },
+       "winsorised_mean_r": -0.1796,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     }
+    },
+    "250": {
+     "registered_definition_cap": false,
+     "train|all": {
+      "std": {
+       "n_positions": 10620,
+       "n_censored": 0,
+       "n": 10620,
+       "expectancy_r": -0.0031,
+       "median_r": -1.0121,
+       "win_rate": 0.3413,
+       "profit_factor": 0.996,
+       "avg_duration_bars": 19.14,
+       "median_duration_bars": 12.0,
+       "avg_mfe_r": 1.214,
+       "avg_mae_r": 0.993,
+       "max_win_r": 10.733,
+       "max_loss_r": -5.495,
+       "top1pct_share_of_gross_profit": 0.045,
+       "top5pct_share_of_gross_profit": 0.168,
+       "max_drawdown_r_cumulative": 511.42,
+       "total_r": -33.1,
+       "exit_reasons": {
+        "stop": 6995,
+        "target": 3621,
+        "time": 4
+       },
+       "expectancy_ci95": [
+        -0.11139,
+        0.10906
+       ]
+      },
+      "actual": {
+       "n_positions": 10620,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 10620,
+       "expectancy_r": -0.0031,
+       "median_r": -1.0121,
+       "win_rate": 0.3413,
+       "profit_factor": 0.996,
+       "avg_duration_bars": 19.14,
+       "median_duration_bars": 12.0,
+       "avg_mfe_r": 1.214,
+       "avg_mae_r": 0.993,
+       "max_win_r": 10.733,
+       "max_loss_r": -5.495,
+       "top1pct_share_of_gross_profit": 0.045,
+       "top5pct_share_of_gross_profit": 0.168,
+       "max_drawdown_r_cumulative": 511.42,
+       "total_r": -33.1,
+       "exit_reasons": {
+        "stop": 6995,
+        "target": 3621,
+        "time": 4
+       },
+       "winsorised_mean_r": -0.0024,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "train|bullish": {
+      "std": {
+       "n_positions": 5980,
+       "n_censored": 0,
+       "n": 5980,
+       "expectancy_r": 0.1151,
+       "median_r": -1.0119,
+       "win_rate": 0.3813,
+       "profit_factor": 1.175,
+       "avg_duration_bars": 19.4,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.281,
+       "avg_mae_r": 0.974,
+       "max_win_r": 7.278,
+       "max_loss_r": -5.495,
+       "top1pct_share_of_gross_profit": 0.04,
+       "top5pct_share_of_gross_profit": 0.151,
+       "max_drawdown_r_cumulative": 222.88,
+       "total_r": 688.2,
+       "exit_reasons": {
+        "stop": 3700,
+        "target": 2277,
+        "time": 3
+       },
+       "expectancy_ci95": [
+        -0.00347,
+        0.25157
+       ]
+      },
+      "actual": {
+       "n_positions": 5980,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5980,
+       "expectancy_r": 0.1151,
+       "median_r": -1.0119,
+       "win_rate": 0.3813,
+       "profit_factor": 1.175,
+       "avg_duration_bars": 19.4,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.281,
+       "avg_mae_r": 0.974,
+       "max_win_r": 7.278,
+       "max_loss_r": -5.495,
+       "top1pct_share_of_gross_profit": 0.04,
+       "top5pct_share_of_gross_profit": 0.151,
+       "max_drawdown_r_cumulative": 222.88,
+       "total_r": 688.2,
+       "exit_reasons": {
+        "stop": 3700,
+        "target": 2277,
+        "time": 3
+       },
+       "winsorised_mean_r": 0.1173,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "train|bearish": {
+      "std": {
+       "n_positions": 4640,
+       "n_censored": 0,
+       "n": 4640,
+       "expectancy_r": -0.1555,
+       "median_r": -1.0123,
+       "win_rate": 0.2899,
+       "profit_factor": 0.792,
+       "avg_duration_bars": 18.8,
+       "median_duration_bars": 11.0,
+       "avg_mfe_r": 1.127,
+       "avg_mae_r": 1.018,
+       "max_win_r": 10.733,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.053,
+       "top5pct_share_of_gross_profit": 0.198,
+       "max_drawdown_r_cumulative": 1011.86,
+       "total_r": -721.3,
+       "exit_reasons": {
+        "stop": 3295,
+        "target": 1344,
+        "time": 1
+       },
+       "expectancy_ci95": [
+        -0.42166,
+        0.08831
+       ]
+      },
+      "actual": {
+       "n_positions": 4640,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4640,
+       "expectancy_r": -0.1555,
+       "median_r": -1.0123,
+       "win_rate": 0.2899,
+       "profit_factor": 0.792,
+       "avg_duration_bars": 18.8,
+       "median_duration_bars": 11.0,
+       "avg_mfe_r": 1.127,
+       "avg_mae_r": 1.018,
+       "max_win_r": 10.733,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.053,
+       "top5pct_share_of_gross_profit": 0.198,
+       "max_drawdown_r_cumulative": 1011.86,
+       "total_r": -721.3,
+       "exit_reasons": {
+        "stop": 3295,
+        "target": 1344,
+        "time": 1
+       },
+       "winsorised_mean_r": -0.1567,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|all": {
+      "std": {
+       "n_positions": 11478,
+       "n_censored": 0,
+       "n": 11478,
+       "expectancy_r": -0.0409,
+       "median_r": -1.0116,
+       "win_rate": 0.3283,
+       "profit_factor": 0.943,
+       "avg_duration_bars": 19.55,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.209,
+       "avg_mae_r": 1.018,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.053,
+       "top5pct_share_of_gross_profit": 0.181,
+       "max_drawdown_r_cumulative": 721.56,
+       "total_r": -469.5,
+       "exit_reasons": {
+        "stop": 7709,
+        "target": 3763,
+        "time": 6
+       },
+       "expectancy_ci95": [
+        -0.11457,
+        0.0453
+       ]
+      },
+      "actual": {
+       "n_positions": 11478,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 11478,
+       "expectancy_r": -0.0409,
+       "median_r": -1.0116,
+       "win_rate": 0.3283,
+       "profit_factor": 0.943,
+       "avg_duration_bars": 19.55,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.209,
+       "avg_mae_r": 1.018,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.053,
+       "top5pct_share_of_gross_profit": 0.181,
+       "max_drawdown_r_cumulative": 721.56,
+       "total_r": -469.5,
+       "exit_reasons": {
+        "stop": 7709,
+        "target": 3763,
+        "time": 6
+       },
+       "winsorised_mean_r": -0.0424,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|bullish": {
+      "std": {
+       "n_positions": 6318,
+       "n_censored": 0,
+       "n": 6318,
+       "expectancy_r": 0.0727,
+       "median_r": -1.0117,
+       "win_rate": 0.3663,
+       "profit_factor": 1.107,
+       "avg_duration_bars": 17.72,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.285,
+       "avg_mae_r": 0.994,
+       "max_win_r": 7.771,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.047,
+       "top5pct_share_of_gross_profit": 0.164,
+       "max_drawdown_r_cumulative": 296.67,
+       "total_r": 459.1,
+       "exit_reasons": {
+        "stop": 4004,
+        "target": 2314
+       },
+       "expectancy_ci95": [
+        -0.09728,
+        0.20555
+       ]
+      },
+      "actual": {
+       "n_positions": 6318,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 6318,
+       "expectancy_r": 0.0727,
+       "median_r": -1.0117,
+       "win_rate": 0.3663,
+       "profit_factor": 1.107,
+       "avg_duration_bars": 17.72,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.285,
+       "avg_mae_r": 0.994,
+       "max_win_r": 7.771,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.047,
+       "top5pct_share_of_gross_profit": 0.164,
+       "max_drawdown_r_cumulative": 296.67,
+       "total_r": 459.1,
+       "exit_reasons": {
+        "stop": 4004,
+        "target": 2314
+       },
+       "winsorised_mean_r": 0.0734,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|bearish": {
+      "std": {
+       "n_positions": 5160,
+       "n_censored": 0,
+       "n": 5160,
+       "expectancy_r": -0.18,
+       "median_r": -1.0114,
+       "win_rate": 0.2818,
+       "profit_factor": 0.763,
+       "avg_duration_bars": 21.78,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.117,
+       "avg_mae_r": 1.047,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.062,
+       "top5pct_share_of_gross_profit": 0.209,
+       "max_drawdown_r_cumulative": 1076.69,
+       "total_r": -928.6,
+       "exit_reasons": {
+        "stop": 3705,
+        "target": 1449,
+        "time": 6
+       },
+       "expectancy_ci95": [
+        -0.3423,
+        0.00647
+       ]
+      },
+      "actual": {
+       "n_positions": 5160,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5160,
+       "expectancy_r": -0.18,
+       "median_r": -1.0114,
+       "win_rate": 0.2818,
+       "profit_factor": 0.763,
+       "avg_duration_bars": 21.78,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.117,
+       "avg_mae_r": 1.047,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.062,
+       "top5pct_share_of_gross_profit": 0.209,
+       "max_drawdown_r_cumulative": 1076.69,
+       "total_r": -928.6,
+       "exit_reasons": {
+        "stop": 3705,
+        "target": 1449,
+        "time": 6
+       },
+       "winsorised_mean_r": -0.1838,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     }
+    }
+   },
+   "donchian_breakout__exit_a_atr_stop_fixed_3r": {
+    "60": {
+     "registered_definition_cap": true,
+     "train|all": {
+      "std": {
+       "n_positions": 9649,
+       "n_censored": 0,
+       "n": 9649,
+       "expectancy_r": -0.0163,
+       "median_r": -1.0131,
+       "win_rate": 0.2944,
+       "profit_factor": 0.978,
+       "avg_duration_bars": 22.65,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.414,
+       "avg_mae_r": 1.041,
+       "max_win_r": 10.733,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.054,
+       "top5pct_share_of_gross_profit": 0.224,
+       "max_drawdown_r_cumulative": 548.74,
+       "total_r": -157.2,
+       "exit_reasons": {
+        "stop": 6644,
+        "target": 1906,
+        "time": 1099
+       },
+       "expectancy_ci95": [
+        -0.1444,
+        0.11693
+       ]
+      },
+      "actual": {
+       "n_positions": 9649,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 9649,
+       "expectancy_r": -0.0163,
+       "median_r": -1.0131,
+       "win_rate": 0.2944,
+       "profit_factor": 0.978,
+       "avg_duration_bars": 22.65,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.414,
+       "avg_mae_r": 1.041,
+       "max_win_r": 10.733,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.054,
+       "top5pct_share_of_gross_profit": 0.224,
+       "max_drawdown_r_cumulative": 548.74,
+       "total_r": -157.2,
+       "exit_reasons": {
+        "stop": 6644,
+        "target": 1906,
+        "time": 1099
+       },
+       "winsorised_mean_r": -0.0142,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "train|bullish": {
+      "std": {
+       "n_positions": 5341,
+       "n_censored": 0,
+       "n": 5341,
+       "expectancy_r": 0.1322,
+       "median_r": -1.013,
+       "win_rate": 0.3351,
+       "profit_factor": 1.19,
+       "avg_duration_bars": 23.58,
+       "median_duration_bars": 17.0,
+       "avg_mfe_r": 1.519,
+       "avg_mae_r": 1.025,
+       "max_win_r": 7.278,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.047,
+       "top5pct_share_of_gross_profit": 0.195,
+       "max_drawdown_r_cumulative": 269.26,
+       "total_r": 706.3,
+       "exit_reasons": {
+        "stop": 3477,
+        "target": 1213,
+        "time": 651
+       },
+       "expectancy_ci95": [
+        -0.01724,
+        0.28384
+       ]
+      },
+      "actual": {
+       "n_positions": 5341,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5341,
+       "expectancy_r": 0.1322,
+       "median_r": -1.013,
+       "win_rate": 0.3351,
+       "profit_factor": 1.19,
+       "avg_duration_bars": 23.58,
+       "median_duration_bars": 17.0,
+       "avg_mfe_r": 1.519,
+       "avg_mae_r": 1.025,
+       "max_win_r": 7.278,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.047,
+       "top5pct_share_of_gross_profit": 0.195,
+       "max_drawdown_r_cumulative": 269.26,
+       "total_r": 706.3,
+       "exit_reasons": {
+        "stop": 3477,
+        "target": 1213,
+        "time": 651
+       },
+       "winsorised_mean_r": 0.1366,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "train|bearish": {
+      "std": {
+       "n_positions": 4308,
+       "n_censored": 0,
+       "n": 4308,
+       "expectancy_r": -0.2004,
+       "median_r": -1.0131,
+       "win_rate": 0.244,
+       "profit_factor": 0.744,
+       "avg_duration_bars": 21.5,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.284,
+       "avg_mae_r": 1.061,
+       "max_win_r": 10.733,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.067,
+       "top5pct_share_of_gross_profit": 0.276,
+       "max_drawdown_r_cumulative": 1173.52,
+       "total_r": -863.4,
+       "exit_reasons": {
+        "stop": 3167,
+        "target": 693,
+        "time": 448
+       },
+       "expectancy_ci95": [
+        -0.49774,
+        0.11887
+       ]
+      },
+      "actual": {
+       "n_positions": 4308,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4308,
+       "expectancy_r": -0.2004,
+       "median_r": -1.0131,
+       "win_rate": 0.244,
+       "profit_factor": 0.744,
+       "avg_duration_bars": 21.5,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.284,
+       "avg_mae_r": 1.061,
+       "max_win_r": 10.733,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.067,
+       "top5pct_share_of_gross_profit": 0.276,
+       "max_drawdown_r_cumulative": 1173.52,
+       "total_r": -863.4,
+       "exit_reasons": {
+        "stop": 3167,
+        "target": 693,
+        "time": 448
+       },
+       "winsorised_mean_r": -0.2007,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|all": {
+      "std": {
+       "n_positions": 10331,
+       "n_censored": 0,
+       "n": 10331,
+       "expectancy_r": -0.0487,
+       "median_r": -1.0122,
+       "win_rate": 0.2907,
+       "profit_factor": 0.934,
+       "avg_duration_bars": 23.7,
+       "median_duration_bars": 17.0,
+       "avg_mfe_r": 1.409,
+       "avg_mae_r": 1.047,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.521,
+       "top1pct_share_of_gross_profit": 0.062,
+       "top5pct_share_of_gross_profit": 0.238,
+       "max_drawdown_r_cumulative": 780.92,
+       "total_r": -503.5,
+       "exit_reasons": {
+        "stop": 7138,
+        "target": 1893,
+        "time": 1300
+       },
+       "expectancy_ci95": [
+        -0.12262,
+        0.0431
+       ]
+      },
+      "actual": {
+       "n_positions": 10331,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 10331,
+       "expectancy_r": -0.0487,
+       "median_r": -1.0122,
+       "win_rate": 0.2907,
+       "profit_factor": 0.934,
+       "avg_duration_bars": 23.7,
+       "median_duration_bars": 17.0,
+       "avg_mfe_r": 1.409,
+       "avg_mae_r": 1.047,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.521,
+       "top1pct_share_of_gross_profit": 0.062,
+       "top5pct_share_of_gross_profit": 0.238,
+       "max_drawdown_r_cumulative": 780.92,
+       "total_r": -503.5,
+       "exit_reasons": {
+        "stop": 7138,
+        "target": 1893,
+        "time": 1300
+       },
+       "winsorised_mean_r": -0.0502,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|bullish": {
+      "std": {
+       "n_positions": 5549,
+       "n_censored": 0,
+       "n": 5549,
+       "expectancy_r": 0.096,
+       "median_r": -1.0125,
+       "win_rate": 0.3166,
+       "profit_factor": 1.134,
+       "avg_duration_bars": 22.69,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.536,
+       "avg_mae_r": 1.028,
+       "max_win_r": 7.295,
+       "max_loss_r": -6.521,
+       "top1pct_share_of_gross_profit": 0.053,
+       "top5pct_share_of_gross_profit": 0.205,
+       "max_drawdown_r_cumulative": 405.18,
+       "total_r": 532.5,
+       "exit_reasons": {
+        "stop": 3706,
+        "target": 1285,
+        "time": 558
+       },
+       "expectancy_ci95": [
+        -0.10457,
+        0.29089
+       ]
+      },
+      "actual": {
+       "n_positions": 5549,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5549,
+       "expectancy_r": 0.096,
+       "median_r": -1.0125,
+       "win_rate": 0.3166,
+       "profit_factor": 1.134,
+       "avg_duration_bars": 22.69,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.536,
+       "avg_mae_r": 1.028,
+       "max_win_r": 7.295,
+       "max_loss_r": -6.521,
+       "top1pct_share_of_gross_profit": 0.053,
+       "top5pct_share_of_gross_profit": 0.205,
+       "max_drawdown_r_cumulative": 405.18,
+       "total_r": 532.5,
+       "exit_reasons": {
+        "stop": 3706,
+        "target": 1285,
+        "time": 558
+       },
+       "winsorised_mean_r": 0.0956,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|bearish": {
+      "std": {
+       "n_positions": 4782,
+       "n_censored": 0,
+       "n": 4782,
+       "expectancy_r": -0.2166,
+       "median_r": -1.012,
+       "win_rate": 0.2606,
+       "profit_factor": 0.719,
+       "avg_duration_bars": 24.87,
+       "median_duration_bars": 18.0,
+       "avg_mfe_r": 1.261,
+       "avg_mae_r": 1.069,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.075,
+       "top5pct_share_of_gross_profit": 0.293,
+       "max_drawdown_r_cumulative": 1128.24,
+       "total_r": -1036.0,
+       "exit_reasons": {
+        "stop": 3432,
+        "target": 608,
+        "time": 742
+       },
+       "expectancy_ci95": [
+        -0.37643,
+        -0.0599
+       ]
+      },
+      "actual": {
+       "n_positions": 4782,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4782,
+       "expectancy_r": -0.2166,
+       "median_r": -1.012,
+       "win_rate": 0.2606,
+       "profit_factor": 0.719,
+       "avg_duration_bars": 24.87,
+       "median_duration_bars": 18.0,
+       "avg_mfe_r": 1.261,
+       "avg_mae_r": 1.069,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.075,
+       "top5pct_share_of_gross_profit": 0.293,
+       "max_drawdown_r_cumulative": 1128.24,
+       "total_r": -1036.0,
+       "exit_reasons": {
+        "stop": 3432,
+        "target": 608,
+        "time": 742
+       },
+       "winsorised_mean_r": -0.2193,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     }
+    },
+    "120": {
+     "registered_definition_cap": false,
+     "train|all": {
+      "std": {
+       "n_positions": 9081,
+       "n_censored": 0,
+       "n": 9081,
+       "expectancy_r": -0.0183,
+       "median_r": -1.0137,
+       "win_rate": 0.2635,
+       "profit_factor": 0.976,
+       "avg_duration_bars": 26.0,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.469,
+       "avg_mae_r": 1.069,
+       "max_win_r": 10.733,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.052,
+       "top5pct_share_of_gross_profit": 0.215,
+       "max_drawdown_r_cumulative": 542.48,
+       "total_r": -166.2,
+       "exit_reasons": {
+        "stop": 6650,
+        "target": 2173,
+        "time": 258
+       },
+       "expectancy_ci95": [
+        -0.15369,
+        0.12573
+       ]
+      },
+      "actual": {
+       "n_positions": 9081,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 9081,
+       "expectancy_r": -0.0183,
+       "median_r": -1.0137,
+       "win_rate": 0.2635,
+       "profit_factor": 0.976,
+       "avg_duration_bars": 26.0,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.469,
+       "avg_mae_r": 1.069,
+       "max_win_r": 10.733,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.052,
+       "top5pct_share_of_gross_profit": 0.215,
+       "max_drawdown_r_cumulative": 542.48,
+       "total_r": -166.2,
+       "exit_reasons": {
+        "stop": 6650,
+        "target": 2173,
+        "time": 258
+       },
+       "winsorised_mean_r": -0.0161,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "train|bullish": {
+      "std": {
+       "n_positions": 4974,
+       "n_censored": 0,
+       "n": 4974,
+       "expectancy_r": 0.1674,
+       "median_r": -1.0136,
+       "win_rate": 0.3096,
+       "profit_factor": 1.229,
+       "avg_duration_bars": 27.18,
+       "median_duration_bars": 17.0,
+       "avg_mfe_r": 1.598,
+       "avg_mae_r": 1.048,
+       "max_win_r": 7.278,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.045,
+       "top5pct_share_of_gross_profit": 0.183,
+       "max_drawdown_r_cumulative": 249.04,
+       "total_r": 832.6,
+       "exit_reasons": {
+        "stop": 3420,
+        "target": 1421,
+        "time": 133
+       },
+       "expectancy_ci95": [
+        0.01223,
+        0.33702
+       ]
+      },
+      "actual": {
+       "n_positions": 4974,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4974,
+       "expectancy_r": 0.1674,
+       "median_r": -1.0136,
+       "win_rate": 0.3096,
+       "profit_factor": 1.229,
+       "avg_duration_bars": 27.18,
+       "median_duration_bars": 17.0,
+       "avg_mfe_r": 1.598,
+       "avg_mae_r": 1.048,
+       "max_win_r": 7.278,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.045,
+       "top5pct_share_of_gross_profit": 0.183,
+       "max_drawdown_r_cumulative": 249.04,
+       "total_r": 832.6,
+       "exit_reasons": {
+        "stop": 3420,
+        "target": 1421,
+        "time": 133
+       },
+       "winsorised_mean_r": 0.1718,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "train|bearish": {
+      "std": {
+       "n_positions": 4107,
+       "n_censored": 0,
+       "n": 4107,
+       "expectancy_r": -0.2432,
+       "median_r": -1.0139,
+       "win_rate": 0.2077,
+       "profit_factor": 0.707,
+       "avg_duration_bars": 24.56,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.312,
+       "avg_mae_r": 1.094,
+       "max_win_r": 10.733,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.066,
+       "top5pct_share_of_gross_profit": 0.275,
+       "max_drawdown_r_cumulative": 1242.53,
+       "total_r": -998.8,
+       "exit_reasons": {
+        "stop": 3230,
+        "target": 752,
+        "time": 125
+       },
+       "expectancy_ci95": [
+        -0.57136,
+        0.09074
+       ]
+      },
+      "actual": {
+       "n_positions": 4107,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4107,
+       "expectancy_r": -0.2432,
+       "median_r": -1.0139,
+       "win_rate": 0.2077,
+       "profit_factor": 0.707,
+       "avg_duration_bars": 24.56,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.312,
+       "avg_mae_r": 1.094,
+       "max_win_r": 10.733,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.066,
+       "top5pct_share_of_gross_profit": 0.275,
+       "max_drawdown_r_cumulative": 1242.53,
+       "total_r": -998.8,
+       "exit_reasons": {
+        "stop": 3230,
+        "target": 752,
+        "time": 125
+       },
+       "winsorised_mean_r": -0.2429,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|all": {
+      "std": {
+       "n_positions": 9698,
+       "n_censored": 0,
+       "n": 9698,
+       "expectancy_r": -0.071,
+       "median_r": -1.0133,
+       "win_rate": 0.251,
+       "profit_factor": 0.911,
+       "avg_duration_bars": 27.43,
+       "median_duration_bars": 17.0,
+       "avg_mfe_r": 1.464,
+       "avg_mae_r": 1.086,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.521,
+       "top1pct_share_of_gross_profit": 0.06,
+       "top5pct_share_of_gross_profit": 0.231,
+       "max_drawdown_r_cumulative": 1039.96,
+       "total_r": -688.8,
+       "exit_reasons": {
+        "stop": 7228,
+        "target": 2190,
+        "time": 280
+       },
+       "expectancy_ci95": [
+        -0.16926,
+        0.02273
+       ]
+      },
+      "actual": {
+       "n_positions": 9698,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 9698,
+       "expectancy_r": -0.071,
+       "median_r": -1.0133,
+       "win_rate": 0.251,
+       "profit_factor": 0.911,
+       "avg_duration_bars": 27.43,
+       "median_duration_bars": 17.0,
+       "avg_mfe_r": 1.464,
+       "avg_mae_r": 1.086,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.521,
+       "top1pct_share_of_gross_profit": 0.06,
+       "top5pct_share_of_gross_profit": 0.231,
+       "max_drawdown_r_cumulative": 1039.96,
+       "total_r": -688.8,
+       "exit_reasons": {
+        "stop": 7228,
+        "target": 2190,
+        "time": 280
+       },
+       "winsorised_mean_r": -0.0727,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|bullish": {
+      "std": {
+       "n_positions": 5300,
+       "n_censored": 0,
+       "n": 5300,
+       "expectancy_r": 0.0984,
+       "median_r": -1.0133,
+       "win_rate": 0.2885,
+       "profit_factor": 1.13,
+       "avg_duration_bars": 25.36,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.587,
+       "avg_mae_r": 1.061,
+       "max_win_r": 7.295,
+       "max_loss_r": -6.521,
+       "top1pct_share_of_gross_profit": 0.052,
+       "top5pct_share_of_gross_profit": 0.198,
+       "max_drawdown_r_cumulative": 428.65,
+       "total_r": 521.6,
+       "exit_reasons": {
+        "stop": 3762,
+        "target": 1461,
+        "time": 77
+       },
+       "expectancy_ci95": [
+        -0.09509,
+        0.29574
+       ]
+      },
+      "actual": {
+       "n_positions": 5300,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5300,
+       "expectancy_r": 0.0984,
+       "median_r": -1.0133,
+       "win_rate": 0.2885,
+       "profit_factor": 1.13,
+       "avg_duration_bars": 25.36,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.587,
+       "avg_mae_r": 1.061,
+       "max_win_r": 7.295,
+       "max_loss_r": -6.521,
+       "top1pct_share_of_gross_profit": 0.052,
+       "top5pct_share_of_gross_profit": 0.198,
+       "max_drawdown_r_cumulative": 428.65,
+       "total_r": 521.6,
+       "exit_reasons": {
+        "stop": 3762,
+        "target": 1461,
+        "time": 77
+       },
+       "winsorised_mean_r": 0.0979,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|bearish": {
+      "std": {
+       "n_positions": 4398,
+       "n_censored": 0,
+       "n": 4398,
+       "expectancy_r": -0.2752,
+       "median_r": -1.0133,
+       "win_rate": 0.2058,
+       "profit_factor": 0.672,
+       "avg_duration_bars": 29.92,
+       "median_duration_bars": 18.0,
+       "avg_mfe_r": 1.315,
+       "avg_mae_r": 1.115,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.075,
+       "top5pct_share_of_gross_profit": 0.291,
+       "max_drawdown_r_cumulative": 1311.17,
+       "total_r": -1210.3,
+       "exit_reasons": {
+        "stop": 3466,
+        "target": 729,
+        "time": 203
+       },
+       "expectancy_ci95": [
+        -0.44665,
+        -0.07162
+       ]
+      },
+      "actual": {
+       "n_positions": 4398,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4398,
+       "expectancy_r": -0.2752,
+       "median_r": -1.0133,
+       "win_rate": 0.2058,
+       "profit_factor": 0.672,
+       "avg_duration_bars": 29.92,
+       "median_duration_bars": 18.0,
+       "avg_mfe_r": 1.315,
+       "avg_mae_r": 1.115,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.075,
+       "top5pct_share_of_gross_profit": 0.291,
+       "max_drawdown_r_cumulative": 1311.17,
+       "total_r": -1210.3,
+       "exit_reasons": {
+        "stop": 3466,
+        "target": 729,
+        "time": 203
+       },
+       "winsorised_mean_r": -0.2776,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     }
+    },
+    "250": {
+     "registered_definition_cap": false,
+     "train|all": {
+      "std": {
+       "n_positions": 8874,
+       "n_censored": 0,
+       "n": 8874,
+       "expectancy_r": -0.0196,
+       "median_r": -1.0139,
+       "win_rate": 0.254,
+       "profit_factor": 0.975,
+       "avg_duration_bars": 27.1,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.475,
+       "avg_mae_r": 1.076,
+       "max_win_r": 10.733,
+       "max_loss_r": -5.495,
+       "top1pct_share_of_gross_profit": 0.052,
+       "top5pct_share_of_gross_profit": 0.212,
+       "max_drawdown_r_cumulative": 537.2,
+       "total_r": -173.6,
+       "exit_reasons": {
+        "stop": 6616,
+        "target": 2227,
+        "time": 31
+       },
+       "expectancy_ci95": [
+        -0.15675,
+        0.12398
+       ]
+      },
+      "actual": {
+       "n_positions": 8874,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 8874,
+       "expectancy_r": -0.0196,
+       "median_r": -1.0139,
+       "win_rate": 0.254,
+       "profit_factor": 0.975,
+       "avg_duration_bars": 27.1,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.475,
+       "avg_mae_r": 1.076,
+       "max_win_r": 10.733,
+       "max_loss_r": -5.495,
+       "top1pct_share_of_gross_profit": 0.052,
+       "top5pct_share_of_gross_profit": 0.212,
+       "max_drawdown_r_cumulative": 537.2,
+       "total_r": -173.6,
+       "exit_reasons": {
+        "stop": 6616,
+        "target": 2227,
+        "time": 31
+       },
+       "winsorised_mean_r": -0.0177,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "train|bullish": {
+      "std": {
+       "n_positions": 4869,
+       "n_censored": 0,
+       "n": 4869,
+       "expectancy_r": 0.1781,
+       "median_r": -1.0137,
+       "win_rate": 0.3036,
+       "profit_factor": 1.241,
+       "avg_duration_bars": 28.34,
+       "median_duration_bars": 17.0,
+       "avg_mfe_r": 1.605,
+       "avg_mae_r": 1.053,
+       "max_win_r": 7.278,
+       "max_loss_r": -5.495,
+       "top1pct_share_of_gross_profit": 0.044,
+       "top5pct_share_of_gross_profit": 0.18,
+       "max_drawdown_r_cumulative": 246.75,
+       "total_r": 867.1,
+       "exit_reasons": {
+        "stop": 3391,
+        "target": 1459,
+        "time": 19
+       },
+       "expectancy_ci95": [
+        0.01775,
+        0.36417
+       ]
+      },
+      "actual": {
+       "n_positions": 4869,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4869,
+       "expectancy_r": 0.1781,
+       "median_r": -1.0137,
+       "win_rate": 0.3036,
+       "profit_factor": 1.241,
+       "avg_duration_bars": 28.34,
+       "median_duration_bars": 17.0,
+       "avg_mfe_r": 1.605,
+       "avg_mae_r": 1.053,
+       "max_win_r": 7.278,
+       "max_loss_r": -5.495,
+       "top1pct_share_of_gross_profit": 0.044,
+       "top5pct_share_of_gross_profit": 0.18,
+       "max_drawdown_r_cumulative": 246.75,
+       "total_r": 867.1,
+       "exit_reasons": {
+        "stop": 3391,
+        "target": 1459,
+        "time": 19
+       },
+       "winsorised_mean_r": 0.1808,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "train|bearish": {
+      "std": {
+       "n_positions": 4005,
+       "n_censored": 0,
+       "n": 4005,
+       "expectancy_r": -0.2598,
+       "median_r": -1.0141,
+       "win_rate": 0.1938,
+       "profit_factor": 0.693,
+       "avg_duration_bars": 25.59,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.316,
+       "avg_mae_r": 1.105,
+       "max_win_r": 10.733,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.065,
+       "top5pct_share_of_gross_profit": 0.274,
+       "max_drawdown_r_cumulative": 1267.44,
+       "total_r": -1040.7,
+       "exit_reasons": {
+        "stop": 3225,
+        "target": 768,
+        "time": 12
+       },
+       "expectancy_ci95": [
+        -0.59768,
+        0.08007
+       ]
+      },
+      "actual": {
+       "n_positions": 4005,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4005,
+       "expectancy_r": -0.2598,
+       "median_r": -1.0141,
+       "win_rate": 0.1938,
+       "profit_factor": 0.693,
+       "avg_duration_bars": 25.59,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.316,
+       "avg_mae_r": 1.105,
+       "max_win_r": 10.733,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.065,
+       "top5pct_share_of_gross_profit": 0.274,
+       "max_drawdown_r_cumulative": 1267.44,
+       "total_r": -1040.7,
+       "exit_reasons": {
+        "stop": 3225,
+        "target": 768,
+        "time": 12
+       },
+       "winsorised_mean_r": -0.2588,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|all": {
+      "std": {
+       "n_positions": 9515,
+       "n_censored": 0,
+       "n": 9515,
+       "expectancy_r": -0.0723,
+       "median_r": -1.0135,
+       "win_rate": 0.2419,
+       "profit_factor": 0.911,
+       "avg_duration_bars": 28.77,
+       "median_duration_bars": 17.0,
+       "avg_mfe_r": 1.474,
+       "avg_mae_r": 1.094,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.521,
+       "top1pct_share_of_gross_profit": 0.06,
+       "top5pct_share_of_gross_profit": 0.229,
+       "max_drawdown_r_cumulative": 1071.7,
+       "total_r": -687.5,
+       "exit_reasons": {
+        "stop": 7212,
+        "target": 2268,
+        "time": 35
+       },
+       "expectancy_ci95": [
+        -0.16081,
+        0.02074
+       ]
+      },
+      "actual": {
+       "n_positions": 9515,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 9515,
+       "expectancy_r": -0.0723,
+       "median_r": -1.0135,
+       "win_rate": 0.2419,
+       "profit_factor": 0.911,
+       "avg_duration_bars": 28.77,
+       "median_duration_bars": 17.0,
+       "avg_mfe_r": 1.474,
+       "avg_mae_r": 1.094,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.521,
+       "top1pct_share_of_gross_profit": 0.06,
+       "top5pct_share_of_gross_profit": 0.229,
+       "max_drawdown_r_cumulative": 1071.7,
+       "total_r": -687.5,
+       "exit_reasons": {
+        "stop": 7212,
+        "target": 2268,
+        "time": 35
+       },
+       "winsorised_mean_r": -0.0736,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|bullish": {
+      "std": {
+       "n_positions": 5272,
+       "n_censored": 0,
+       "n": 5272,
+       "expectancy_r": 0.103,
+       "median_r": -1.0134,
+       "win_rate": 0.2841,
+       "profit_factor": 1.135,
+       "avg_duration_bars": 25.87,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.592,
+       "avg_mae_r": 1.063,
+       "max_win_r": 7.295,
+       "max_loss_r": -6.521,
+       "top1pct_share_of_gross_profit": 0.051,
+       "top5pct_share_of_gross_profit": 0.196,
+       "max_drawdown_r_cumulative": 427.74,
+       "total_r": 542.9,
+       "exit_reasons": {
+        "stop": 3774,
+        "target": 1497,
+        "time": 1
+       },
+       "expectancy_ci95": [
+        -0.09657,
+        0.2874
+       ]
+      },
+      "actual": {
+       "n_positions": 5272,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5272,
+       "expectancy_r": 0.103,
+       "median_r": -1.0134,
+       "win_rate": 0.2841,
+       "profit_factor": 1.135,
+       "avg_duration_bars": 25.87,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.592,
+       "avg_mae_r": 1.063,
+       "max_win_r": 7.295,
+       "max_loss_r": -6.521,
+       "top1pct_share_of_gross_profit": 0.051,
+       "top5pct_share_of_gross_profit": 0.196,
+       "max_drawdown_r_cumulative": 427.74,
+       "total_r": 542.9,
+       "exit_reasons": {
+        "stop": 3774,
+        "target": 1497,
+        "time": 1
+       },
+       "winsorised_mean_r": 0.1024,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|bearish": {
+      "std": {
+       "n_positions": 4243,
+       "n_censored": 0,
+       "n": 4243,
+       "expectancy_r": -0.29,
+       "median_r": -1.0136,
+       "win_rate": 0.1895,
+       "profit_factor": 0.664,
+       "avg_duration_bars": 32.38,
+       "median_duration_bars": 18.0,
+       "avg_mfe_r": 1.327,
+       "avg_mae_r": 1.132,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.077,
+       "top5pct_share_of_gross_profit": 0.292,
+       "max_drawdown_r_cumulative": 1355.59,
+       "total_r": -1230.4,
+       "exit_reasons": {
+        "stop": 3438,
+        "target": 771,
+        "time": 34
+       },
+       "expectancy_ci95": [
+        -0.46127,
+        -0.06287
+       ]
+      },
+      "actual": {
+       "n_positions": 4243,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4243,
+       "expectancy_r": -0.29,
+       "median_r": -1.0136,
+       "win_rate": 0.1895,
+       "profit_factor": 0.664,
+       "avg_duration_bars": 32.38,
+       "median_duration_bars": 18.0,
+       "avg_mfe_r": 1.327,
+       "avg_mae_r": 1.132,
+       "max_win_r": 12.064,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.077,
+       "top5pct_share_of_gross_profit": 0.292,
+       "max_drawdown_r_cumulative": 1355.59,
+       "total_r": -1230.4,
+       "exit_reasons": {
+        "stop": 3438,
+        "target": 771,
+        "time": 34
+       },
+       "winsorised_mean_r": -0.2925,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     }
+    }
+   },
+   "donchian_breakout__exit_b_donchian_trail_10": {
+    "60": {
+     "registered_definition_cap": true,
+     "train|all": {
+      "std": {
+       "n_positions": 10146,
+       "n_censored": 0,
+       "n": 10146,
+       "expectancy_r": -0.0103,
+       "median_r": -0.4311,
+       "win_rate": 0.352,
+       "profit_factor": 0.981,
+       "avg_duration_bars": 16.81,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.463,
+       "avg_mae_r": 0.856,
+       "max_win_r": 17.338,
+       "max_loss_r": -5.495,
+       "top1pct_share_of_gross_profit": 0.171,
+       "top5pct_share_of_gross_profit": 0.474,
+       "max_drawdown_r_cumulative": 612.43,
+       "total_r": -104.7,
+       "exit_reasons": {
+        "channel": 10054,
+        "time": 92
+       },
+       "expectancy_ci95": [
+        -0.15043,
+        0.15528
+       ]
+      },
+      "actual": {
+       "n_positions": 10146,
+       "n_censored": 0,
+       "n_invalid_risk": 15,
+       "n": 10131,
+       "expectancy_r": -0.0109,
+       "median_r": -0.2565,
+       "win_rate": 0.3525,
+       "profit_factor": 0.968,
+       "avg_duration_bars": 16.83,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 0.918,
+       "avg_mae_r": 0.542,
+       "max_win_r": 16.114,
+       "max_loss_r": -3.579,
+       "top1pct_share_of_gross_profit": 0.18,
+       "top5pct_share_of_gross_profit": 0.484,
+       "max_drawdown_r_cumulative": 405.56,
+       "total_r": -110.7,
+       "exit_reasons": {
+        "channel": 10039,
+        "time": 92
+       },
+       "winsorised_mean_r": -0.0269,
+       "initial_risk_atr": {
+        "median": 3.28,
+        "p10": 2.25,
+        "p90": 4.631,
+        "share_below_0_5_atr": 0.0009,
+        "share_above_3_atr": 0.6238
+       }
+      }
+     },
+     "train|bullish": {
+      "std": {
+       "n_positions": 5745,
+       "n_censored": 0,
+       "n": 5745,
+       "expectancy_r": 0.0381,
+       "median_r": -0.3603,
+       "win_rate": 0.3765,
+       "profit_factor": 1.076,
+       "avg_duration_bars": 17.36,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.478,
+       "avg_mae_r": 0.832,
+       "max_win_r": 17.338,
+       "max_loss_r": -5.495,
+       "top1pct_share_of_gross_profit": 0.148,
+       "top5pct_share_of_gross_profit": 0.432,
+       "max_drawdown_r_cumulative": 216.95,
+       "total_r": 219.1,
+       "exit_reasons": {
+        "channel": 5680,
+        "time": 65
+       },
+       "expectancy_ci95": [
+        -0.07063,
+        0.14579
+       ]
+      },
+      "actual": {
+       "n_positions": 5745,
+       "n_censored": 0,
+       "n_invalid_risk": 10,
+       "n": 5735,
+       "expectancy_r": 0.0283,
+       "median_r": -0.2213,
+       "win_rate": 0.3772,
+       "profit_factor": 1.088,
+       "avg_duration_bars": 17.38,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 0.948,
+       "avg_mae_r": 0.531,
+       "max_win_r": 15.259,
+       "max_loss_r": -3.579,
+       "top1pct_share_of_gross_profit": 0.162,
+       "top5pct_share_of_gross_profit": 0.448,
+       "max_drawdown_r_cumulative": 137.22,
+       "total_r": 162.5,
+       "exit_reasons": {
+        "channel": 5670,
+        "time": 65
+       },
+       "winsorised_mean_r": 0.0141,
+       "initial_risk_atr": {
+        "median": 3.257,
+        "p10": 2.245,
+        "p90": 4.539,
+        "share_below_0_5_atr": 0.0007,
+        "share_above_3_atr": 0.6181
+       }
+      }
+     },
+     "train|bearish": {
+      "std": {
+       "n_positions": 4401,
+       "n_censored": 0,
+       "n": 4401,
+       "expectancy_r": -0.0736,
+       "median_r": -0.516,
+       "win_rate": 0.3199,
+       "profit_factor": 0.875,
+       "avg_duration_bars": 16.09,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.443,
+       "avg_mae_r": 0.886,
+       "max_win_r": 15.651,
+       "max_loss_r": -5.325,
+       "top1pct_share_of_gross_profit": 0.197,
+       "top5pct_share_of_gross_profit": 0.531,
+       "max_drawdown_r_cumulative": 871.65,
+       "total_r": -323.8,
+       "exit_reasons": {
+        "channel": 4374,
+        "time": 27
+       },
+       "expectancy_ci95": [
+        -0.37958,
+        0.27636
+       ]
+      },
+      "actual": {
+       "n_positions": 4401,
+       "n_censored": 0,
+       "n_invalid_risk": 5,
+       "n": 4396,
+       "expectancy_r": -0.0621,
+       "median_r": -0.3049,
+       "win_rate": 0.3203,
+       "profit_factor": 0.832,
+       "avg_duration_bars": 16.11,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 0.879,
+       "avg_mae_r": 0.556,
+       "max_win_r": 16.114,
+       "max_loss_r": -2.788,
+       "top1pct_share_of_gross_profit": 0.204,
+       "top5pct_share_of_gross_profit": 0.535,
+       "max_drawdown_r_cumulative": 562.58,
+       "total_r": -273.1,
+       "exit_reasons": {
+        "channel": 4369,
+        "time": 27
+       },
+       "winsorised_mean_r": -0.0807,
+       "initial_risk_atr": {
+        "median": 3.313,
+        "p10": 2.253,
+        "p90": 4.76,
+        "share_below_0_5_atr": 0.0011,
+        "share_above_3_atr": 0.6313
+       }
+      }
+     },
+     "test|all": {
+      "std": {
+       "n_positions": 11069,
+       "n_censored": 0,
+       "n": 11069,
+       "expectancy_r": -0.0244,
+       "median_r": -0.3957,
+       "win_rate": 0.3596,
+       "profit_factor": 0.954,
+       "avg_duration_bars": 17.2,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.386,
+       "avg_mae_r": 0.848,
+       "max_win_r": 30.107,
+       "max_loss_r": -6.536,
+       "top1pct_share_of_gross_profit": 0.159,
+       "top5pct_share_of_gross_profit": 0.443,
+       "max_drawdown_r_cumulative": 592.09,
+       "total_r": -270.5,
+       "exit_reasons": {
+        "channel": 10984,
+        "time": 85
+       },
+       "expectancy_ci95": [
+        -0.11031,
+        0.06154
+       ]
+      },
+      "actual": {
+       "n_positions": 11069,
+       "n_censored": 0,
+       "n_invalid_risk": 14,
+       "n": 11055,
+       "expectancy_r": -0.0116,
+       "median_r": -0.231,
+       "win_rate": 0.36,
+       "profit_factor": 0.965,
+       "avg_duration_bars": 17.22,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 0.884,
+       "avg_mae_r": 0.548,
+       "max_win_r": 18.977,
+       "max_loss_r": -4.861,
+       "top1pct_share_of_gross_profit": 0.172,
+       "top5pct_share_of_gross_profit": 0.461,
+       "max_drawdown_r_cumulative": 333.18,
+       "total_r": -128.3,
+       "exit_reasons": {
+        "channel": 10970,
+        "time": 85
+       },
+       "winsorised_mean_r": -0.0272,
+       "initial_risk_atr": {
+        "median": 3.338,
+        "p10": 2.303,
+        "p90": 4.703,
+        "share_below_0_5_atr": 0.001,
+        "share_above_3_atr": 0.6519
+       }
+      }
+     },
+     "test|bullish": {
+      "std": {
+       "n_positions": 5685,
+       "n_censored": 0,
+       "n": 5685,
+       "expectancy_r": 0.1225,
+       "median_r": -0.3335,
+       "win_rate": 0.3907,
+       "profit_factor": 1.24,
+       "avg_duration_bars": 17.81,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.621,
+       "avg_mae_r": 0.85,
+       "max_win_r": 30.107,
+       "max_loss_r": -6.536,
+       "top1pct_share_of_gross_profit": 0.155,
+       "top5pct_share_of_gross_profit": 0.425,
+       "max_drawdown_r_cumulative": 272.22,
+       "total_r": 696.3,
+       "exit_reasons": {
+        "channel": 5635,
+        "time": 50
+       },
+       "expectancy_ci95": [
+        -0.03562,
+        0.25877
+       ]
+      },
+      "actual": {
+       "n_positions": 5685,
+       "n_censored": 0,
+       "n_invalid_risk": 8,
+       "n": 5677,
+       "expectancy_r": 0.0692,
+       "median_r": -0.1938,
+       "win_rate": 0.3912,
+       "profit_factor": 1.215,
+       "avg_duration_bars": 17.84,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.029,
+       "avg_mae_r": 0.565,
+       "max_win_r": 18.977,
+       "max_loss_r": -4.861,
+       "top1pct_share_of_gross_profit": 0.164,
+       "top5pct_share_of_gross_profit": 0.437,
+       "max_drawdown_r_cumulative": 184.32,
+       "total_r": 393.1,
+       "exit_reasons": {
+        "channel": 5627,
+        "time": 50
+       },
+       "winsorised_mean_r": 0.0508,
+       "initial_risk_atr": {
+        "median": 3.315,
+        "p10": 2.305,
+        "p90": 4.682,
+        "share_below_0_5_atr": 0.0014,
+        "share_above_3_atr": 0.6461
+       }
+      }
+     },
+     "test|bearish": {
+      "std": {
+       "n_positions": 5384,
+       "n_censored": 0,
+       "n": 5384,
+       "expectancy_r": -0.1796,
+       "median_r": -0.442,
+       "win_rate": 0.3267,
+       "profit_factor": 0.672,
+       "avg_duration_bars": 16.56,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.138,
+       "avg_mae_r": 0.845,
+       "max_win_r": 18.212,
+       "max_loss_r": -4.795,
+       "top1pct_share_of_gross_profit": 0.139,
+       "top5pct_share_of_gross_profit": 0.451,
+       "max_drawdown_r_cumulative": 1065.43,
+       "total_r": -966.8,
+       "exit_reasons": {
+        "channel": 5349,
+        "time": 35
+       },
+       "expectancy_ci95": [
+        -0.28769,
+        -0.0736
+       ]
+      },
+      "actual": {
+       "n_positions": 5384,
+       "n_censored": 0,
+       "n_invalid_risk": 6,
+       "n": 5378,
+       "expectancy_r": -0.0969,
+       "median_r": -0.2579,
+       "win_rate": 0.3271,
+       "profit_factor": 0.712,
+       "avg_duration_bars": 16.58,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 0.732,
+       "avg_mae_r": 0.529,
+       "max_win_r": 12.194,
+       "max_loss_r": -3.341,
+       "top1pct_share_of_gross_profit": 0.169,
+       "top5pct_share_of_gross_profit": 0.483,
+       "max_drawdown_r_cumulative": 591.46,
+       "total_r": -521.4,
+       "exit_reasons": {
+        "channel": 5343,
+        "time": 35
+       },
+       "winsorised_mean_r": -0.1048,
+       "initial_risk_atr": {
+        "median": 3.365,
+        "p10": 2.3,
+        "p90": 4.717,
+        "share_below_0_5_atr": 0.0006,
+        "share_above_3_atr": 0.6581
+       }
+      }
+     }
+    },
+    "120": {
+     "registered_definition_cap": false,
+     "train|all": {
+      "std": {
+       "n_positions": 10109,
+       "n_censored": 0,
+       "n": 10109,
+       "expectancy_r": -0.0095,
+       "median_r": -0.4287,
+       "win_rate": 0.3526,
+       "profit_factor": 0.982,
+       "avg_duration_bars": 16.91,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.473,
+       "avg_mae_r": 0.855,
+       "max_win_r": 34.07,
+       "max_loss_r": -5.495,
+       "top1pct_share_of_gross_profit": 0.174,
+       "top5pct_share_of_gross_profit": 0.474,
+       "max_drawdown_r_cumulative": 598.92,
+       "total_r": -96.2,
+       "exit_reasons": {
+        "channel": 10109
+       },
+       "expectancy_ci95": [
+        -0.14508,
+        0.15614
+       ]
+      },
+      "actual": {
+       "n_positions": 10109,
+       "n_censored": 0,
+       "n_invalid_risk": 15,
+       "n": 10094,
+       "expectancy_r": -0.0106,
+       "median_r": -0.2559,
+       "win_rate": 0.3531,
+       "profit_factor": 0.969,
+       "avg_duration_bars": 16.93,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 0.924,
+       "avg_mae_r": 0.541,
+       "max_win_r": 19.06,
+       "max_loss_r": -3.579,
+       "top1pct_share_of_gross_profit": 0.182,
+       "top5pct_share_of_gross_profit": 0.483,
+       "max_drawdown_r_cumulative": 398.84,
+       "total_r": -106.6,
+       "exit_reasons": {
+        "channel": 10094
+       },
+       "winsorised_mean_r": -0.0281,
+       "initial_risk_atr": {
+        "median": 3.281,
+        "p10": 2.25,
+        "p90": 4.631,
+        "share_below_0_5_atr": 0.0009,
+        "share_above_3_atr": 0.6241
+       }
+      }
+     },
+     "train|bullish": {
+      "std": {
+       "n_positions": 5716,
+       "n_censored": 0,
+       "n": 5716,
+       "expectancy_r": 0.0422,
+       "median_r": -0.3562,
+       "win_rate": 0.3775,
+       "profit_factor": 1.084,
+       "avg_duration_bars": 17.51,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.494,
+       "avg_mae_r": 0.831,
+       "max_win_r": 34.07,
+       "max_loss_r": -5.495,
+       "top1pct_share_of_gross_profit": 0.155,
+       "top5pct_share_of_gross_profit": 0.433,
+       "max_drawdown_r_cumulative": 204.35,
+       "total_r": 241.2,
+       "exit_reasons": {
+        "channel": 5716
+       },
+       "expectancy_ci95": [
+        -0.06735,
+        0.15532
+       ]
+      },
+      "actual": {
+       "n_positions": 5716,
+       "n_censored": 0,
+       "n_invalid_risk": 10,
+       "n": 5706,
+       "expectancy_r": 0.0306,
+       "median_r": -0.2203,
+       "win_rate": 0.3782,
+       "profit_factor": 1.095,
+       "avg_duration_bars": 17.53,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 0.958,
+       "avg_mae_r": 0.53,
+       "max_win_r": 19.06,
+       "max_loss_r": -3.579,
+       "top1pct_share_of_gross_profit": 0.167,
+       "top5pct_share_of_gross_profit": 0.449,
+       "max_drawdown_r_cumulative": 129.83,
+       "total_r": 174.5,
+       "exit_reasons": {
+        "channel": 5706
+       },
+       "winsorised_mean_r": 0.0134,
+       "initial_risk_atr": {
+        "median": 3.259,
+        "p10": 2.245,
+        "p90": 4.539,
+        "share_below_0_5_atr": 0.0007,
+        "share_above_3_atr": 0.6186
+       }
+      }
+     },
+     "train|bearish": {
+      "std": {
+       "n_positions": 4393,
+       "n_censored": 0,
+       "n": 4393,
+       "expectancy_r": -0.0768,
+       "median_r": -0.5152,
+       "win_rate": 0.3201,
+       "profit_factor": 0.869,
+       "avg_duration_bars": 16.13,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.444,
+       "avg_mae_r": 0.886,
+       "max_win_r": 15.651,
+       "max_loss_r": -5.325,
+       "top1pct_share_of_gross_profit": 0.193,
+       "top5pct_share_of_gross_profit": 0.529,
+       "max_drawdown_r_cumulative": 869.2,
+       "total_r": -337.4,
+       "exit_reasons": {
+        "channel": 4393
+       },
+       "expectancy_ci95": [
+        -0.37749,
+        0.26884
+       ]
+      },
+      "actual": {
+       "n_positions": 4393,
+       "n_censored": 0,
+       "n_invalid_risk": 5,
+       "n": 4388,
+       "expectancy_r": -0.0641,
+       "median_r": -0.3046,
+       "win_rate": 0.3204,
+       "profit_factor": 0.826,
+       "avg_duration_bars": 16.14,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 0.88,
+       "avg_mae_r": 0.556,
+       "max_win_r": 16.114,
+       "max_loss_r": -2.788,
+       "top1pct_share_of_gross_profit": 0.203,
+       "top5pct_share_of_gross_profit": 0.532,
+       "max_drawdown_r_cumulative": 561.17,
+       "total_r": -281.1,
+       "exit_reasons": {
+        "channel": 4388
+       },
+       "winsorised_mean_r": -0.0816,
+       "initial_risk_atr": {
+        "median": 3.313,
+        "p10": 2.253,
+        "p90": 4.762,
+        "share_below_0_5_atr": 0.0011,
+        "share_above_3_atr": 0.6313
+       }
+      }
+     },
+     "test|all": {
+      "std": {
+       "n_positions": 11037,
+       "n_censored": 0,
+       "n": 11037,
+       "expectancy_r": -0.024,
+       "median_r": -0.3949,
+       "win_rate": 0.3599,
+       "profit_factor": 0.955,
+       "avg_duration_bars": 17.3,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.395,
+       "avg_mae_r": 0.847,
+       "max_win_r": 23.143,
+       "max_loss_r": -6.536,
+       "top1pct_share_of_gross_profit": 0.163,
+       "top5pct_share_of_gross_profit": 0.443,
+       "max_drawdown_r_cumulative": 624.11,
+       "total_r": -264.9,
+       "exit_reasons": {
+        "channel": 11037
+       },
+       "expectancy_ci95": [
+        -0.11105,
+        0.066
+       ]
+      },
+      "actual": {
+       "n_positions": 11037,
+       "n_censored": 0,
+       "n_invalid_risk": 14,
+       "n": 11023,
+       "expectancy_r": -0.0108,
+       "median_r": -0.231,
+       "win_rate": 0.3603,
+       "profit_factor": 0.967,
+       "avg_duration_bars": 17.32,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 0.89,
+       "avg_mae_r": 0.547,
+       "max_win_r": 15.082,
+       "max_loss_r": -4.861,
+       "top1pct_share_of_gross_profit": 0.177,
+       "top5pct_share_of_gross_profit": 0.463,
+       "max_drawdown_r_cumulative": 347.89,
+       "total_r": -118.6,
+       "exit_reasons": {
+        "channel": 11023
+       },
+       "winsorised_mean_r": -0.0279,
+       "initial_risk_atr": {
+        "median": 3.339,
+        "p10": 2.304,
+        "p90": 4.7,
+        "share_below_0_5_atr": 0.001,
+        "share_above_3_atr": 0.6522
+       }
+      }
+     },
+     "test|bullish": {
+      "std": {
+       "n_positions": 5665,
+       "n_censored": 0,
+       "n": 5665,
+       "expectancy_r": 0.1247,
+       "median_r": -0.3334,
+       "win_rate": 0.391,
+       "profit_factor": 1.245,
+       "avg_duration_bars": 17.94,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.637,
+       "avg_mae_r": 0.85,
+       "max_win_r": 23.143,
+       "max_loss_r": -6.536,
+       "top1pct_share_of_gross_profit": 0.16,
+       "top5pct_share_of_gross_profit": 0.426,
+       "max_drawdown_r_cumulative": 272.22,
+       "total_r": 706.7,
+       "exit_reasons": {
+        "channel": 5665
+       },
+       "expectancy_ci95": [
+        -0.02293,
+        0.25687
+       ]
+      },
+      "actual": {
+       "n_positions": 5665,
+       "n_censored": 0,
+       "n_invalid_risk": 8,
+       "n": 5657,
+       "expectancy_r": 0.0713,
+       "median_r": -0.1931,
+       "win_rate": 0.3916,
+       "profit_factor": 1.221,
+       "avg_duration_bars": 17.96,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.039,
+       "avg_mae_r": 0.565,
+       "max_win_r": 15.082,
+       "max_loss_r": -4.861,
+       "top1pct_share_of_gross_profit": 0.172,
+       "top5pct_share_of_gross_profit": 0.44,
+       "max_drawdown_r_cumulative": 184.32,
+       "total_r": 403.3,
+       "exit_reasons": {
+        "channel": 5657
+       },
+       "winsorised_mean_r": 0.0494,
+       "initial_risk_atr": {
+        "median": 3.315,
+        "p10": 2.306,
+        "p90": 4.679,
+        "share_below_0_5_atr": 0.0014,
+        "share_above_3_atr": 0.6463
+       }
+      }
+     },
+     "test|bearish": {
+      "std": {
+       "n_positions": 5372,
+       "n_censored": 0,
+       "n": 5372,
+       "expectancy_r": -0.1809,
+       "median_r": -0.442,
+       "win_rate": 0.3271,
+       "profit_factor": 0.669,
+       "avg_duration_bars": 16.62,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.14,
+       "avg_mae_r": 0.845,
+       "max_win_r": 18.212,
+       "max_loss_r": -4.795,
+       "top1pct_share_of_gross_profit": 0.139,
+       "top5pct_share_of_gross_profit": 0.449,
+       "max_drawdown_r_cumulative": 1068.97,
+       "total_r": -971.6,
+       "exit_reasons": {
+        "channel": 5372
+       },
+       "expectancy_ci95": [
+        -0.28882,
+        -0.07571
+       ]
+      },
+      "actual": {
+       "n_positions": 5372,
+       "n_censored": 0,
+       "n_invalid_risk": 6,
+       "n": 5366,
+       "expectancy_r": -0.0973,
+       "median_r": -0.2574,
+       "win_rate": 0.3274,
+       "profit_factor": 0.711,
+       "avg_duration_bars": 16.64,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 0.733,
+       "avg_mae_r": 0.529,
+       "max_win_r": 12.194,
+       "max_loss_r": -3.341,
+       "top1pct_share_of_gross_profit": 0.169,
+       "top5pct_share_of_gross_profit": 0.482,
+       "max_drawdown_r_cumulative": 591.38,
+       "total_r": -521.9,
+       "exit_reasons": {
+        "channel": 5366
+       },
+       "winsorised_mean_r": -0.1049,
+       "initial_risk_atr": {
+        "median": 3.368,
+        "p10": 2.302,
+        "p90": 4.717,
+        "share_below_0_5_atr": 0.0006,
+        "share_above_3_atr": 0.6584
+       }
+      }
+     }
+    },
+    "250": {
+     "registered_definition_cap": false,
+     "train|all": {
+      "std": {
+       "n_positions": 10109,
+       "n_censored": 0,
+       "n": 10109,
+       "expectancy_r": -0.0095,
+       "median_r": -0.4287,
+       "win_rate": 0.3526,
+       "profit_factor": 0.982,
+       "avg_duration_bars": 16.91,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.473,
+       "avg_mae_r": 0.855,
+       "max_win_r": 34.07,
+       "max_loss_r": -5.495,
+       "top1pct_share_of_gross_profit": 0.174,
+       "top5pct_share_of_gross_profit": 0.474,
+       "max_drawdown_r_cumulative": 598.92,
+       "total_r": -96.2,
+       "exit_reasons": {
+        "channel": 10109
+       },
+       "expectancy_ci95": [
+        -0.14508,
+        0.15614
+       ]
+      },
+      "actual": {
+       "n_positions": 10109,
+       "n_censored": 0,
+       "n_invalid_risk": 15,
+       "n": 10094,
+       "expectancy_r": -0.0106,
+       "median_r": -0.2559,
+       "win_rate": 0.3531,
+       "profit_factor": 0.969,
+       "avg_duration_bars": 16.93,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 0.924,
+       "avg_mae_r": 0.541,
+       "max_win_r": 19.06,
+       "max_loss_r": -3.579,
+       "top1pct_share_of_gross_profit": 0.182,
+       "top5pct_share_of_gross_profit": 0.483,
+       "max_drawdown_r_cumulative": 398.84,
+       "total_r": -106.6,
+       "exit_reasons": {
+        "channel": 10094
+       },
+       "winsorised_mean_r": -0.0281,
+       "initial_risk_atr": {
+        "median": 3.281,
+        "p10": 2.25,
+        "p90": 4.631,
+        "share_below_0_5_atr": 0.0009,
+        "share_above_3_atr": 0.6241
+       }
+      }
+     },
+     "train|bullish": {
+      "std": {
+       "n_positions": 5716,
+       "n_censored": 0,
+       "n": 5716,
+       "expectancy_r": 0.0422,
+       "median_r": -0.3562,
+       "win_rate": 0.3775,
+       "profit_factor": 1.084,
+       "avg_duration_bars": 17.51,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.494,
+       "avg_mae_r": 0.831,
+       "max_win_r": 34.07,
+       "max_loss_r": -5.495,
+       "top1pct_share_of_gross_profit": 0.155,
+       "top5pct_share_of_gross_profit": 0.433,
+       "max_drawdown_r_cumulative": 204.35,
+       "total_r": 241.2,
+       "exit_reasons": {
+        "channel": 5716
+       },
+       "expectancy_ci95": [
+        -0.06735,
+        0.15532
+       ]
+      },
+      "actual": {
+       "n_positions": 5716,
+       "n_censored": 0,
+       "n_invalid_risk": 10,
+       "n": 5706,
+       "expectancy_r": 0.0306,
+       "median_r": -0.2203,
+       "win_rate": 0.3782,
+       "profit_factor": 1.095,
+       "avg_duration_bars": 17.53,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 0.958,
+       "avg_mae_r": 0.53,
+       "max_win_r": 19.06,
+       "max_loss_r": -3.579,
+       "top1pct_share_of_gross_profit": 0.167,
+       "top5pct_share_of_gross_profit": 0.449,
+       "max_drawdown_r_cumulative": 129.83,
+       "total_r": 174.5,
+       "exit_reasons": {
+        "channel": 5706
+       },
+       "winsorised_mean_r": 0.0134,
+       "initial_risk_atr": {
+        "median": 3.259,
+        "p10": 2.245,
+        "p90": 4.539,
+        "share_below_0_5_atr": 0.0007,
+        "share_above_3_atr": 0.6186
+       }
+      }
+     },
+     "train|bearish": {
+      "std": {
+       "n_positions": 4393,
+       "n_censored": 0,
+       "n": 4393,
+       "expectancy_r": -0.0768,
+       "median_r": -0.5152,
+       "win_rate": 0.3201,
+       "profit_factor": 0.869,
+       "avg_duration_bars": 16.13,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.444,
+       "avg_mae_r": 0.886,
+       "max_win_r": 15.651,
+       "max_loss_r": -5.325,
+       "top1pct_share_of_gross_profit": 0.193,
+       "top5pct_share_of_gross_profit": 0.529,
+       "max_drawdown_r_cumulative": 869.2,
+       "total_r": -337.4,
+       "exit_reasons": {
+        "channel": 4393
+       },
+       "expectancy_ci95": [
+        -0.37749,
+        0.26884
+       ]
+      },
+      "actual": {
+       "n_positions": 4393,
+       "n_censored": 0,
+       "n_invalid_risk": 5,
+       "n": 4388,
+       "expectancy_r": -0.0641,
+       "median_r": -0.3046,
+       "win_rate": 0.3204,
+       "profit_factor": 0.826,
+       "avg_duration_bars": 16.14,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 0.88,
+       "avg_mae_r": 0.556,
+       "max_win_r": 16.114,
+       "max_loss_r": -2.788,
+       "top1pct_share_of_gross_profit": 0.203,
+       "top5pct_share_of_gross_profit": 0.532,
+       "max_drawdown_r_cumulative": 561.17,
+       "total_r": -281.1,
+       "exit_reasons": {
+        "channel": 4388
+       },
+       "winsorised_mean_r": -0.0816,
+       "initial_risk_atr": {
+        "median": 3.313,
+        "p10": 2.253,
+        "p90": 4.762,
+        "share_below_0_5_atr": 0.0011,
+        "share_above_3_atr": 0.6313
+       }
+      }
+     },
+     "test|all": {
+      "std": {
+       "n_positions": 11037,
+       "n_censored": 0,
+       "n": 11037,
+       "expectancy_r": -0.024,
+       "median_r": -0.3949,
+       "win_rate": 0.3599,
+       "profit_factor": 0.955,
+       "avg_duration_bars": 17.3,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.395,
+       "avg_mae_r": 0.847,
+       "max_win_r": 23.143,
+       "max_loss_r": -6.536,
+       "top1pct_share_of_gross_profit": 0.163,
+       "top5pct_share_of_gross_profit": 0.443,
+       "max_drawdown_r_cumulative": 624.11,
+       "total_r": -264.9,
+       "exit_reasons": {
+        "channel": 11037
+       },
+       "expectancy_ci95": [
+        -0.11105,
+        0.066
+       ]
+      },
+      "actual": {
+       "n_positions": 11037,
+       "n_censored": 0,
+       "n_invalid_risk": 14,
+       "n": 11023,
+       "expectancy_r": -0.0108,
+       "median_r": -0.231,
+       "win_rate": 0.3603,
+       "profit_factor": 0.967,
+       "avg_duration_bars": 17.32,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 0.89,
+       "avg_mae_r": 0.547,
+       "max_win_r": 15.082,
+       "max_loss_r": -4.861,
+       "top1pct_share_of_gross_profit": 0.177,
+       "top5pct_share_of_gross_profit": 0.463,
+       "max_drawdown_r_cumulative": 347.89,
+       "total_r": -118.6,
+       "exit_reasons": {
+        "channel": 11023
+       },
+       "winsorised_mean_r": -0.0279,
+       "initial_risk_atr": {
+        "median": 3.339,
+        "p10": 2.304,
+        "p90": 4.7,
+        "share_below_0_5_atr": 0.001,
+        "share_above_3_atr": 0.6522
+       }
+      }
+     },
+     "test|bullish": {
+      "std": {
+       "n_positions": 5665,
+       "n_censored": 0,
+       "n": 5665,
+       "expectancy_r": 0.1247,
+       "median_r": -0.3334,
+       "win_rate": 0.391,
+       "profit_factor": 1.245,
+       "avg_duration_bars": 17.94,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.637,
+       "avg_mae_r": 0.85,
+       "max_win_r": 23.143,
+       "max_loss_r": -6.536,
+       "top1pct_share_of_gross_profit": 0.16,
+       "top5pct_share_of_gross_profit": 0.426,
+       "max_drawdown_r_cumulative": 272.22,
+       "total_r": 706.7,
+       "exit_reasons": {
+        "channel": 5665
+       },
+       "expectancy_ci95": [
+        -0.02293,
+        0.25687
+       ]
+      },
+      "actual": {
+       "n_positions": 5665,
+       "n_censored": 0,
+       "n_invalid_risk": 8,
+       "n": 5657,
+       "expectancy_r": 0.0713,
+       "median_r": -0.1931,
+       "win_rate": 0.3916,
+       "profit_factor": 1.221,
+       "avg_duration_bars": 17.96,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.039,
+       "avg_mae_r": 0.565,
+       "max_win_r": 15.082,
+       "max_loss_r": -4.861,
+       "top1pct_share_of_gross_profit": 0.172,
+       "top5pct_share_of_gross_profit": 0.44,
+       "max_drawdown_r_cumulative": 184.32,
+       "total_r": 403.3,
+       "exit_reasons": {
+        "channel": 5657
+       },
+       "winsorised_mean_r": 0.0494,
+       "initial_risk_atr": {
+        "median": 3.315,
+        "p10": 2.306,
+        "p90": 4.679,
+        "share_below_0_5_atr": 0.0014,
+        "share_above_3_atr": 0.6463
+       }
+      }
+     },
+     "test|bearish": {
+      "std": {
+       "n_positions": 5372,
+       "n_censored": 0,
+       "n": 5372,
+       "expectancy_r": -0.1809,
+       "median_r": -0.442,
+       "win_rate": 0.3271,
+       "profit_factor": 0.669,
+       "avg_duration_bars": 16.62,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.14,
+       "avg_mae_r": 0.845,
+       "max_win_r": 18.212,
+       "max_loss_r": -4.795,
+       "top1pct_share_of_gross_profit": 0.139,
+       "top5pct_share_of_gross_profit": 0.449,
+       "max_drawdown_r_cumulative": 1068.97,
+       "total_r": -971.6,
+       "exit_reasons": {
+        "channel": 5372
+       },
+       "expectancy_ci95": [
+        -0.28882,
+        -0.07571
+       ]
+      },
+      "actual": {
+       "n_positions": 5372,
+       "n_censored": 0,
+       "n_invalid_risk": 6,
+       "n": 5366,
+       "expectancy_r": -0.0973,
+       "median_r": -0.2574,
+       "win_rate": 0.3274,
+       "profit_factor": 0.711,
+       "avg_duration_bars": 16.64,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 0.733,
+       "avg_mae_r": 0.529,
+       "max_win_r": 12.194,
+       "max_loss_r": -3.341,
+       "top1pct_share_of_gross_profit": 0.169,
+       "top5pct_share_of_gross_profit": 0.482,
+       "max_drawdown_r_cumulative": 591.38,
+       "total_r": -521.9,
+       "exit_reasons": {
+        "channel": 5366
+       },
+       "winsorised_mean_r": -0.1049,
+       "initial_risk_atr": {
+        "median": 3.368,
+        "p10": 2.302,
+        "p90": 4.717,
+        "share_below_0_5_atr": 0.0006,
+        "share_above_3_atr": 0.6584
+       }
+      }
+     }
+    }
+   },
+   "donchian_breakout__exit_c_atr_trail_3x": {
+    "60": {
+     "registered_definition_cap": true,
+     "train|all": {
+      "std": {
+       "n_positions": 9538,
+       "n_censored": 0,
+       "n": 9538,
+       "expectancy_r": -0.0248,
+       "median_r": -0.4926,
+       "win_rate": 0.3693,
+       "profit_factor": 0.958,
+       "avg_duration_bars": 19.74,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.487,
+       "avg_mae_r": 0.925,
+       "max_win_r": 14.14,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.124,
+       "top5pct_share_of_gross_profit": 0.404,
+       "max_drawdown_r_cumulative": 649.63,
+       "total_r": -236.8,
+       "exit_reasons": {
+        "time": 526,
+        "trail": 9012
+       },
+       "expectancy_ci95": [
+        -0.15272,
+        0.14445
+       ]
+      },
+      "actual": {
+       "n_positions": 9538,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 9538,
+       "expectancy_r": -0.0166,
+       "median_r": -0.3284,
+       "win_rate": 0.3693,
+       "profit_factor": 0.958,
+       "avg_duration_bars": 19.74,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 0.991,
+       "avg_mae_r": 0.617,
+       "max_win_r": 9.426,
+       "max_loss_r": -4.95,
+       "top1pct_share_of_gross_profit": 0.124,
+       "top5pct_share_of_gross_profit": 0.404,
+       "max_drawdown_r_cumulative": 433.08,
+       "total_r": -157.9,
+       "exit_reasons": {
+        "time": 526,
+        "trail": 9012
+       },
+       "winsorised_mean_r": -0.0219,
+       "initial_risk_atr": {
+        "median": 3.0,
+        "p10": 3.0,
+        "p90": 3.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.4299
+       }
+      }
+     },
+     "train|bullish": {
+      "std": {
+       "n_positions": 5257,
+       "n_censored": 0,
+       "n": 5257,
+       "expectancy_r": 0.0801,
+       "median_r": -0.3614,
+       "win_rate": 0.405,
+       "profit_factor": 1.146,
+       "avg_duration_bars": 20.81,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.594,
+       "avg_mae_r": 0.906,
+       "max_win_r": 14.14,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.107,
+       "top5pct_share_of_gross_profit": 0.366,
+       "max_drawdown_r_cumulative": 185.88,
+       "total_r": 421.3,
+       "exit_reasons": {
+        "time": 316,
+        "trail": 4941
+       },
+       "expectancy_ci95": [
+        -0.04914,
+        0.19916
+       ]
+      },
+      "actual": {
+       "n_positions": 5257,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5257,
+       "expectancy_r": 0.0534,
+       "median_r": -0.241,
+       "win_rate": 0.405,
+       "profit_factor": 1.146,
+       "avg_duration_bars": 20.81,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.063,
+       "avg_mae_r": 0.604,
+       "max_win_r": 9.426,
+       "max_loss_r": -4.95,
+       "top1pct_share_of_gross_profit": 0.107,
+       "top5pct_share_of_gross_profit": 0.366,
+       "max_drawdown_r_cumulative": 123.92,
+       "total_r": 280.9,
+       "exit_reasons": {
+        "time": 316,
+        "trail": 4941
+       },
+       "winsorised_mean_r": 0.0509,
+       "initial_risk_atr": {
+        "median": 3.0,
+        "p10": 3.0,
+        "p90": 3.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.4242
+       }
+      }
+     },
+     "train|bearish": {
+      "std": {
+       "n_positions": 4281,
+       "n_censored": 0,
+       "n": 4281,
+       "expectancy_r": -0.1537,
+       "median_r": -0.6414,
+       "win_rate": 0.3254,
+       "profit_factor": 0.764,
+       "avg_duration_bars": 18.43,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.355,
+       "avg_mae_r": 0.95,
+       "max_win_r": 11.662,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.148,
+       "top5pct_share_of_gross_profit": 0.461,
+       "max_drawdown_r_cumulative": 918.06,
+       "total_r": -658.1,
+       "exit_reasons": {
+        "time": 210,
+        "trail": 4071
+       },
+       "expectancy_ci95": [
+        -0.44654,
+        0.21142
+       ]
+      },
+      "actual": {
+       "n_positions": 4281,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4281,
+       "expectancy_r": -0.1025,
+       "median_r": -0.4276,
+       "win_rate": 0.3254,
+       "profit_factor": 0.764,
+       "avg_duration_bars": 18.43,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 0.903,
+       "avg_mae_r": 0.633,
+       "max_win_r": 7.775,
+       "max_loss_r": -2.852,
+       "top1pct_share_of_gross_profit": 0.148,
+       "top5pct_share_of_gross_profit": 0.461,
+       "max_drawdown_r_cumulative": 612.04,
+       "total_r": -438.8,
+       "exit_reasons": {
+        "time": 210,
+        "trail": 4071
+       },
+       "winsorised_mean_r": -0.1112,
+       "initial_risk_atr": {
+        "median": 3.0,
+        "p10": 3.0,
+        "p90": 3.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.4368
+       }
+      }
+     },
+     "test|all": {
+      "std": {
+       "n_positions": 10156,
+       "n_censored": 0,
+       "n": 10156,
+       "expectancy_r": -0.0454,
+       "median_r": -0.5097,
+       "win_rate": 0.3611,
+       "profit_factor": 0.924,
+       "avg_duration_bars": 20.76,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.472,
+       "avg_mae_r": 0.938,
+       "max_win_r": 11.623,
+       "max_loss_r": -6.536,
+       "top1pct_share_of_gross_profit": 0.117,
+       "top5pct_share_of_gross_profit": 0.389,
+       "max_drawdown_r_cumulative": 780.2,
+       "total_r": -461.2,
+       "exit_reasons": {
+        "time": 576,
+        "trail": 9580
+       },
+       "expectancy_ci95": [
+        -0.11855,
+        0.04279
+       ]
+      },
+      "actual": {
+       "n_positions": 10156,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 10156,
+       "expectancy_r": -0.0303,
+       "median_r": -0.3398,
+       "win_rate": 0.3611,
+       "profit_factor": 0.924,
+       "avg_duration_bars": 20.76,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 0.981,
+       "avg_mae_r": 0.625,
+       "max_win_r": 7.749,
+       "max_loss_r": -4.357,
+       "top1pct_share_of_gross_profit": 0.117,
+       "top5pct_share_of_gross_profit": 0.389,
+       "max_drawdown_r_cumulative": 520.13,
+       "total_r": -307.5,
+       "exit_reasons": {
+        "time": 576,
+        "trail": 9580
+       },
+       "winsorised_mean_r": -0.035,
+       "initial_risk_atr": {
+        "median": 3.0,
+        "p10": 3.0,
+        "p90": 3.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.4377
+       }
+      }
+     },
+     "test|bullish": {
+      "std": {
+       "n_positions": 5374,
+       "n_censored": 0,
+       "n": 5374,
+       "expectancy_r": 0.0871,
+       "median_r": -0.3851,
+       "win_rate": 0.3969,
+       "profit_factor": 1.154,
+       "avg_duration_bars": 19.89,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.629,
+       "avg_mae_r": 0.916,
+       "max_win_r": 11.623,
+       "max_loss_r": -6.536,
+       "top1pct_share_of_gross_profit": 0.108,
+       "top5pct_share_of_gross_profit": 0.368,
+       "max_drawdown_r_cumulative": 308.07,
+       "total_r": 467.9,
+       "exit_reasons": {
+        "time": 217,
+        "trail": 5157
+       },
+       "expectancy_ci95": [
+        -0.07785,
+        0.23625
+       ]
+      },
+      "actual": {
+       "n_positions": 5374,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5374,
+       "expectancy_r": 0.058,
+       "median_r": -0.2567,
+       "win_rate": 0.3969,
+       "profit_factor": 1.154,
+       "avg_duration_bars": 19.89,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.086,
+       "avg_mae_r": 0.611,
+       "max_win_r": 7.749,
+       "max_loss_r": -4.357,
+       "top1pct_share_of_gross_profit": 0.108,
+       "top5pct_share_of_gross_profit": 0.368,
+       "max_drawdown_r_cumulative": 205.38,
+       "total_r": 312.0,
+       "exit_reasons": {
+        "time": 217,
+        "trail": 5157
+       },
+       "winsorised_mean_r": 0.0548,
+       "initial_risk_atr": {
+        "median": 3.0,
+        "p10": 3.0,
+        "p90": 3.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.4328
+       }
+      }
+     },
+     "test|bearish": {
+      "std": {
+       "n_positions": 4782,
+       "n_censored": 0,
+       "n": 4782,
+       "expectancy_r": -0.1943,
+       "median_r": -0.6121,
+       "win_rate": 0.3208,
+       "profit_factor": 0.697,
+       "avg_duration_bars": 21.73,
+       "median_duration_bars": 17.0,
+       "avg_mfe_r": 1.295,
+       "avg_mae_r": 0.962,
+       "max_win_r": 9.802,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.115,
+       "top5pct_share_of_gross_profit": 0.415,
+       "max_drawdown_r_cumulative": 1044.85,
+       "total_r": -929.1,
+       "exit_reasons": {
+        "time": 359,
+        "trail": 4423
+       },
+       "expectancy_ci95": [
+        -0.3265,
+        -0.06623
+       ]
+      },
+      "actual": {
+       "n_positions": 4782,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4782,
+       "expectancy_r": -0.1295,
+       "median_r": -0.408,
+       "win_rate": 0.3208,
+       "profit_factor": 0.697,
+       "avg_duration_bars": 21.73,
+       "median_duration_bars": 17.0,
+       "avg_mfe_r": 0.863,
+       "avg_mae_r": 0.641,
+       "max_win_r": 6.535,
+       "max_loss_r": -4.343,
+       "top1pct_share_of_gross_profit": 0.115,
+       "top5pct_share_of_gross_profit": 0.415,
+       "max_drawdown_r_cumulative": 696.57,
+       "total_r": -619.4,
+       "exit_reasons": {
+        "time": 359,
+        "trail": 4423
+       },
+       "winsorised_mean_r": -0.1318,
+       "initial_risk_atr": {
+        "median": 3.0,
+        "p10": 3.0,
+        "p90": 3.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.4431
+       }
+      }
+     }
+    },
+    "120": {
+     "registered_definition_cap": false,
+     "train|all": {
+      "std": {
+       "n_positions": 9172,
+       "n_censored": 0,
+       "n": 9172,
+       "expectancy_r": -0.0251,
+       "median_r": -0.499,
+       "win_rate": 0.3648,
+       "profit_factor": 0.958,
+       "avg_duration_bars": 21.21,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.532,
+       "avg_mae_r": 0.925,
+       "max_win_r": 14.14,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.13,
+       "top5pct_share_of_gross_profit": 0.416,
+       "max_drawdown_r_cumulative": 608.1,
+       "total_r": -230.2,
+       "exit_reasons": {
+        "time": 90,
+        "trail": 9082
+       },
+       "expectancy_ci95": [
+        -0.16202,
+        0.15949
+       ]
+      },
+      "actual": {
+       "n_positions": 9172,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 9172,
+       "expectancy_r": -0.0167,
+       "median_r": -0.3327,
+       "win_rate": 0.3648,
+       "profit_factor": 0.958,
+       "avg_duration_bars": 21.21,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.022,
+       "avg_mae_r": 0.617,
+       "max_win_r": 9.426,
+       "max_loss_r": -4.95,
+       "top1pct_share_of_gross_profit": 0.13,
+       "top5pct_share_of_gross_profit": 0.416,
+       "max_drawdown_r_cumulative": 405.4,
+       "total_r": -153.5,
+       "exit_reasons": {
+        "time": 90,
+        "trail": 9082
+       },
+       "winsorised_mean_r": -0.0241,
+       "initial_risk_atr": {
+        "median": 3.0,
+        "p10": 3.0,
+        "p90": 3.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.4291
+       }
+      }
+     },
+     "train|bullish": {
+      "std": {
+       "n_positions": 5012,
+       "n_censored": 0,
+       "n": 5012,
+       "expectancy_r": 0.0986,
+       "median_r": -0.3543,
+       "win_rate": 0.4032,
+       "profit_factor": 1.18,
+       "avg_duration_bars": 22.6,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.664,
+       "avg_mae_r": 0.903,
+       "max_win_r": 14.14,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.115,
+       "top5pct_share_of_gross_profit": 0.376,
+       "max_drawdown_r_cumulative": 178.22,
+       "total_r": 494.2,
+       "exit_reasons": {
+        "time": 51,
+        "trail": 4961
+       },
+       "expectancy_ci95": [
+        -0.01964,
+        0.20733
+       ]
+      },
+      "actual": {
+       "n_positions": 5012,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5012,
+       "expectancy_r": 0.0657,
+       "median_r": -0.2362,
+       "win_rate": 0.4032,
+       "profit_factor": 1.18,
+       "avg_duration_bars": 22.6,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.109,
+       "avg_mae_r": 0.602,
+       "max_win_r": 9.426,
+       "max_loss_r": -4.95,
+       "top1pct_share_of_gross_profit": 0.115,
+       "top5pct_share_of_gross_profit": 0.376,
+       "max_drawdown_r_cumulative": 118.82,
+       "total_r": 329.4,
+       "exit_reasons": {
+        "time": 51,
+        "trail": 4961
+       },
+       "winsorised_mean_r": 0.0606,
+       "initial_risk_atr": {
+        "median": 3.0,
+        "p10": 3.0,
+        "p90": 3.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.4228
+       }
+      }
+     },
+     "train|bearish": {
+      "std": {
+       "n_positions": 4160,
+       "n_censored": 0,
+       "n": 4160,
+       "expectancy_r": -0.1741,
+       "median_r": -0.6465,
+       "win_rate": 0.3185,
+       "profit_factor": 0.734,
+       "avg_duration_bars": 19.54,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.374,
+       "avg_mae_r": 0.952,
+       "max_win_r": 11.662,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.154,
+       "top5pct_share_of_gross_profit": 0.477,
+       "max_drawdown_r_cumulative": 930.13,
+       "total_r": -724.4,
+       "exit_reasons": {
+        "time": 39,
+        "trail": 4121
+       },
+       "expectancy_ci95": [
+        -0.48496,
+        0.2144
+       ]
+      },
+      "actual": {
+       "n_positions": 4160,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4160,
+       "expectancy_r": -0.1161,
+       "median_r": -0.431,
+       "win_rate": 0.3185,
+       "profit_factor": 0.734,
+       "avg_duration_bars": 19.54,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 0.916,
+       "avg_mae_r": 0.634,
+       "max_win_r": 7.775,
+       "max_loss_r": -2.852,
+       "top1pct_share_of_gross_profit": 0.154,
+       "top5pct_share_of_gross_profit": 0.477,
+       "max_drawdown_r_cumulative": 620.09,
+       "total_r": -482.9,
+       "exit_reasons": {
+        "time": 39,
+        "trail": 4121
+       },
+       "winsorised_mean_r": -0.1255,
+       "initial_risk_atr": {
+        "median": 3.0,
+        "p10": 3.0,
+        "p90": 3.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.4368
+       }
+      }
+     },
+     "test|all": {
+      "std": {
+       "n_positions": 9814,
+       "n_censored": 0,
+       "n": 9814,
+       "expectancy_r": -0.0434,
+       "median_r": -0.5097,
+       "win_rate": 0.3577,
+       "profit_factor": 0.928,
+       "avg_duration_bars": 22.13,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.521,
+       "avg_mae_r": 0.937,
+       "max_win_r": 12.425,
+       "max_loss_r": -6.536,
+       "top1pct_share_of_gross_profit": 0.125,
+       "top5pct_share_of_gross_profit": 0.406,
+       "max_drawdown_r_cumulative": 814.11,
+       "total_r": -425.7,
+       "exit_reasons": {
+        "time": 85,
+        "trail": 9729
+       },
+       "expectancy_ci95": [
+        -0.13118,
+        0.03379
+       ]
+      },
+      "actual": {
+       "n_positions": 9814,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 9814,
+       "expectancy_r": -0.0289,
+       "median_r": -0.3398,
+       "win_rate": 0.3577,
+       "profit_factor": 0.928,
+       "avg_duration_bars": 22.13,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.014,
+       "avg_mae_r": 0.625,
+       "max_win_r": 8.283,
+       "max_loss_r": -4.357,
+       "top1pct_share_of_gross_profit": 0.125,
+       "top5pct_share_of_gross_profit": 0.406,
+       "max_drawdown_r_cumulative": 542.74,
+       "total_r": -283.8,
+       "exit_reasons": {
+        "time": 85,
+        "trail": 9729
+       },
+       "winsorised_mean_r": -0.0341,
+       "initial_risk_atr": {
+        "median": 3.0,
+        "p10": 3.0,
+        "p90": 3.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.4365
+       }
+      }
+     },
+     "test|bullish": {
+      "std": {
+       "n_positions": 5253,
+       "n_censored": 0,
+       "n": 5253,
+       "expectancy_r": 0.0967,
+       "median_r": -0.3852,
+       "win_rate": 0.3954,
+       "profit_factor": 1.171,
+       "avg_duration_bars": 20.68,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.675,
+       "avg_mae_r": 0.917,
+       "max_win_r": 12.425,
+       "max_loss_r": -6.536,
+       "top1pct_share_of_gross_profit": 0.114,
+       "top5pct_share_of_gross_profit": 0.382,
+       "max_drawdown_r_cumulative": 312.73,
+       "total_r": 508.1,
+       "exit_reasons": {
+        "time": 16,
+        "trail": 5237
+       },
+       "expectancy_ci95": [
+        -0.0664,
+        0.2277
+       ]
+      },
+      "actual": {
+       "n_positions": 5253,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5253,
+       "expectancy_r": 0.0645,
+       "median_r": -0.2568,
+       "win_rate": 0.3954,
+       "profit_factor": 1.171,
+       "avg_duration_bars": 20.68,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.117,
+       "avg_mae_r": 0.611,
+       "max_win_r": 8.283,
+       "max_loss_r": -4.357,
+       "top1pct_share_of_gross_profit": 0.114,
+       "top5pct_share_of_gross_profit": 0.382,
+       "max_drawdown_r_cumulative": 208.49,
+       "total_r": 338.7,
+       "exit_reasons": {
+        "time": 16,
+        "trail": 5237
+       },
+       "winsorised_mean_r": 0.0601,
+       "initial_risk_atr": {
+        "median": 3.0,
+        "p10": 3.0,
+        "p90": 3.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.4319
+       }
+      }
+     },
+     "test|bearish": {
+      "std": {
+       "n_positions": 4561,
+       "n_censored": 0,
+       "n": 4561,
+       "expectancy_r": -0.2047,
+       "median_r": -0.6096,
+       "win_rate": 0.3142,
+       "profit_factor": 0.68,
+       "avg_duration_bars": 23.79,
+       "median_duration_bars": 17.0,
+       "avg_mfe_r": 1.344,
+       "avg_mae_r": 0.961,
+       "max_win_r": 9.745,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.128,
+       "top5pct_share_of_gross_profit": 0.435,
+       "max_drawdown_r_cumulative": 1083.98,
+       "total_r": -933.7,
+       "exit_reasons": {
+        "time": 69,
+        "trail": 4492
+       },
+       "expectancy_ci95": [
+        -0.34321,
+        -0.07034
+       ]
+      },
+      "actual": {
+       "n_positions": 4561,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4561,
+       "expectancy_r": -0.1365,
+       "median_r": -0.4064,
+       "win_rate": 0.3142,
+       "profit_factor": 0.68,
+       "avg_duration_bars": 23.79,
+       "median_duration_bars": 17.0,
+       "avg_mfe_r": 0.896,
+       "avg_mae_r": 0.641,
+       "max_win_r": 6.497,
+       "max_loss_r": -4.343,
+       "top1pct_share_of_gross_profit": 0.128,
+       "top5pct_share_of_gross_profit": 0.435,
+       "max_drawdown_r_cumulative": 722.65,
+       "total_r": -622.5,
+       "exit_reasons": {
+        "time": 69,
+        "trail": 4492
+       },
+       "winsorised_mean_r": -0.1412,
+       "initial_risk_atr": {
+        "median": 3.0,
+        "p10": 3.0,
+        "p90": 3.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.4418
+       }
+      }
+     }
+    },
+    "250": {
+     "registered_definition_cap": false,
+     "train|all": {
+      "std": {
+       "n_positions": 9076,
+       "n_censored": 0,
+       "n": 9076,
+       "expectancy_r": -0.0255,
+       "median_r": -0.5007,
+       "win_rate": 0.3632,
+       "profit_factor": 0.957,
+       "avg_duration_bars": 21.67,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.539,
+       "avg_mae_r": 0.925,
+       "max_win_r": 14.14,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.131,
+       "top5pct_share_of_gross_profit": 0.418,
+       "max_drawdown_r_cumulative": 609.69,
+       "total_r": -231.4,
+       "exit_reasons": {
+        "time": 19,
+        "trail": 9057
+       },
+       "expectancy_ci95": [
+        -0.16467,
+        0.16388
+       ]
+      },
+      "actual": {
+       "n_positions": 9076,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 9076,
+       "expectancy_r": -0.017,
+       "median_r": -0.3338,
+       "win_rate": 0.3632,
+       "profit_factor": 0.957,
+       "avg_duration_bars": 21.67,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.026,
+       "avg_mae_r": 0.617,
+       "max_win_r": 9.426,
+       "max_loss_r": -4.95,
+       "top1pct_share_of_gross_profit": 0.131,
+       "top5pct_share_of_gross_profit": 0.418,
+       "max_drawdown_r_cumulative": 406.46,
+       "total_r": -154.2,
+       "exit_reasons": {
+        "time": 19,
+        "trail": 9057
+       },
+       "winsorised_mean_r": -0.024,
+       "initial_risk_atr": {
+        "median": 3.0,
+        "p10": 3.0,
+        "p90": 3.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.4294
+       }
+      }
+     },
+     "train|bullish": {
+      "std": {
+       "n_positions": 4947,
+       "n_censored": 0,
+       "n": 4947,
+       "expectancy_r": 0.1037,
+       "median_r": -0.354,
+       "win_rate": 0.4023,
+       "profit_factor": 1.19,
+       "avg_duration_bars": 23.22,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.676,
+       "avg_mae_r": 0.904,
+       "max_win_r": 14.14,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.115,
+       "top5pct_share_of_gross_profit": 0.377,
+       "max_drawdown_r_cumulative": 179.46,
+       "total_r": 513.2,
+       "exit_reasons": {
+        "time": 14,
+        "trail": 4933
+       },
+       "expectancy_ci95": [
+        -0.01831,
+        0.22268
+       ]
+      },
+      "actual": {
+       "n_positions": 4947,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4947,
+       "expectancy_r": 0.0692,
+       "median_r": -0.236,
+       "win_rate": 0.4023,
+       "profit_factor": 1.19,
+       "avg_duration_bars": 23.22,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.117,
+       "avg_mae_r": 0.602,
+       "max_win_r": 9.426,
+       "max_loss_r": -4.95,
+       "top1pct_share_of_gross_profit": 0.115,
+       "top5pct_share_of_gross_profit": 0.377,
+       "max_drawdown_r_cumulative": 119.64,
+       "total_r": 342.2,
+       "exit_reasons": {
+        "time": 14,
+        "trail": 4933
+       },
+       "winsorised_mean_r": 0.0643,
+       "initial_risk_atr": {
+        "median": 3.0,
+        "p10": 3.0,
+        "p90": 3.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.4229
+       }
+      }
+     },
+     "train|bearish": {
+      "std": {
+       "n_positions": 4129,
+       "n_censored": 0,
+       "n": 4129,
+       "expectancy_r": -0.1803,
+       "median_r": -0.6485,
+       "win_rate": 0.3163,
+       "profit_factor": 0.725,
+       "avg_duration_bars": 19.81,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 1.376,
+       "avg_mae_r": 0.951,
+       "max_win_r": 11.662,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.157,
+       "top5pct_share_of_gross_profit": 0.479,
+       "max_drawdown_r_cumulative": 939.06,
+       "total_r": -744.6,
+       "exit_reasons": {
+        "time": 5,
+        "trail": 4124
+       },
+       "expectancy_ci95": [
+        -0.49245,
+        0.20737
+       ]
+      },
+      "actual": {
+       "n_positions": 4129,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4129,
+       "expectancy_r": -0.1202,
+       "median_r": -0.4323,
+       "win_rate": 0.3163,
+       "profit_factor": 0.725,
+       "avg_duration_bars": 19.81,
+       "median_duration_bars": 13.0,
+       "avg_mfe_r": 0.917,
+       "avg_mae_r": 0.634,
+       "max_win_r": 7.775,
+       "max_loss_r": -2.852,
+       "top1pct_share_of_gross_profit": 0.157,
+       "top5pct_share_of_gross_profit": 0.479,
+       "max_drawdown_r_cumulative": 626.04,
+       "total_r": -496.4,
+       "exit_reasons": {
+        "time": 5,
+        "trail": 4124
+       },
+       "winsorised_mean_r": -0.1297,
+       "initial_risk_atr": {
+        "median": 3.0,
+        "p10": 3.0,
+        "p90": 3.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.4372
+       }
+      }
+     },
+     "test|all": {
+      "std": {
+       "n_positions": 9722,
+       "n_censored": 0,
+       "n": 9722,
+       "expectancy_r": -0.0432,
+       "median_r": -0.5099,
+       "win_rate": 0.3575,
+       "profit_factor": 0.928,
+       "avg_duration_bars": 22.54,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.529,
+       "avg_mae_r": 0.936,
+       "max_win_r": 12.425,
+       "max_loss_r": -6.536,
+       "top1pct_share_of_gross_profit": 0.125,
+       "top5pct_share_of_gross_profit": 0.408,
+       "max_drawdown_r_cumulative": 817.68,
+       "total_r": -420.4,
+       "exit_reasons": {
+        "time": 18,
+        "trail": 9704
+       },
+       "expectancy_ci95": [
+        -0.13345,
+        0.03655
+       ]
+      },
+      "actual": {
+       "n_positions": 9722,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 9722,
+       "expectancy_r": -0.0288,
+       "median_r": -0.3399,
+       "win_rate": 0.3575,
+       "profit_factor": 0.928,
+       "avg_duration_bars": 22.54,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.02,
+       "avg_mae_r": 0.624,
+       "max_win_r": 8.283,
+       "max_loss_r": -4.357,
+       "top1pct_share_of_gross_profit": 0.125,
+       "top5pct_share_of_gross_profit": 0.408,
+       "max_drawdown_r_cumulative": 545.12,
+       "total_r": -280.3,
+       "exit_reasons": {
+        "time": 18,
+        "trail": 9704
+       },
+       "winsorised_mean_r": -0.0341,
+       "initial_risk_atr": {
+        "median": 3.0,
+        "p10": 3.0,
+        "p90": 3.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.4365
+       }
+      }
+     },
+     "test|bullish": {
+      "std": {
+       "n_positions": 5251,
+       "n_censored": 0,
+       "n": 5251,
+       "expectancy_r": 0.0952,
+       "median_r": -0.3852,
+       "win_rate": 0.3954,
+       "profit_factor": 1.168,
+       "avg_duration_bars": 20.72,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.677,
+       "avg_mae_r": 0.917,
+       "max_win_r": 12.425,
+       "max_loss_r": -6.536,
+       "top1pct_share_of_gross_profit": 0.114,
+       "top5pct_share_of_gross_profit": 0.381,
+       "max_drawdown_r_cumulative": 312.73,
+       "total_r": 499.7,
+       "exit_reasons": {
+        "trail": 5251
+       },
+       "expectancy_ci95": [
+        -0.06181,
+        0.22503
+       ]
+      },
+      "actual": {
+       "n_positions": 5251,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5251,
+       "expectancy_r": 0.0634,
+       "median_r": -0.2568,
+       "win_rate": 0.3954,
+       "profit_factor": 1.168,
+       "avg_duration_bars": 20.72,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.118,
+       "avg_mae_r": 0.611,
+       "max_win_r": 8.283,
+       "max_loss_r": -4.357,
+       "top1pct_share_of_gross_profit": 0.114,
+       "top5pct_share_of_gross_profit": 0.381,
+       "max_drawdown_r_cumulative": 208.49,
+       "total_r": 333.1,
+       "exit_reasons": {
+        "trail": 5251
+       },
+       "winsorised_mean_r": 0.059,
+       "initial_risk_atr": {
+        "median": 3.0,
+        "p10": 3.0,
+        "p90": 3.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.4317
+       }
+      }
+     },
+     "test|bearish": {
+      "std": {
+       "n_positions": 4471,
+       "n_censored": 0,
+       "n": 4471,
+       "expectancy_r": -0.2058,
+       "median_r": -0.6123,
+       "win_rate": 0.3131,
+       "profit_factor": 0.679,
+       "avg_duration_bars": 24.68,
+       "median_duration_bars": 17.0,
+       "avg_mfe_r": 1.356,
+       "avg_mae_r": 0.959,
+       "max_win_r": 9.745,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.131,
+       "top5pct_share_of_gross_profit": 0.441,
+       "max_drawdown_r_cumulative": 1094.51,
+       "total_r": -920.1,
+       "exit_reasons": {
+        "time": 18,
+        "trail": 4453
+       },
+       "expectancy_ci95": [
+        -0.33204,
+        -0.06433
+       ]
+      },
+      "actual": {
+       "n_positions": 4471,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4471,
+       "expectancy_r": -0.1372,
+       "median_r": -0.4082,
+       "win_rate": 0.3131,
+       "profit_factor": 0.679,
+       "avg_duration_bars": 24.68,
+       "median_duration_bars": 17.0,
+       "avg_mfe_r": 0.904,
+       "avg_mae_r": 0.639,
+       "max_win_r": 6.497,
+       "max_loss_r": -4.343,
+       "top1pct_share_of_gross_profit": 0.131,
+       "top5pct_share_of_gross_profit": 0.441,
+       "max_drawdown_r_cumulative": 729.67,
+       "total_r": -613.4,
+       "exit_reasons": {
+        "time": 18,
+        "trail": 4453
+       },
+       "winsorised_mean_r": -0.1418,
+       "initial_risk_atr": {
+        "median": 3.0,
+        "p10": 3.0,
+        "p90": 3.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.4422
+       }
+      }
+     }
+    }
+   },
+   "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10": {
+    "60": {
+     "registered_definition_cap": true,
+     "train|all": {
+      "std": {
+       "n_positions": 9815,
+       "n_censored": 0,
+       "n": 9815,
+       "expectancy_r": -0.0135,
+       "median_r": -1.006,
+       "win_rate": 0.3776,
+       "profit_factor": 0.977,
+       "avg_duration_bars": 18.41,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.498,
+       "avg_mae_r": 0.886,
+       "max_win_r": 17.338,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.16,
+       "top5pct_share_of_gross_profit": 0.446,
+       "max_drawdown_r_cumulative": 610.53,
+       "total_r": -132.8,
+       "exit_reasons": {
+        "channel": 4680,
+        "stop": 4910,
+        "time": 225
+       },
+       "expectancy_ci95": [
+        -0.14788,
+        0.14128
+       ]
+      },
+      "actual": {
+       "n_positions": 9815,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 9815,
+       "expectancy_r": -0.0135,
+       "median_r": -1.006,
+       "win_rate": 0.3776,
+       "profit_factor": 0.977,
+       "avg_duration_bars": 18.41,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.498,
+       "avg_mae_r": 0.886,
+       "max_win_r": 17.338,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.16,
+       "top5pct_share_of_gross_profit": 0.446,
+       "max_drawdown_r_cumulative": 610.53,
+       "total_r": -132.8,
+       "exit_reasons": {
+        "channel": 4680,
+        "stop": 4910,
+        "time": 225
+       },
+       "winsorised_mean_r": -0.034,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "train|bullish": {
+      "std": {
+       "n_positions": 5520,
+       "n_censored": 0,
+       "n": 5520,
+       "expectancy_r": 0.0434,
+       "median_r": -0.6183,
+       "win_rate": 0.4091,
+       "profit_factor": 1.079,
+       "avg_duration_bars": 18.99,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.533,
+       "avg_mae_r": 0.867,
+       "max_win_r": 17.338,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.133,
+       "top5pct_share_of_gross_profit": 0.399,
+       "max_drawdown_r_cumulative": 199.69,
+       "total_r": 239.6,
+       "exit_reasons": {
+        "channel": 2829,
+        "stop": 2563,
+        "time": 128
+       },
+       "expectancy_ci95": [
+        -0.0761,
+        0.16013
+       ]
+      },
+      "actual": {
+       "n_positions": 5520,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5520,
+       "expectancy_r": 0.0434,
+       "median_r": -0.6183,
+       "win_rate": 0.4091,
+       "profit_factor": 1.079,
+       "avg_duration_bars": 18.99,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.533,
+       "avg_mae_r": 0.867,
+       "max_win_r": 17.338,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.133,
+       "top5pct_share_of_gross_profit": 0.399,
+       "max_drawdown_r_cumulative": 199.69,
+       "total_r": 239.6,
+       "exit_reasons": {
+        "channel": 2829,
+        "stop": 2563,
+        "time": 128
+       },
+       "winsorised_mean_r": 0.0305,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "train|bearish": {
+      "std": {
+       "n_positions": 4295,
+       "n_censored": 0,
+       "n": 4295,
+       "expectancy_r": -0.0867,
+       "median_r": -1.0084,
+       "win_rate": 0.3371,
+       "profit_factor": 0.861,
+       "avg_duration_bars": 17.65,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.452,
+       "avg_mae_r": 0.909,
+       "max_win_r": 15.313,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.19,
+       "top5pct_share_of_gross_profit": 0.514,
+       "max_drawdown_r_cumulative": 856.1,
+       "total_r": -372.4,
+       "exit_reasons": {
+        "channel": 1851,
+        "stop": 2347,
+        "time": 97
+       },
+       "expectancy_ci95": [
+        -0.37866,
+        0.24951
+       ]
+      },
+      "actual": {
+       "n_positions": 4295,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4295,
+       "expectancy_r": -0.0867,
+       "median_r": -1.0084,
+       "win_rate": 0.3371,
+       "profit_factor": 0.861,
+       "avg_duration_bars": 17.65,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.452,
+       "avg_mae_r": 0.909,
+       "max_win_r": 15.313,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.19,
+       "top5pct_share_of_gross_profit": 0.514,
+       "max_drawdown_r_cumulative": 856.1,
+       "total_r": -372.4,
+       "exit_reasons": {
+        "channel": 1851,
+        "stop": 2347,
+        "time": 97
+       },
+       "winsorised_mean_r": -0.1108,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|all": {
+      "std": {
+       "n_positions": 10637,
+       "n_censored": 0,
+       "n": 10637,
+       "expectancy_r": -0.0309,
+       "median_r": -1.0046,
+       "win_rate": 0.3838,
+       "profit_factor": 0.947,
+       "avg_duration_bars": 18.78,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.432,
+       "avg_mae_r": 0.896,
+       "max_win_r": 21.992,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.145,
+       "top5pct_share_of_gross_profit": 0.413,
+       "max_drawdown_r_cumulative": 584.46,
+       "total_r": -328.9,
+       "exit_reasons": {
+        "channel": 5125,
+        "stop": 5283,
+        "time": 229
+       },
+       "expectancy_ci95": [
+        -0.11877,
+        0.05903
+       ]
+      },
+      "actual": {
+       "n_positions": 10637,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 10637,
+       "expectancy_r": -0.0309,
+       "median_r": -1.0046,
+       "win_rate": 0.3838,
+       "profit_factor": 0.947,
+       "avg_duration_bars": 18.78,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.432,
+       "avg_mae_r": 0.896,
+       "max_win_r": 21.992,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.145,
+       "top5pct_share_of_gross_profit": 0.413,
+       "max_drawdown_r_cumulative": 584.46,
+       "total_r": -328.9,
+       "exit_reasons": {
+        "channel": 5125,
+        "stop": 5283,
+        "time": 229
+       },
+       "winsorised_mean_r": -0.0499,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|bullish": {
+      "std": {
+       "n_positions": 5533,
+       "n_censored": 0,
+       "n": 5533,
+       "expectancy_r": 0.1146,
+       "median_r": -0.5786,
+       "win_rate": 0.4099,
+       "profit_factor": 1.208,
+       "avg_duration_bars": 18.81,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.644,
+       "avg_mae_r": 0.878,
+       "max_win_r": 21.992,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.144,
+       "top5pct_share_of_gross_profit": 0.402,
+       "max_drawdown_r_cumulative": 302.51,
+       "total_r": 634.3,
+       "exit_reasons": {
+        "channel": 2865,
+        "stop": 2568,
+        "time": 100
+       },
+       "expectancy_ci95": [
+        -0.04239,
+        0.2547
+       ]
+      },
+      "actual": {
+       "n_positions": 5533,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5533,
+       "expectancy_r": 0.1146,
+       "median_r": -0.5786,
+       "win_rate": 0.4099,
+       "profit_factor": 1.208,
+       "avg_duration_bars": 18.81,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.644,
+       "avg_mae_r": 0.878,
+       "max_win_r": 21.992,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.144,
+       "top5pct_share_of_gross_profit": 0.402,
+       "max_drawdown_r_cumulative": 302.51,
+       "total_r": 634.3,
+       "exit_reasons": {
+        "channel": 2865,
+        "stop": 2568,
+        "time": 100
+       },
+       "winsorised_mean_r": 0.0908,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|bearish": {
+      "std": {
+       "n_positions": 5104,
+       "n_censored": 0,
+       "n": 5104,
+       "expectancy_r": -0.1887,
+       "median_r": -1.0061,
+       "win_rate": 0.3554,
+       "profit_factor": 0.692,
+       "avg_duration_bars": 18.76,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.203,
+       "avg_mae_r": 0.916,
+       "max_win_r": 18.212,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.127,
+       "top5pct_share_of_gross_profit": 0.411,
+       "max_drawdown_r_cumulative": 1066.55,
+       "total_r": -963.2,
+       "exit_reasons": {
+        "channel": 2260,
+        "stop": 2715,
+        "time": 129
+       },
+       "expectancy_ci95": [
+        -0.31088,
+        -0.07864
+       ]
+      },
+      "actual": {
+       "n_positions": 5104,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5104,
+       "expectancy_r": -0.1887,
+       "median_r": -1.0061,
+       "win_rate": 0.3554,
+       "profit_factor": 0.692,
+       "avg_duration_bars": 18.76,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.203,
+       "avg_mae_r": 0.916,
+       "max_win_r": 18.212,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.127,
+       "top5pct_share_of_gross_profit": 0.411,
+       "max_drawdown_r_cumulative": 1066.55,
+       "total_r": -963.2,
+       "exit_reasons": {
+        "channel": 2260,
+        "stop": 2715,
+        "time": 129
+       },
+       "winsorised_mean_r": -0.1944,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     }
+    },
+    "120": {
+     "registered_definition_cap": false,
+     "train|all": {
+      "std": {
+       "n_positions": 9710,
+       "n_censored": 0,
+       "n": 9710,
+       "expectancy_r": -0.0116,
+       "median_r": -1.006,
+       "win_rate": 0.3788,
+       "profit_factor": 0.98,
+       "avg_duration_bars": 18.75,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.516,
+       "avg_mae_r": 0.884,
+       "max_win_r": 34.07,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.163,
+       "top5pct_share_of_gross_profit": 0.447,
+       "max_drawdown_r_cumulative": 586.83,
+       "total_r": -112.5,
+       "exit_reasons": {
+        "channel": 4834,
+        "stop": 4867,
+        "time": 9
+       },
+       "expectancy_ci95": [
+        -0.14208,
+        0.14351
+       ]
+      },
+      "actual": {
+       "n_positions": 9710,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 9710,
+       "expectancy_r": -0.0116,
+       "median_r": -1.006,
+       "win_rate": 0.3788,
+       "profit_factor": 0.98,
+       "avg_duration_bars": 18.75,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.516,
+       "avg_mae_r": 0.884,
+       "max_win_r": 34.07,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.163,
+       "top5pct_share_of_gross_profit": 0.447,
+       "max_drawdown_r_cumulative": 586.83,
+       "total_r": -112.5,
+       "exit_reasons": {
+        "channel": 4834,
+        "stop": 4867,
+        "time": 9
+       },
+       "winsorised_mean_r": -0.0334,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "train|bullish": {
+      "std": {
+       "n_positions": 5458,
+       "n_censored": 0,
+       "n": 5458,
+       "expectancy_r": 0.0505,
+       "median_r": -0.6183,
+       "win_rate": 0.411,
+       "profit_factor": 1.092,
+       "avg_duration_bars": 19.35,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.56,
+       "avg_mae_r": 0.866,
+       "max_win_r": 34.07,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.139,
+       "top5pct_share_of_gross_profit": 0.401,
+       "max_drawdown_r_cumulative": 184.17,
+       "total_r": 275.4,
+       "exit_reasons": {
+        "channel": 2921,
+        "stop": 2534,
+        "time": 3
+       },
+       "expectancy_ci95": [
+        -0.07097,
+        0.16505
+       ]
+      },
+      "actual": {
+       "n_positions": 5458,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5458,
+       "expectancy_r": 0.0505,
+       "median_r": -0.6183,
+       "win_rate": 0.411,
+       "profit_factor": 1.092,
+       "avg_duration_bars": 19.35,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.56,
+       "avg_mae_r": 0.866,
+       "max_win_r": 34.07,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.139,
+       "top5pct_share_of_gross_profit": 0.401,
+       "max_drawdown_r_cumulative": 184.17,
+       "total_r": 275.4,
+       "exit_reasons": {
+        "channel": 2921,
+        "stop": 2534,
+        "time": 3
+       },
+       "winsorised_mean_r": 0.033,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "train|bearish": {
+      "std": {
+       "n_positions": 4252,
+       "n_censored": 0,
+       "n": 4252,
+       "expectancy_r": -0.0912,
+       "median_r": -1.0084,
+       "win_rate": 0.3375,
+       "profit_factor": 0.854,
+       "avg_duration_bars": 17.98,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.459,
+       "avg_mae_r": 0.907,
+       "max_win_r": 15.098,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.19,
+       "top5pct_share_of_gross_profit": 0.511,
+       "max_drawdown_r_cumulative": 842.6,
+       "total_r": -387.9,
+       "exit_reasons": {
+        "channel": 1913,
+        "stop": 2333,
+        "time": 6
+       },
+       "expectancy_ci95": [
+        -0.38247,
+        0.24577
+       ]
+      },
+      "actual": {
+       "n_positions": 4252,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4252,
+       "expectancy_r": -0.0912,
+       "median_r": -1.0084,
+       "win_rate": 0.3375,
+       "profit_factor": 0.854,
+       "avg_duration_bars": 17.98,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.459,
+       "avg_mae_r": 0.907,
+       "max_win_r": 15.098,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.19,
+       "top5pct_share_of_gross_profit": 0.511,
+       "max_drawdown_r_cumulative": 842.6,
+       "total_r": -387.9,
+       "exit_reasons": {
+        "channel": 1913,
+        "stop": 2333,
+        "time": 6
+       },
+       "winsorised_mean_r": -0.1147,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|all": {
+      "std": {
+       "n_positions": 10544,
+       "n_censored": 0,
+       "n": 10544,
+       "expectancy_r": -0.0306,
+       "median_r": -1.0047,
+       "win_rate": 0.3841,
+       "profit_factor": 0.947,
+       "avg_duration_bars": 19.07,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.45,
+       "avg_mae_r": 0.896,
+       "max_win_r": 24.717,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.148,
+       "top5pct_share_of_gross_profit": 0.414,
+       "max_drawdown_r_cumulative": 617.42,
+       "total_r": -322.6,
+       "exit_reasons": {
+        "channel": 5289,
+        "stop": 5250,
+        "time": 5
+       },
+       "expectancy_ci95": [
+        -0.1183,
+        0.06128
+       ]
+      },
+      "actual": {
+       "n_positions": 10544,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 10544,
+       "expectancy_r": -0.0306,
+       "median_r": -1.0047,
+       "win_rate": 0.3841,
+       "profit_factor": 0.947,
+       "avg_duration_bars": 19.07,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.45,
+       "avg_mae_r": 0.896,
+       "max_win_r": 24.717,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.148,
+       "top5pct_share_of_gross_profit": 0.414,
+       "max_drawdown_r_cumulative": 617.42,
+       "total_r": -322.6,
+       "exit_reasons": {
+        "channel": 5289,
+        "stop": 5250,
+        "time": 5
+       },
+       "winsorised_mean_r": -0.0511,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|bullish": {
+      "std": {
+       "n_positions": 5491,
+       "n_censored": 0,
+       "n": 5491,
+       "expectancy_r": 0.1183,
+       "median_r": -0.5748,
+       "win_rate": 0.411,
+       "profit_factor": 1.215,
+       "avg_duration_bars": 19.06,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.668,
+       "avg_mae_r": 0.877,
+       "max_win_r": 24.717,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.148,
+       "top5pct_share_of_gross_profit": 0.404,
+       "max_drawdown_r_cumulative": 301.75,
+       "total_r": 649.6,
+       "exit_reasons": {
+        "channel": 2943,
+        "stop": 2548
+       },
+       "expectancy_ci95": [
+        -0.03461,
+        0.26371
+       ]
+      },
+      "actual": {
+       "n_positions": 5491,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5491,
+       "expectancy_r": 0.1183,
+       "median_r": -0.5748,
+       "win_rate": 0.411,
+       "profit_factor": 1.215,
+       "avg_duration_bars": 19.06,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.668,
+       "avg_mae_r": 0.877,
+       "max_win_r": 24.717,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.148,
+       "top5pct_share_of_gross_profit": 0.404,
+       "max_drawdown_r_cumulative": 301.75,
+       "total_r": 649.6,
+       "exit_reasons": {
+        "channel": 2943,
+        "stop": 2548
+       },
+       "winsorised_mean_r": 0.0921,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|bearish": {
+      "std": {
+       "n_positions": 5053,
+       "n_censored": 0,
+       "n": 5053,
+       "expectancy_r": -0.1924,
+       "median_r": -1.0062,
+       "win_rate": 0.3548,
+       "profit_factor": 0.687,
+       "avg_duration_bars": 19.08,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.213,
+       "avg_mae_r": 0.917,
+       "max_win_r": 18.212,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.126,
+       "top5pct_share_of_gross_profit": 0.409,
+       "max_drawdown_r_cumulative": 1072.63,
+       "total_r": -972.2,
+       "exit_reasons": {
+        "channel": 2346,
+        "stop": 2702,
+        "time": 5
+       },
+       "expectancy_ci95": [
+        -0.32015,
+        -0.07549
+       ]
+      },
+      "actual": {
+       "n_positions": 5053,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5053,
+       "expectancy_r": -0.1924,
+       "median_r": -1.0062,
+       "win_rate": 0.3548,
+       "profit_factor": 0.687,
+       "avg_duration_bars": 19.08,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.213,
+       "avg_mae_r": 0.917,
+       "max_win_r": 18.212,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.126,
+       "top5pct_share_of_gross_profit": 0.409,
+       "max_drawdown_r_cumulative": 1072.63,
+       "total_r": -972.2,
+       "exit_reasons": {
+        "channel": 2346,
+        "stop": 2702,
+        "time": 5
+       },
+       "winsorised_mean_r": -0.1979,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     }
+    },
+    "250": {
+     "registered_definition_cap": false,
+     "train|all": {
+      "std": {
+       "n_positions": 9700,
+       "n_censored": 0,
+       "n": 9700,
+       "expectancy_r": -0.0115,
+       "median_r": -1.006,
+       "win_rate": 0.3788,
+       "profit_factor": 0.98,
+       "avg_duration_bars": 18.79,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.517,
+       "avg_mae_r": 0.884,
+       "max_win_r": 34.07,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.163,
+       "top5pct_share_of_gross_profit": 0.447,
+       "max_drawdown_r_cumulative": 585.07,
+       "total_r": -111.4,
+       "exit_reasons": {
+        "channel": 4835,
+        "stop": 4865
+       },
+       "expectancy_ci95": [
+        -0.14232,
+        0.14397
+       ]
+      },
+      "actual": {
+       "n_positions": 9700,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 9700,
+       "expectancy_r": -0.0115,
+       "median_r": -1.006,
+       "win_rate": 0.3788,
+       "profit_factor": 0.98,
+       "avg_duration_bars": 18.79,
+       "median_duration_bars": 15.0,
+       "avg_mfe_r": 1.517,
+       "avg_mae_r": 0.884,
+       "max_win_r": 34.07,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.163,
+       "top5pct_share_of_gross_profit": 0.447,
+       "max_drawdown_r_cumulative": 585.07,
+       "total_r": -111.4,
+       "exit_reasons": {
+        "channel": 4835,
+        "stop": 4865
+       },
+       "winsorised_mean_r": -0.0333,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "train|bullish": {
+      "std": {
+       "n_positions": 5453,
+       "n_censored": 0,
+       "n": 5453,
+       "expectancy_r": 0.0512,
+       "median_r": -0.6121,
+       "win_rate": 0.4113,
+       "profit_factor": 1.093,
+       "avg_duration_bars": 19.38,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.561,
+       "avg_mae_r": 0.866,
+       "max_win_r": 34.07,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.139,
+       "top5pct_share_of_gross_profit": 0.401,
+       "max_drawdown_r_cumulative": 184.17,
+       "total_r": 279.1,
+       "exit_reasons": {
+        "channel": 2922,
+        "stop": 2531
+       },
+       "expectancy_ci95": [
+        -0.07019,
+        0.16565
+       ]
+      },
+      "actual": {
+       "n_positions": 5453,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5453,
+       "expectancy_r": 0.0512,
+       "median_r": -0.6121,
+       "win_rate": 0.4113,
+       "profit_factor": 1.093,
+       "avg_duration_bars": 19.38,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.561,
+       "avg_mae_r": 0.866,
+       "max_win_r": 34.07,
+       "max_loss_r": -7.426,
+       "top1pct_share_of_gross_profit": 0.139,
+       "top5pct_share_of_gross_profit": 0.401,
+       "max_drawdown_r_cumulative": 184.17,
+       "total_r": 279.1,
+       "exit_reasons": {
+        "channel": 2922,
+        "stop": 2531
+       },
+       "winsorised_mean_r": 0.0337,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "train|bearish": {
+      "std": {
+       "n_positions": 4247,
+       "n_censored": 0,
+       "n": 4247,
+       "expectancy_r": -0.0919,
+       "median_r": -1.0085,
+       "win_rate": 0.3369,
+       "profit_factor": 0.853,
+       "avg_duration_bars": 18.03,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.46,
+       "avg_mae_r": 0.908,
+       "max_win_r": 15.098,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.19,
+       "top5pct_share_of_gross_profit": 0.511,
+       "max_drawdown_r_cumulative": 844.14,
+       "total_r": -390.5,
+       "exit_reasons": {
+        "channel": 1913,
+        "stop": 2334
+       },
+       "expectancy_ci95": [
+        -0.38296,
+        0.24675
+       ]
+      },
+      "actual": {
+       "n_positions": 4247,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 4247,
+       "expectancy_r": -0.0919,
+       "median_r": -1.0085,
+       "win_rate": 0.3369,
+       "profit_factor": 0.853,
+       "avg_duration_bars": 18.03,
+       "median_duration_bars": 14.0,
+       "avg_mfe_r": 1.46,
+       "avg_mae_r": 0.908,
+       "max_win_r": 15.098,
+       "max_loss_r": -4.278,
+       "top1pct_share_of_gross_profit": 0.19,
+       "top5pct_share_of_gross_profit": 0.511,
+       "max_drawdown_r_cumulative": 844.14,
+       "total_r": -390.5,
+       "exit_reasons": {
+        "channel": 1913,
+        "stop": 2334
+       },
+       "winsorised_mean_r": -0.1154,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|all": {
+      "std": {
+       "n_positions": 10536,
+       "n_censored": 0,
+       "n": 10536,
+       "expectancy_r": -0.0302,
+       "median_r": -1.0047,
+       "win_rate": 0.3843,
+       "profit_factor": 0.948,
+       "avg_duration_bars": 19.1,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.45,
+       "avg_mae_r": 0.896,
+       "max_win_r": 24.717,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.148,
+       "top5pct_share_of_gross_profit": 0.413,
+       "max_drawdown_r_cumulative": 613.77,
+       "total_r": -318.1,
+       "exit_reasons": {
+        "channel": 5289,
+        "stop": 5246,
+        "time": 1
+       },
+       "expectancy_ci95": [
+        -0.1183,
+        0.06204
+       ]
+      },
+      "actual": {
+       "n_positions": 10536,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 10536,
+       "expectancy_r": -0.0302,
+       "median_r": -1.0047,
+       "win_rate": 0.3843,
+       "profit_factor": 0.948,
+       "avg_duration_bars": 19.1,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.45,
+       "avg_mae_r": 0.896,
+       "max_win_r": 24.717,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.148,
+       "top5pct_share_of_gross_profit": 0.413,
+       "max_drawdown_r_cumulative": 613.77,
+       "total_r": -318.1,
+       "exit_reasons": {
+        "channel": 5289,
+        "stop": 5246,
+        "time": 1
+       },
+       "winsorised_mean_r": -0.0507,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|bullish": {
+      "std": {
+       "n_positions": 5491,
+       "n_censored": 0,
+       "n": 5491,
+       "expectancy_r": 0.1183,
+       "median_r": -0.5748,
+       "win_rate": 0.411,
+       "profit_factor": 1.215,
+       "avg_duration_bars": 19.06,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.668,
+       "avg_mae_r": 0.877,
+       "max_win_r": 24.717,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.148,
+       "top5pct_share_of_gross_profit": 0.404,
+       "max_drawdown_r_cumulative": 301.75,
+       "total_r": 649.6,
+       "exit_reasons": {
+        "channel": 2943,
+        "stop": 2548
+       },
+       "expectancy_ci95": [
+        -0.03461,
+        0.26371
+       ]
+      },
+      "actual": {
+       "n_positions": 5491,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5491,
+       "expectancy_r": 0.1183,
+       "median_r": -0.5748,
+       "win_rate": 0.411,
+       "profit_factor": 1.215,
+       "avg_duration_bars": 19.06,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.668,
+       "avg_mae_r": 0.877,
+       "max_win_r": 24.717,
+       "max_loss_r": -6.617,
+       "top1pct_share_of_gross_profit": 0.148,
+       "top5pct_share_of_gross_profit": 0.404,
+       "max_drawdown_r_cumulative": 301.75,
+       "total_r": 649.6,
+       "exit_reasons": {
+        "channel": 2943,
+        "stop": 2548
+       },
+       "winsorised_mean_r": 0.0921,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     },
+     "test|bearish": {
+      "std": {
+       "n_positions": 5045,
+       "n_censored": 0,
+       "n": 5045,
+       "expectancy_r": -0.1918,
+       "median_r": -1.0062,
+       "win_rate": 0.3552,
+       "profit_factor": 0.688,
+       "avg_duration_bars": 19.14,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.214,
+       "avg_mae_r": 0.917,
+       "max_win_r": 18.212,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.126,
+       "top5pct_share_of_gross_profit": 0.409,
+       "max_drawdown_r_cumulative": 1068.98,
+       "total_r": -967.7,
+       "exit_reasons": {
+        "channel": 2346,
+        "stop": 2698,
+        "time": 1
+       },
+       "expectancy_ci95": [
+        -0.31927,
+        -0.07563
+       ]
+      },
+      "actual": {
+       "n_positions": 5045,
+       "n_censored": 0,
+       "n_invalid_risk": 0,
+       "n": 5045,
+       "expectancy_r": -0.1918,
+       "median_r": -1.0062,
+       "win_rate": 0.3552,
+       "profit_factor": 0.688,
+       "avg_duration_bars": 19.14,
+       "median_duration_bars": 16.0,
+       "avg_mfe_r": 1.214,
+       "avg_mae_r": 0.917,
+       "max_win_r": 18.212,
+       "max_loss_r": -6.514,
+       "top1pct_share_of_gross_profit": 0.126,
+       "top5pct_share_of_gross_profit": 0.409,
+       "max_drawdown_r_cumulative": 1068.98,
+       "total_r": -967.7,
+       "exit_reasons": {
+        "channel": 2346,
+        "stop": 2698,
+        "time": 1
+       },
+       "winsorised_mean_r": -0.1974,
+       "initial_risk_atr": {
+        "median": 2.0,
+        "p10": 2.0,
+        "p90": 2.0,
+        "share_below_0_5_atr": 0.0,
+        "share_above_3_atr": 0.0
+       }
+      }
+     }
+    }
+   }
+  },
+  "cost_sensitivity_test": {
+   "donchian_breakout__exit_a_atr_stop_fixed_2r": {
+    "60": {
+     "0bps": {
+      "std_expectancy": -0.0213,
+      "actual_expectancy": -0.0213
+     },
+     "10bps": {
+      "std_expectancy": -0.0374,
+      "actual_expectancy": -0.0374
+     },
+     "25bps": {
+      "std_expectancy": -0.0616,
+      "actual_expectancy": -0.0616
+     }
+    },
+    "120": {
+     "0bps": {
+      "std_expectancy": -0.0237,
+      "actual_expectancy": -0.0237
+     },
+     "10bps": {
+      "std_expectancy": -0.0398,
+      "actual_expectancy": -0.0398
+     },
+     "25bps": {
+      "std_expectancy": -0.064,
+      "actual_expectancy": -0.064
+     }
+    },
+    "250": {
+     "0bps": {
+      "std_expectancy": -0.0248,
+      "actual_expectancy": -0.0248
+     },
+     "10bps": {
+      "std_expectancy": -0.0409,
+      "actual_expectancy": -0.0409
+     },
+     "25bps": {
+      "std_expectancy": -0.0651,
+      "actual_expectancy": -0.0651
+     }
+    }
+   },
+   "donchian_breakout__exit_a_atr_stop_fixed_3r": {
+    "60": {
+     "0bps": {
+      "std_expectancy": -0.0327,
+      "actual_expectancy": -0.0327
+     },
+     "10bps": {
+      "std_expectancy": -0.0487,
+      "actual_expectancy": -0.0487
+     },
+     "25bps": {
+      "std_expectancy": -0.0728,
+      "actual_expectancy": -0.0728
+     }
+    },
+    "120": {
+     "0bps": {
+      "std_expectancy": -0.055,
+      "actual_expectancy": -0.055
+     },
+     "10bps": {
+      "std_expectancy": -0.071,
+      "actual_expectancy": -0.071
+     },
+     "25bps": {
+      "std_expectancy": -0.0951,
+      "actual_expectancy": -0.0951
+     }
+    },
+    "250": {
+     "0bps": {
+      "std_expectancy": -0.0561,
+      "actual_expectancy": -0.0561
+     },
+     "10bps": {
+      "std_expectancy": -0.0723,
+      "actual_expectancy": -0.0723
+     },
+     "25bps": {
+      "std_expectancy": -0.0964,
+      "actual_expectancy": -0.0964
+     }
+    }
+   },
+   "donchian_breakout__exit_b_donchian_trail_10": {
+    "60": {
+     "0bps": {
+      "std_expectancy": -0.0083,
+      "actual_expectancy": -0.0008
+     },
+     "10bps": {
+      "std_expectancy": -0.0244,
+      "actual_expectancy": -0.0116
+     },
+     "25bps": {
+      "std_expectancy": -0.0487,
+      "actual_expectancy": -0.0278
+     }
+    },
+    "120": {
+     "0bps": {
+      "std_expectancy": -0.0078,
+      "actual_expectancy": 0.0
+     },
+     "10bps": {
+      "std_expectancy": -0.024,
+      "actual_expectancy": -0.0108
+     },
+     "25bps": {
+      "std_expectancy": -0.0482,
+      "actual_expectancy": -0.027
+     }
+    },
+    "250": {
+     "0bps": {
+      "std_expectancy": -0.0078,
+      "actual_expectancy": 0.0
+     },
+     "10bps": {
+      "std_expectancy": -0.024,
+      "actual_expectancy": -0.0108
+     },
+     "25bps": {
+      "std_expectancy": -0.0482,
+      "actual_expectancy": -0.027
+     }
+    }
+   },
+   "donchian_breakout__exit_c_atr_trail_3x": {
+    "60": {
+     "0bps": {
+      "std_expectancy": -0.0294,
+      "actual_expectancy": -0.0196
+     },
+     "10bps": {
+      "std_expectancy": -0.0454,
+      "actual_expectancy": -0.0303
+     },
+     "25bps": {
+      "std_expectancy": -0.0694,
+      "actual_expectancy": -0.0463
+     }
+    },
+    "120": {
+     "0bps": {
+      "std_expectancy": -0.0274,
+      "actual_expectancy": -0.0182
+     },
+     "10bps": {
+      "std_expectancy": -0.0434,
+      "actual_expectancy": -0.0289
+     },
+     "25bps": {
+      "std_expectancy": -0.0674,
+      "actual_expectancy": -0.0449
+     }
+    },
+    "250": {
+     "0bps": {
+      "std_expectancy": -0.0272,
+      "actual_expectancy": -0.0181
+     },
+     "10bps": {
+      "std_expectancy": -0.0432,
+      "actual_expectancy": -0.0288
+     },
+     "25bps": {
+      "std_expectancy": -0.0674,
+      "actual_expectancy": -0.0449
+     }
+    }
+   },
+   "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10": {
+    "60": {
+     "0bps": {
+      "std_expectancy": -0.0148,
+      "actual_expectancy": -0.0148
+     },
+     "10bps": {
+      "std_expectancy": -0.0309,
+      "actual_expectancy": -0.0309
+     },
+     "25bps": {
+      "std_expectancy": -0.0551,
+      "actual_expectancy": -0.0551
+     }
+    },
+    "120": {
+     "0bps": {
+      "std_expectancy": -0.0145,
+      "actual_expectancy": -0.0145
+     },
+     "10bps": {
+      "std_expectancy": -0.0306,
+      "actual_expectancy": -0.0306
+     },
+     "25bps": {
+      "std_expectancy": -0.0548,
+      "actual_expectancy": -0.0548
+     }
+    },
+    "250": {
+     "0bps": {
+      "std_expectancy": -0.0141,
+      "actual_expectancy": -0.0141
+     },
+     "10bps": {
+      "std_expectancy": -0.0302,
+      "actual_expectancy": -0.0302
+     },
+     "25bps": {
+      "std_expectancy": -0.0544,
+      "actual_expectancy": -0.0544
+     }
+    }
+   }
+  },
+  "longer_hold_paired_effect": {
+   "donchian_breakout__exit_a_atr_stop_fixed_2r": {
+    "cap120_minus_cap60_std_net_r": {
+     "train|all": {
+      "n": 34685,
+      "mean": 0.00253,
+      "ci95": [
+       -0.00358,
+       0.00927
+      ],
+      "share_signals_changed": 0.044
+     },
+     "train|bullish": {
+      "n": 20960,
+      "mean": 0.00944,
+      "ci95": [
+       0.00229,
+       0.0176
+      ],
+      "share_signals_changed": 0.0388
+     },
+     "train|bearish": {
+      "n": 13725,
+      "mean": -0.00804,
+      "ci95": [
+       -0.01748,
+       0.00118
+      ],
+      "share_signals_changed": 0.0519
+     },
+     "test|all": {
+      "n": 38190,
+      "mean": -0.00484,
+      "ci95": [
+       -0.01071,
+       0.00121
+      ],
+      "share_signals_changed": 0.0437
+     },
+     "test|bullish": {
+      "n": 20838,
+      "mean": -0.00071,
+      "ci95": [
+       -0.00621,
+       0.00408
+      ],
+      "share_signals_changed": 0.0252
+     },
+     "test|bearish": {
+      "n": 17352,
+      "mean": -0.0098,
+      "ci95": [
+       -0.02357,
+       0.00307
+      ],
+      "share_signals_changed": 0.0659
+     }
+    },
+    "cap250_minus_cap60_std_net_r": {
+     "train|all": {
+      "n": 34685,
+      "mean": 0.00416,
+      "ci95": [
+       -0.00293,
+       0.0121
+      ],
+      "share_signals_changed": 0.0441
+     },
+     "train|bullish": {
+      "n": 20960,
+      "mean": 0.01139,
+      "ci95": [
+       0.00264,
+       0.02123
+      ],
+      "share_signals_changed": 0.0389
+     },
+     "train|bearish": {
+      "n": 13725,
+      "mean": -0.00689,
+      "ci95": [
+       -0.01703,
+       0.00282
+      ],
+      "share_signals_changed": 0.0519
+     },
+     "test|all": {
+      "n": 38190,
+      "mean": -0.00452,
+      "ci95": [
+       -0.01098,
+       0.0018
+      ],
+      "share_signals_changed": 0.0438
+     },
+     "test|bullish": {
+      "n": 20838,
+      "mean": -0.00029,
+      "ci95": [
+       -0.00581,
+       0.0049
+      ],
+      "share_signals_changed": 0.0252
+     },
+     "test|bearish": {
+      "n": 17352,
+      "mean": -0.0096,
+      "ci95": [
+       -0.02494,
+       0.00396
+      ],
+      "share_signals_changed": 0.066
+     }
+    }
+   },
+   "donchian_breakout__exit_a_atr_stop_fixed_3r": {
+    "cap120_minus_cap60_std_net_r": {
+     "train|all": {
+      "n": 34685,
+      "mean": 0.00983,
+      "ci95": [
+       -0.00563,
+       0.02695
+      ],
+      "share_signals_changed": 0.1064
+     },
+     "train|bullish": {
+      "n": 20960,
+      "mean": 0.02911,
+      "ci95": [
+       0.00862,
+       0.0534
+      ],
+      "share_signals_changed": 0.1062
+     },
+     "train|bearish": {
+      "n": 13725,
+      "mean": -0.0196,
+      "ci95": [
+       -0.04428,
+       0.0028
+      ],
+      "share_signals_changed": 0.1067
+     },
+     "test|all": {
+      "n": 38190,
+      "mean": -0.01507,
+      "ci95": [
+       -0.0309,
+       0.00212
+      ],
+      "share_signals_changed": 0.1162
+     },
+     "test|bullish": {
+      "n": 20838,
+      "mean": 0.00441,
+      "ci95": [
+       -0.01601,
+       0.02402
+      ],
+      "share_signals_changed": 0.0874
+     },
+     "test|bearish": {
+      "n": 17352,
+      "mean": -0.03846,
+      "ci95": [
+       -0.07349,
+       -0.00141
+      ],
+      "share_signals_changed": 0.1508
+     }
+    },
+    "cap250_minus_cap60_std_net_r": {
+     "train|all": {
+      "n": 34685,
+      "mean": 0.01782,
+      "ci95": [
+       -0.00086,
+       0.03815
+      ],
+      "share_signals_changed": 0.1065
+     },
+     "train|bullish": {
+      "n": 20960,
+      "mean": 0.03978,
+      "ci95": [
+       0.01361,
+       0.06942
+      ],
+      "share_signals_changed": 0.1063
+     },
+     "train|bearish": {
+      "n": 13725,
+      "mean": -0.01572,
+      "ci95": [
+       -0.03993,
+       0.01044
+      ],
+      "share_signals_changed": 0.1067
+     },
+     "test|all": {
+      "n": 38190,
+      "mean": -0.01559,
+      "ci95": [
+       -0.03345,
+       0.00152
+      ],
+      "share_signals_changed": 0.1162
+     },
+     "test|bullish": {
+      "n": 20838,
+      "mean": 0.00829,
+      "ci95": [
+       -0.0126,
+       0.02867
+      ],
+      "share_signals_changed": 0.0874
+     },
+     "test|bearish": {
+      "n": 17352,
+      "mean": -0.04426,
+      "ci95": [
+       -0.08023,
+       -0.0088
+      ],
+      "share_signals_changed": 0.1508
+     }
+    }
+   },
+   "donchian_breakout__exit_b_donchian_trail_10": {
+    "cap120_minus_cap60_std_net_r": {
+     "train|all": {
+      "n": 34685,
+      "mean": -0.00244,
+      "ci95": [
+       -0.00507,
+       0.00064
+      ],
+      "share_signals_changed": 0.0079
+     },
+     "train|bullish": {
+      "n": 20960,
+      "mean": -0.00251,
+      "ci95": [
+       -0.00693,
+       0.00273
+      ],
+      "share_signals_changed": 0.0102
+     },
+     "train|bearish": {
+      "n": 13725,
+      "mean": -0.00235,
+      "ci95": [
+       -0.00556,
+       -0.0006
+      ],
+      "share_signals_changed": 0.0044
+     },
+     "test|all": {
+      "n": 38190,
+      "mean": -0.00151,
+      "ci95": [
+       -0.00571,
+       0.0023
+      ],
+      "share_signals_changed": 0.007
+     },
+     "test|bullish": {
+      "n": 20838,
+      "mean": -0.00128,
+      "ci95": [
+       -0.00891,
+       0.00527
+      ],
+      "share_signals_changed": 0.0089
+     },
+     "test|bearish": {
+      "n": 17352,
+      "mean": -0.00177,
+      "ci95": [
+       -0.00289,
+       -0.00087
+      ],
+      "share_signals_changed": 0.0048
+     }
+    },
+    "cap250_minus_cap60_std_net_r": {
+     "train|all": {
+      "n": 34685,
+      "mean": -0.00244,
+      "ci95": [
+       -0.00507,
+       0.00064
+      ],
+      "share_signals_changed": 0.0079
+     },
+     "train|bullish": {
+      "n": 20960,
+      "mean": -0.00251,
+      "ci95": [
+       -0.00693,
+       0.00273
+      ],
+      "share_signals_changed": 0.0102
+     },
+     "train|bearish": {
+      "n": 13725,
+      "mean": -0.00235,
+      "ci95": [
+       -0.00556,
+       -0.0006
+      ],
+      "share_signals_changed": 0.0044
+     },
+     "test|all": {
+      "n": 38190,
+      "mean": -0.00151,
+      "ci95": [
+       -0.00571,
+       0.0023
+      ],
+      "share_signals_changed": 0.007
+     },
+     "test|bullish": {
+      "n": 20838,
+      "mean": -0.00128,
+      "ci95": [
+       -0.00891,
+       0.00527
+      ],
+      "share_signals_changed": 0.0089
+     },
+     "test|bearish": {
+      "n": 17352,
+      "mean": -0.00177,
+      "ci95": [
+       -0.00289,
+       -0.00087
+      ],
+      "share_signals_changed": 0.0048
+     }
+    }
+   },
+   "donchian_breakout__exit_c_atr_trail_3x": {
+    "cap120_minus_cap60_std_net_r": {
+     "train|all": {
+      "n": 34685,
+      "mean": -0.00408,
+      "ci95": [
+       -0.00893,
+       0.00156
+      ],
+      "share_signals_changed": 0.0489
+     },
+     "train|bullish": {
+      "n": 20960,
+      "mean": 0.00235,
+      "ci95": [
+       -0.00413,
+       0.01018
+      ],
+      "share_signals_changed": 0.0448
+     },
+     "train|bearish": {
+      "n": 13725,
+      "mean": -0.01389,
+      "ci95": [
+       -0.02304,
+       -0.00676
+      ],
+      "share_signals_changed": 0.0553
+     },
+     "test|all": {
+      "n": 38190,
+      "mean": -0.00318,
+      "ci95": [
+       -0.00989,
+       0.00369
+      ],
+      "share_signals_changed": 0.0467
+     },
+     "test|bullish": {
+      "n": 20838,
+      "mean": 0.00289,
+      "ci95": [
+       -0.00541,
+       0.01336
+      ],
+      "share_signals_changed": 0.0286
+     },
+     "test|bearish": {
+      "n": 17352,
+      "mean": -0.01048,
+      "ci95": [
+       -0.02302,
+       0.00186
+      ],
+      "share_signals_changed": 0.0685
+     }
+    },
+    "cap250_minus_cap60_std_net_r": {
+     "train|all": {
+      "n": 34685,
+      "mean": -0.0031,
+      "ci95": [
+       -0.00953,
+       0.00586
+      ],
+      "share_signals_changed": 0.049
+     },
+     "train|bullish": {
+      "n": 20960,
+      "mean": 0.00393,
+      "ci95": [
+       -0.00507,
+       0.01762
+      ],
+      "share_signals_changed": 0.0448
+     },
+     "train|bearish": {
+      "n": 13725,
+      "mean": -0.01385,
+      "ci95": [
+       -0.0238,
+       -0.00618
+      ],
+      "share_signals_changed": 0.0553
+     },
+     "test|all": {
+      "n": 38190,
+      "mean": -0.00501,
+      "ci95": [
+       -0.01246,
+       0.0012
+      ],
+      "share_signals_changed": 0.0467
+     },
+     "test|bullish": {
+      "n": 20838,
+      "mean": 0.00187,
+      "ci95": [
+       -0.00609,
+       0.01108
+      ],
+      "share_signals_changed": 0.0286
+     },
+     "test|bearish": {
+      "n": 17352,
+      "mean": -0.01328,
+      "ci95": [
+       -0.02792,
+       -0.00158
+      ],
+      "share_signals_changed": 0.0685
+     }
+    }
+   },
+   "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10": {
+    "cap120_minus_cap60_std_net_r": {
+     "train|all": {
+      "n": 34685,
+      "mean": -0.00398,
+      "ci95": [
+       -0.00648,
+       -0.00089
+      ],
+      "share_signals_changed": 0.0215
+     },
+     "train|bullish": {
+      "n": 20960,
+      "mean": -0.00328,
+      "ci95": [
+       -0.0073,
+       0.001
+      ],
+      "share_signals_changed": 0.0215
+     },
+     "train|bearish": {
+      "n": 13725,
+      "mean": -0.00504,
+      "ci95": [
+       -0.0092,
+       -0.00141
+      ],
+      "share_signals_changed": 0.0215
+     },
+     "test|all": {
+      "n": 38190,
+      "mean": -0.00314,
+      "ci95": [
+       -0.00762,
+       0.0008
+      ],
+      "share_signals_changed": 0.02
+     },
+     "test|bullish": {
+      "n": 20838,
+      "mean": -0.00111,
+      "ci95": [
+       -0.00821,
+       0.00498
+      ],
+      "share_signals_changed": 0.0168
+     },
+     "test|bearish": {
+      "n": 17352,
+      "mean": -0.00558,
+      "ci95": [
+       -0.00968,
+       -0.0023
+      ],
+      "share_signals_changed": 0.0238
+     }
+    },
+    "cap250_minus_cap60_std_net_r": {
+     "train|all": {
+      "n": 34685,
+      "mean": -0.00401,
+      "ci95": [
+       -0.00648,
+       -0.00108
+      ],
+      "share_signals_changed": 0.0215
+     },
+     "train|bullish": {
+      "n": 20960,
+      "mean": -0.00341,
+      "ci95": [
+       -0.00732,
+       0.00092
+      ],
+      "share_signals_changed": 0.0216
+     },
+     "train|bearish": {
+      "n": 13725,
+      "mean": -0.00493,
+      "ci95": [
+       -0.00908,
+       -0.00107
+      ],
+      "share_signals_changed": 0.0215
+     },
+     "test|all": {
+      "n": 38190,
+      "mean": -0.00316,
+      "ci95": [
+       -0.00763,
+       0.00075
+      ],
+      "share_signals_changed": 0.02
+     },
+     "test|bullish": {
+      "n": 20838,
+      "mean": -0.00111,
+      "ci95": [
+       -0.00821,
+       0.00498
+      ],
+      "share_signals_changed": 0.0168
+     },
+     "test|bearish": {
+      "n": 17352,
+      "mean": -0.00562,
+      "ci95": [
+       -0.01014,
+       -0.00244
+      ],
+      "share_signals_changed": 0.0238
+     }
+    }
+   }
+  },
+  "risk_actual_vs_standardised_cap60": {
+   "donchian_breakout__exit_a_atr_stop_fixed_2r": {
+    "std_expectancy": -0.0217,
+    "std_profit_factor": 0.968,
+    "actual_expectancy": -0.0217,
+    "actual_winsorised_mean": -0.022,
+    "actual_profit_factor": 0.968,
+    "n_positions": 23095,
+    "n_invalid_actual_risk": 0,
+    "initial_risk_atr": {
+     "median": 2.0,
+     "p10": 2.0,
+     "p90": 2.0,
+     "share_below_0_5_atr": 0.0,
+     "share_above_3_atr": 0.0
+    },
+    "std_max_loss_r": -7.426,
+    "actual_max_loss_r": -7.426
+   },
+   "donchian_breakout__exit_a_atr_stop_fixed_3r": {
+    "std_expectancy": -0.0295,
+    "std_profit_factor": 0.96,
+    "actual_expectancy": -0.0295,
+    "actual_winsorised_mean": -0.0291,
+    "actual_profit_factor": 0.96,
+    "n_positions": 20359,
+    "n_invalid_actual_risk": 0,
+    "initial_risk_atr": {
+     "median": 2.0,
+     "p10": 2.0,
+     "p90": 2.0,
+     "share_below_0_5_atr": 0.0,
+     "share_above_3_atr": 0.0
+    },
+    "std_max_loss_r": -7.426,
+    "actual_max_loss_r": -7.426
+   },
+   "donchian_breakout__exit_b_donchian_trail_10": {
+    "std_expectancy": -0.0196,
+    "std_profit_factor": 0.963,
+    "actual_expectancy": -0.0126,
+    "actual_winsorised_mean": -0.0287,
+    "actual_profit_factor": 0.962,
+    "n_positions": 21581,
+    "n_invalid_actual_risk": 29,
+    "initial_risk_atr": {
+     "median": 3.315,
+     "p10": 2.28,
+     "p90": 4.669,
+     "share_below_0_5_atr": 0.0009,
+     "share_above_3_atr": 0.6392
+    },
+    "std_max_loss_r": -6.536,
+    "actual_max_loss_r": -4.861
+   },
+   "donchian_breakout__exit_c_atr_trail_3x": {
+    "std_expectancy": -0.0357,
+    "std_profit_factor": 0.94,
+    "actual_expectancy": -0.0238,
+    "actual_winsorised_mean": -0.0283,
+    "actual_profit_factor": 0.94,
+    "n_positions": 20058,
+    "n_invalid_actual_risk": 0,
+    "initial_risk_atr": {
+     "median": 3.0,
+     "p10": 3.0,
+     "p90": 3.0,
+     "share_below_0_5_atr": 0.0,
+     "share_above_3_atr": 0.4342
+    },
+    "std_max_loss_r": -7.426,
+    "actual_max_loss_r": -4.95
+   },
+   "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10": {
+    "std_expectancy": -0.0244,
+    "std_profit_factor": 0.958,
+    "actual_expectancy": -0.0244,
+    "actual_winsorised_mean": -0.0447,
+    "actual_profit_factor": 0.958,
+    "n_positions": 20814,
+    "n_invalid_actual_risk": 0,
+    "initial_risk_atr": {
+     "median": 2.0,
+     "p10": 2.0,
+     "p90": 2.0,
+     "share_below_0_5_atr": 0.0,
+     "share_above_3_atr": 0.0
+    },
+    "std_max_loss_r": -7.426,
+    "actual_max_loss_r": -7.426
+   }
+  },
+  "strategy_selection_baselines_cap60_std_net": {
+   "n_by_split": {
+    "embargo": 1157,
+    "purged": 258,
+    "test": 38190,
+    "train": 34427
+   },
+   "rules": {
+    "direction": {
+     "n_train": 34427,
+     "n_test": 38190,
+     "variants": [
+      "donchian_breakout__exit_a_atr_stop_fixed_2r",
+      "donchian_breakout__exit_a_atr_stop_fixed_3r",
+      "donchian_breakout__exit_b_donchian_trail_10",
+      "donchian_breakout__exit_c_atr_trail_3x",
+      "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10"
+     ],
+     "fixed_variant_test_mean": {
+      "donchian_breakout__exit_a_atr_stop_fixed_2r": -0.0489,
+      "donchian_breakout__exit_a_atr_stop_fixed_3r": -0.069,
+      "donchian_breakout__exit_b_donchian_trail_10": -0.0568,
+      "donchian_breakout__exit_c_atr_trail_3x": -0.0804,
+      "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10": -0.0556
+     },
+     "fixed_variant_train_mean": {
+      "donchian_breakout__exit_a_atr_stop_fixed_2r": -0.0379,
+      "donchian_breakout__exit_a_atr_stop_fixed_3r": -0.0289,
+      "donchian_breakout__exit_b_donchian_trail_10": -0.0373,
+      "donchian_breakout__exit_c_atr_trail_3x": -0.0505,
+      "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10": -0.0503
+     },
+     "best_single_variant_on_train": "donchian_breakout__exit_a_atr_stop_fixed_3r",
+     "group_best_pick_on_train": {
+      "bear": "donchian_breakout__exit_b_donchian_trail_10",
+      "bull": "donchian_breakout__exit_a_atr_stop_fixed_3r"
+     },
+     "rules_test_mean": {
+      "best_single_variant": -0.069,
+      "best_variant_per_group": -0.0659,
+      "per_signal_oracle_UPPER_BOUND": 0.6267
+     },
+     "test_mean_ci95": {
+      "best_single_variant": [
+       -0.1705,
+       0.03919
+      ],
+      "best_variant_per_group": [
+       -0.15736,
+       0.03231
+      ]
+     },
+     "group_rule_minus_best_single_ci95": {
+      "n": 38190,
+      "mean": 0.00312,
+      "ci95": [
+       -0.03555,
+       0.03613
+      ]
+     }
+    },
+    "direction_x_catalyst": {
+     "n_train": 34427,
+     "n_test": 38190,
+     "variants": [
+      "donchian_breakout__exit_a_atr_stop_fixed_2r",
+      "donchian_breakout__exit_a_atr_stop_fixed_3r",
+      "donchian_breakout__exit_b_donchian_trail_10",
+      "donchian_breakout__exit_c_atr_trail_3x",
+      "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10"
+     ],
+     "fixed_variant_test_mean": {
+      "donchian_breakout__exit_a_atr_stop_fixed_2r": -0.0489,
+      "donchian_breakout__exit_a_atr_stop_fixed_3r": -0.069,
+      "donchian_breakout__exit_b_donchian_trail_10": -0.0568,
+      "donchian_breakout__exit_c_atr_trail_3x": -0.0804,
+      "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10": -0.0556
+     },
+     "fixed_variant_train_mean": {
+      "donchian_breakout__exit_a_atr_stop_fixed_2r": -0.0379,
+      "donchian_breakout__exit_a_atr_stop_fixed_3r": -0.0289,
+      "donchian_breakout__exit_b_donchian_trail_10": -0.0373,
+      "donchian_breakout__exit_c_atr_trail_3x": -0.0505,
+      "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10": -0.0503
+     },
+     "best_single_variant_on_train": "donchian_breakout__exit_a_atr_stop_fixed_3r",
+     "group_best_pick_on_train": {
+      "bear|none": "donchian_breakout__exit_b_donchian_trail_10",
+      "bear|one_time_suspected": "donchian_breakout__exit_b_donchian_trail_10",
+      "bear|recurring_operating": "donchian_breakout__exit_a_atr_stop_fixed_2r",
+      "bear|unclassified": "donchian_breakout__exit_b_donchian_trail_10",
+      "bull|none": "donchian_breakout__exit_a_atr_stop_fixed_3r",
+      "bull|one_time_suspected": "donchian_breakout__exit_a_atr_stop_fixed_3r",
+      "bull|recurring_operating": "donchian_breakout__exit_a_atr_stop_fixed_3r",
+      "bull|unclassified": "donchian_breakout__exit_c_atr_trail_3x"
+     },
+     "rules_test_mean": {
+      "best_single_variant": -0.069,
+      "best_variant_per_group": -0.0642,
+      "per_signal_oracle_UPPER_BOUND": 0.6267
+     },
+     "test_mean_ci95": {
+      "best_single_variant": [
+       -0.1705,
+       0.03919
+      ],
+      "best_variant_per_group": [
+       -0.15567,
+       0.03321
+      ]
+     },
+     "group_rule_minus_best_single_ci95": {
+      "n": 38190,
+      "mean": 0.00484,
+      "ci95": [
+       -0.03406,
+       0.03709
+      ]
+     }
+    },
+    "direction_x_index_regime": {
+     "n_train": 34427,
+     "n_test": 38190,
+     "variants": [
+      "donchian_breakout__exit_a_atr_stop_fixed_2r",
+      "donchian_breakout__exit_a_atr_stop_fixed_3r",
+      "donchian_breakout__exit_b_donchian_trail_10",
+      "donchian_breakout__exit_c_atr_trail_3x",
+      "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10"
+     ],
+     "fixed_variant_test_mean": {
+      "donchian_breakout__exit_a_atr_stop_fixed_2r": -0.0489,
+      "donchian_breakout__exit_a_atr_stop_fixed_3r": -0.069,
+      "donchian_breakout__exit_b_donchian_trail_10": -0.0568,
+      "donchian_breakout__exit_c_atr_trail_3x": -0.0804,
+      "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10": -0.0556
+     },
+     "fixed_variant_train_mean": {
+      "donchian_breakout__exit_a_atr_stop_fixed_2r": -0.0379,
+      "donchian_breakout__exit_a_atr_stop_fixed_3r": -0.0289,
+      "donchian_breakout__exit_b_donchian_trail_10": -0.0373,
+      "donchian_breakout__exit_c_atr_trail_3x": -0.0505,
+      "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10": -0.0503
+     },
+     "best_single_variant_on_train": "donchian_breakout__exit_a_atr_stop_fixed_3r",
+     "group_best_pick_on_train": {
+      "bear|down": "donchian_breakout__exit_b_donchian_trail_10",
+      "bear|up": "donchian_breakout__exit_b_donchian_trail_10",
+      "bull|down": "donchian_breakout__exit_a_atr_stop_fixed_3r",
+      "bull|up": "donchian_breakout__exit_a_atr_stop_fixed_3r"
+     },
+     "rules_test_mean": {
+      "best_single_variant": -0.069,
+      "best_variant_per_group": -0.0659,
+      "per_signal_oracle_UPPER_BOUND": 0.6267
+     },
+     "test_mean_ci95": {
+      "best_single_variant": [
+       -0.1705,
+       0.03919
+      ],
+      "best_variant_per_group": [
+       -0.15736,
+       0.03231
+      ]
+     },
+     "group_rule_minus_best_single_ci95": {
+      "n": 38190,
+      "mean": 0.00312,
+      "ci95": [
+       -0.03555,
+       0.03613
+      ]
+     }
+    }
+   },
+   "note": "rules are fitted on TRAIN rows only; the per-signal oracle is an unattainable upper bound; signals on their own (counterfactual), not position-accounted"
+  },
+  "ml_ready_table": {
+   "file": "strategy_signal_outcomes.csv.gz",
+   "rows": 74032,
+   "columns": [
+    "symbol",
+    "signal_date",
+    "direction",
+    "split_cap60",
+    "relvol_signal_bar",
+    "ret5_to_signal",
+    "ret20_to_signal",
+    "atr_pct",
+    "regime_up_prev_session",
+    "catalyst_class",
+    "catalyst_days_since",
+    "catalyst_decision_accepted_at",
+    "catalyst_release_accession",
+    "donchian_breakout__exit_a_atr_stop_fixed_2r__cap60__r_std_net10",
+    "donchian_breakout__exit_a_atr_stop_fixed_2r__cap60__r_actual_net10",
+    "donchian_breakout__exit_a_atr_stop_fixed_2r__cap250__r_std_net10",
+    "donchian_breakout__exit_a_atr_stop_fixed_2r__cap250__r_actual_net10",
+    "donchian_breakout__exit_a_atr_stop_fixed_2r__cap60__exit_reason",
+    "donchian_breakout__exit_a_atr_stop_fixed_2r__cap60__bars_held",
+    "donchian_breakout__exit_a_atr_stop_fixed_2r__cap60__initial_risk_atr",
+    "donchian_breakout__exit_a_atr_stop_fixed_3r__cap60__r_std_net10",
+    "donchian_breakout__exit_a_atr_stop_fixed_3r__cap60__r_actual_net10",
+    "donchian_breakout__exit_a_atr_stop_fixed_3r__cap250__r_std_net10",
+    "donchian_breakout__exit_a_atr_stop_fixed_3r__cap250__r_actual_net10",
+    "donchian_breakout__exit_a_atr_stop_fixed_3r__cap60__exit_reason",
+    "donchian_breakout__exit_a_atr_stop_fixed_3r__cap60__bars_held",
+    "donchian_breakout__exit_a_atr_stop_fixed_3r__cap60__initial_risk_atr",
+    "donchian_breakout__exit_b_donchian_trail_10__cap60__r_std_net10",
+    "donchian_breakout__exit_b_donchian_trail_10__cap60__r_actual_net10",
+    "donchian_breakout__exit_b_donchian_trail_10__cap250__r_std_net10",
+    "donchian_breakout__exit_b_donchian_trail_10__cap250__r_actual_net10",
+    "donchian_breakout__exit_b_donchian_trail_10__cap60__exit_reason",
+    "donchian_breakout__exit_b_donchian_trail_10__cap60__bars_held",
+    "donchian_breakout__exit_b_donchian_trail_10__cap60__initial_risk_atr",
+    "donchian_breakout__exit_c_atr_trail_3x__cap60__r_std_net10",
+    "donchian_breakout__exit_c_atr_trail_3x__cap60__r_actual_net10",
+    "donchian_breakout__exit_c_atr_trail_3x__cap250__r_std_net10",
+    "donchian_breakout__exit_c_atr_trail_3x__cap250__r_actual_net10",
+    "donchian_breakout__exit_c_atr_trail_3x__cap60__exit_reason",
+    "donchian_breakout__exit_c_atr_trail_3x__cap60__bars_held",
+    "donchian_breakout__exit_c_atr_trail_3x__cap60__initial_risk_atr",
+    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap60__r_std_net10",
+    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap60__r_actual_net10",
+    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap250__r_std_net10",
+    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap250__r_actual_net10",
+    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap60__exit_reason",
+    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap60__bars_held",
+    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap60__initial_risk_atr"
+   ],
+   "sha256_of_csv": "bc79782bdd3b41a2fcf1193a01c29e754b13d1a5a36b8710957bf04e793a4602",
+   "split_counts_cap60": {
+    "embargo": 1157,
+    "purged": 258,
+    "test": 38190,
+    "train": 34427
+   },
+   "point_in_time": "features use bars <= the signal bar; the catalyst is the latest earnings event whose reaction session completed BEFORE the signal session, with its SEC acceptance timestamp",
+   "purge_note": "split_cap60 = 'purged' for a train-period signal whose position under ANY variant (cap 60) is still open at the test start"
+  },
+  "paper_tracker_replay_validation": {
+   "symbols": 39,
+   "sessions_replayed": 2528,
+   "signals_registered": 8627,
+   "variants": 5,
+   "batch_positions_compared": 12157,
+   "closed_by_tracker": 12157,
+   "mismatches": 0,
+   "tracker_extra_closed": 0,
+   "first_mismatch": null,
+   "state_hash": "56fa6d02ed31bc22f43bc74646e254c879ab8f5f8701a77fcb565f9bce32fa25",
+   "open_at_end": 0,
+   "summary": {
+    "donchian_breakout__exit_a_atr_stop_fixed_2r": {
+     "pending": 0,
+     "open": 0,
+     "closed": 2655
+    },
+    "donchian_breakout__exit_a_atr_stop_fixed_3r": {
+     "pending": 0,
+     "open": 0,
+     "closed": 2342
+    },
+    "donchian_breakout__exit_b_donchian_trail_10": {
+     "pending": 0,
+     "open": 0,
+     "closed": 2468
+    },
+    "donchian_breakout__exit_c_atr_trail_3x": {
+     "pending": 0,
+     "open": 0,
+     "closed": 2287
+    },
+    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10": {
+     "pending": 0,
+     "open": 0,
+     "closed": 2405
+    }
+   },
+   "writes_anything": false
+  }
+ }
+}
