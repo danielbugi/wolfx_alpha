@@ -47,3 +47,20 @@ Rollback: restore the previous compose file and unit (kept as `.bak`); `mechanis
 
 Until then: **a backend deployment is safe for the bot** (`deploy.sh` is backend-only and `--no-deps`); the risk is a hand-run compose command, and the rule for those is to name one service and its
 variable explicitly and to compare running images before and after.
+
+## Prepared and tested (2026-10-12) — still NOT installed or activated
+
+Owner decision: the bot image, `CURRENT_MECHANISM_SHA` and the arming file stay as they are; the fix may be prepared and tested separately. It is, as inactive files:
+
+| File | What it is |
+|---|---|
+| `deploy/vps/compose_env.sh` | library: exports `BACKEND_/BOT_/MECHANISM_/FRONTEND_IMAGE_TAG`, each from its own pin file (`CURRENT_SHA`, new `CURRENT_BOT_SHA`, `CURRENT_MECHANISM_SHA`); validates 12-hex; ignores `BOT_`/`MECHANISM_` values from the environment; drops the legacy `IMAGE_TAG` |
+| `deploy/vps/run_bot_service.sh` | bot wrapper (replaces the earlier unsafe proposal): `up` = `--profile bot up -d --no-deps bot`, refuses to start without a running postgres |
+| `deploy/vps/donchian-bot.service.proposed` | unit using the wrapper; `EnvironmentFile=mechanism_image_tag.env` retired |
+| `deploy/vps/blast_radius_guard.sh` + `deploy/vps/deploy.sh.proposed` | `deploy.sh` with per-service tags and a before/after snapshot of every container except backend / reverse-proxy; a change is logged and the script exits 3 **without** rolling back |
+| `docker-compose.prod.yml.proposed` | bot image uses a strict `${BOT_IMAGE_TAG:-bot-tag-not-set}` (no `IMAGE_TAG` fallback); backend, frontend, pipeline, channel-sender use their own variable and fall back to `IMAGE_TAG` during the transition, so the existing wrappers keep working until they source `compose_env.sh` |
+
+Tests: `mechanism/alerts/tests/test_bot_pin_proposal.py` (28; behaviour tests run the real scripts against a stub `docker`, Linux only; static tests anywhere). Mutation-checked: the bot reading the mechanism pin (13 tests fail), a guard that ignores the bot (3), a bot fallback to `IMAGE_TAG` (1) and a leaking `IMAGE_TAG` (1) are all caught.
+The existing `test_deploy_wrapper_targets.py` invariants (unit targets exist, mode 100755, valid bash) still pass; nothing in an installed unit or in `cd.yml` references the new files.
+
+Cutover is unchanged from the section above and needs separate approval; the first step is writing `CURRENT_BOT_SHA` with the tag the bot runs today (`575fa5dc0599` on 2026-10-12) so that the first restart changes nothing.
