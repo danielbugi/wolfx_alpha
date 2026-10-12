@@ -82,6 +82,8 @@ def build_events(symbol: str, cik: int, sub_facts: Sequence[F.FilingFact], compa
         def mk(i: int) -> float:
             return idx.get(sess[i], float("nan"))
         react = c[r] / c[r - 1] - 1
+        prev_gap = o[r - 1] / c[r - 2] - 1                                    # placebo: the bar BEFORE the reaction bar
+        prev_ar_react = (c[r - 1] / c[r - 2] - 1) - (mk(r - 1) / mk(r - 2) - 1)
         ar_react = react - (mk(r) / mk(r - 1) - 1)
         entry = o[r + 1]
         ar5 = (c[r + 5] / entry - 1) - (mk(r + 5) / mk(r) - 1)
@@ -97,7 +99,7 @@ def build_events(symbol: str, cik: int, sub_facts: Sequence[F.FilingFact], compa
             "anomaly_rules": list(an.rules) if an else [], "nature": an.nature if an else "none",
             "revenue_yoy": m["revenue_yoy"], "revenue_acceleration": m["revenue_acceleration"], "net_income_yoy": m["net_income_yoy"], "operating_income_yoy": m["operating_income_yoy"],
             "operating_margin_change": m["operating_margin_change"], "net_margin_change": m["net_margin_change"], "net_income_turnaround": m["net_income_turnaround"],
-            "react": react, "gap": o[r] / c[r - 1] - 1, "ar_react": ar_react, "ar_d5": ar5, "ar_d20": ar20,
+            "react": react, "prev_gap": prev_gap, "prev_ar_react": prev_ar_react, "gap": o[r] / c[r - 1] - 1, "ar_react": ar_react, "ar_d5": ar5, "ar_d20": ar20,
             "relvol": float(v[r] / np.nanmean(v[r - 20:r])) if np.nanmean(v[r - 20:r]) > 0 else float("nan"),
             "vol20": vol20, "ret20_pre": float(c[r - 1] / c[r - 21] - 1), "dollar_vol20": dv,
             "regime_up": (regime or {}).get(sess[r - 1], float("nan")), "year": sess[r].year,

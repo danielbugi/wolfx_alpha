@@ -103,3 +103,27 @@ beat out of sample. **Not supported**: no exit policy conditional on catalyst ty
 **ML-ready outcome table** (`sec_event_outcomes.csv.gz`, 9,614 rows, csv sha256 recorded in the study JSON): one row per earnings event with identities (symbol, CIK,
 accession numbers, SEC filing URL), the release acceptance timestamp, point-in-time features, anomaly class, realised outcomes (reaction, +5 and +20 session drift,
 big-move flag) and a train / embargo / test split label (4,128 / 123 / 5,363). Its integrity is tested against the recorded hash.
+
+## Addendum 2026-10-12 (2): walk-forward by year, timestamp placebo, variant-keyed outcomes
+
+Third run of the study on a fresh isolated restore (993 requests). All 15 earlier result blocks reproduced exactly; 992 of the 993 SEC payloads were byte-identical, the 993rd being the
+daily-refreshed ticker file. The catalyst + relative-volume cell is **exploratory evidence, not a validated trading edge**: the rules below were fixed before the numbers existed, and year counting
+can never upgrade a claim to "supported".
+
+**Timestamp integrity, tested empirically (placebo).** If the acceptance-time to reaction-bar mapping is right, the overnight gap of BMO / AMC releases lands on the reaction bar and a
+baseline-sized gap sits on the bar before it. Mean absolute gap, reaction bar vs the bar before: **AMC 4.89% vs 0.98% (x5.0, n=5,556); BMO 4.02% vs 0.75% (x5.4, n=2,451)**; intraday releases 3.45% vs 0.78%.
+Claim "supported". 92.6% of Item 2.02 releases were accepted on or before the day of the periodic filing (median lag 1 day, 10th to 90th percentile 0 to 14 days).
+
+**Walk-forward by calendar year (cell vs every bullish breakout, fixed 3R, net 10 bps; a year counts when both have at least 30 trades).**
+
+| Cell | Years counted | Better than the plain breakout |
+|---|---|---|
+| Recent recurring-operating catalyst | 9 (2018-2026) | 6 (inconclusive: below the 75% bar) |
+| Catalyst + relative volume ≥ 1.5 | 5 (2021-2025; 2018-2020 and 2026 have under 30 trades) | 4 ("suggestive" only) |
+| Catalyst + volume + index uptrend | 3 | 2 (too few years) |
+
+The catalyst + relative volume cell is thin (17 to 66 trades per year) and is one of five cells; the pooled out-of-sample interval still reaches the plain breakout's mean (previous addendum).
+
+**Strategy-specific outcome tracking.** Outcomes are now keyed by the registered variant identities (`donchian_breakout__exit_<policy>`, version, definition hash), per direction and per year, and
+after a recurring-operating catalyst, so every number traces to one exact definition. A breakout-level ML-ready table (`sec_breakout_outcomes.csv.gz`, 88,604 signals: catalyst class, relative
+volume, regime, plan R, and the net R under each of the five variants, with a train / embargo / test label) is committed with its sha256 and tested against it.

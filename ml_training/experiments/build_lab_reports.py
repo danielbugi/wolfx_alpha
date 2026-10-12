@@ -118,7 +118,7 @@ def build(evidence_dir, code_ref):
                                 "The breakout, exit-policy and combination cells are many and small; none is a confirmed edge."],
                     "provenance": {"source": "sec.gov submissions + XBRL companyfacts, fetched 2026-10-11 (payload sha256 in sec_raw_manifest.json) joined to stock_prices (isolated copy)", "design": sec["design"],
                                    "payload_manifest": {"payloads": len(manifest["payloads"]), "total_mb": round(sum(x["bytes"] for x in manifest["payloads"]) / 1e6, 1)},
-                                   "evidence_files": ["sec_earnings_study.json", "sec_raw_manifest.json", "sec_earnings.txt", "sec_event_outcomes.csv.gz"]},
+                                   "evidence_files": ["sec_earnings_study.json", "sec_raw_manifest.json", "sec_earnings.txt", "sec_event_outcomes.csv.gz", "sec_breakout_outcomes.csv.gz"]},
                     "data": {k: sec[k] for k in sec if k != "design"}})
 
     reports.append({**base, "id": "performance_attribution", "kind": "strategy_lab", "title": "Performance attribution: direction, year, regime and sector",
@@ -254,6 +254,24 @@ def insights(ex, rk, exitp, cat, runs, sec=None):
             st, note = "inconclusive", "better on average in the test period but the interval reaches fixed 3R"
         add("An exit policy chosen on the train period beats the fixed-3R exit out of sample for bullish breakouts after a recurring-operating catalyst", st,
             f"picked {sel['best_policy_on_train']}: test {tb['mean']:+.3f} R (n={tb['n']:,}, CI {tb['ci95'][0]:+.3f} to {tb['ci95'][1]:+.3f}) vs fixed 3R {tf['mean']:+.3f} R (n={tf['n']:,}); {note}",
+            ["catalyst_sec_earnings"])
+    if sec is not None and "bullish_combinations_by_year" in sec:
+        # Rules fixed before the numbers existed. Walk-forward by calendar year: count the years (both sides >= 30 trades) in which the cell beat the plain bullish breakout. Year counting can never
+        # make a claim 'supported' (the cells are exploratory and chosen among several): >= 75% of >= 5 years = 'suggestive'; < 50% = 'not_supported'; otherwise 'inconclusive'.
+        wf = sec["bullish_combinations_by_year"]["wins_vs_plain"]
+        for cell, label in (("recurring_catalyst", "a recent recurring-operating catalyst"), ("recurring_catalyst_and_relvol_ge_1_5", "a recent recurring-operating catalyst and relative volume of 1.5 or more")):
+            w = wf[cell]
+            share = w["years_better_than_plain"] / w["years_evaluable"] if w["years_evaluable"] else 0.0
+            st = "inconclusive" if w["years_evaluable"] < 5 else ("suggestive" if share >= 0.75 else ("not_supported" if share < 0.5 else "inconclusive"))
+            add(f"Walk-forward by year, a bullish Donchian breakout with {label} beats a plain bullish breakout in most years", st,
+                f"better in {w['years_better_than_plain']} of {w['years_evaluable']} evaluable years ({', '.join(str(y) for y in w['years'])}); exploratory cell, year counting never upgrades it to supported", ["catalyst_sec_earnings"])
+    if sec is not None and "timing_quality" in sec:
+        # Timestamp placebo: if the acceptance time -> reaction bar mapping is right, the overnight gap of BMO / AMC releases lands on the reaction bar and a baseline-sized one on the bar before.
+        tqs = sec["timing_quality"]["by_timing_class"]
+        ratios = {k: tqs[k]["mean_abs_gap_on_reaction_bar"] / tqs[k]["mean_abs_gap_on_bar_before"] for k in ("BMO", "AMC") if k in tqs and tqs[k]["mean_abs_gap_on_bar_before"] > 0}
+        st = "inconclusive" if len(ratios) < 2 else ("supported" if min(ratios.values()) >= 2.0 else ("not_supported" if min(ratios.values()) < 1.2 else "inconclusive"))
+        add("SEC acceptance timestamps place the information on the right trading bar (placebo: the bar before shows no comparable gap)", st,
+            "; ".join(f"{k}: gap on reaction bar {tqs[k]['mean_abs_gap_on_reaction_bar'] * 100:.2f}% vs {tqs[k]['mean_abs_gap_on_bar_before'] * 100:.2f}% the bar before (x{ratios[k]:.1f}, n={tqs[k]['n']:,})" for k in ratios),
             ["catalyst_sec_earnings"])
     return out
 
