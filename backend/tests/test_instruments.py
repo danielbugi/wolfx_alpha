@@ -28,12 +28,9 @@ def _updater_symbols():
     raise AssertionError("MARKET_INDEX_SYMBOLS not found in market_index_updater.py")
 
 
-def test_everything_the_pipeline_fetches_is_on_the_markets_pages():
-    # The registry may list instruments the pipeline doesn't fetch yet (new data sources are on hold until the new
-    # database design lands); those have no rows, so the pages hide them. The other way round is a bug: fetched data
-    # that no page shows.
-    unlisted = _updater_symbols() - {i.symbol for i in INSTRUMENTS}
-    assert not unlisted, f"add to services/instruments.py: {sorted(unlisted)}"
+def test_every_instrument_is_fetched_by_the_pipeline():
+    missing = {i.symbol for i in INSTRUMENTS} - _updater_symbols()
+    assert not missing, f"add to market_index_updater.MARKET_INDEX_SYMBOLS: {sorted(missing)}"
 
 
 def test_registry_is_well_formed():
