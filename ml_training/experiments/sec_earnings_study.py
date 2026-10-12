@@ -299,60 +299,6 @@ with open(f"{OUT}/sec_event_outcomes.csv.gz", "wb") as fh_:
 res["outcome_table"] = {"file": "sec_event_outcomes.csv.gz", "rows": int(len(O_)), "columns": list(O_.columns), "sha256_of_csv": __import__("hashlib").sha256(csv_bytes).hexdigest(),
                         "big_move_threshold_abs_market_adjusted_reaction": round(float(thr), 4), "split_counts": O_["split"].value_counts().to_dict(),
                         "label_note": "labels are realised outcomes on the reaction session (ar_react), +5 and +20 sessions after it (ar_d5, ar_d20); features are known at the release acceptance time"}
-# ------------------------------------------------------------------ 2026-10-12 follow-up: walk-forward by year, timestamp placebo, variant-keyed outcomes, breakout-level ML table
-# (a) Walk-forward by calendar year. Rule fixed in advance: a cell "beats the plain bullish breakout" in a year when both have >= 30 trades that year and its mean net R is higher.
-def yearly(x):
-    return {int(y): {"n": int(len(g)), "mean": round(float(g.r10.mean()), 4)} for y, g in x.groupby(x.date.dt.year)}
-
-
-cells_y = {k: yearly(v) for k, v in cells.items()}
-wins = {}
-for k in cells:
-    ys = [y for y in sorted(cells_y[k]) if cells_y[k][y]["n"] >= 30 and cells_y["all_bullish"].get(y, {}).get("n", 0) >= 30]
-    wins[k] = {"years_evaluable": len(ys), "years_better_than_plain": int(sum(cells_y[k][y]["mean"] > cells_y["all_bullish"][y]["mean"] for y in ys)), "years": ys}
-res["bullish_combinations_by_year"] = {"cells": cells_y, "wins_vs_plain": wins, "rule": "a year counts when the cell and the plain bullish breakout both have >= 30 trades; better = higher mean net R (fixed 3R, 10 bps)"}
-
-# (b) Timestamp placebo. If the acceptance-time -> reaction-bar mapping is right, the information gap lands on the reaction bar and NOT on the bar before it.
-tq = {}
-for t_, g in E_.groupby("timing"):
-    if len(g) < 30:
-        continue
-    tq[t_] = {"n": int(len(g)), "mean_abs_gap_on_reaction_bar": round(float(g.gap.abs().mean()), 4), "mean_abs_gap_on_bar_before": round(float(g.prev_gap.abs().mean()), 4),
-              "mean_abs_ar_on_reaction_bar": round(float(g.ar_react.abs().mean()), 4), "mean_abs_ar_on_bar_before": round(float(g.prev_ar_react.abs().mean()), 4)}
-lag = (pd.to_datetime(E_.periodic_filed) - pd.to_datetime(E_.release_accepted_at, utc=True).dt.tz_localize(None).dt.normalize()).dt.days[E_.release_source == "8k_item_2_02"]
-res["timing_quality"] = {"by_timing_class": tq, "release_to_periodic_filing_lag_days": {"n": int(lag.notna().sum()), "p10": float(lag.quantile(0.1)), "median": float(lag.median()), "p90": float(lag.quantile(0.9)),
-                                                                                       "share_released_same_day_or_before_periodic": round(float((lag >= 0).mean()), 4)},
-                         "reading": "a correct mapping puts the large absolute gap on the reaction bar and a baseline-sized one on the bar before it (placebo); INTRADAY releases show their move in the bar's own range, not the gap"}
-
-# (c) Strategy-specific outcome tracking, keyed by the registry identities (key, version, definition hash) so a result can be traced to one exact definition.
-from research import strategy_variants as SV  # noqa: E402
-spec_by_policy = {n_: s_ for n_, s_ in zip(list(X.POLICIES), SV.build_specs())}
-vo = {}
-for pol, g in B.groupby("policy"):
-    sp = spec_by_policy[pol]
-    vo[sp.key] = {"version": sp.version, "definition_hash": sp.definition_hash, "policy": pol, "net_bps_per_side_round_trip": 10,
-                  "bullish": {"all": {"n": int((g.direction == 1).sum()), **C.block_ci(g[g.direction == 1].r10.to_numpy(), g[g.direction == 1].month.to_numpy())},
-                              "by_year": yearly(g[g.direction == 1])},
-                  "bearish": {"all": {"n": int((g.direction == -1).sum()), **C.block_ci(g[g.direction == -1].r10.to_numpy(), g[g.direction == -1].month.to_numpy())},
-                              "by_year": yearly(g[g.direction == -1])},
-                  "bullish_after_recurring_operating": {"n": int(((g.direction == 1) & (g.catalyst == "recurring_operating")).sum()),
-                                                        **C.block_ci(g[(g.direction == 1) & (g.catalyst == "recurring_operating")].r10.to_numpy(), g[(g.direction == 1) & (g.catalyst == "recurring_operating")].month.to_numpy())}}
-res["strategy_variant_outcomes"] = vo
-
-# (d) Breakout-level ML-ready table: one row per (symbol, signal date, direction); features known at the signal close, labels = net R under each registered exit policy.
-attrs = B[B.policy == "A_atr_stop_fixed_3R"][["symbol", "date", "direction", "catalyst", "plan_r", "relvol", "regime_up", "px_per_r"]]
-lab = B.pivot_table(index=["symbol", "date", "direction"], columns="policy", values="r10", aggfunc="first")
-lab.columns = ["r_net10__" + spec_by_policy[c_].key for c_ in lab.columns]
-wide = attrs.merge(lab.reset_index(), on=["symbol", "date", "direction"], how="left")            # a merge, not a pivot over the attributes: a NaN relvol / plan_r must not drop the breakout
-wide["split"] = np.where(wide["date"] < split, "train", np.where(wide["date"] >= emb, "test", "embargo"))
-wide = wide.sort_values(["date", "symbol", "direction"]).reset_index(drop=True)
-bo_bytes = wide.to_csv(index=False, float_format="%.5g", lineterminator="\n", date_format="%Y-%m-%d").encode("utf-8")
-with open(f"{OUT}/sec_breakout_outcomes.csv.gz", "wb") as fh_:
-    fh_.write(_gz.compress(bo_bytes, 9, mtime=0))
-res["breakout_outcome_table"] = {"file": "sec_breakout_outcomes.csv.gz", "rows": int(len(wide)), "columns": list(wide.columns), "sha256_of_csv": __import__("hashlib").sha256(bo_bytes).hexdigest(),
-                                 "split_counts": wide["split"].value_counts().to_dict(),
-                                 "label_note": "r_net10__<variant key> = realised R net of 10 bps round trip under that registered exit policy; catalyst = class of the most recent earnings event within 15 days before the signal"}
-log("follow-up sections done")
 res["evidence_events_sample"] = [{k: r[k] for k in ("symbol", "cik", "period_accession", "form", "period_end", "release_accession", "release_source", "decision_accepted_at", "timing", "reaction_date", "nature", "anomaly_rules",
                                                     "revenue_yoy", "revenue_acceleration", "operating_margin_change", "net_income_yoy", "relvol", "ar_react", "ar_d20", "source_url", "periodic_url")}
                                  for r in sorted((r for r in events if r["nature"] != "none"), key=lambda r: r["reaction_date"], reverse=True)[:40]]
