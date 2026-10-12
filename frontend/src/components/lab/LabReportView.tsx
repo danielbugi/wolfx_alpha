@@ -96,6 +96,14 @@ const NATURE_LABEL: Record<string, string> = {
   unclassified: 'Anomaly, unclassified',
 };
 
+const COMBO_LABEL: Record<string, string> = {
+  all_bullish: 'Every bullish breakout (baseline)',
+  recurring_catalyst: 'Recent recurring-operating catalyst',
+  recurring_catalyst_and_relvol_ge_1_5: 'Catalyst + relative volume ≥ 1.5',
+  recurring_catalyst_and_relvol_and_index_uptrend: 'Catalyst + relative volume ≥ 1.5 + index uptrend',
+  no_catalyst_relvol_ge_1_5: 'No recent earnings, relative volume ≥ 1.5',
+};
+
 function SecEarnings({ d }: { d: any }) {
   const q = d.quality;
   return (
@@ -124,6 +132,31 @@ function SecEarnings({ d }: { d: any }) {
       <Table head={['Donchian breakout after earnings (15 days)', 'Trades', 'Plan R', 'Fixed 3R, net R']} rows={(['bullish', 'bearish'] as const).flatMap((dir) => Object.keys(d.breakouts_by_catalyst[dir]).map((k) => [
         `${dir}: ${NATURE_LABEL[k] ?? k.replace(/_/g, ' ')}`, fmtInt(d.breakouts_by_catalyst[dir][k].n), fmtR(d.breakouts_by_catalyst[dir][k].plan_r.mean),
         `${fmtR(d.breakouts_by_catalyst[dir][k].fixed_3R_net10.mean)} (${fmtInterval(d.breakouts_by_catalyst[dir][k].fixed_3R_net10.ci95)})`]))} />
+      {d.bullish_combinations_chronological && (
+        <>
+          <h3 className="text-sm font-semibold text-slate-700">Out of sample: bullish breakouts, trained before 2022, tested from February 2022 (fixed 3R, net of costs)</h3>
+          <Table head={['Cell', 'Train trades', 'Train R', 'Test trades', 'Test R (95% CI)']} rows={Object.keys(d.bullish_combinations_chronological).map((k) => {
+            const c = d.bullish_combinations_chronological[k];
+            return [COMBO_LABEL[k] ?? k.replace(/_/g, ' '), fmtInt(c.train.n), fmtR(c.train.mean), fmtInt(c.test.n), `${fmtR(c.test.mean)} (${fmtInterval(c.test.ci95)})`];
+          })} />
+        </>
+      )}
+      {d.exit_policy_selection_out_of_sample && (
+        <>
+          <h3 className="text-sm font-semibold text-slate-700">Exit policy picked on the train period, judged on the test period</h3>
+          <Table head={['Catalyst group', 'Picked on train', 'Test: picked policy', 'Test: fixed 3R']} rows={Object.keys(d.exit_policy_selection_out_of_sample).map((k) => {
+            const s = d.exit_policy_selection_out_of_sample[k];
+            return [NATURE_LABEL[k] ?? k.replace(/_/g, ' '), s.best_policy_on_train, `${fmtR(s.test_best_policy.mean)} (${fmtInterval(s.test_best_policy.ci95)}), n=${fmtInt(s.test_best_policy.n)}`,
+              `${fmtR(s.test_fixed_3R.mean)} (${fmtInterval(s.test_fixed_3R.ci95)}), n=${fmtInt(s.test_fixed_3R.n)}`];
+          })} />
+        </>
+      )}
+      {d.outcome_table && (
+        <p className="text-xs text-slate-500">
+          ML-ready outcome table: {fmtInt(d.outcome_table.rows)} events with point-in-time features and realised outcomes, split {Object.keys(d.outcome_table.split_counts).map((k) => `${k} ${fmtInt(d.outcome_table.split_counts[k])}`).join(' · ')}.
+          {' '}Committed as <span className="font-mono">{d.outcome_table.file}</span>; csv sha256 <span className="font-mono">{String(d.outcome_table.sha256_of_csv).slice(0, 16)}…</span>
+        </p>
+      )}
       <h3 className="text-sm font-semibold text-slate-700">Evidence: the most recent flagged filings</h3>
       <Table head={['Symbol', 'Form', 'Release accepted (UTC)', 'Timing', 'Class', 'Revenue YoY', 'Op. margin change', 'Reaction', 'SEC filing']} rows={d.evidence_events_sample.map((e: any) => [
         e.symbol, e.form, String(e.decision_accepted_at).replace('T', ' ').slice(0, 16), e.timing, NATURE_LABEL[e.nature] ?? e.nature, fmtPct(e.revenue_yoy, 0), fmtPct(e.operating_margin_change, 1), fmtPct(e.ar_react),

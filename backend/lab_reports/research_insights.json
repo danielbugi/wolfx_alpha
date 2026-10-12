@@ -1,13 +1,13 @@
 {
  "generated_at": "2026-10-11",
- "code_ref": "3afff09",
+ "code_ref": "pending",
  "status": "research_only",
  "use": "Research evidence only. Not a trading signal, not advice, and not used by the live signal path.",
  "schema": "lab_report_v1",
  "id": "research_insights",
  "kind": "strategy_lab",
  "title": "Research insights: what the evidence supports, and what it does not",
- "headline": "16 claims checked: 3 inconclusive, 7 not supported, 2 suggestive, 4 supported.",
+ "headline": "20 claims checked: 6 inconclusive, 8 not supported, 2 suggestive, 4 supported.",
  "caveats": [
   "Statuses are assigned by fixed rules from the intervals and counts in the other reports; they are not model opinions.",
   "'Supported' means the sample supports the sign of the effect, not that it is tradeable after costs.",
@@ -149,6 +149,38 @@
     "claim": "Financial-anomaly features predict the direction of the reaction",
     "status": "suggestive",
     "evidence": "AUC 0.5629 vs best single-metric baseline 0.5456 (chronological test); modest lift on a coin-flip base rate 0.5064",
+    "reports": [
+     "catalyst_sec_earnings"
+    ]
+   },
+   {
+    "claim": "Out of sample, a bullish Donchian breakout with a recent recurring-operating catalyst does better than a plain bullish breakout (fixed-3R exit, net of costs)",
+    "status": "inconclusive",
+    "evidence": "test period +0.239 R (n=717, CI -0.189 to +0.644) vs plain breakout +0.072 R (n=27,629); train period +0.057 R (n=466) vs +0.114 R",
+    "reports": [
+     "catalyst_sec_earnings"
+    ]
+   },
+   {
+    "claim": "Out of sample, a bullish Donchian breakout with a recent recurring-operating catalyst and relative volume of 1.5 or more does better than a plain bullish breakout (fixed-3R exit, net of costs)",
+    "status": "inconclusive",
+    "evidence": "test period +0.300 R (n=230, CI +0.015 to +0.618) vs plain breakout +0.072 R (n=27,629); train period +0.028 R (n=134) vs +0.114 R",
+    "reports": [
+     "catalyst_sec_earnings"
+    ]
+   },
+   {
+    "claim": "Out of sample, a bullish Donchian breakout with a recent recurring-operating catalyst, relative volume of 1.5 or more and an index uptrend does better than a plain bullish breakout (fixed-3R exit, net of costs)",
+    "status": "inconclusive",
+    "evidence": "test period +0.257 R (n=145, CI -0.163 to +0.569) vs plain breakout +0.072 R (n=27,629); train period +0.053 R (n=128) vs +0.114 R",
+    "reports": [
+     "catalyst_sec_earnings"
+    ]
+   },
+   {
+    "claim": "An exit policy chosen on the train period beats the fixed-3R exit out of sample for bullish breakouts after a recurring-operating catalyst",
+    "status": "not_supported",
+    "evidence": "picked A_atr_stop_fixed_3R: test +0.239 R (n=717, CI -0.189 to +0.644) vs fixed 3R +0.239 R (n=717); the fixed-3R exit was already the best on the train period, so there is nothing better to test",
     "reports": [
      "catalyst_sec_earnings"
     ]

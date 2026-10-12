@@ -1,6 +1,6 @@
 {
  "generated_at": "2026-10-11",
- "code_ref": "3afff09",
+ "code_ref": "pending",
  "status": "research_only",
  "use": "Research evidence only. Not a trading signal, not advice, and not used by the live signal path.",
  "schema": "lab_report_v1",
@@ -26,8 +26,8 @@
    "since": "2014-01-01",
    "first_event": "2016-12-15",
    "last_event": "2026-09-09",
-   "sec_requests": 0,
-   "cache_hits": 996,
+   "sec_requests": 993,
+   "cache_hits": 3,
    "fetch_errors": {},
    "n_fetch_errors": 0,
    "sources": [
@@ -43,13 +43,14 @@
    }
   },
   "payload_manifest": {
-   "payloads": 993,
-   "total_mb": 1214.4
+   "payloads": 996,
+   "total_mb": 1217.0
   },
   "evidence_files": [
    "sec_earnings_study.json",
    "sec_raw_manifest.json",
-   "sec_earnings.txt"
+   "sec_earnings.txt",
+   "sec_event_outcomes.csv.gz"
   ]
  },
  "data": {
@@ -1572,6 +1573,195 @@
     "auc_baseline_operating_margin_change": 0.5456,
     "base_rate_test": 0.5064
    }
+  },
+  "bullish_combinations_chronological": {
+   "all_bullish": {
+    "train": {
+     "n": 22456,
+     "mean": 0.1139,
+     "ci95": [
+      -0.05216,
+      0.2828
+     ]
+    },
+    "test": {
+     "n": 27629,
+     "mean": 0.07164,
+     "ci95": [
+      -0.06911,
+      0.23423
+     ]
+    }
+   },
+   "recurring_catalyst": {
+    "train": {
+     "n": 466,
+     "mean": 0.05721,
+     "ci95": [
+      -0.28492,
+      0.39404
+     ]
+    },
+    "test": {
+     "n": 717,
+     "mean": 0.23862,
+     "ci95": [
+      -0.18861,
+      0.64368
+     ]
+    }
+   },
+   "recurring_catalyst_and_relvol_ge_1_5": {
+    "train": {
+     "n": 134,
+     "mean": 0.02793,
+     "ci95": [
+      -0.36679,
+      0.42359
+     ]
+    },
+    "test": {
+     "n": 230,
+     "mean": 0.30049,
+     "ci95": [
+      0.01483,
+      0.6175
+     ]
+    }
+   },
+   "recurring_catalyst_and_relvol_and_index_uptrend": {
+    "train": {
+     "n": 128,
+     "mean": 0.053,
+     "ci95": [
+      -0.32518,
+      0.45705
+     ]
+    },
+    "test": {
+     "n": 145,
+     "mean": 0.25664,
+     "ci95": [
+      -0.16257,
+      0.56949
+     ]
+    }
+   },
+   "no_catalyst_relvol_ge_1_5": {
+    "train": {
+     "n": 4945,
+     "mean": 0.07589,
+     "ci95": [
+      -0.09663,
+      0.25758
+     ]
+    },
+    "test": {
+     "n": 6470,
+     "mean": 0.11751,
+     "ci95": [
+      -0.00781,
+      0.25275
+     ]
+    }
+   }
+  },
+  "exit_policy_selection_out_of_sample": {
+   "recurring_operating": {
+    "best_policy_on_train": "A_atr_stop_fixed_3R",
+    "train_mean_by_policy": {
+     "A_atr_stop_fixed_2R": -0.0124,
+     "A_atr_stop_fixed_3R": 0.0572,
+     "B_donchian_trail_10": -0.138,
+     "C_atr_trail_3x": -0.1431,
+     "D_hybrid_atr_stop_to_donchian_10": -0.1154
+    },
+    "test_best_policy": {
+     "n": 717,
+     "mean": 0.23862,
+     "ci95": [
+      -0.18861,
+      0.64368
+     ]
+    },
+    "test_fixed_3R": {
+     "n": 717,
+     "mean": 0.23862,
+     "ci95": [
+      -0.18861,
+      0.64368
+     ]
+    }
+   },
+   "no_recent_earnings": {
+    "best_policy_on_train": "A_atr_stop_fixed_3R",
+    "train_mean_by_policy": {
+     "A_atr_stop_fixed_2R": 0.0789,
+     "A_atr_stop_fixed_3R": 0.1142,
+     "B_donchian_trail_10": -0.0062,
+     "C_atr_trail_3x": 0.0255,
+     "D_hybrid_atr_stop_to_donchian_10": 0.0115
+    },
+    "test_best_policy": {
+     "n": 24138,
+     "mean": 0.0713,
+     "ci95": [
+      -0.05824,
+      0.21353
+     ]
+    },
+    "test_fixed_3R": {
+     "n": 24138,
+     "mean": 0.0713,
+     "ci95": [
+      -0.05824,
+      0.21353
+     ]
+    }
+   }
+  },
+  "outcome_table": {
+   "file": "sec_event_outcomes.csv.gz",
+   "rows": 9614,
+   "columns": [
+    "symbol",
+    "cik",
+    "form",
+    "period_end",
+    "period_accession",
+    "release_accession",
+    "release_source",
+    "decision_accepted_at",
+    "timing",
+    "reaction_date",
+    "nature",
+    "anomaly_rules",
+    "revenue_yoy",
+    "revenue_acceleration",
+    "net_income_yoy",
+    "operating_income_yoy",
+    "operating_margin_change",
+    "net_margin_change",
+    "vol20",
+    "ret20_pre",
+    "dollar_vol20",
+    "relvol",
+    "regime_up",
+    "ar_react",
+    "ar_d5",
+    "ar_d20",
+    "source_url",
+    "big_move",
+    "split"
+   ],
+   "sha256_of_csv": "49c3cfbf33f9cf7bb294d3e09dc3681ae9e63476068876397f02c7eeed3c1309",
+   "big_move_threshold_abs_market_adjusted_reaction": 0.1111,
+   "split_counts": {
+    "test": 5363,
+    "train": 4128,
+    "embargo": 123
+   },
+   "label_note": "labels are realised outcomes on the reaction session (ar_react), +5 and +20 sessions after it (ar_d5, ar_d20); features are known at the release acceptance time"
   },
   "evidence_events_sample": [
    {

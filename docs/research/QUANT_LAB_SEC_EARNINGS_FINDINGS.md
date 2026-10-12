@@ -75,3 +75,31 @@ report and are similarly inconclusive. Cells are many and small; none is a confi
 `ml_training/experiments/sec_earnings_study.py` (needs `SEC_USER_AGENT` in the environment and a scratch database), then
 `ml_training/experiments/build_lab_reports.py <evidence_dir> backend/lab_reports <commit>`. Tests: `ml_training/tests/test_sec_earnings_pipeline.py`,
 `test_build_lab_reports.py`, `mechanism/market_intelligence/tests/test_sec_financials.py`, `test_catalyst_timing.py`.
+
+## Addendum 2026-10-12: out-of-sample tests, exit-policy selection, ML-ready outcome table
+
+The study was re-run from scratch on a fresh isolated copy of the production backup (993 SEC requests; SEC served byte-identical payloads for all 993 URLs,
+and every earlier statistic reproduced exactly). Three outputs were added; all rules were fixed before the test period was read (train = signal dates before
+2022-01-01, test = from 2022-02-15; five pre-named cells, none searched for).
+
+**Bullish Donchian breakout after earnings, fixed 3R, net of 10 bps (mean R, 95% month-block CI)**
+
+| Cell | Train n / R | Test n / R |
+|---|---|---|
+| Every bullish breakout (baseline) | 22,456 / +0.114 | 27,629 / +0.072 (−0.07 to +0.23) |
+| Recent recurring-operating catalyst | 466 / +0.057 | 717 / +0.239 (−0.19 to +0.64) |
+| Catalyst + relative volume ≥ 1.5 | 134 / +0.028 | 230 / **+0.300 (+0.01 to +0.62)** |
+| Catalyst + relative volume + index uptrend | 128 / +0.053 | 145 / +0.257 (−0.16 to +0.57) |
+| No recent earnings, relative volume ≥ 1.5 | 4,945 / +0.076 | 6,470 / +0.118 (−0.01 to +0.25) |
+
+Reading: the catalyst cells are better than the plain breakout in the test period, but the train period points the other way (+0.03 to +0.06 R against +0.11 R),
+the test intervals reach the plain breakout's mean, and the one interval that excludes zero is one of five cells. **Inconclusive**, not an edge. The sample is
+small (230 trades); the forward collection is what can settle it.
+
+**Exit policy chosen on the train period.** For recurring-operating catalysts and for no-recent-earnings breakouts the train period's best policy is the fixed 3R
+exit itself (train means: 3R +0.057/+0.114, 2R −0.012/+0.079, Donchian-10 trail −0.138/−0.006, ATR trail −0.143/+0.026, hybrid −0.115/+0.012), so there is nothing to
+beat out of sample. **Not supported**: no exit policy conditional on catalyst type improves on fixed 3R.
+
+**ML-ready outcome table** (`sec_event_outcomes.csv.gz`, 9,614 rows, csv sha256 recorded in the study JSON): one row per earnings event with identities (symbol, CIK,
+accession numbers, SEC filing URL), the release acceptance timestamp, point-in-time features, anomaly class, realised outcomes (reaction, +5 and +20 session drift,
+big-move flag) and a train / embargo / test split label (4,128 / 123 / 5,363). Its integrity is tested against the recorded hash.

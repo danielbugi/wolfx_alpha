@@ -118,7 +118,7 @@ def build(evidence_dir, code_ref):
                                 "The breakout, exit-policy and combination cells are many and small; none is a confirmed edge."],
                     "provenance": {"source": "sec.gov submissions + XBRL companyfacts, fetched 2026-10-11 (payload sha256 in sec_raw_manifest.json) joined to stock_prices (isolated copy)", "design": sec["design"],
                                    "payload_manifest": {"payloads": len(manifest["payloads"]), "total_mb": round(sum(x["bytes"] for x in manifest["payloads"]) / 1e6, 1)},
-                                   "evidence_files": ["sec_earnings_study.json", "sec_raw_manifest.json", "sec_earnings.txt"]},
+                                   "evidence_files": ["sec_earnings_study.json", "sec_raw_manifest.json", "sec_earnings.txt", "sec_event_outcomes.csv.gz"]},
                     "data": {k: sec[k] for k in sec if k != "design"}})
 
     reports.append({**base, "id": "performance_attribution", "kind": "strategy_lab", "title": "Performance attribution: direction, year, regime and sector",
@@ -219,6 +219,42 @@ def insights(ex, rk, exitp, cat, runs, sec=None):
         base2 = max(m2["auc_baseline_revenue_yoy"], m2["auc_baseline_operating_margin_change"])
         add("Financial-anomaly features predict the direction of the reaction", "suggestive" if m2["auc_model"] - base2 >= 0.01 else "not_supported",
             f"AUC {m2['auc_model']} vs best single-metric baseline {base2} (chronological test); modest lift on a coin-flip base rate {m2['base_rate_test']}", ["catalyst_sec_earnings"])
+    if sec is not None and "bullish_combinations_chronological" in sec:
+        # Out-of-sample rule, fixed before the test period was read: the combination must beat the plain bullish breakout in the TEST period. 'supported' = its test interval lies above the
+        # baseline's test mean; 'suggestive' = better in both train and test but the interval still reaches the baseline; 'not_supported' = no better in test; otherwise 'inconclusive'.
+        cc = sec["bullish_combinations_chronological"]
+        base_c = cc["all_bullish"]
+        for cell, label in (("recurring_catalyst", "a recent recurring-operating catalyst"),
+                            ("recurring_catalyst_and_relvol_ge_1_5", "a recent recurring-operating catalyst and relative volume of 1.5 or more"),
+                            ("recurring_catalyst_and_relvol_and_index_uptrend", "a recent recurring-operating catalyst, relative volume of 1.5 or more and an index uptrend")):
+            c_ = cc[cell]
+            te, tr, bte, btr = c_["test"], c_["train"], base_c["test"], base_c["train"]
+            if te["n"] < 30:
+                st = "inconclusive"
+            elif te["mean"] <= bte["mean"]:
+                st = "not_supported"
+            elif te["ci95"][0] > bte["mean"]:
+                st = "supported"
+            elif tr["n"] >= 30 and tr["mean"] > btr["mean"]:
+                st = "suggestive"
+            else:
+                st = "inconclusive"
+            add(f"Out of sample, a bullish Donchian breakout with {label} does better than a plain bullish breakout (fixed-3R exit, net of costs)", st,
+                f"test period {te['mean']:+.3f} R (n={te['n']:,}, CI {te['ci95'][0]:+.3f} to {te['ci95'][1]:+.3f}) vs plain breakout {bte['mean']:+.3f} R (n={bte['n']:,}); "
+                f"train period {tr['mean']:+.3f} R (n={tr['n']:,}) vs {btr['mean']:+.3f} R", ["catalyst_sec_earnings"])
+        sel = sec["exit_policy_selection_out_of_sample"]["recurring_operating"]
+        tb, tf = sel["test_best_policy"], sel["test_fixed_3R"]
+        if sel["best_policy_on_train"] == "A_atr_stop_fixed_3R":
+            st, note = "not_supported", "the fixed-3R exit was already the best on the train period, so there is nothing better to test"
+        elif tb["mean"] <= tf["mean"]:
+            st, note = "not_supported", "the policy picked on the train period did no better than fixed 3R in the test period"
+        elif tb["ci95"][0] > tf["mean"]:
+            st, note = "supported", "the policy picked on the train period beat fixed 3R in the test period with an interval above it"
+        else:
+            st, note = "inconclusive", "better on average in the test period but the interval reaches fixed 3R"
+        add("An exit policy chosen on the train period beats the fixed-3R exit out of sample for bullish breakouts after a recurring-operating catalyst", st,
+            f"picked {sel['best_policy_on_train']}: test {tb['mean']:+.3f} R (n={tb['n']:,}, CI {tb['ci95'][0]:+.3f} to {tb['ci95'][1]:+.3f}) vs fixed 3R {tf['mean']:+.3f} R (n={tf['n']:,}); {note}",
+            ["catalyst_sec_earnings"])
     return out
 
 

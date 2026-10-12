@@ -102,3 +102,23 @@ def test_the_sec_report_carries_quality_and_a_payload_manifest(reports):
     assert q["share_with_xbrl_facts"] > 0.8 and q["release_8k_matched_share"] > 0.9 and q["rejected_record_reasons"]
     assert r["provenance"]["payload_manifest"]["payloads"] >= 900 and "sha256" in " ".join(r["provenance"]["evidence_files"] + ["sha256"])
     assert any("reconstructed basis" in c for c in r["caveats"])
+
+
+def test_the_out_of_sample_sec_claims_follow_the_chronological_evidence(reports):
+    st = {c["claim"]: c["status"] for c in reports["research_insights"]["data"]["claims"]}
+    oos = {k: v for k, v in st.items() if k.startswith("Out of sample, a bullish Donchian breakout")}
+    assert len(oos) == 3
+    assert set(oos.values()) == {"inconclusive"}            # better in test, but the train period does not agree and the interval reaches the plain breakout's mean
+    assert next(v for k, v in st.items() if "exit policy chosen on the train period" in k) == "not_supported"
+    d = reports["catalyst_sec_earnings"]["data"]
+    assert d["outcome_table"]["rows"] == 9614 and sum(d["outcome_table"]["split_counts"].values()) == 9614 and len(d["outcome_table"]["sha256_of_csv"]) == 64
+
+
+def test_the_outcome_table_on_disk_matches_its_recorded_hash():
+    import gzip
+    import hashlib
+    with open(os.path.join(EVIDENCE, "sec_event_outcomes.csv.gz"), "rb") as fh:
+        raw = gzip.decompress(fh.read())
+    assert hashlib.sha256(raw).hexdigest() == _load("sec_earnings_study.json")["outcome_table"]["sha256_of_csv"]
+    header = raw.split(b"\n", 1)[0].decode().split(",")
+    assert {"decision_accepted_at", "reaction_date", "ar_react", "ar_d20", "split", "source_url"} <= set(header)

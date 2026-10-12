@@ -259,6 +259,46 @@ m2 = xgb.XGBClassifier(**PAR).fit(tr_[fs], y2tr)
 ml["reaction_direction"] = {"auc_model": round(float(roc_auc_score(y2te, m2.predict_proba(te_[fs])[:, 1])), 4), "auc_baseline_revenue_yoy": round(float(roc_auc_score(y2te, te_["revenue_yoy"].fillna(0))), 4),
                             "auc_baseline_operating_margin_change": round(float(roc_auc_score(y2te, te_["operating_margin_change"].fillna(0))), 4), "base_rate_test": round(float(y2te.mean()), 4)}
 res["ml"] = ml
+
+# ------------------------------------------------------------------ out-of-sample (chronological) tests of the combinations and of exit-policy selection
+# Rules are fixed here, before the test period is looked at: train = signal dates before 2022-01-01, test = from 2022-02-15 (the same split as the ML above).
+# Cells are NOT searched: the five combinations below are the ones the owner asked about; a cell that wins in train is not selected from a larger menu.
+def side(x):
+    trn, tst = x[x.date < split], x[x.date >= emb]
+    return {"train": {"n": int(len(trn)), **C.block_ci(trn.r10.to_numpy(), trn.month.to_numpy())}, "test": {"n": int(len(tst)), **C.block_ci(tst.r10.to_numpy(), tst.month.to_numpy())}}
+
+
+cells = {"all_bullish": cm, "recurring_catalyst": cm[cm.recurring], "recurring_catalyst_and_relvol_ge_1_5": cm[cm.recurring & cm.rv],
+         "recurring_catalyst_and_relvol_and_index_uptrend": cm[cm.recurring & cm.rv & cm.up], "no_catalyst_relvol_ge_1_5": cm[(cm.catalyst == "no_recent_earnings") & cm.rv]}
+res["bullish_combinations_chronological"] = {k: side(v) for k, v in cells.items()}
+sel = {}
+for cat in ("recurring_operating", "no_recent_earnings"):
+    x = B[(B.direction == 1) & (B.catalyst == cat)]
+    tr_x, te_x = x[x.date < split], x[x.date >= emb]
+    means = tr_x.groupby("policy").r10.mean()
+    best = str(means.idxmax())
+    te_best, te_fixed = te_x[te_x.policy == best], te_x[te_x.policy == "A_atr_stop_fixed_3R"]
+    sel[cat] = {"best_policy_on_train": best, "train_mean_by_policy": {k: round(float(v), 4) for k, v in means.items()},
+                "test_best_policy": {"n": int(len(te_best)), **C.block_ci(te_best.r10.to_numpy(), te_best.month.to_numpy())},
+                "test_fixed_3R": {"n": int(len(te_fixed)), **C.block_ci(te_fixed.r10.to_numpy(), te_fixed.month.to_numpy())}}
+res["exit_policy_selection_out_of_sample"] = sel
+
+# ------------------------------------------------------------------ the ML-ready outcome table: one row per event, point-in-time features + realised outcomes + identities; hash recorded
+OUTCOME_COLS = ["symbol", "cik", "form", "period_end", "period_accession", "release_accession", "release_source", "decision_accepted_at", "timing", "reaction_date", "nature", "anomaly_rules",
+                "revenue_yoy", "revenue_acceleration", "net_income_yoy", "operating_income_yoy", "operating_margin_change", "net_margin_change", "vol20", "ret20_pre", "dollar_vol20", "relvol",
+                "regime_up", "ar_react", "ar_d5", "ar_d20", "source_url"]
+O_ = E_[[c_ for c_ in OUTCOME_COLS if c_ in E_.columns]].copy()
+O_["anomaly_rules"] = O_["anomaly_rules"].apply(lambda r: ";".join(r) if isinstance(r, (list, tuple, set)) else str(r))
+O_["big_move"] = (O_["ar_react"].abs() >= thr).astype(int)
+O_["split"] = np.where(pd.to_datetime(O_["reaction_date"]) < split, "train", np.where(pd.to_datetime(O_["reaction_date"]) >= emb, "test", "embargo"))
+O_ = O_.sort_values(["reaction_date", "symbol", "period_accession"]).reset_index(drop=True)
+csv_bytes = O_.to_csv(index=False, float_format="%.6g", lineterminator="\n").encode("utf-8")
+import gzip as _gz
+with open(f"{OUT}/sec_event_outcomes.csv.gz", "wb") as fh_:
+    fh_.write(_gz.compress(csv_bytes, 9, mtime=0))
+res["outcome_table"] = {"file": "sec_event_outcomes.csv.gz", "rows": int(len(O_)), "columns": list(O_.columns), "sha256_of_csv": __import__("hashlib").sha256(csv_bytes).hexdigest(),
+                        "big_move_threshold_abs_market_adjusted_reaction": round(float(thr), 4), "split_counts": O_["split"].value_counts().to_dict(),
+                        "label_note": "labels are realised outcomes on the reaction session (ar_react), +5 and +20 sessions after it (ar_d5, ar_d20); features are known at the release acceptance time"}
 res["evidence_events_sample"] = [{k: r[k] for k in ("symbol", "cik", "period_accession", "form", "period_end", "release_accession", "release_source", "decision_accepted_at", "timing", "reaction_date", "nature", "anomaly_rules",
                                                     "revenue_yoy", "revenue_acceleration", "operating_margin_change", "net_income_yoy", "relvol", "ar_react", "ar_d20", "source_url", "periodic_url")}
                                  for r in sorted((r for r in events if r["nature"] != "none"), key=lambda r: r["reaction_date"], reverse=True)[:40]]
