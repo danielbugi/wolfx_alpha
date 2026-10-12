@@ -7,7 +7,7 @@ import type {
 } from '@/services/strategyApi';
 
 /** 'r' is a signed result (+1.00R / −1.00R); 'magnitude_r' is an unsigned size in R (e.g. MAE, never read as profit). */
-export type MetricKind = 'rate' | 'r' | 'magnitude_r' | 'sessions';
+export type MetricKind = 'rate' | 'r' | 'magnitude_r' | 'sessions' | 'ratio';
 export type MetricTone = 'ok' | 'preliminary' | 'empty' | 'unavailable';
 
 export interface MetricDisplay {
@@ -24,6 +24,7 @@ export function formatValue(value: number, kind: MetricKind): string {
   if (kind === 'rate') return `${(value * 100).toFixed(1)}%`;
   if (kind === 'r') return formatR(value);
   if (kind === 'magnitude_r') return `${Math.abs(value).toFixed(2)}R`;
+  if (kind === 'ratio') return value.toFixed(2);
   return value.toFixed(1);
 }
 

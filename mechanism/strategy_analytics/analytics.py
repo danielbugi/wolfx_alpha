@@ -18,7 +18,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from strategy_analytics.definitions import (
     ALL_STATUSES, CAPABILITIES, DEFINITIONS_VERSION, DIRECTION_VALUES, DIRECTIONS, EVALUATION_FLAGS,
-    LIFECYCLE_HELD, LIFECYCLE_OPEN, LIFECYCLE_RESOLVED, LIFECYCLES, RESOLUTION_FLAGS, SESSION_WINDOW,
+    LEGACY_UNSCORED_MODEL_VERSIONS, LIFECYCLE_HELD, LIFECYCLE_OPEN, LIFECYCLE_RESOLVED, LIFECYCLES, RESOLUTION_FLAGS, SESSION_WINDOW,
     STALE_AFTER_SESSIONS, TARGET_STATUSES, lifecycle, metric, not_available, ratio,
 )
 
@@ -336,11 +336,12 @@ def data_health(fetch: Fetch, strategy: Dict[str, Any]) -> Dict[str, Any]:
                count(*) FILTER (WHERE status <> 'open' AND resolution_flag IS NOT NULL) AS ambiguous,
                max(signal_date) AS latest_signal_session,
                max(last_evaluated_date) FILTER (WHERE status = 'open' AND evaluation_flag IS NULL) AS latest_evaluated_open,
-               count(strategy_version) AS c_strategy_version, count(model_version) AS c_model_version,
+               count(strategy_version) AS c_strategy_version,
+               count(model_version) FILTER (WHERE lower(btrim(model_version)) <> ALL(%s)) AS c_model_version,
                count(feature_set_version) AS c_feature_set_version, count(observation_id) AS c_observation_id,
                count(feature_snapshot_id) AS c_feature_snapshot_id
         FROM signal_ledger WHERE strategy_id = %s
-    """, (sid,))[0])
+    """, (list(LEGACY_UNSCORED_MODEL_VERSIONS), sid))[0])
     held_by_flag = {r["evaluation_flag"]: int(r["n"]) for r in fetch("""
         SELECT evaluation_flag, count(*) AS n FROM signal_ledger
         WHERE strategy_id = %s AND status = 'open' AND evaluation_flag IS NOT NULL GROUP BY evaluation_flag

@@ -1,0 +1,10 @@
+[   19s] events 75044 symbols 2944 market sessions 2528
+[   19s] symbols done 0 trades 200
+[   31s] symbols done 500 trades 61030
+[   44s] symbols done 1000 trades 124330
+[   56s] symbols done 1500 trades 185250
+[   68s] symbols done 2000 trades 245770
+[   80s] symbols done 2500 trades 304215
+[   91s] simulated 361310 skipped {'window_not_complete': 2557, 'short_history': 197, 'price_discontinuity_in_window': 28}
+[   97s] overall done
+[   98s] WROTE exit_policy_study.json

@@ -1,0 +1,15 @@
+Target: momentum -- Legacy composite momentum score >= 65 within 25 calendar days
+Dataset: 592687 mature samples, 2018-01-02 -> 2026-09-11, base rate 0.332
+Train 2018-01-02 -> 2025-02-07 (466098) | embargo 30d | holdout 2025-03-11 -> 2026-09-11 (118633)
+HOLDOUT (untouched, 2025-03-11 -> 2026-09-11, n=118633, base rate 0.3284)
+  AUC 0.6269  95% CI [0.6105, 0.6428]  | direction-only baseline AUC 0.541
+  AUC bullish 0.623 (n=68634) | bearish 0.6159 (n=49999)
+  Brier 0.21121 vs base-rate Brier 0.22057 | top-decile precision 0.5004 (lift 1.524x)
+  AUC vs plan profit within direction: bullish 0.5063 | bearish 0.4924
+  AUC vs plan profit (R>0): 0.5104 | mean plan R by score quintile (low->high): [-0.0663, -0.0465, -0.0293, -0.0021, 0.008] (all -0.0272)
+  Calibration (pred -> observed): 0.19->0.17, 0.24->0.23, 0.27->0.26, 0.30->0.28, 0.32->0.31, 0.34->0.33, 0.37->0.36, 0.41->0.40, 0.46->0.45, 0.51->0.50
+WALK-FORWARD: 2020-03..2021-04 AUC 0.6095 | 2021-04..2022-05 AUC 0.5944 | 2022-05..2023-06 AUC 0.6018 | 2023-06..2024-07 AUC 0.6412 | 2024-07..2025-08 AUC 0.6135 | 2025-08..2026-09 AUC 0.6277
+GATE: holdout_auc 0.6269 (need 0.55) OK, auc_ci_low 0.6105 (need 0.5) OK, over_direction_baseline 0.0859 (need 0.02) OK, walk_forward_share_auc_gt_0.5 1.0 (need 0.75) OK, top_decile_lift 1.524 (need 1.15) OK, plan_profit_auc_within_direction 0.4924 (need 0.52) FAIL
+Top features: vol_ratio_50 0.2547, vol_ratio_10 0.1523, is_bullish 0.0502, bollinger_pos 0.0456, rsi_14 0.0409, atr_pct 0.0347, ret_5d 0.029, gap_pct 0.0267
+NOT PROMOTED (gate failed: plan_profit_auc_within_direction). The live screener keeps whatever model (if any) it already had.
+Report: /app/ml_training/models/candidates/report_momentum_20261011_0952.json

@@ -230,7 +230,15 @@ jobs:
         # self-skip when Postgres is unreachable -- this job deliberately has no postgres service,
         # matching the codebase's own existing skip-if-unreachable convention. Schema/DB-level
         # correctness is covered separately by db-bootstrap-integration below.
-        run: python -m pytest mechanism/alerts/tests mechanism/data_updaters/tests mechanism/research/tests mechanism/market_intelligence/tests ml_training/tests -q
+        run: python -m pytest mechanism/alerts/tests mechanism/data_updaters/tests mechanism/research/tests mechanism/market_intelligence/tests mechanism/forward_collection/tests ml_training/tests -q
+
+      - name: scan-wrapper real-flock tests (must run on Linux, never skip)
+        # The lock-contention tests of deploy/vps/run_discontinuity_scan.sh need real util-linux flock and bash. They self-skip on Windows/macOS dev machines, so
+        # REQUIRE_REAL_FLOCK=1 turns "no flock here" into a collection error, and the grep fails the job if any test of the file was skipped.
+        run: |
+          REQUIRE_REAL_FLOCK=1 python -m pytest mechanism/forward_collection/tests/test_scan_wrapper_and_timing.py -v -rs -p no:cacheprovider | tee flock_tests.txt
+          ! grep -q "SKIPPED" flock_tests.txt
+          grep -c "PASSED" flock_tests.txt
 
   # ---------------------------------------------------------------------------------------------
   docker-validate:
@@ -636,7 +644,7 @@ jobs:
           # (only the skip grep below could fail the step).
           set -o pipefail
           python -m pytest mechanism/screeners/tests mechanism/shared/tests mechanism/strategy_analytics/tests \
-            mechanism/research/tests mechanism/market_intelligence/tests backend/tests/test_strategy_intelligence_api.py backend/tests/test_research_api.py \
-            backend/tests/test_market_intelligence_api.py mechanism/alerts/tests/test_strategy_intel.py \
+            mechanism/research/tests mechanism/market_intelligence/tests mechanism/forward_collection/tests backend/tests/test_strategy_intelligence_api.py backend/tests/test_research_api.py \
+            backend/tests/test_market_intelligence_api.py backend/tests/test_strategy_performance_api.py mechanism/alerts/tests/test_strategy_intel.py \
             -q -rs -p no:cacheprovider | tee /tmp/db_tests.txt
           if grep -qi "skipped" /tmp/db_tests.txt; then echo "::error::DB-backed tests skipped -- Postgres not reached"; exit 1; fi

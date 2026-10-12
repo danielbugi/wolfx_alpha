@@ -27,6 +27,7 @@ from shared import (
     format_number, safe_divide
 )
 from shared import market_calendar
+from shared.model_provenance import scoring_model_version
 from shared.session_integrity import partition_by_session, summarize_rejections
 
 # ML prediction logging — records every ML-enhanced signal to the
@@ -262,7 +263,7 @@ class MultiTimeframeMLScreener:
                 'ml_trade_recommendation': 'hold',
                 'ml_risk_score': 50.0,
                 'ml_predicted_momentum_days': 7.0,
-                'ml_model_version': self.ml_enhancer.ml_model_version if self.ml_enhancer else None,
+                'ml_model_version': None,  # not scored: a loaded-but-unused model is not the scorer
                 'combined_score': round(alignment_score * 0.6, 1),
             })
             merged.append(fallback)
@@ -478,8 +479,9 @@ class MultiTimeframeMLScreener:
                         'ml_trade_recommendation': ml_data.get('ml_trade_recommendation', 'hold'),
                         'ml_risk_score': ml_data.get('ml_risk_score', 50.0) or 50.0,
                         'ml_predicted_momentum_days': ml_data.get('ml_predicted_momentum_days', 7.0) or 7.0,
-                        'ml_model_version': ml_data.get('ml_model_version', 'unknown')
                     })
+                    # None unless a validated model actually scored this signal (never 'unknown')
+                    enhanced_signal['ml_model_version'] = scoring_model_version(ml_data)
 
                     # Create combined score with null handling: Timeframe Alignment + ML Probability
                     alignment_score = enhanced_signal.get('alignment_score', 0) or 0
@@ -521,6 +523,7 @@ class MultiTimeframeMLScreener:
                     fallback_signal['ml_momentum_probability'] = None
                     fallback_signal['ml_confidence'] = 'not_processed'
                     fallback_signal['ml_prediction_available'] = False
+                    fallback_signal['ml_model_version'] = None
                     fallback_signal['combined_score'] = signal.get('alignment_score', 0)
 
                     signal_type_display = signal['signal_type'].replace('_', ' ').title()
@@ -566,8 +569,11 @@ class MultiTimeframeMLScreener:
                             'ml_trade_recommendation': s.get('ml_trade_recommendation', 'hold'),
                             'ml_risk_score': s.get('ml_risk_score', 50.0),
                         })
-                    model_version = enhanced_signals[0].get('ml_model_version', 'unknown') if enhanced_signals else 'unknown'
-                    performance_tracker.record_predictions(to_record, model_version=model_version)
+                    scored_versions = [v for v in (scoring_model_version(s) for s in enhanced_signals) if v]
+                    if scored_versions:
+                        performance_tracker.record_predictions(to_record, model_version=scored_versions[0])
+                    else:
+                        performance_tracker.record_predictions(to_record)
                 except Exception as e:
                     # Never let logging failures break the actual screening run
                     logger.warning(f"Failed to log ML predictions for performance tracking: {e}")

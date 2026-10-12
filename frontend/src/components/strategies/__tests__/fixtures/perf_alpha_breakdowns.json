@@ -1,0 +1,959 @@
+{
+  "strategy": {
+    "id": 2,
+    "key": "alpha_trend",
+    "version": "v1",
+    "display_name": "alpha_trend",
+    "description": "t",
+    "registered_at": "2026-10-04T13:57:58.863724+03:00"
+  },
+  "definitions_version": "2026-10-04.1",
+  "min_sample_size": 5,
+  "dimensions": {
+    "direction": {
+      "strategy_id": 2,
+      "dimension": "direction",
+      "label": "Direction",
+      "state": "ok",
+      "definitions_version": "2026-10-04.1",
+      "groups": [
+        {
+          "bucket": "bearish",
+          "signals": 3,
+          "open": 0,
+          "held": 0,
+          "resolved": 3,
+          "winners": 0,
+          "win_rate": {
+            "value": 0.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "average_r": {
+            "value": -1.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "median_r": {
+            "value": -1.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "sum_r": {
+            "value": -3.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "profit_factor": {
+            "value": 0.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "average_holding_bars": {
+            "value": 2.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "average_mae_r": {
+            "value": -1.0,
+            "n": 3,
+            "state": "preliminary"
+          }
+        },
+        {
+          "bucket": "bullish",
+          "signals": 9,
+          "open": 1,
+          "held": 1,
+          "resolved": 7,
+          "winners": 6,
+          "win_rate": {
+            "value": 0.8571,
+            "n": 7,
+            "state": "ok"
+          },
+          "average_r": {
+            "value": 0.914,
+            "n": 7,
+            "state": "ok"
+          },
+          "median_r": {
+            "value": 1.0,
+            "n": 7,
+            "state": "ok"
+          },
+          "sum_r": {
+            "value": 6.4,
+            "n": 7,
+            "state": "ok"
+          },
+          "profit_factor": {
+            "value": null,
+            "n": null,
+            "state": "not_available",
+            "reason": "no losing resolved signal in this group: profit factor is undefined, not infinite"
+          },
+          "average_holding_bars": {
+            "value": 5.1,
+            "n": 7,
+            "state": "ok"
+          },
+          "average_mae_r": {
+            "value": -0.243,
+            "n": 7,
+            "state": "ok"
+          }
+        }
+      ],
+      "truncated": false
+    },
+    "exit": {
+      "strategy_id": 2,
+      "dimension": "exit",
+      "label": "Exit type",
+      "state": "ok",
+      "definitions_version": "2026-10-04.1",
+      "groups": [
+        {
+          "bucket": "expired",
+          "signals": 1,
+          "open": 0,
+          "held": 0,
+          "resolved": 1,
+          "winners": 0,
+          "win_rate": {
+            "value": 0.0,
+            "n": 1,
+            "state": "preliminary"
+          },
+          "average_r": {
+            "value": 0.4,
+            "n": 1,
+            "state": "preliminary"
+          },
+          "median_r": {
+            "value": 0.4,
+            "n": 1,
+            "state": "preliminary"
+          },
+          "sum_r": {
+            "value": 0.4,
+            "n": 1,
+            "state": "preliminary"
+          },
+          "profit_factor": {
+            "value": null,
+            "n": null,
+            "state": "not_available",
+            "reason": "no losing resolved signal in this group: profit factor is undefined, not infinite"
+          },
+          "average_holding_bars": {
+            "value": 18.0,
+            "n": 1,
+            "state": "preliminary"
+          },
+          "average_mae_r": {
+            "value": -0.5,
+            "n": 1,
+            "state": "preliminary"
+          }
+        },
+        {
+          "bucket": "open",
+          "signals": 2,
+          "open": 1,
+          "held": 1,
+          "resolved": 0,
+          "winners": 0,
+          "win_rate": {
+            "value": null,
+            "n": 0,
+            "state": "no_data"
+          },
+          "average_r": {
+            "value": null,
+            "n": 0,
+            "state": "no_data"
+          },
+          "median_r": {
+            "value": null,
+            "n": 0,
+            "state": "no_data"
+          },
+          "sum_r": {
+            "value": null,
+            "n": 0,
+            "state": "no_data"
+          },
+          "profit_factor": {
+            "value": null,
+            "n": 0,
+            "state": "no_data"
+          },
+          "average_holding_bars": {
+            "value": null,
+            "n": 0,
+            "state": "no_data"
+          },
+          "average_mae_r": {
+            "value": null,
+            "n": 0,
+            "state": "no_data"
+          }
+        },
+        {
+          "bucket": "stopped",
+          "signals": 3,
+          "open": 0,
+          "held": 0,
+          "resolved": 3,
+          "winners": 0,
+          "win_rate": {
+            "value": 0.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "average_r": {
+            "value": -1.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "median_r": {
+            "value": -1.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "sum_r": {
+            "value": -3.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "profit_factor": {
+            "value": 0.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "average_holding_bars": {
+            "value": 2.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "average_mae_r": {
+            "value": -1.0,
+            "n": 3,
+            "state": "preliminary"
+          }
+        },
+        {
+          "bucket": "target1",
+          "signals": 6,
+          "open": 0,
+          "held": 0,
+          "resolved": 6,
+          "winners": 6,
+          "win_rate": {
+            "value": 1.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "average_r": {
+            "value": 1.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "median_r": {
+            "value": 1.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "sum_r": {
+            "value": 6.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "profit_factor": {
+            "value": null,
+            "n": null,
+            "state": "not_available",
+            "reason": "no losing resolved signal in this group: profit factor is undefined, not infinite"
+          },
+          "average_holding_bars": {
+            "value": 3.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "average_mae_r": {
+            "value": -0.2,
+            "n": 6,
+            "state": "ok"
+          }
+        }
+      ],
+      "truncated": false
+    },
+    "quality_grade": {
+      "strategy_id": 2,
+      "dimension": "quality_grade",
+      "label": "Quality grade (at signal time)",
+      "state": "ok",
+      "definitions_version": "2026-10-04.1",
+      "groups": [
+        {
+          "bucket": "A",
+          "signals": 8,
+          "open": 1,
+          "held": 1,
+          "resolved": 6,
+          "winners": 6,
+          "win_rate": {
+            "value": 1.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "average_r": {
+            "value": 1.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "median_r": {
+            "value": 1.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "sum_r": {
+            "value": 6.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "profit_factor": {
+            "value": null,
+            "n": null,
+            "state": "not_available",
+            "reason": "no losing resolved signal in this group: profit factor is undefined, not infinite"
+          },
+          "average_holding_bars": {
+            "value": 3.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "average_mae_r": {
+            "value": -0.2,
+            "n": 6,
+            "state": "ok"
+          }
+        },
+        {
+          "bucket": "B",
+          "signals": 3,
+          "open": 0,
+          "held": 0,
+          "resolved": 3,
+          "winners": 0,
+          "win_rate": {
+            "value": 0.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "average_r": {
+            "value": -1.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "median_r": {
+            "value": -1.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "sum_r": {
+            "value": -3.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "profit_factor": {
+            "value": 0.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "average_holding_bars": {
+            "value": 2.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "average_mae_r": {
+            "value": -1.0,
+            "n": 3,
+            "state": "preliminary"
+          }
+        },
+        {
+          "bucket": "ungraded",
+          "signals": 1,
+          "open": 0,
+          "held": 0,
+          "resolved": 1,
+          "winners": 0,
+          "win_rate": {
+            "value": 0.0,
+            "n": 1,
+            "state": "preliminary"
+          },
+          "average_r": {
+            "value": 0.4,
+            "n": 1,
+            "state": "preliminary"
+          },
+          "median_r": {
+            "value": 0.4,
+            "n": 1,
+            "state": "preliminary"
+          },
+          "sum_r": {
+            "value": 0.4,
+            "n": 1,
+            "state": "preliminary"
+          },
+          "profit_factor": {
+            "value": null,
+            "n": null,
+            "state": "not_available",
+            "reason": "no losing resolved signal in this group: profit factor is undefined, not infinite"
+          },
+          "average_holding_bars": {
+            "value": 18.0,
+            "n": 1,
+            "state": "preliminary"
+          },
+          "average_mae_r": {
+            "value": -0.5,
+            "n": 1,
+            "state": "preliminary"
+          }
+        }
+      ],
+      "truncated": false
+    },
+    "sector": {
+      "strategy_id": 2,
+      "dimension": "sector",
+      "label": "Sector (at signal time)",
+      "state": "ok",
+      "definitions_version": "2026-10-04.1",
+      "groups": [
+        {
+          "bucket": "Energy",
+          "signals": 3,
+          "open": 0,
+          "held": 0,
+          "resolved": 3,
+          "winners": 0,
+          "win_rate": {
+            "value": 0.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "average_r": {
+            "value": -1.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "median_r": {
+            "value": -1.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "sum_r": {
+            "value": -3.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "profit_factor": {
+            "value": 0.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "average_holding_bars": {
+            "value": 2.0,
+            "n": 3,
+            "state": "preliminary"
+          },
+          "average_mae_r": {
+            "value": -1.0,
+            "n": 3,
+            "state": "preliminary"
+          }
+        },
+        {
+          "bucket": "Technology",
+          "signals": 8,
+          "open": 1,
+          "held": 1,
+          "resolved": 6,
+          "winners": 6,
+          "win_rate": {
+            "value": 1.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "average_r": {
+            "value": 1.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "median_r": {
+            "value": 1.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "sum_r": {
+            "value": 6.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "profit_factor": {
+            "value": null,
+            "n": null,
+            "state": "not_available",
+            "reason": "no losing resolved signal in this group: profit factor is undefined, not infinite"
+          },
+          "average_holding_bars": {
+            "value": 3.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "average_mae_r": {
+            "value": -0.2,
+            "n": 6,
+            "state": "ok"
+          }
+        },
+        {
+          "bucket": "unclassified",
+          "signals": 1,
+          "open": 0,
+          "held": 0,
+          "resolved": 1,
+          "winners": 0,
+          "win_rate": {
+            "value": 0.0,
+            "n": 1,
+            "state": "preliminary"
+          },
+          "average_r": {
+            "value": 0.4,
+            "n": 1,
+            "state": "preliminary"
+          },
+          "median_r": {
+            "value": 0.4,
+            "n": 1,
+            "state": "preliminary"
+          },
+          "sum_r": {
+            "value": 0.4,
+            "n": 1,
+            "state": "preliminary"
+          },
+          "profit_factor": {
+            "value": null,
+            "n": null,
+            "state": "not_available",
+            "reason": "no losing resolved signal in this group: profit factor is undefined, not infinite"
+          },
+          "average_holding_bars": {
+            "value": 18.0,
+            "n": 1,
+            "state": "preliminary"
+          },
+          "average_mae_r": {
+            "value": -0.5,
+            "n": 1,
+            "state": "preliminary"
+          }
+        }
+      ],
+      "truncated": false
+    },
+    "signal_month": {
+      "strategy_id": 2,
+      "dimension": "signal_month",
+      "label": "Signal month",
+      "state": "ok",
+      "definitions_version": "2026-10-04.1",
+      "groups": [
+        {
+          "bucket": "2099-07",
+          "signals": 6,
+          "open": 0,
+          "held": 0,
+          "resolved": 6,
+          "winners": 6,
+          "win_rate": {
+            "value": 1.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "average_r": {
+            "value": 1.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "median_r": {
+            "value": 1.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "sum_r": {
+            "value": 6.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "profit_factor": {
+            "value": null,
+            "n": null,
+            "state": "not_available",
+            "reason": "no losing resolved signal in this group: profit factor is undefined, not infinite"
+          },
+          "average_holding_bars": {
+            "value": 3.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "average_mae_r": {
+            "value": -0.2,
+            "n": 6,
+            "state": "ok"
+          }
+        },
+        {
+          "bucket": "2099-08",
+          "signals": 6,
+          "open": 1,
+          "held": 1,
+          "resolved": 4,
+          "winners": 0,
+          "win_rate": {
+            "value": 0.0,
+            "n": 4,
+            "state": "preliminary"
+          },
+          "average_r": {
+            "value": -0.65,
+            "n": 4,
+            "state": "preliminary"
+          },
+          "median_r": {
+            "value": -1.0,
+            "n": 4,
+            "state": "preliminary"
+          },
+          "sum_r": {
+            "value": -2.6,
+            "n": 4,
+            "state": "preliminary"
+          },
+          "profit_factor": {
+            "value": 0.133,
+            "n": 4,
+            "state": "preliminary"
+          },
+          "average_holding_bars": {
+            "value": 6.0,
+            "n": 4,
+            "state": "preliminary"
+          },
+          "average_mae_r": {
+            "value": -0.875,
+            "n": 4,
+            "state": "preliminary"
+          }
+        }
+      ],
+      "truncated": false
+    },
+    "holding_bars": {
+      "strategy_id": 2,
+      "dimension": "holding_bars",
+      "label": "Holding period (trading bars)",
+      "state": "ok",
+      "definitions_version": "2026-10-04.1",
+      "groups": [
+        {
+          "bucket": "01-05",
+          "signals": 9,
+          "open": 0,
+          "held": 0,
+          "resolved": 9,
+          "winners": 6,
+          "win_rate": {
+            "value": 0.6667,
+            "n": 9,
+            "state": "ok"
+          },
+          "average_r": {
+            "value": 0.333,
+            "n": 9,
+            "state": "ok"
+          },
+          "median_r": {
+            "value": 1.0,
+            "n": 9,
+            "state": "ok"
+          },
+          "sum_r": {
+            "value": 3.0,
+            "n": 9,
+            "state": "ok"
+          },
+          "profit_factor": {
+            "value": 2.0,
+            "n": 9,
+            "state": "ok"
+          },
+          "average_holding_bars": {
+            "value": 2.7,
+            "n": 9,
+            "state": "ok"
+          },
+          "average_mae_r": {
+            "value": -0.467,
+            "n": 9,
+            "state": "ok"
+          }
+        },
+        {
+          "bucket": "16+",
+          "signals": 1,
+          "open": 0,
+          "held": 0,
+          "resolved": 1,
+          "winners": 0,
+          "win_rate": {
+            "value": 0.0,
+            "n": 1,
+            "state": "preliminary"
+          },
+          "average_r": {
+            "value": 0.4,
+            "n": 1,
+            "state": "preliminary"
+          },
+          "median_r": {
+            "value": 0.4,
+            "n": 1,
+            "state": "preliminary"
+          },
+          "sum_r": {
+            "value": 0.4,
+            "n": 1,
+            "state": "preliminary"
+          },
+          "profit_factor": {
+            "value": null,
+            "n": null,
+            "state": "not_available",
+            "reason": "no losing resolved signal in this group: profit factor is undefined, not infinite"
+          },
+          "average_holding_bars": {
+            "value": 18.0,
+            "n": 1,
+            "state": "preliminary"
+          },
+          "average_mae_r": {
+            "value": -0.5,
+            "n": 1,
+            "state": "preliminary"
+          }
+        },
+        {
+          "bucket": "unresolved",
+          "signals": 2,
+          "open": 1,
+          "held": 1,
+          "resolved": 0,
+          "winners": 0,
+          "win_rate": {
+            "value": null,
+            "n": 0,
+            "state": "no_data"
+          },
+          "average_r": {
+            "value": null,
+            "n": 0,
+            "state": "no_data"
+          },
+          "median_r": {
+            "value": null,
+            "n": 0,
+            "state": "no_data"
+          },
+          "sum_r": {
+            "value": null,
+            "n": 0,
+            "state": "no_data"
+          },
+          "profit_factor": {
+            "value": null,
+            "n": 0,
+            "state": "no_data"
+          },
+          "average_holding_bars": {
+            "value": null,
+            "n": 0,
+            "state": "no_data"
+          },
+          "average_mae_r": {
+            "value": null,
+            "n": 0,
+            "state": "no_data"
+          }
+        }
+      ],
+      "truncated": false
+    },
+    "model_scored": {
+      "strategy_id": 2,
+      "dimension": "model_scored",
+      "label": "Scored by a validated model",
+      "state": "ok",
+      "definitions_version": "2026-10-04.1",
+      "groups": [
+        {
+          "bucket": "scored",
+          "signals": 6,
+          "open": 0,
+          "held": 0,
+          "resolved": 6,
+          "winners": 6,
+          "win_rate": {
+            "value": 1.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "average_r": {
+            "value": 1.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "median_r": {
+            "value": 1.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "sum_r": {
+            "value": 6.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "profit_factor": {
+            "value": null,
+            "n": null,
+            "state": "not_available",
+            "reason": "no losing resolved signal in this group: profit factor is undefined, not infinite"
+          },
+          "average_holding_bars": {
+            "value": 3.0,
+            "n": 6,
+            "state": "ok"
+          },
+          "average_mae_r": {
+            "value": -0.2,
+            "n": 6,
+            "state": "ok"
+          }
+        },
+        {
+          "bucket": "unscored",
+          "signals": 6,
+          "open": 1,
+          "held": 1,
+          "resolved": 4,
+          "winners": 0,
+          "win_rate": {
+            "value": 0.0,
+            "n": 4,
+            "state": "preliminary"
+          },
+          "average_r": {
+            "value": -0.65,
+            "n": 4,
+            "state": "preliminary"
+          },
+          "median_r": {
+            "value": -1.0,
+            "n": 4,
+            "state": "preliminary"
+          },
+          "sum_r": {
+            "value": -2.6,
+            "n": 4,
+            "state": "preliminary"
+          },
+          "profit_factor": {
+            "value": 0.133,
+            "n": 4,
+            "state": "preliminary"
+          },
+          "average_holding_bars": {
+            "value": 6.0,
+            "n": 4,
+            "state": "preliminary"
+          },
+          "average_mae_r": {
+            "value": -0.875,
+            "n": 4,
+            "state": "preliminary"
+          }
+        }
+      ],
+      "truncated": false
+    },
+    "market_regime": {
+      "strategy_id": 2,
+      "dimension": "market_regime",
+      "label": "Market regime at signal",
+      "state": "not_available",
+      "requires": "market_snapshot rows (migration 24) joined by session, observed provenance only",
+      "groups": []
+    },
+    "volatility_regime": {
+      "strategy_id": 2,
+      "dimension": "volatility_regime",
+      "label": "Volatility regime at signal",
+      "state": "not_available",
+      "requires": "market_snapshot (migration 24)",
+      "groups": []
+    },
+    "relative_strength": {
+      "strategy_id": 2,
+      "dimension": "relative_strength",
+      "label": "Relative strength at signal",
+      "state": "not_available",
+      "requires": "sector_snapshot / feature_snapshot (migrations 22, 24)",
+      "groups": []
+    },
+    "earnings_proximity": {
+      "strategy_id": 2,
+      "dimension": "earnings_proximity",
+      "label": "Earnings proximity",
+      "state": "not_available",
+      "requires": "market_event (migration 25) with a known_at earlier than the signal",
+      "groups": []
+    },
+    "catalyst": {
+      "strategy_id": 2,
+      "dimension": "catalyst",
+      "label": "Catalyst type",
+      "state": "not_available",
+      "requires": "a versioned catalyst classification of PIT-safe events",
+      "groups": []
+    },
+    "ml_score_bucket": {
+      "strategy_id": 2,
+      "dimension": "ml_score_bucket",
+      "label": "ML score bucket",
+      "state": "not_available",
+      "requires": "the score itself -- signal_ledger stores only the model version, not the probability",
+      "groups": []
+    }
+  }
+}

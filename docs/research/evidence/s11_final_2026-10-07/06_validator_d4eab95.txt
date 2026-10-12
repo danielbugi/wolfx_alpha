@@ -1,0 +1,91 @@
+#### VAL schema --expect exact --capture inactive --ml-models any
+PASS session.read_only: transaction_read_only=on
+PASS migration22.state: EXACT (as expected)
+INFO migration23.ml_models_columns: present: ['evaluation', 'feature_set_version', 'target']
+PASS migration22.triggers_always: 14 triggers, all ENABLE ALWAYS
+INFO rows.feature_set_registry: 0
+INFO rows.candidate_capture_run: 0
+INFO rows.research_capture_activation: 0
+INFO rows.research_maintenance_log: 0
+INFO rows.research_maintenance_session: 0
+INFO rows.research_maintenance_audit: 0
+INFO rows.feature_snapshot: 0
+INFO rows.candidate_observation: 0
+PASS capture.inactive: no boundary, run, observation or snapshot rows
+PASS ledger.lineage_all_or_none: 0 rows violate all-or-none lineage
+RESULT: OK (0 fail, 0 warn, 5 pass)
+#### VAL roles --expect present
+PASS roles.present: donchian_owner, donchian_app, donchian_research_admin
+PASS roles.donchian_owner.no_privileged_attributes: no SUPERUSER/CREATEROLE/CREATEDB/REPLICATION/BYPASSRLS
+PASS roles.donchian_owner.login: rolcanlogin=False
+PASS roles.donchian_app.no_privileged_attributes: no SUPERUSER/CREATEROLE/CREATEDB/REPLICATION/BYPASSRLS
+PASS roles.donchian_app.login: rolcanlogin=True
+PASS roles.donchian_research_admin.no_privileged_attributes: no SUPERUSER/CREATEROLE/CREATEDB/REPLICATION/BYPASSRLS
+PASS roles.donchian_research_admin.login: rolcanlogin=False
+PASS roles.app_not_in.donchian_owner: donchian_app is not a member
+PASS roles.app_not_in.donchian_research_admin: donchian_app is not a member
+INFO roles.admin_group_members: none yet (S9b not done)
+PASS roles.research_objects_owned_by_owner: the research objects (and any Market Intelligence tables) are owned by donchian_owner
+PASS roles.app_owns_nothing: donchian_app owns no relation
+PASS privileges.runtime_coverage: 76 relations reachable with the intended privileges
+PASS privileges.functions: 3 non-research functions executable
+PASS privileges.maintenance_functions_denied: neither the runtime role nor PUBLIC can execute a maintenance / set_state function
+PASS privileges.admin_can_execute: the admin group can execute all five
+PASS privileges.research_tables_read_insert_only: no UPDATE/DELETE/TRUNCATE on any research table
+INFO privileges.market_intelligence_append_only: migrations 24/25 not applied; nothing to check
+PASS privileges.schema_usage: USAGE on schema
+PASS privileges.no_schema_create: no CREATE on schema
+PASS privileges.no_database_create: no CREATE on database
+PASS privileges.connect: may CONNECT
+RESULT: OK (0 fail, 0 warn, 20 pass)
+#### VAL config --env-file /opt/donchian/env/.env --expect-guards set --expect-capture unset --check-boundary-vs-db
+INFO config.guards.value: GUARDS_EFFECTIVE_FROM=2026-10-02
+PASS config.guards.expected_set: 2026-10-02
+FAIL config.guards.boundary_in_future: 2026-10-02 <= latest completed session 2026-10-06: the boundary must be a session that has not started
+INFO config.capture.value: RESEARCH_CAPTURE_ENABLED is unset
+PASS config.capture.expected_off: capture kill switch is off
+RESULT: FAILED (1 fail, 0 warn, 2 pass)
+#### VAL connections --forbid-user trading_user
+INFO connection: user=donchian_app application_name=- count=12
+PASS connections.no_trading_user: no service connections as trading_user
+RESULT: OK (0 fail, 0 warn, 1 pass)
+#### VAL guards --session 2026-10-05 --expect active --log /tmp/ov/g1005.log
+PASS guards.log.mode: ACTIVE (as expected)
+PASS guards.log.behaviour_mode: NEW (consistent with guards ACTIVE)
+PASS guards.log.guard_input_symbol_count: M=1397 distinct candidate symbols entered the guards, N=81 dropped (M > 0, 0 <= N <= M)
+PASS guards.log.drop_fraction: dropped 81/1397 = 5.8% (<= 15%)
+WARN guards.log.post_guard_signals: expected exactly one 'N signals after the ... guards' line, found 0; log/results signal-count reconciliation skipped
+INFO guards.db.ledger_rows: 126 signal_ledger rows for 2026-10-05
+INFO guards.db.prior_5_session_median: 363 (from [169, 363, 490])
+FAIL guards.db.candidate_range: 126 vs median 363: collapsed below the allowed range
+PASS guards.db.no_discontinuity_in_ledger: no ledger row for the session has a price_discontinuities row within the guard lookback
+INFO guards.db.price_discontinuities_total: 1040
+RESULT: FAILED (1 fail, 1 warn, 5 pass)
+#### VAL guards --session 2026-10-06 --expect active --log /tmp/ov/g1006.log
+PASS guards.log.mode: ACTIVE (as expected)
+PASS guards.log.behaviour_mode: NEW (consistent with guards ACTIVE)
+PASS guards.log.guard_input_symbol_count: M=1366 distinct candidate symbols entered the guards, N=78 dropped (M > 0, 0 <= N <= M)
+PASS guards.log.drop_fraction: dropped 78/1366 = 5.7% (<= 15%)
+WARN guards.log.post_guard_signals: expected exactly one 'N signals after the ... guards' line, found 0; log/results signal-count reconciliation skipped
+INFO guards.db.ledger_rows: 99 signal_ledger rows for 2026-10-06
+INFO guards.db.prior_5_session_median: 266.0 (from [126, 169, 363, 490])
+FAIL guards.db.candidate_range: 99 vs median 266.0: collapsed below the allowed range
+PASS guards.db.no_discontinuity_in_ledger: no ledger row for the session has a price_discontinuities row within the guard lookback
+INFO guards.db.price_discontinuities_total: 1040
+RESULT: FAILED (1 fail, 1 warn, 5 pass)
+#### VAL delivery --session 2026-10-05
+INFO delivery.row: ('daily_digest', 'prod', 'sent', 1)
+INFO delivery.row: ('market_health', 'prod', 'sent', 1)
+INFO delivery.row: ('momentum_board', 'prod', 'sent', 1)
+INFO delivery.row: ('top_gainers', 'prod', 'sent', 1)
+PASS delivery.prod_sent: 4 prod posts sent for 2026-10-05
+PASS delivery.no_duplicates: no duplicate (session, kind, target) rows
+RESULT: OK (0 fail, 0 warn, 2 pass)
+#### VAL delivery --session 2026-10-06
+INFO delivery.row: ('daily_digest', 'prod', 'sent', 1)
+INFO delivery.row: ('market_health', 'prod', 'sent', 1)
+INFO delivery.row: ('momentum_board', 'prod', 'sent', 1)
+INFO delivery.row: ('top_gainers', 'prod', 'sent', 1)
+PASS delivery.prod_sent: 4 prod posts sent for 2026-10-06
+PASS delivery.no_duplicates: no duplicate (session, kind, target) rows
+RESULT: OK (0 fail, 0 warn, 2 pass)

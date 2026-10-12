@@ -1,0 +1,13 @@
+# COMMITTED, NOT INSTALLED. Installing it (copy to /etc/systemd/system, daemon-reload) and enabling the paired timer are manual administrator steps that need an owner
+# approval; no script, workflow or CD path does either. It writes only the append-only price_discontinuity_scan evidence (and refreshes the discontinuity table's
+# values while preserving every first-detected timestamp); it never touches the ML dataset.
+[Unit]
+Description=First Light: the night's single price-discontinuity scan (after the final post-market retry; scan-only, never a rebuild)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/donchian/scripts/run_discontinuity_scan.sh
+TimeoutStartSec=40m
+# a failed scan must stay visible as a failed unit (systemctl --failed): no SuccessExitStatus other than the script's own 0

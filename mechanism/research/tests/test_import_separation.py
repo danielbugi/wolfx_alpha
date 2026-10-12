@@ -95,7 +95,10 @@ def test_activation_table_is_only_read_by_runtime_code():
             readers.append(rel.replace("\\", "/"))
     assert set(readers) <= {"mechanism/research/repository.py", "mechanism/strategy_analytics/research.py",
                             "mechanism/check_research_migration_preflight.py",
-                            "mechanism/research/schema_fingerprint.py", "mechanism/validate_release_b.py"}
+                            "mechanism/research/schema_fingerprint.py", "mechanism/validate_release_b.py",
+                            "mechanism/research/lab/research_status_reader.py",
+                            "mechanism/forward_collection/preflight.py", "mechanism/forward_collection/activation.py",
+                                "mechanism/forward_collection/steps.py"}
 
 
 def test_no_runtime_python_writes_any_research_table_except_through_the_capture_repository():
@@ -115,3 +118,58 @@ def test_migration_and_role_sql_are_the_only_place_the_hatch_functions_are_defin
             for f in files:
                 if f.endswith(".sql") and "CREATE OR REPLACE FUNCTION research_maintenance" in read(os.path.join(base, f)):
                     assert f == "add_research_observation_tables.sql", f
+
+
+# ---- fwd_v1 forward-return labels (migration 26) --------------------------------------------------------------------
+LABEL_PKG = os.path.join("mechanism", "research", "labels")
+
+
+def _label_modules():
+    base = os.path.join(ROOT, LABEL_PKG)
+    return {n: read(os.path.join(base, n)) for n in sorted(os.listdir(base)) if n.endswith(".py")}
+
+
+def test_label_modules_only_ever_insert_into_the_label_table_and_never_touch_the_ledger():
+    forbidden = re.compile(r"\b(UPDATE|DELETE\s+FROM|TRUNCATE(?:\s+TABLE)?)\s+(forward_return_label|candidate_observation|"
+                           r"feature_snapshot|signal_ledger|stock_prices|market_index_prices)\b", re.I)
+    inserts = re.compile(r"\bINSERT\s+INTO\s+(\w+)", re.I)
+    for name, text in _label_modules().items():
+        assert not forbidden.search(text), name
+        assert not re.search(r"(FROM|JOIN|INTO|UPDATE)\s+signal_ledger", text, re.I), f"{name} reads/writes the ledger"
+        assert set(m.lower() for m in inserts.findall(text)) <= {"forward_return_label"}, name
+
+
+OWNER_CLI = "mechanism/research/lab/dataset_cli.py"
+
+
+def test_the_owner_dataset_cli_uses_only_the_pure_calendar_helpers_of_the_label_engine_and_nothing_imports_the_cli():
+    """The one carve-out from the rule below: the owner-run dataset CLI derives a session calendar with the label engine's own (read-only)
+    calendar code rather than re-implementing it. It may import only `sessions` and `fwd_v1` -- never the label repository or runner -- and no
+    other runtime module may import the CLI, so it stays an operator tool the pipeline cannot reach."""
+    cli = read(os.path.join(ROOT, OWNER_CLI))
+    imported = set(re.findall(r"^\s*(?:from|import)\s+(research\.labels[\w.]*)", cli, re.M))
+    assert imported == {"research.labels.fwd_v1", "research.labels.sessions"}, imported
+    assert not re.search(r"research\.labels\.(repository|runner)|research import labels", cli)
+    for rel, path in runtime_python_files():
+        rel = rel.replace("\\", "/")
+        if rel != OWNER_CLI:
+            assert "dataset_cli" not in read(path), f"{rel} imports the owner dataset CLI"
+
+
+def test_only_the_label_repository_writes_the_label_table_and_nothing_imports_the_runner_from_the_pipeline():
+    write = re.compile(r"\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM|TRUNCATE(?:\s+TABLE)?)\s+forward_return_label\b", re.I)
+    for rel, path in runtime_python_files():
+        rel = rel.replace("\\", "/")
+        text = read(path)
+        if rel != "mechanism/research/labels/repository.py":
+            assert not write.search(text), f"{rel} writes forward_return_label"
+        if not rel.startswith(("mechanism/research/labels/", "mechanism/forward_collection/")) and rel != OWNER_CLI:
+            assert "research.labels" not in text and "research import labels" not in text, \
+                f"{rel} imports the label engine: it is activated by a separate, owner-authorised stage"
+
+
+def test_label_modules_do_not_reach_the_hatch_or_the_clock():
+    for name, text in _label_modules().items():
+        assert not HATCH.search(text), name
+        for bad in ("datetime.now", "date.today", "time.time(", "utcnow"):
+            assert bad not in text, f"{name} reads the wall clock ({bad})"

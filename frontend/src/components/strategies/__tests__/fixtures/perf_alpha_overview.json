@@ -1,0 +1,273 @@
+{
+  "strategy": {
+    "id": 2,
+    "key": "alpha_trend",
+    "version": "v1",
+    "display_name": "alpha_trend",
+    "description": "t",
+    "registered_at": "2026-10-04T13:57:58.863724+03:00"
+  },
+  "definitions_version": "2026-10-04.1",
+  "reference_session": null,
+  "min_sample_size": 5,
+  "tracking": {
+    "tracking_status": "tracking",
+    "first_tracked_session": "2099-07-01",
+    "latest_tracked_session": "2099-08-06",
+    "total_signals": 12,
+    "open": 2,
+    "normally_open": 1,
+    "held": 1,
+    "resolved": 10,
+    "bullish": 9,
+    "bearish": 3,
+    "signals_this_week": null,
+    "signals_this_month": null
+  },
+  "performance": {
+    "resolved_n": 10,
+    "winners": 6,
+    "stopped": 3,
+    "expired": 1,
+    "expired_positive": 1,
+    "expired_negative": 0,
+    "ambiguous": 0,
+    "win_rate": {
+      "value": 0.6,
+      "n": 10,
+      "state": "ok"
+    },
+    "stop_rate": {
+      "value": 0.3,
+      "n": 10,
+      "state": "ok"
+    },
+    "expiry_rate": {
+      "value": 0.1,
+      "n": 10,
+      "state": "ok"
+    },
+    "average_r": {
+      "value": 0.34,
+      "n": 10,
+      "state": "ok"
+    },
+    "median_r": {
+      "value": 1.0,
+      "n": 10,
+      "state": "ok"
+    },
+    "average_holding_bars": {
+      "value": 4.2,
+      "n": 10,
+      "state": "ok"
+    },
+    "median_holding_bars": {
+      "value": 3.0,
+      "n": 10,
+      "state": "ok"
+    },
+    "average_mae_r": {
+      "value": -0.47,
+      "n": 10,
+      "state": "ok"
+    },
+    "average_mfe_r": {
+      "value": null,
+      "n": null,
+      "state": "not_available",
+      "reason": "maximum favourable excursion is not stored in Release A",
+      "release": "B"
+    }
+  },
+  "directions": {
+    "bullish": {
+      "signals": 9,
+      "open": 2,
+      "normally_open": 1,
+      "held": 1,
+      "resolved": 7,
+      "winners": 6,
+      "stopped": 0,
+      "expired": 1,
+      "ambiguous": 0,
+      "win_rate": {
+        "value": 0.8571,
+        "n": 7,
+        "state": "ok"
+      },
+      "average_r": {
+        "value": 0.914,
+        "n": 7,
+        "state": "ok"
+      },
+      "median_r": {
+        "value": 1.0,
+        "n": 7,
+        "state": "ok"
+      },
+      "average_holding_bars": {
+        "value": 5.1,
+        "n": 7,
+        "state": "ok"
+      },
+      "median_holding_bars": {
+        "value": 3.0,
+        "n": 7,
+        "state": "ok"
+      },
+      "stop_rate": {
+        "value": 0.0,
+        "n": 7,
+        "state": "ok"
+      },
+      "expiry_rate": {
+        "value": 0.1429,
+        "n": 7,
+        "state": "ok"
+      },
+      "target_rates": {
+        "target1": {
+          "value": 0.8571,
+          "n": 7,
+          "state": "ok"
+        },
+        "target2": {
+          "value": 0.0,
+          "n": 7,
+          "state": "ok"
+        },
+        "target3": {
+          "value": 0.0,
+          "n": 7,
+          "state": "ok"
+        }
+      }
+    },
+    "bearish": {
+      "signals": 3,
+      "open": 0,
+      "normally_open": 0,
+      "held": 0,
+      "resolved": 3,
+      "winners": 0,
+      "stopped": 3,
+      "expired": 0,
+      "ambiguous": 0,
+      "win_rate": {
+        "value": 0.0,
+        "n": 3,
+        "state": "preliminary"
+      },
+      "average_r": {
+        "value": -1.0,
+        "n": 3,
+        "state": "preliminary"
+      },
+      "median_r": {
+        "value": -1.0,
+        "n": 3,
+        "state": "preliminary"
+      },
+      "average_holding_bars": {
+        "value": 2.0,
+        "n": 3,
+        "state": "preliminary"
+      },
+      "median_holding_bars": {
+        "value": 2.0,
+        "n": 3,
+        "state": "preliminary"
+      },
+      "stop_rate": {
+        "value": 1.0,
+        "n": 3,
+        "state": "preliminary"
+      },
+      "expiry_rate": {
+        "value": 0.0,
+        "n": 3,
+        "state": "preliminary"
+      },
+      "target_rates": {
+        "target1": {
+          "value": 0.0,
+          "n": 3,
+          "state": "preliminary"
+        },
+        "target2": {
+          "value": 0.0,
+          "n": 3,
+          "state": "preliminary"
+        },
+        "target3": {
+          "value": 0.0,
+          "n": 3,
+          "state": "preliminary"
+        }
+      }
+    }
+  },
+  "exit_rules": {
+    "value": null,
+    "n": null,
+    "state": "not_available",
+    "reason": "no exit rules are declared for this strategy version"
+  },
+  "unavailable_metrics": {
+    "max_favourable_excursion": {
+      "state": "not_available",
+      "reason": "MFE is not stored; needs the forward path (fwd_v1 labels)"
+    },
+    "post_exit_trajectory": {
+      "state": "not_available",
+      "reason": "the ledger stops tracking price at exit"
+    },
+    "per_row_expiry_horizon": {
+      "state": "not_available",
+      "reason": "the expiry horizon is a strategy constant, not stored on each row"
+    },
+    "drawdown_in_r": {
+      "state": "not_available",
+      "reason": "needs a portfolio/sequencing rule; it is not a property of independent signals"
+    }
+  },
+  "unavailable_dimensions": {
+    "market_regime": {
+      "label": "Market regime at signal",
+      "available": false,
+      "state": "not_available",
+      "requires": "market_snapshot rows (migration 24) joined by session, observed provenance only"
+    },
+    "volatility_regime": {
+      "label": "Volatility regime at signal",
+      "available": false,
+      "state": "not_available",
+      "requires": "market_snapshot (migration 24)"
+    },
+    "relative_strength": {
+      "label": "Relative strength at signal",
+      "available": false,
+      "state": "not_available",
+      "requires": "sector_snapshot / feature_snapshot (migrations 22, 24)"
+    },
+    "earnings_proximity": {
+      "label": "Earnings proximity",
+      "available": false,
+      "state": "not_available",
+      "requires": "market_event (migration 25) with a known_at earlier than the signal"
+    },
+    "catalyst": {
+      "label": "Catalyst type",
+      "available": false,
+      "state": "not_available",
+      "requires": "a versioned catalyst classification of PIT-safe events"
+    },
+    "ml_score_bucket": {
+      "label": "ML score bucket",
+      "available": false,
+      "state": "not_available",
+      "requires": "the score itself -- signal_ledger stores only the model version, not the probability"
+    }
+  }
+}

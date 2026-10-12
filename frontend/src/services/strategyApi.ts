@@ -532,6 +532,85 @@ function cleanQuery(q: SignalQuery | CandidateQuery): Record<string, string | nu
   return out;
 }
 
+// ---- Generic performance API (backend/routers/strategy_performance.py) ----------------------------------------------------
+// GET /api/strategies/{key}/{version}/performance[/breakdowns]. Strategy-neutral: the same shapes for every registered
+// strategy. A metric is {value, n, state}; a dimension or metric the ledger cannot support is state 'not_available' with
+// what it requires -- never a zero.
+export type DimensionState = 'ok' | 'no_data' | 'not_available';
+
+export interface PerfGroup {
+  bucket: string;
+  signals: number;
+  open: number;
+  held: number;
+  resolved: number;
+  winners: number;
+  win_rate: Metric;
+  average_r: Metric;
+  median_r: Metric;
+  sum_r: Metric;
+  profit_factor: Metric;
+  average_holding_bars: Metric;
+  average_mae_r: Metric;
+}
+
+export interface PerfDimension {
+  strategy_id: number;
+  dimension: string;
+  label: string;
+  state: DimensionState;
+  requires?: string;
+  definitions_version?: string;
+  groups: PerfGroup[];
+  truncated?: boolean;
+}
+
+export interface PerformanceBreakdowns {
+  strategy: StrategyRef;
+  definitions_version: string;
+  min_sample_size: number;
+  dimensions: Record<string, PerfDimension>;
+}
+
+export interface UnavailableDimension {
+  label: string;
+  available: false;
+  state: 'not_available';
+  requires: string;
+}
+
+export interface UnavailableMetric {
+  state: 'not_available';
+  reason: string;
+}
+
+export interface DeclaredExitRules {
+  state: 'declared';
+  stop_atr_mult: number;
+  target_atr_mults: number[];
+  expiry_bars: number;
+  r_unit: string;
+  source: string;
+}
+
+export interface UndeclaredExitRules {
+  value: null;
+  n: null;
+  state: 'not_available';
+  reason: string;
+}
+
+export interface PerformanceOverview {
+  strategy: StrategyRef;
+  definitions_version: string;
+  reference_session: string | null;
+  min_sample_size: number;
+  performance: Performance;
+  exit_rules: DeclaredExitRules | UndeclaredExitRules;
+  unavailable_metrics: Record<string, UnavailableMetric>;
+  unavailable_dimensions: Record<string, UnavailableDimension>;
+}
+
 const base = (key: string, version: string) => `/api/strategies/${encodeURIComponent(key)}/${encodeURIComponent(version)}`;
 
 export const strategyApi = {
@@ -545,6 +624,10 @@ export const strategyApi = {
     (await apiClient.get<SignalPage>(`${base(key, version)}/signals`, { params: cleanQuery(query) })).data,
   signal: async (key: string, version: string, id: number): Promise<SignalDetail> =>
     (await apiClient.get<SignalDetail>(`${base(key, version)}/signals/${id}`)).data,
+  performanceOverview: async (key: string, version: string): Promise<PerformanceOverview> =>
+    (await apiClient.get<PerformanceOverview>(`${base(key, version)}/performance`)).data,
+  performanceBreakdowns: async (key: string, version: string): Promise<PerformanceBreakdowns> =>
+    (await apiClient.get<PerformanceBreakdowns>(`${base(key, version)}/performance/breakdowns`)).data,
   researchSummary: async (key: string, version: string): Promise<ResearchSummary> =>
     (await apiClient.get<ResearchSummary>(`${base(key, version)}/research/summary`)).data,
   captureRuns: async (key: string, version: string, limit = 30): Promise<CaptureRunsResponse> =>

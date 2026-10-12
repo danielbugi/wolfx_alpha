@@ -18,7 +18,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-DEFINITIONS_VERSION = "2026-09-29.2"
+DEFINITIONS_VERSION = "2026-10-04.1"
+
+# Legacy placeholder the screener once wrote to signal_ledger.model_version when no model scored the signal.
+# Current semantics: model_version is NULL unless a validated model scored the signal (shared/model_provenance.py).
+# Historical rows are not rewritten, so read-side consumers must treat this value as "not scored", never as a model.
+LEGACY_UNSCORED_MODEL_VERSIONS = ("unknown",)
 
 # signal_ledger.status vocabulary (CHECK constraint, migration 19).
 STATUS_OPEN = "open"

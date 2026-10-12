@@ -37,6 +37,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
 from research import registry, repository, snapshot_builder as sb
 from screeners.signal_ledger_writer import ObservationLink, StrategyRef, ledger_ineligibility
+from shared.model_provenance import scoring_model_version
 from shared.session_integrity import to_date
 
 logger = logging.getLogger(__name__)
@@ -135,7 +136,7 @@ def _funnel(c: Mapping[str, Any], session_date: date, final: Optional[Mapping[st
         "ml_status": "scored" if scored else "not_processed",
         "ml_score": _num(final.get("ml_momentum_probability")) if scored else None,
         "ml_confidence": final.get("ml_confidence") if scored else None,
-        "ml_model_version": final.get("ml_model_version") if scored else None,
+        "ml_model_version": scoring_model_version(final) if final else None,
         # the ONE predicate the ledger writer uses; a candidate the guards dropped has no `final` and so is False
         "tracked_intent": bool(final) and ledger_ineligibility(final, session_date) is None,
     }

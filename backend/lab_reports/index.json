@@ -1,0 +1,68 @@
+{
+ "schema": "lab_index_v1",
+ "reports": [
+  {
+   "id": "strategy_baseline",
+   "file": "strategy_baseline.json",
+   "kind": "strategy_lab",
+   "title": "Donchian-20 breakout: baseline plan R by direction and year",
+   "headline": "592,687 matured breakouts: mean -0.018 R (95% CI -0.063 to +0.030); bullish +0.042 R, bearish -0.095 R."
+  },
+  {
+   "id": "ranker_stability",
+   "file": "ranker_stability.json",
+   "kind": "strategy_lab",
+   "title": "Parameter-free rankers: year-by-year stability",
+   "headline": "'Less extended in its own direction' (vs the 52-week high) has a positive top-minus-bottom quintile R spread in 8 of 9 years (mean +0.168 R). 7 related candidates were tried."
+  },
+  {
+   "id": "ml_evaluation",
+   "file": "ml_evaluation.json",
+   "kind": "ml",
+   "title": "ML evaluation runs (evaluate-only) and the promotion gate",
+   "headline": "No model passes the a-priori gate. The legacy momentum target is predictable (holdout AUC 0.627) but does not rank the trade's profit (AUC 0.506 bullish / 0.492 bearish within direction)."
+  },
+  {
+   "id": "exit_policies",
+   "file": "exit_policies.json",
+   "kind": "strategy_lab",
+   "title": "Donchian exit-policy comparison (same entries, same costs)",
+   "headline": "72,262 breakouts x 5 policies: best net expectancy -0.048 R (A_atr_stop_fixed_2R); no policy differs from the fixed-3R exit beyond noise (every paired interval includes zero). Bearish trades lose under every policy."
+  },
+  {
+   "id": "catalyst_earnings",
+   "file": "catalyst_earnings.json",
+   "kind": "catalyst",
+   "title": "Earnings catalysts: reaction, drift and the breakout interaction",
+   "headline": "39,706 liquid earnings events: surprise >= +10% -> +2.45% market-adjusted reaction, surprise <= -10% -> -3.72%; post-reaction 20-day drift -0.16% / -0.42% (intervals include zero): the market prices the surprise immediately."
+  },
+  {
+   "id": "catalyst_radar_recent",
+   "file": "catalyst_radar_recent.json",
+   "kind": "catalyst",
+   "title": "Recent large earnings surprises (research feed, not alerts)",
+   "headline": "40 liquid events with surprise >= +25% in the last 40 days of data, each with its market-adjusted reaction so far."
+  },
+  {
+   "id": "catalyst_sec_earnings",
+   "file": "catalyst_sec_earnings.json",
+   "kind": "catalyst",
+   "title": "SEC earnings catalysts: anomalies from filings, decision time, reaction",
+   "headline": "9,614 earnings events from SEC filings: recurring operating improvements react +2.22% vs -0.51% without an anomaly; 20-day drift -0.10% (interval includes zero). Extraction: 86% of periodic filings carry usable facts; 97% of events matched to their 8-K 2.02 release."
+  },
+  {
+   "id": "performance_attribution",
+   "file": "performance_attribution.json",
+   "kind": "strategy_lab",
+   "title": "Performance attribution: direction, year, regime and sector",
+   "headline": "Fixed-3R exit by year: bullish positive in 7 of 9 years, bearish positive in 1; regime and sector cells change sign between years."
+  },
+  {
+   "id": "research_insights",
+   "file": "research_insights.json",
+   "kind": "strategy_lab",
+   "title": "Research insights: what the evidence supports, and what it does not",
+   "headline": "20 claims checked: 6 inconclusive, 8 not supported, 2 suggestive, 4 supported."
+  }
+ ]
+}

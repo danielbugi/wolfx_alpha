@@ -1,6 +1,7 @@
 // File: frontend/src/lib/navigation.ts
 // The single list of dashboard routes, shared by Sidebar and MobileNav so they can never drift apart.
 import {
+  BeakerIcon,
   BellAlertIcon,
   BoltIcon,
   ChartBarIcon,
@@ -40,6 +41,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { name: 'Screener', href: '/screener', icon: FunnelIcon, description: 'Search & filter the universe' },
       { name: 'Position Plans', href: '/strategy', icon: ChartBarIcon, description: 'Ranked position plans' },
       { name: 'Strategies', href: '/strategies', icon: PresentationChartLineIcon, description: 'Strategy intelligence: outcomes, signals, data health' },
+      { name: 'Quant Lab', href: '/lab', icon: BeakerIcon, description: 'Historical research evidence: strategies, exits, ML, catalysts' },
       { name: 'Alerts', href: '/alerts', icon: BellAlertIcon, description: 'Deep-value / turnaround watch' },
       { name: 'Telegram', href: '/telegram', icon: PaperAirplaneIcon, description: 'Channel post control center' },
     ],

@@ -22,6 +22,11 @@ def _db():
         from dotenv import load_dotenv
         load_dotenv(os.path.join(ROOT, ".env"))
         from shared import db
+        # shared.database builds its singleton pool once, at import; a single transient connect failure (seen: Postgres
+        # 'out of memory' under host memory pressure) leaves sync_pool None for the whole process, so retry once here
+        # instead of letting every DB-backed test in the run skip.
+        if db.sync_pool is None:
+            db.initialize_sync_pool()
         db.execute_dict_query("SELECT 1 FROM signal_ledger LIMIT 1")
         return db
     except Exception as e:  # noqa: BLE001
@@ -66,11 +71,28 @@ def test_bullish_breakout_writes_a_row_with_correct_levels(db):
     assert r["model_version"] is None  # no ml_model_version on this signal
 
 
-def test_model_version_is_captured_when_the_screener_already_computed_one(db):
+def _scored(**kw):
+    return dict(ml_prediction_available=True, ml_momentum_probability=61.0, **kw)
+
+
+def test_model_version_is_captured_when_a_model_scored_the_signal(db):
     symbol = _symbol()
-    write_todays_signals(db, [_signal(symbol, ml_model_version="momentum_predictor_v20260918_2157")], SESSION)
+    write_todays_signals(db, [_signal(symbol, **_scored(ml_model_version="momentum_predictor_v20260918_2157"))], SESSION)
     row = db.execute_dict_query("SELECT * FROM signal_ledger WHERE symbol = %s", (symbol,))[0]
     assert row["model_version"] == "momentum_predictor_v20260918_2157"
+
+
+@pytest.mark.parametrize("extra", [
+    dict(ml_model_version="unknown"),                                               # the legacy placeholder
+    dict(ml_model_version="momentum_v1", ml_prediction_available=False),            # loaded model, signal not scored
+    dict(ml_model_version="momentum_v1", ml_prediction_available=True, ml_momentum_probability=None),
+    dict(ml_prediction_available=True, ml_momentum_probability=61.0),               # scored but no version reported
+])
+def test_model_version_is_null_unless_a_validated_model_scored_the_signal(db, extra):
+    symbol = _symbol()
+    write_todays_signals(db, [_signal(symbol, **extra)], SESSION)
+    row = db.execute_dict_query("SELECT * FROM signal_ledger WHERE symbol = %s", (symbol,))[0]
+    assert row["model_version"] is None
 
 
 def test_second_signal_while_one_is_open_is_skipped_not_duplicated(db):

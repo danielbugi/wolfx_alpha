@@ -1,0 +1,15 @@
+# COMMITTED BUT DORMANT. Installed by nobody: copying it to /etc/systemd/system, `systemctl daemon-reload` and `systemctl enable --now` on the paired timer are
+# manual administrator steps (docs/operations/FORWARD_RESEARCH_ACTIVATION_RUNBOOK.md); no script, workflow or CD path does any of them. Even once enabled, the
+# wrapper refuses (exit 5) without its arming file. A service unit does nothing until something starts it.
+[Unit]
+Description=First Light: forward collection (market + sector + relative strength + labels) for the latest completed session
+After=docker.service
+Requires=docker.service
+OnFailure=donchian-forward-collection-alert.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/donchian/scripts/run_forward_collection.sh
+TimeoutStartSec=45m
+# 3 = another run holds the lock: not a failure (the second fire re-checks)
+SuccessExitStatus=3

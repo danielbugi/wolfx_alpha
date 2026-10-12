@@ -1,0 +1,24 @@
+BEGIN
+SET
+== D0 identity
+db|trading_production|read_only|on|server_utc|2026-10-06T20:15:00Z
+== D1 every stock_prices symbol that is NOT plain [A-Z0-9]+ : symbol|in_latest_session|inactive|last_price|price_rows|last_fund_row|latest_sector
+BF.B|t|f|2026-10-05|2524|2026-09-23|
+BRK.B|t|f|2026-10-05|2524|2026-10-05|
+BRK/A|t|f|2026-10-05|2524||
+BRK/B|f|t|2026-09-21|2514||
+== D2 characters used outside [A-Z0-9] across ALL stock_prices symbols: char|symbols
+.|2
+/|2
+== D3 symbol-length distribution
+1|20
+2|160
+3|1123
+4|1772
+5|39
+== D4 same-company sibling spellings present (normalise by stripping . / - and compare): base|spellings
+BRKB|BRK.B,BRK/B
+== D5 lowercase / whitespace / non-ascii symbols
+== D6 the active updater set size and how many of it are non-plain
+updater_set|3075|3
+ROLLBACK

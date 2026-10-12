@@ -15,7 +15,8 @@ Only real bullish/bearish breakouts get a row -- near-breakout signals ('near_bu
 
 Every signal is stamped with a strategy identity (`strategy_id`/`strategy_version`, denormalized
 onto the row -- see add_strategy_identity_release_a.sql) and, when the screener already computed
-one, the serving `model_version`. When the research observer captured the candidate
+one, the `model_version` of the model that actually scored the signal (NULL when no validated model did --
+shared/model_provenance.py; never a placeholder like 'unknown'). When the research observer captured the candidate
 (mechanism/research/observer.py), the row also carries the lineage -- `observation_id`,
 `feature_snapshot_id`, `feature_set_version` -- passed in as `links`; with no link (capture off or failed)
 those stay NULL exactly as before, and the ledger write is never conditional on them.
@@ -54,6 +55,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Dict, List, Mapping, Optional, Tuple
 
+from shared.model_provenance import scoring_model_version
 from shared.session_integrity import partition_by_session, summarize_rejections, to_date
 from shared.trade_plan import compute_levels
 
@@ -223,7 +225,7 @@ def write_signals(db, signals: List[Dict], session_date: date, strategy: Strateg
             entry_price = float(signal["current_price"])
             atr = float(signal["atr_14"])
             levels = compute_levels(entry_price, atr, direction)
-            model_version: Optional[str] = signal.get("ml_model_version")
+            model_version: Optional[str] = scoring_model_version(signal)  # NULL unless a validated model scored it
             link = links.get((symbol, direction))
             params = {
                 "symbol": symbol,

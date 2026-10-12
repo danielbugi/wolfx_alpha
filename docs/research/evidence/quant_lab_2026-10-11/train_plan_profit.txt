@@ -1,0 +1,15 @@
+Target: plan_profit -- Trade plan (2xATR stop, 2/4/6xATR tranches, 20 bars) ends with R > 0
+Dataset: 592687 mature samples, 2018-01-02 -> 2026-09-11, base rate 0.427
+Train 2018-01-02 -> 2025-02-07 (466098) | embargo 30d | holdout 2025-03-11 -> 2026-09-11 (118633)
+HOLDOUT (untouched, 2025-03-11 -> 2026-09-11, n=118633, base rate 0.4259)
+  AUC 0.5328  95% CI [0.5094, 0.5572]  | direction-only baseline AUC 0.539
+  AUC bullish 0.5204 (n=68634) | bearish 0.499 (n=49999)
+  Brier 0.24376 vs base-rate Brier 0.24451 | top-decile precision 0.4694 (lift 1.102x)
+  AUC vs plan profit within direction: bullish 0.5204 | bearish 0.499
+  AUC vs plan profit (R>0): 0.5328 | mean plan R by score quintile (low->high): [-0.1396, -0.051, -0.0309, 0.0436, 0.0416] (all -0.0272)
+  Calibration (pred -> observed): 0.38->0.37, 0.39->0.40, 0.41->0.40, 0.42->0.42, 0.42->0.41, 0.43->0.43, 0.44->0.45, 0.45->0.45, 0.46->0.45, 0.48->0.47
+WALK-FORWARD: 2020-03..2021-04 AUC 0.5507 | 2021-04..2022-05 AUC 0.4659 | 2022-05..2023-06 AUC 0.5145 | 2023-06..2024-07 AUC 0.5258 | 2024-07..2025-08 AUC 0.515 | 2025-08..2026-09 AUC 0.5233
+GATE: holdout_auc 0.5328 (need 0.55) FAIL, auc_ci_low 0.5094 (need 0.5) OK, over_direction_baseline -0.0062 (need 0.02) FAIL, walk_forward_share_auc_gt_0.5 0.833 (need 0.75) OK, top_decile_lift 1.102 (need 1.15) FAIL, plan_profit_auc_within_direction 0.499 (need 0.52) FAIL
+Top features: bollinger_pos 0.0909, rsi_14 0.081, macd_norm 0.0789, sector_healthcare 0.0517, ret_20d 0.0475, pct_from_52w_low 0.0471, sma10_vs_20 0.0449, ret_60d 0.0448
+NOT PROMOTED (gate failed: holdout_auc, over_direction_baseline, top_decile_lift, plan_profit_auc_within_direction). The live screener keeps whatever model (if any) it already had.
+Report: /app/ml_training/models/candidates/report_plan_profit_20261011_0953.json

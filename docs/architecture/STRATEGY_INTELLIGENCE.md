@@ -55,7 +55,8 @@ The track record shows only `ok` values. Strategy Intelligence also shows `preli
 |---|---|
 | `GET /api/strategies` | Every registered strategy with light tracking counts |
 | `GET /api/strategies/definitions` | The definitions, vocabularies, sorts and capability flags |
-| `GET /api/strategies/{key}/{version}/summary` | Tracking, performance, outcome distribution, bullish vs bearish, and capabilities, all from one grouped aggregate query |
+| `GET /api/strategies/{key}/{version}/summary` | Tracking, performance, outcome distribution, bullish vs bearish, and capabilities, all from one grouped aggregate query |
+| `GET /api/strategies/{key}/{version}/performance[/outcomes|/breakdowns[/{dimension}]]`, `/api/strategies/performance/contract` | Generic read-only performance API (lab, not yet deployed): outcome stats and conditional breakdowns for any strategy/version; unavailable dimensions answer `not_available` — see [PERFORMANCE_ENGINE_CONTRACT.md](../research/PERFORMANCE_ENGINE_CONTRACT.md) |
 | `GET /api/strategies/{key}/{version}/data-health` | Internal only. Ledger state, price-data and evaluation states of open signals, attention lists, 7 invariant checks, lineage coverage |
 | `GET /api/strategies/{key}/{version}/signals` | Paginated (`limit` ≤ 200, `offset`, `total`, `has_more`). Filters: symbol, direction, status, lifecycle, evaluation/resolution flag, date range, model_version, sector, quality_grade. Sorts: newest, oldest, symbol, r_desc/asc, holding_desc/asc, grade |
 | `GET /api/strategies/{key}/{version}/signals/{id}` | Identity, trade plan, context, lifecycle, provenance (Release-B lineage returned as null), timeline |

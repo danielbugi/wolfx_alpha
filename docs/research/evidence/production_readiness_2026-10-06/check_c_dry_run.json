@@ -1,0 +1,759 @@
+[
+ {
+  "admissible_for_forward_history": true,
+  "no_sector_basis": null,
+  "outcome": {
+   "failure_reason": null,
+   "no_sector_reason": null,
+   "quote_type": null,
+   "response_state": "sector",
+   "sector": "Technology",
+   "sector_raw": "Technology"
+  },
+  "probe": {
+   "error_type": null,
+   "latency_ms": 1071,
+   "n_keys": 187
+  },
+  "proposed_observation": {
+   "change_kind": "first",
+   "no_sector_reason": null,
+   "prev_value_hash": null,
+   "sector": "Technology",
+   "seq": 1
+  },
+  "proposed_poll": {
+   "chain_effect": "created_observation",
+   "response_state": "sector"
+  },
+  "raw_payload_hash": "ac4e942cd89f39cf87a61380c25ddcd1e73cf51dbc26f19b9575329a09aa48d8",
+  "recorded_on_own_chain": true,
+  "rejection_reason": null,
+  "source": "yfinance_info",
+  "source_asof": null,
+  "source_identity": "authoritative",
+  "symbol": "AAPL",
+  "vendor_symbol": {
+   "canonical": "AAPL",
+   "request": "AAPL",
+   "rule": "plain",
+   "status": "unchanged"
+  },
+  "writes": false
+ },
+ {
+  "admissible_for_forward_history": true,
+  "no_sector_basis": null,
+  "outcome": {
+   "failure_reason": null,
+   "no_sector_reason": null,
+   "quote_type": null,
+   "response_state": "sector",
+   "sector": "Technology",
+   "sector_raw": "Technology"
+  },
+  "probe": {
+   "error_type": null,
+   "latency_ms": 242,
+   "n_keys": 187
+  },
+  "proposed_observation": {
+   "change_kind": "first",
+   "no_sector_reason": null,
+   "prev_value_hash": null,
+   "sector": "Technology",
+   "seq": 1
+  },
+  "proposed_poll": {
+   "chain_effect": "created_observation",
+   "response_state": "sector"
+  },
+  "raw_payload_hash": "ac4e942cd89f39cf87a61380c25ddcd1e73cf51dbc26f19b9575329a09aa48d8",
+  "recorded_on_own_chain": true,
+  "rejection_reason": null,
+  "source": "yfinance_info",
+  "source_asof": null,
+  "source_identity": "authoritative",
+  "symbol": "MSFT",
+  "vendor_symbol": {
+   "canonical": "MSFT",
+   "request": "MSFT",
+   "rule": "plain",
+   "status": "unchanged"
+  },
+  "writes": false
+ },
+ {
+  "admissible_for_forward_history": true,
+  "no_sector_basis": null,
+  "outcome": {
+   "failure_reason": null,
+   "no_sector_reason": null,
+   "quote_type": null,
+   "response_state": "sector",
+   "sector": "Financial Services",
+   "sector_raw": "Financial Services"
+  },
+  "probe": {
+   "error_type": null,
+   "latency_ms": 209,
+   "n_keys": 181
+  },
+  "proposed_observation": {
+   "change_kind": "first",
+   "no_sector_reason": null,
+   "prev_value_hash": null,
+   "sector": "Financial Services",
+   "seq": 1
+  },
+  "proposed_poll": {
+   "chain_effect": "created_observation",
+   "response_state": "sector"
+  },
+  "raw_payload_hash": "279ac1fff4ed7543535e07b479c05ac3f48b51ee54a3953d75212bfb1245b859",
+  "recorded_on_own_chain": true,
+  "rejection_reason": null,
+  "source": "yfinance_info",
+  "source_asof": null,
+  "source_identity": "authoritative",
+  "symbol": "JPM",
+  "vendor_symbol": {
+   "canonical": "JPM",
+   "request": "JPM",
+   "rule": "plain",
+   "status": "unchanged"
+  },
+  "writes": false
+ },
+ {
+  "admissible_for_forward_history": true,
+  "no_sector_basis": "inferred_from_quote_type",
+  "outcome": {
+   "failure_reason": null,
+   "no_sector_reason": "vendor_null",
+   "quote_type": "ETF",
+   "response_state": "no_sector",
+   "sector": null,
+   "sector_raw": null
+  },
+  "probe": {
+   "error_type": null,
+   "latency_ms": 344,
+   "n_keys": 104
+  },
+  "proposed_observation": {
+   "change_kind": "first",
+   "no_sector_reason": "vendor_null",
+   "prev_value_hash": null,
+   "sector": null,
+   "seq": 1
+  },
+  "proposed_poll": {
+   "chain_effect": "created_observation",
+   "response_state": "no_sector"
+  },
+  "raw_payload_hash": "1e3ac013c7b0b46f80461599299906e6ac2776f606f699bf7b50f71f3d3f17f2",
+  "recorded_on_own_chain": true,
+  "rejection_reason": null,
+  "source": "yfinance_info",
+  "source_asof": null,
+  "source_identity": "authoritative",
+  "symbol": "SPY",
+  "vendor_symbol": {
+   "canonical": "SPY",
+   "request": "SPY",
+   "rule": "plain",
+   "status": "unchanged"
+  },
+  "writes": false
+ },
+ {
+  "admissible_for_forward_history": true,
+  "no_sector_basis": "inferred_from_quote_type",
+  "outcome": {
+   "failure_reason": null,
+   "no_sector_reason": "vendor_null",
+   "quote_type": "ETF",
+   "response_state": "no_sector",
+   "sector": null,
+   "sector_raw": null
+  },
+  "probe": {
+   "error_type": null,
+   "latency_ms": 295,
+   "n_keys": 103
+  },
+  "proposed_observation": {
+   "change_kind": "first",
+   "no_sector_reason": "vendor_null",
+   "prev_value_hash": null,
+   "sector": null,
+   "seq": 1
+  },
+  "proposed_poll": {
+   "chain_effect": "created_observation",
+   "response_state": "no_sector"
+  },
+  "raw_payload_hash": "1e3ac013c7b0b46f80461599299906e6ac2776f606f699bf7b50f71f3d3f17f2",
+  "recorded_on_own_chain": true,
+  "rejection_reason": null,
+  "source": "yfinance_info",
+  "source_asof": null,
+  "source_identity": "authoritative",
+  "symbol": "QQQ",
+  "vendor_symbol": {
+   "canonical": "QQQ",
+   "request": "QQQ",
+   "rule": "plain",
+   "status": "unchanged"
+  },
+  "writes": false
+ },
+ {
+  "admissible_for_forward_history": true,
+  "no_sector_basis": "inferred_from_quote_type",
+  "outcome": {
+   "failure_reason": null,
+   "no_sector_reason": "vendor_null",
+   "quote_type": "MUTUALFUND",
+   "response_state": "no_sector",
+   "sector": null,
+   "sector_raw": null
+  },
+  "probe": {
+   "error_type": null,
+   "latency_ms": 227,
+   "n_keys": 89
+  },
+  "proposed_observation": {
+   "change_kind": "first",
+   "no_sector_reason": "vendor_null",
+   "prev_value_hash": null,
+   "sector": null,
+   "seq": 1
+  },
+  "proposed_poll": {
+   "chain_effect": "created_observation",
+   "response_state": "no_sector"
+  },
+  "raw_payload_hash": "7d93b4e8c6cb5894c877c65f3c24f88c495583e79db7d8cf6e205d2c2442067e",
+  "recorded_on_own_chain": true,
+  "rejection_reason": null,
+  "source": "yfinance_info",
+  "source_asof": null,
+  "source_identity": "authoritative",
+  "symbol": "VFIAX",
+  "vendor_symbol": {
+   "canonical": "VFIAX",
+   "request": "VFIAX",
+   "rule": "plain",
+   "status": "unchanged"
+  },
+  "writes": false
+ },
+ {
+  "admissible_for_forward_history": false,
+  "no_sector_basis": null,
+  "outcome": {
+   "failure_reason": "response_too_sparse",
+   "no_sector_reason": null,
+   "quote_type": null,
+   "response_state": "invalid_response",
+   "sector": null,
+   "sector_raw": null
+  },
+  "probe": {
+   "error_type": null,
+   "latency_ms": 463,
+   "n_keys": 1
+  },
+  "proposed_observation": null,
+  "proposed_poll": {
+   "chain_effect": "none",
+   "response_state": "invalid_response"
+  },
+  "raw_payload_hash": null,
+  "recorded_on_own_chain": false,
+  "rejection_reason": "invalid_response:response_too_sparse",
+  "source": "yfinance_info",
+  "source_asof": null,
+  "source_identity": "authoritative",
+  "symbol": "ZZZZXQ",
+  "vendor_symbol": {
+   "canonical": "ZZZZXQ",
+   "request": "ZZZZXQ",
+   "rule": "plain",
+   "status": "unchanged"
+  },
+  "writes": false
+ },
+ {
+  "admissible_for_forward_history": true,
+  "no_sector_basis": null,
+  "outcome": {
+   "failure_reason": null,
+   "no_sector_reason": null,
+   "quote_type": null,
+   "response_state": "sector",
+   "sector": "Financial Services",
+   "sector_raw": "Financial Services"
+  },
+  "probe": {
+   "error_type": null,
+   "latency_ms": 535,
+   "n_keys": 178
+  },
+  "proposed_observation": {
+   "change_kind": "first",
+   "no_sector_reason": null,
+   "prev_value_hash": null,
+   "sector": "Financial Services",
+   "seq": 1
+  },
+  "proposed_poll": {
+   "chain_effect": "created_observation",
+   "response_state": "sector"
+  },
+  "raw_payload_hash": "279ac1fff4ed7543535e07b479c05ac3f48b51ee54a3953d75212bfb1245b859",
+  "recorded_on_own_chain": true,
+  "rejection_reason": null,
+  "source": "yfinance_info",
+  "source_asof": null,
+  "source_identity": "authoritative",
+  "symbol": "BRK.B",
+  "vendor_symbol": {
+   "canonical": "BRK.B",
+   "request": "BRK-B",
+   "rule": "share_class_separator_to_dash",
+   "status": "translated"
+  },
+  "writes": false
+ },
+ {
+  "admissible_for_forward_history": true,
+  "no_sector_basis": null,
+  "outcome": {
+   "failure_reason": null,
+   "no_sector_reason": null,
+   "quote_type": null,
+   "response_state": "sector",
+   "sector": "Consumer Defensive",
+   "sector_raw": "Consumer Defensive"
+  },
+  "probe": {
+   "error_type": null,
+   "latency_ms": 267,
+   "n_keys": 187
+  },
+  "proposed_observation": {
+   "change_kind": "first",
+   "no_sector_reason": null,
+   "prev_value_hash": null,
+   "sector": "Consumer Defensive",
+   "seq": 1
+  },
+  "proposed_poll": {
+   "chain_effect": "created_observation",
+   "response_state": "sector"
+  },
+  "raw_payload_hash": "c06248fad3270b7189747a0bb30f27bddf5808381c8e2576448e0112a981378c",
+  "recorded_on_own_chain": true,
+  "rejection_reason": null,
+  "source": "yfinance_info",
+  "source_asof": null,
+  "source_identity": "authoritative",
+  "symbol": "BF.B",
+  "vendor_symbol": {
+   "canonical": "BF.B",
+   "request": "BF-B",
+   "rule": "share_class_separator_to_dash",
+   "status": "translated"
+  },
+  "writes": false
+ },
+ {
+  "admissible_for_forward_history": true,
+  "no_sector_basis": null,
+  "outcome": {
+   "failure_reason": null,
+   "no_sector_reason": null,
+   "quote_type": null,
+   "response_state": "sector",
+   "sector": "Financial Services",
+   "sector_raw": "Financial Services"
+  },
+  "probe": {
+   "error_type": null,
+   "latency_ms": 340,
+   "n_keys": 166
+  },
+  "proposed_observation": {
+   "change_kind": "first",
+   "no_sector_reason": null,
+   "prev_value_hash": null,
+   "sector": "Financial Services",
+   "seq": 1
+  },
+  "proposed_poll": {
+   "chain_effect": "created_observation",
+   "response_state": "sector"
+  },
+  "raw_payload_hash": "279ac1fff4ed7543535e07b479c05ac3f48b51ee54a3953d75212bfb1245b859",
+  "recorded_on_own_chain": true,
+  "rejection_reason": null,
+  "source": "yfinance_info",
+  "source_asof": null,
+  "source_identity": "authoritative",
+  "symbol": "BRK/A",
+  "vendor_symbol": {
+   "canonical": "BRK/A",
+   "request": "BRK-A",
+   "rule": "share_class_separator_to_dash",
+   "status": "translated"
+  },
+  "writes": false
+ },
+ {
+  "admissible_for_forward_history": true,
+  "no_sector_basis": null,
+  "outcome": {
+   "failure_reason": null,
+   "no_sector_reason": null,
+   "quote_type": null,
+   "response_state": "sector",
+   "sector": "Financial Services",
+   "sector_raw": "Financial Services"
+  },
+  "probe": {
+   "error_type": null,
+   "latency_ms": 344,
+   "n_keys": 178
+  },
+  "proposed_observation": {
+   "change_kind": "first",
+   "no_sector_reason": null,
+   "prev_value_hash": null,
+   "sector": "Financial Services",
+   "seq": 1
+  },
+  "proposed_poll": {
+   "chain_effect": "created_observation",
+   "response_state": "sector"
+  },
+  "raw_payload_hash": "279ac1fff4ed7543535e07b479c05ac3f48b51ee54a3953d75212bfb1245b859",
+  "recorded_on_own_chain": true,
+  "rejection_reason": null,
+  "source": "yfinance_info",
+  "source_asof": null,
+  "source_identity": "authoritative",
+  "symbol": "BRK/B",
+  "vendor_symbol": {
+   "canonical": "BRK/B",
+   "request": "BRK-B",
+   "rule": "share_class_separator_to_dash",
+   "status": "translated"
+  },
+  "writes": false
+ },
+ {
+  "admissible_for_forward_history": true,
+  "no_sector_basis": null,
+  "outcome": {
+   "failure_reason": null,
+   "no_sector_reason": null,
+   "quote_type": null,
+   "response_state": "sector",
+   "sector": "Financial Services",
+   "sector_raw": "Financial Services"
+  },
+  "probe": {
+   "error_type": null,
+   "latency_ms": 218,
+   "n_keys": 178
+  },
+  "proposed_observation": {
+   "change_kind": "first",
+   "no_sector_reason": null,
+   "prev_value_hash": null,
+   "sector": "Financial Services",
+   "seq": 1
+  },
+  "proposed_poll": {
+   "chain_effect": "created_observation",
+   "response_state": "sector"
+  },
+  "raw_payload_hash": "279ac1fff4ed7543535e07b479c05ac3f48b51ee54a3953d75212bfb1245b859",
+  "recorded_on_own_chain": true,
+  "rejection_reason": null,
+  "source": "yfinance_info",
+  "source_asof": null,
+  "source_identity": "authoritative",
+  "symbol": "BRK-B",
+  "vendor_symbol": {
+   "canonical": "BRK-B",
+   "request": "BRK-B",
+   "rule": "share_class_already_dashed",
+   "status": "unchanged"
+  },
+  "writes": false
+ },
+ {
+  "admissible_for_forward_history": false,
+  "no_sector_basis": null,
+  "outcome": {
+   "failure_reason": "operating_company_sector_absent",
+   "no_sector_reason": null,
+   "quote_type": null,
+   "response_state": "invalid_response",
+   "sector": null,
+   "sector_raw": null
+  },
+  "probe": {
+   "error_type": null,
+   "latency_ms": 352,
+   "n_keys": 76
+  },
+  "proposed_observation": null,
+  "proposed_poll": {
+   "chain_effect": "none",
+   "response_state": "invalid_response"
+  },
+  "raw_payload_hash": "d6581da3ca6ddd35a9e7525be1618083843ed0233ed0e91ad7da29f8a1ddbe05",
+  "recorded_on_own_chain": false,
+  "rejection_reason": "invalid_response:operating_company_sector_absent",
+  "source": "yfinance_info",
+  "source_asof": null,
+  "source_identity": "authoritative",
+  "symbol": "DUKB",
+  "vendor_symbol": {
+   "canonical": "DUKB",
+   "request": "DUKB",
+   "rule": "plain",
+   "status": "unchanged"
+  },
+  "writes": false
+ },
+ {
+  "admissible_for_forward_history": false,
+  "no_sector_basis": null,
+  "outcome": {
+   "failure_reason": "operating_company_sector_absent",
+   "no_sector_reason": null,
+   "quote_type": null,
+   "response_state": "invalid_response",
+   "sector": null,
+   "sector_raw": null
+  },
+  "probe": {
+   "error_type": null,
+   "latency_ms": 305,
+   "n_keys": 107
+  },
+  "proposed_observation": null,
+  "proposed_poll": {
+   "chain_effect": "none",
+   "response_state": "invalid_response"
+  },
+  "raw_payload_hash": "d6581da3ca6ddd35a9e7525be1618083843ed0233ed0e91ad7da29f8a1ddbe05",
+  "recorded_on_own_chain": false,
+  "rejection_reason": "invalid_response:operating_company_sector_absent",
+  "source": "yfinance_info",
+  "source_asof": null,
+  "source_identity": "authoritative",
+  "symbol": "FISV",
+  "vendor_symbol": {
+   "canonical": "FISV",
+   "request": "FISV",
+   "rule": "plain",
+   "status": "unchanged"
+  },
+  "writes": false
+ },
+ {
+  "admissible_for_forward_history": false,
+  "no_sector_basis": null,
+  "outcome": {
+   "failure_reason": "operating_company_sector_absent",
+   "no_sector_reason": null,
+   "quote_type": null,
+   "response_state": "invalid_response",
+   "sector": null,
+   "sector_raw": null
+  },
+  "probe": {
+   "error_type": null,
+   "latency_ms": 314,
+   "n_keys": 105
+  },
+  "proposed_observation": null,
+  "proposed_poll": {
+   "chain_effect": "none",
+   "response_state": "invalid_response"
+  },
+  "raw_payload_hash": "d6581da3ca6ddd35a9e7525be1618083843ed0233ed0e91ad7da29f8a1ddbe05",
+  "recorded_on_own_chain": false,
+  "rejection_reason": "invalid_response:operating_company_sector_absent",
+  "source": "yfinance_info",
+  "source_asof": null,
+  "source_identity": "authoritative",
+  "symbol": "NIQ",
+  "vendor_symbol": {
+   "canonical": "NIQ",
+   "request": "NIQ",
+   "rule": "plain",
+   "status": "unchanged"
+  },
+  "writes": false
+ },
+ {
+  "admissible_for_forward_history": false,
+  "no_sector_basis": null,
+  "outcome": {
+   "failure_reason": "operating_company_sector_absent",
+   "no_sector_reason": null,
+   "quote_type": null,
+   "response_state": "invalid_response",
+   "sector": null,
+   "sector_raw": null
+  },
+  "probe": {
+   "error_type": null,
+   "latency_ms": 311,
+   "n_keys": 106
+  },
+  "proposed_observation": null,
+  "proposed_poll": {
+   "chain_effect": "none",
+   "response_state": "invalid_response"
+  },
+  "raw_payload_hash": "d6581da3ca6ddd35a9e7525be1618083843ed0233ed0e91ad7da29f8a1ddbe05",
+  "recorded_on_own_chain": false,
+  "rejection_reason": "invalid_response:operating_company_sector_absent",
+  "source": "yfinance_info",
+  "source_asof": null,
+  "source_identity": "authoritative",
+  "symbol": "SI",
+  "vendor_symbol": {
+   "canonical": "SI",
+   "request": "SI",
+   "rule": "plain",
+   "status": "unchanged"
+  },
+  "writes": false
+ },
+ {
+  "admissible_for_forward_history": false,
+  "no_sector_basis": null,
+  "outcome": {
+   "failure_reason": "operating_company_sector_absent",
+   "no_sector_reason": null,
+   "quote_type": null,
+   "response_state": "invalid_response",
+   "sector": null,
+   "sector_raw": null
+  },
+  "probe": {
+   "error_type": null,
+   "latency_ms": 305,
+   "n_keys": 84
+  },
+  "proposed_observation": null,
+  "proposed_poll": {
+   "chain_effect": "none",
+   "response_state": "invalid_response"
+  },
+  "raw_payload_hash": "d6581da3ca6ddd35a9e7525be1618083843ed0233ed0e91ad7da29f8a1ddbe05",
+  "recorded_on_own_chain": false,
+  "rejection_reason": "invalid_response:operating_company_sector_absent",
+  "source": "yfinance_info",
+  "source_asof": null,
+  "source_identity": "authoritative",
+  "symbol": "EAI",
+  "vendor_symbol": {
+   "canonical": "EAI",
+   "request": "EAI",
+   "rule": "plain",
+   "status": "unchanged"
+  },
+  "writes": false
+ },
+ {
+  "admissible_for_forward_history": true,
+  "no_sector_basis": "inferred_from_quote_type",
+  "outcome": {
+   "failure_reason": null,
+   "no_sector_reason": "vendor_null",
+   "quote_type": "ETF",
+   "response_state": "no_sector",
+   "sector": null,
+   "sector_raw": null
+  },
+  "probe": {
+   "error_type": null,
+   "latency_ms": 280,
+   "n_keys": 105
+  },
+  "proposed_observation": {
+   "change_kind": "first",
+   "no_sector_reason": "vendor_null",
+   "prev_value_hash": null,
+   "sector": null,
+   "seq": 1
+  },
+  "proposed_poll": {
+   "chain_effect": "created_observation",
+   "response_state": "no_sector"
+  },
+  "raw_payload_hash": "1e3ac013c7b0b46f80461599299906e6ac2776f606f699bf7b50f71f3d3f17f2",
+  "recorded_on_own_chain": true,
+  "rejection_reason": null,
+  "source": "yfinance_info",
+  "source_asof": null,
+  "source_identity": "authoritative",
+  "symbol": "PINC",
+  "vendor_symbol": {
+   "canonical": "PINC",
+   "request": "PINC",
+   "rule": "plain",
+   "status": "unchanged"
+  },
+  "writes": false
+ },
+ {
+  "admissible_for_forward_history": false,
+  "no_sector_basis": null,
+  "outcome": {
+   "failure_reason": "unsupported_symbol_format",
+   "no_sector_reason": null,
+   "quote_type": null,
+   "response_state": "request_failed",
+   "sector": null,
+   "sector_raw": null
+  },
+  "probe": {
+   "error_type": null,
+   "latency_ms": 0,
+   "n_keys": 0
+  },
+  "proposed_observation": null,
+  "proposed_poll": {
+   "chain_effect": "none",
+   "response_state": "request_failed"
+  },
+  "raw_payload_hash": null,
+  "recorded_on_own_chain": false,
+  "rejection_reason": "request_failed:unsupported_symbol_format",
+  "source": "yfinance_info",
+  "source_asof": null,
+  "source_identity": "authoritative",
+  "symbol": "ABC.WS",
+  "vendor_symbol": {
+   "canonical": "ABC.WS",
+   "refusal_reason": "unsupported_punctuation_layout",
+   "request": null,
+   "rule": null,
+   "status": "refused"
+  },
+  "writes": false
+ }
+]

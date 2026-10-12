@@ -38,6 +38,9 @@ def _conn():
 def test_inference_path_reproduces_stored_training_features():
     conn = _conn()
     cur = conn.cursor()
+    cur.execute("SELECT to_regclass('ml_breakout_dataset_v2')")
+    if cur.fetchone()[0] is None:
+        pytest.skip("ml_breakout_dataset_v2 does not exist in this database (not a populated, migrated one)")
     cur.execute("""SELECT symbol, date, direction, features FROM ml_breakout_dataset_v2
                    WHERE feature_set_version = %s AND date >= '2020-01-01'
                    ORDER BY md5(symbol || date::text) LIMIT 150""", (pf.FEATURE_SET_VERSION,))

@@ -4,6 +4,7 @@ import { clsx } from 'clsx';
 import type { Metric, StrategySummary } from '@/services/strategyApi';
 import { describeMetric, formatCount } from '@/lib/strategyFormat';
 import { EmptyState, MetricCard, Section, StatTile } from '@/components/strategies/ui';
+import PerformanceBreakdownsPanel from '@/components/strategies/PerformanceBreakdowns';
 
 interface OutcomeRow {
   key: string;
@@ -43,6 +44,7 @@ function OutcomeBars({ rows }: { rows: OutcomeRow[] }) {
 }
 
 export default function PerformanceTab({ summary }: { summary: StrategySummary }) {
+  const { key, version } = summary.strategy;
   const p = summary.performance;
   const o = summary.outcomes;
   const exp = o.terminal.expired;
@@ -94,6 +96,8 @@ export default function PerformanceTab({ summary }: { summary: StrategySummary }
           </div>
         )}
       </Section>
+
+      <PerformanceBreakdownsPanel key={`${key}/${version}`} strategyKey={key} version={version} />
     </div>
   );
 }
