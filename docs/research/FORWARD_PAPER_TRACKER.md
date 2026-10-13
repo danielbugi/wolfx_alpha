@@ -1,6 +1,6 @@
 # Forward paper tracker (research slice, 2026-10-12/13)
 
-Status: **built, dry-run and shadow-tested on a scratch restore; NOT activated in production.** No production table holds tracker data, no unit is installed, no pin or arming file exists.
+Status (2026-10-13): **merged (PR #14); built, dry-run and shadow-tested on a scratch restore; NOT activated in production.** No production table holds tracker data, no unit is installed, no pin or arming file exists.
 Production activation is a separate owner approval (section 6).
 
 ## 1. What it is
@@ -42,7 +42,7 @@ Only 0, 2, 3, 6 are success to systemd. (A review of this slice found 2/3 collid
 Evidence: `docs/research/evidence/quant_lab_2026-10-11/ (`paper_shadow_real.json`, `paper_shadow_historical.json`, `strategy_experiment.json`)`.
 
 * **Unit/DB tests:** 20 DB tests (migration, privileges, immutability, order/chain rules, idempotency, drift, failed-session rollback, tampered snapshot, rollback script, `resolve_next`, CLI refusals and exit codes), 16 wrapper tests (every refusal happens before a container starts), pure store tests, opportunity and big-winner analysis tests.
-* **Real-source shadow (`paper_shadow_real.json`):** the one real forward capture that exists (session 2026-10-09, 250 candidates) -> dry run wrote nothing; the real write created 1,250 observations (5 variants x 250) and the same open-state hash as the dry run; restore verified; re-run a no-op; next session refused as "input not ready"; audit clean. Honest context availability on that session: sector known for 249/250, guard flags present, market regime *not* available (migrations 24/25 are not applied in production), no catalysts attached.
+* **Real-source shadow (`paper_shadow_real.json`):** the one real forward capture that exists (session 2026-10-09, 250 candidates) -> dry run wrote nothing; the real write created 1,250 observations (5 variants x 250) and the same open-state hash as the dry run; restore verified; re-run a no-op; next session refused as "input not ready"; audit clean. Honest context availability on that session (final code): sector known for 249/250, guard flags present; market regime and relative strength unavailable for all 250 ("no observed market snapshot available at the cutoff" / "no observed relative-strength row at the cutoff"); no catalysts in the window. Absent context is recorded as absent, never filled.
 * **Historical replay shadow (`paper_shadow_historical.json`):** 946 consecutive sessions (2023-01-03 .. 2026-10-09), 143 symbols, 14,284 signals pushed through the same store/runner code one session at a time: 20,882 positions, 20,338 closed, 15,122 hindsight events; **0 mismatches against the batch experiment** on exit price, reason, bars held, R, MFE, MAE, initial stop, initial risk and entry/exit sessions; dry run equals write; re-runs change nothing; audit clean. Mean 0.61 s/session (max 1.7 s).
 * **Footprint:** about 140 MB for those 946 sessions with 5 variants (open snapshot ~72 KB average per session). A production session registers ~250 candidates x 5 variants; expect on the order of 20-50 MB per year of session snapshots plus the observations/events. Retention is an owner decision.
 
@@ -54,11 +54,20 @@ measure forward behaviour, including tails, honestly; it does not change that fi
 * `deploy/vps/run_paper_tracker.sh` (own pin `/opt/donchian/CURRENT_PAPER_SHA`, own arming file `/opt/donchian/PAPER_TRACKER_ARMED` that must contain exactly the pin, flock, one-off `docker compose run --rm`). It reads/writes neither the collector's pin nor its arming file, and starts no long-lived container.
 * `deploy/vps/donchian-paper-tracker.service.proposed` / `.timer.proposed` (05:30 and 07:30 Asia/Jerusalem, after the 23:45/01:00 pipeline; the second fire is the retry). Not installed, not enabled; tests assert nothing installed or CD references them.
 
+## 5b. Configuration (owner defaults, 2026-10-13)
+
+* **Universe:** the session's `candidate_observation` rows of the forward capture with `triggered`, scope `triggered` (every triggered candidate; `tracked_intent` is recorded per observation, so the narrower `tracked` view is a query, not a second run). The existing tracked/triggered semantics are not changed.
+* **Variants:** the five registered, immutable `v1` identities, verified by hash against `strategy_variant` before every session.
+* **Costs:** every `closed` event records net R at 0, **10 (primary)** and 25 bps round-trip (`cost_model`, `r_net_std`, `r_net_actual`), computed with the batch formula (gross minus bps x entry / 1R). Costs never alter an exit.
+* **Retention:** all forward evidence is kept (append-only tables); storage is monitored (see `docs/operations/MIGRATION_36_PAPER_TRACKER.md`).
+* **Activation session:** the first eligible FUTURE market session after the owner's final approval, named explicitly on the first run (`--session S --activation-session`). No historical backfill into production forward tables; replays stay in the research domain.
+* **Absent context:** market regime, relative strength and catalysts are recorded with an explicit `available: false` and a reason (`... not present` when the migration is not applied, `no observed ... at the cutoff` when the table is empty, `query_error:<SQLSTATE>` if a query breaks). Only `observed` market snapshots are used (reconstructed ones are never point-in-time safe).
+
 ## 6. Shortest safe path to daily activation (each step needs the owner's go; none has been run)
 
 1. **Merge** the research PR after CI (no production effect).
-2. **Image:** run the existing mechanism *build-and-push* (it deploys nothing) so an image containing the tracker exists in ghcr; note its 12-hex tag `TAG`. The bot pin, the collector pin and the arming file are not touched.
-3. **Backup**, then **migration 36** (`preflight_36.sql` -> apply `add_paper_tracker_tables.sql` with `psql -1` as `trading_user`, `search_path=public`, exactly like migration 35 (`docs/operations/MIGRATION_35_STRATEGY_VARIANT.md`) -> re-run `research_roles.sql` + `research_roles_verify.sql` -> `preflight_36.sql` reports `EXACT`). Requires migration 35 (already applied). Additive; rollback script prepared.
+2. **Image:** run the existing mechanism *build-and-push* from the approved main commit (it deploys nothing: all runtime services require an explicit `IMAGE_TAG`, never `:latest`) so an image containing the tracker exists in ghcr; note its 12-hex tag `TAG` and digest. `CURRENT_MECHANISM_SHA`, the bot pin and the collector arming file are not touched.
+3. **Backup**, then **migration 36** exactly as in `docs/operations/MIGRATION_36_PAPER_TRACKER.md` (preflight -> apply -> roles + verifier -> `EXACT`). Requires migration 35 (applied). Additive; rollback script prepared. Production preflight on 2026-10-13: `OK state=ABSENT`.
 4. **Install on the VPS (root, one-time):** copy `run_paper_tracker.sh` to `/opt/donchian/scripts/`, write `TAG` to `/opt/donchian/CURRENT_PAPER_SHA`, rename the two `.proposed` files into `/etc/systemd/system/` and `daemon-reload` (do not enable yet).
 5. **Production dry run:** `run_paper_tracker.sh dry-run` -> read-only; expect `status: dry_run`, 5 x candidates registrations, nothing written (confirm by row counts).
 6. **Activation session:** choose the first session explicitly (the newest fully captured one), run once manually with `--session S --activation-session` after writing `TAG` into `PAPER_TRACKER_ARMED`.
@@ -68,7 +77,7 @@ Owner decisions still open: activation session, retention, whether to track only
 
 ## 7. Known limits
 
-* Market regime and relative strength are *absent* from the context until migrations 24/25 (Market Intelligence) exist in production; the tracker records `available: false` and the reason rather than guessing.
+* Market regime and relative strength are unavailable today: the tables exist in production (migrations 24-31 are applied) but no job writes `observed` snapshots (production holds 1 `market_snapshot` row and 9,192 `stock_relative_strength` rows, none `observed` for the captured session) and `market_event_revision` / `catalyst_classification` are empty. The tracker records `available: false` with the reason rather than guessing, and starts using these sections automatically once observed rows exist.
 * Catalyst context attaches only events with a recorded publication timestamp at or before the decision time; none were attached to the 2026-10-09 capture.
 * One real forward session exists. Everything else in the shadow evidence is a dataset replay and is labelled as such.
 * Executions are idealised (next-bar open, fixed cost assumption, no liquidity model, no partial fills).

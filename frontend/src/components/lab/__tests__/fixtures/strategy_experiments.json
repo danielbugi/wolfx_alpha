@@ -1,6 +1,6 @@
 {
  "generated_at": "2026-10-11",
- "code_ref": "5d8d666",
+ "code_ref": "1bfa3c9",
  "status": "research_only",
  "use": "Research evidence only. Not a trading signal, not advice, and not used by the live signal path.",
  "schema": "lab_report_v1",
@@ -7812,6 +7812,13 @@
      "market_regime_available": 0,
      "relative_strength_available": 0,
      "catalysts_with_events": 0,
+     "catalyst_sections": {
+      "none_in_window": 250
+     },
+     "context_unavailable_reasons": {
+      "no observed market snapshot available at the cutoff": 250,
+      "no observed relative-strength row at the cutoff": 250
+     },
      "sector_known": 249,
      "guard_rejected": 10,
      "tracked_intent": 240
@@ -7837,14 +7844,14 @@
     "rerun_is_noop": true,
     "audit_problems": 0,
     "seconds_per_session": {
-     "mean": 0.613,
-     "p95": 1.089,
-     "max": 1.664
+     "mean": 0.635,
+     "p95": 1.081,
+     "max": 1.704
     },
     "bytes": {
      "paper_session": 71688192,
      "paper_observation": 15024128,
-     "paper_event": 54255616
+     "paper_event": 61751296
     }
    }
   }

@@ -13,9 +13,9 @@
   "processed": 946
  },
  "seconds_per_session": {
-  "mean": 0.613,
-  "p95": 1.089,
-  "max": 1.664
+  "mean": 0.635,
+  "p95": 1.081,
+  "max": 1.704
  },
  "dry_run_equals_write_for_the_last_session": true,
  "tables": {
@@ -52,7 +52,7 @@
  "bytes": {
   "paper_session": 71688192,
   "paper_observation": 15024128,
-  "paper_event": 54255616
+  "paper_event": 61751296
  },
  "open_state_bytes": {
   "avg": 72122,

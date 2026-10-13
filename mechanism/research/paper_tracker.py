@@ -16,6 +16,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import math
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
@@ -24,6 +25,12 @@ from research import exit_policies as X
 from research.experiment_runner import Variant
 
 PENDING, OPEN, CLOSED = "pending_entry", "open", "closed"
+PRIMARY_COST_BPS = 10.0                  # round-trip, charged in R (commission + slippage); the owner's primary assumption
+COST_BPS = (0.0, PRIMARY_COST_BPS, 25.0)  # recorded on every closed event: no cost, primary, and a pessimistic sensitivity
+
+
+def _bps_key(b: float) -> str:
+    return f"{b:g}"
 
 
 class TrackerError(RuntimeError):
@@ -150,7 +157,10 @@ class PaperBook:
             self._events.append({"type": "closed", "ident": ob.ident(), "session": session_date.isoformat(), "payload": {
                 "exit_session": session_date.isoformat(), "entry_session": ob.entry_date.isoformat(), "exit_price": t.exit_price, "reason": t.reason, "bars_held": t.duration, "entry_price": t.entry_price,
                 "r_gross_std": t.r_gross, "mfe_r_std": t.mfe_r, "mae_r_std": t.mae_r, "initial_stop": t.initial_stop, "initial_risk": t.initial_risk, "atr": t.atr,
-                "return_pct": ob.direction * (t.exit_price / t.entry_price - 1) * 100, "stale_sessions": ob.stale_sessions}})
+                "return_pct": ob.direction * (t.exit_price / t.entry_price - 1) * 100, "stale_sessions": ob.stale_sessions,
+                "cost_model": {"primary_bps": PRIMARY_COST_BPS, "round_trip_bps_charged_in_r": list(COST_BPS)},
+                "r_net_std": {_bps_key(b): X.make_trade(ob.position, ex, 0, 0, b).r_net for b in COST_BPS},
+                "r_net_actual": {_bps_key(b): (None if not math.isfinite(t.r_actual_net(b)) else t.r_actual_net(b)) for b in COST_BPS}}})
         else:
             self._events.append({"type": "not_enterable", "ident": ob.ident(), "session": session_date.isoformat(), "payload": {"reason": reason}})
         self._closed.append(ob)

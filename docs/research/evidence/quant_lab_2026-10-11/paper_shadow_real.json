@@ -35,6 +35,13 @@
   "market_regime_available": 0,
   "relative_strength_available": 0,
   "catalysts_with_events": 0,
+  "catalyst_sections": {
+   "none_in_window": 250
+  },
+  "context_unavailable_reasons": {
+   "no observed market snapshot available at the cutoff": 250,
+   "no observed relative-strength row at the cutoff": 250
+  },
   "sector_known": 249,
   "guard_rejected": 10,
   "tracked_intent": 240
@@ -85,7 +92,10 @@
    "available",
    "reason"
   ],
-  "relative_strength": "NoneType",
+  "relative_strength": [
+   "available",
+   "reason"
+  ],
   "catalysts": [
    "events",
    "section"

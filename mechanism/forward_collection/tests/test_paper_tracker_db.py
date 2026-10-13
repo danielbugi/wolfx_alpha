@@ -200,6 +200,10 @@ def test_running_every_session_as_the_runtime_role_reproduces_the_batch_experime
         t = ref[k].trade
         assert (pl["exit_price"], pl["reason"], pl["bars_held"], pl["r_gross_std"], pl["mfe_r_std"], pl["initial_risk"]) == (t.exit_price, t.reason, t.duration, t.r_gross, t.mfe_r, t.initial_risk)
         assert pl["exit_session"] == ref[k].exit_date.isoformat() and pl["entry_session"] == ref[k].entry_date.isoformat()
+        assert pl["cost_model"] == {"primary_bps": 10.0, "round_trip_bps_charged_in_r": [0.0, 10.0, 25.0]} and set(pl["r_net_std"]) == {"0", "10", "25"}
+        for bps in (0.0, 10.0, 25.0):                                           # the recorded net R is the batch formula: gross minus bps x entry / 1R
+            assert abs(pl["r_net_std"][f"{bps:g}"] - (t.r_gross - bps / 1e4 * t.entry_price / t.unit)) < 1e-9
+        assert pl["r_net_std"]["0"] == pl["r_gross_std"] and pl["r_net_std"]["25"] < pl["r_net_std"]["10"] < pl["r_net_std"]["0"]
 
 
 def test_hindsight_events_appear_only_when_the_later_bars_exist_and_are_flagged(env):
