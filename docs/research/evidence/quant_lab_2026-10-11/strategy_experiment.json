@@ -81,9 +81,9 @@
      "sec_event_table_sha256": "472d2dcbeadfd28fd77c689493296316870cd69087e7d24ebbb9c4a525a8b4f1"
     }
    },
-   "code_ref": "cc8ddda"
+   "code_ref": "shadow-scratch"
   },
-  "manifest_hash": "db062f711ef9d9bb8fd21af9b94c2212e32f39c5d93023e9f746e068348a5736"
+  "manifest_hash": "da512828bed9f8f0f35b223e20e4cfe63ce34e8f62fe4247b878ca5c1e1d3825"
  },
  "design": {
   "train_end": "2022-01-01",
@@ -6824,6 +6824,680 @@
   },
   "note": "rules are fitted on TRAIN rows only; the per-signal oracle is an unattainable upper bound; signals on their own (counterfactual), not position-accounted"
  },
+ "big_winner_intelligence": {
+  "definition": {
+   "big_winner": "favourable excursion >= 5R (R = 2 x ATR) within 120 bars of the entry: a HINDSIGHT label, never a feature or a rule",
+   "premature_exit": "price continues >= 2R beyond the exit within 60 bars (hindsight)",
+   "capture_ratio": "realised return / favourable excursion over the shortest horizon covering the hold",
+   "label_purge": "train signals within 180 days of the test start are purged (their label window overlaps the test period)",
+   "decision_time_vs_hindsight": "pit_* columns/features are known at the signal close; hs_* columns need later bars"
+  },
+  "n_signals": 74032,
+  "n_with_known_120_bar_window": 74032,
+  "big_winner_rate": 0.2164,
+  "split_counts": {
+   "embargo": 1157,
+   "purged": 3567,
+   "test": 38190,
+   "train": 31118
+  },
+  "opportunity_distribution": {
+   "all": {
+    "n_signals": 74032,
+    "by_horizon": {
+     "60": {
+      "n": 74032,
+      "mean": 2.3628,
+      "median": 1.7571,
+      "p90": 4.9603,
+      "p99": 11.037,
+      "top_1pct_share_of_positive": 0.0667,
+      "top_5pct_share_of_positive": 0.2023,
+      "top_10pct_share_of_positive": 0.3209,
+      "skewness": 3.713,
+      "n_unknown": 0
+     },
+     "120": {
+      "n": 74032,
+      "mean": 3.4658,
+      "median": 2.5217,
+      "p90": 7.3457,
+      "p99": 16.522,
+      "top_1pct_share_of_positive": 0.0706,
+      "top_5pct_share_of_positive": 0.2098,
+      "top_10pct_share_of_positive": 0.3302,
+      "skewness": 10.719,
+      "n_unknown": 0
+     },
+     "250": {
+      "n": 74032,
+      "mean": 5.5629,
+      "median": 3.817,
+      "p90": 11.8211,
+      "p99": 29.9313,
+      "top_1pct_share_of_positive": 0.0887,
+      "top_5pct_share_of_positive": 0.2363,
+      "top_10pct_share_of_positive": 0.3585,
+      "skewness": 7.182,
+      "n_unknown": 0
+     }
+    },
+    "tiers_120": {
+     "ge_3r": 0.4279,
+     "ge_5r": 0.2164,
+     "ge_10r": 0.0454
+    }
+   },
+   "bullish": {
+    "n_signals": 42181,
+    "by_horizon": {
+     "60": {
+      "n": 42181,
+      "mean": 2.6523,
+      "median": 2.0627,
+      "p90": 5.4487,
+      "p99": 11.4776,
+      "top_1pct_share_of_positive": 0.0633,
+      "top_5pct_share_of_positive": 0.1913,
+      "top_10pct_share_of_positive": 0.3069,
+      "skewness": 3.673,
+      "n_unknown": 0
+     },
+     "120": {
+      "n": 42181,
+      "mean": 4.1263,
+      "median": 3.0974,
+      "p90": 8.5327,
+      "p99": 18.8488,
+      "top_1pct_share_of_positive": 0.0697,
+      "top_5pct_share_of_positive": 0.203,
+      "top_10pct_share_of_positive": 0.3197,
+      "skewness": 11.24,
+      "n_unknown": 0
+     },
+     "250": {
+      "n": 42181,
+      "mean": 7.1218,
+      "median": 5.051,
+      "p90": 14.7059,
+      "p99": 40.347,
+      "top_1pct_share_of_positive": 0.0851,
+      "top_5pct_share_of_positive": 0.2287,
+      "top_10pct_share_of_positive": 0.3468,
+      "skewness": 6.415,
+      "n_unknown": 0
+     }
+    },
+    "tiers_120": {
+     "ge_3r": 0.5128,
+     "ge_5r": 0.2872,
+     "ge_10r": 0.066
+    }
+   },
+   "bearish": {
+    "n_signals": 31851,
+    "by_horizon": {
+     "60": {
+      "n": 31851,
+      "mean": 1.9795,
+      "median": 1.4396,
+      "p90": 4.1971,
+      "p99": 10.3513,
+      "top_1pct_share_of_positive": 0.0725,
+      "top_5pct_share_of_positive": 0.2146,
+      "top_10pct_share_of_positive": 0.3344,
+      "skewness": 3.768,
+      "n_unknown": 0
+     },
+     "120": {
+      "n": 31851,
+      "mean": 2.5911,
+      "median": 1.9503,
+      "p90": 5.4153,
+      "p99": 11.9983,
+      "top_1pct_share_of_positive": 0.0633,
+      "top_5pct_share_of_positive": 0.1979,
+      "top_10pct_share_of_positive": 0.3162,
+      "skewness": 3.621,
+      "n_unknown": 0
+     },
+     "250": {
+      "n": 31851,
+      "mean": 3.4984,
+      "median": 2.7519,
+      "p90": 7.3863,
+      "p99": 14.0828,
+      "top_1pct_share_of_positive": 0.0528,
+      "top_5pct_share_of_positive": 0.1776,
+      "top_10pct_share_of_positive": 0.2948,
+      "skewness": 2.959,
+      "n_unknown": 0
+     }
+    },
+    "tiers_120": {
+     "ge_3r": 0.3155,
+     "ge_5r": 0.1227,
+     "ge_10r": 0.0181
+    }
+   }
+  },
+  "capture_by_variant_cap60": {
+   "donchian_breakout__exit_a_atr_stop_fixed_2r": {
+    "positions": 23095,
+    "big_winner_positions": 4962,
+    "big_winner_capture_ratio": {
+     "median": 0.3816,
+     "mean": -0.7083,
+     "n": 4932
+    },
+    "big_winner_mean_realized_r": 0.8626,
+    "big_winner_mean_mfe_r": 1.7439,
+    "big_winner_premature_exit_share": 0.8843,
+    "all_premature_exit_share": 0.4537,
+    "all_mean_missed_continuation_r": 2.4164,
+    "realized_r_tail": {
+     "n": 23095,
+     "mean": -0.0217,
+     "median": -1.0113,
+     "p90": 1.9896,
+     "p99": 2.5393,
+     "top_1pct_share_of_positive": 0.0501,
+     "top_5pct_share_of_positive": 0.1786,
+     "top_10pct_share_of_positive": 0.3285,
+     "skewness": 0.703
+    },
+    "share_of_big_winners_taken_and_ended_positive": 0.6161
+   },
+   "donchian_breakout__exit_a_atr_stop_fixed_3r": {
+    "positions": 20359,
+    "big_winner_positions": 4330,
+    "big_winner_capture_ratio": {
+     "median": 0.4468,
+     "mean": -0.6807,
+     "n": 4303
+    },
+    "big_winner_mean_realized_r": 1.2885,
+    "big_winner_mean_mfe_r": 2.3096,
+    "big_winner_premature_exit_share": 0.8878,
+    "all_premature_exit_share": 0.4564,
+    "all_mean_missed_continuation_r": 2.4247,
+    "realized_r_tail": {
+     "n": 20359,
+     "mean": -0.0295,
+     "median": -1.0125,
+     "p90": 2.9848,
+     "p99": 3.3671,
+     "top_1pct_share_of_positive": 0.0581,
+     "top_5pct_share_of_positive": 0.2305,
+     "top_10pct_share_of_positive": 0.4417,
+     "skewness": 1.118
+    },
+    "share_of_big_winners_taken_and_ended_positive": 0.5901
+   },
+   "donchian_breakout__exit_b_donchian_trail_10": {
+    "positions": 21581,
+    "big_winner_positions": 4556,
+    "big_winner_capture_ratio": {
+     "median": 0.1622,
+     "mean": -0.9203,
+     "n": 4529
+    },
+    "big_winner_mean_realized_r": 1.1107,
+    "big_winner_mean_mfe_r": 2.8048,
+    "big_winner_premature_exit_share": 0.8382,
+    "all_premature_exit_share": 0.4535,
+    "all_mean_missed_continuation_r": 2.3682,
+    "realized_r_tail": {
+     "n": 21581,
+     "mean": -0.0196,
+     "median": -0.4124,
+     "p90": 1.7034,
+     "p99": 5.692,
+     "top_1pct_share_of_positive": 0.1668,
+     "top_5pct_share_of_positive": 0.4585,
+     "top_10pct_share_of_positive": 0.6675,
+     "skewness": 3.257
+    },
+    "share_of_big_winners_taken_and_ended_positive": 0.5753
+   },
+   "donchian_breakout__exit_c_atr_trail_3x": {
+    "positions": 20058,
+    "big_winner_positions": 4240,
+    "big_winner_capture_ratio": {
+     "median": 0.1901,
+     "mean": -0.9422,
+     "n": 4217
+    },
+    "big_winner_mean_realized_r": 1.0878,
+    "big_winner_mean_mfe_r": 2.5896,
+    "big_winner_premature_exit_share": 0.8462,
+    "all_premature_exit_share": 0.4562,
+    "all_mean_missed_continuation_r": 2.4224,
+    "realized_r_tail": {
+     "n": 20058,
+     "mean": -0.0357,
+     "median": -0.5021,
+     "p90": 2.0058,
+     "p99": 5.3837,
+     "top_1pct_share_of_positive": 0.1212,
+     "top_5pct_share_of_positive": 0.3965,
+     "top_10pct_share_of_positive": 0.6166,
+     "skewness": 1.768
+    },
+    "share_of_big_winners_taken_and_ended_positive": 0.5953
+   },
+   "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10": {
+    "positions": 20814,
+    "big_winner_positions": 4399,
+    "big_winner_capture_ratio": {
+     "median": 0.1955,
+     "mean": -0.7312,
+     "n": 4373
+    },
+    "big_winner_mean_realized_r": 1.1274,
+    "big_winner_mean_mfe_r": 2.821,
+    "big_winner_premature_exit_share": 0.8418,
+    "all_premature_exit_share": 0.4542,
+    "all_mean_missed_continuation_r": 2.3845,
+    "realized_r_tail": {
+     "n": 20814,
+     "mean": -0.0244,
+     "median": -1.005,
+     "p90": 1.8026,
+     "p99": 5.7642,
+     "top_1pct_share_of_positive": 0.1535,
+     "top_5pct_share_of_positive": 0.4293,
+     "top_10pct_share_of_positive": 0.6312,
+     "skewness": 2.945
+    },
+    "share_of_big_winners_taken_and_ended_positive": 0.5922
+   }
+  },
+  "decision_time_lift": {
+   "relative_volume": {
+    "train": {
+     "base_rate": 0.2482,
+     "n": 31118,
+     "buckets": {
+      "relvol1.5-3": {
+       "n": 6972,
+       "rate": 0.2384,
+       "lift": 0.96
+      },
+      "relvol<1.5": {
+       "n": 22436,
+       "rate": 0.2519,
+       "lift": 1.015
+      },
+      "relvol>=3": {
+       "n": 1710,
+       "rate": 0.2404,
+       "lift": 0.968
+      }
+     }
+    },
+    "test": {
+     "base_rate": 0.1956,
+     "n": 38190,
+     "buckets": {
+      "relvol1.5-3": {
+       "n": 8337,
+       "rate": 0.1922,
+       "lift": 0.982,
+       "rate_ci95": [
+        0.1609,
+        0.2294
+       ]
+      },
+      "relvol<1.5": {
+       "n": 27644,
+       "rate": 0.1965,
+       "lift": 1.004,
+       "rate_ci95": [
+        0.1679,
+        0.2299
+       ]
+      },
+      "relvol>=3": {
+       "n": 2209,
+       "rate": 0.1978,
+       "lift": 1.011,
+       "rate_ci95": [
+        0.1743,
+        0.226
+       ]
+      }
+     }
+    }
+   },
+   "trend_ret20": {
+    "train": {
+     "base_rate": 0.2482,
+     "n": 31118,
+     "buckets": {
+      "ret20_high": {
+       "n": 10417,
+       "rate": 0.3089,
+       "lift": 1.245
+      },
+      "ret20_low": {
+       "n": 9179,
+       "rate": 0.1433,
+       "lift": 0.577
+      },
+      "ret20_mid": {
+       "n": 11522,
+       "rate": 0.2769,
+       "lift": 1.116
+      }
+     }
+    },
+    "test": {
+     "base_rate": 0.1956,
+     "n": 38190,
+     "buckets": {
+      "ret20_high": {
+       "n": 13038,
+       "rate": 0.2928,
+       "lift": 1.497,
+       "rate_ci95": [
+        0.2531,
+        0.3364
+       ]
+      },
+      "ret20_low": {
+       "n": 13680,
+       "rate": 0.0705,
+       "lift": 0.36,
+       "rate_ci95": [
+        0.0494,
+        0.0926
+       ]
+      },
+      "ret20_mid": {
+       "n": 11472,
+       "rate": 0.2344,
+       "lift": 1.198,
+       "rate_ci95": [
+        0.2074,
+        0.2677
+       ]
+      }
+     }
+    }
+   },
+   "volatility_atr_pct": {
+    "train": {
+     "base_rate": 0.2482,
+     "n": 31118,
+     "buckets": {
+      "atr_high": {
+       "n": 9633,
+       "rate": 0.1886,
+       "lift": 0.76
+      },
+      "atr_low": {
+       "n": 11526,
+       "rate": 0.2992,
+       "lift": 1.206
+      },
+      "atr_mid": {
+       "n": 9959,
+       "rate": 0.2468,
+       "lift": 0.994
+      }
+     }
+    },
+    "test": {
+     "base_rate": 0.1956,
+     "n": 38190,
+     "buckets": {
+      "atr_high": {
+       "n": 13418,
+       "rate": 0.154,
+       "lift": 0.787,
+       "rate_ci95": [
+        0.1187,
+        0.1902
+       ]
+      },
+      "atr_low": {
+       "n": 11558,
+       "rate": 0.2558,
+       "lift": 1.308,
+       "rate_ci95": [
+        0.221,
+        0.2939
+       ]
+      },
+      "atr_mid": {
+       "n": 13214,
+       "rate": 0.1852,
+       "lift": 0.947,
+       "rate_ci95": [
+        0.1596,
+        0.2134
+       ]
+      }
+     }
+    }
+   },
+   "index_regime": {
+    "train": {
+     "base_rate": 0.2482,
+     "n": 31118,
+     "buckets": {
+      "index_down": {
+       "n": 6311,
+       "rate": 0.1716,
+       "lift": 0.691
+      },
+      "index_up": {
+       "n": 24807,
+       "rate": 0.2677,
+       "lift": 1.079
+      }
+     }
+    },
+    "test": {
+     "base_rate": 0.1956,
+     "n": 38190,
+     "buckets": {
+      "index_down": {
+       "n": 14137,
+       "rate": 0.1087,
+       "lift": 0.555,
+       "rate_ci95": [
+        0.0827,
+        0.145
+       ]
+      },
+      "index_up": {
+       "n": 24053,
+       "rate": 0.2467,
+       "lift": 1.261,
+       "rate_ci95": [
+        0.2199,
+        0.2751
+       ]
+      }
+     }
+    }
+   },
+   "catalyst_class": {
+    "train": {
+     "base_rate": 0.2482,
+     "n": 31118,
+     "buckets": {
+      "none": {
+       "n": 29672,
+       "rate": 0.2494,
+       "lift": 1.005
+      },
+      "one_time_suspected": {
+       "n": 385,
+       "rate": 0.2052,
+       "lift": 0.827
+      },
+      "recurring_operating": {
+       "n": 614,
+       "rate": 0.2134,
+       "lift": 0.86
+      },
+      "unclassified": {
+       "n": 447,
+       "rate": 0.2528,
+       "lift": 1.018
+      }
+     }
+    },
+    "test": {
+     "base_rate": 0.1956,
+     "n": 38190,
+     "buckets": {
+      "none": {
+       "n": 36326,
+       "rate": 0.1949,
+       "lift": 0.996,
+       "rate_ci95": [
+        0.167,
+        0.2268
+       ]
+      },
+      "one_time_suspected": {
+       "n": 358,
+       "rate": 0.1927,
+       "lift": 0.985,
+       "rate_ci95": [
+        0.1145,
+        0.2803
+       ]
+      },
+      "recurring_operating": {
+       "n": 935,
+       "rate": 0.231,
+       "lift": 1.181,
+       "rate_ci95": [
+        0.1619,
+        0.3157
+       ]
+      },
+      "unclassified": {
+       "n": 571,
+       "rate": 0.1856,
+       "lift": 0.949,
+       "rate_ci95": [
+        0.1329,
+        0.2368
+       ]
+      }
+     }
+    }
+   },
+   "direction": {
+    "train": {
+     "base_rate": 0.2482,
+     "n": 31118,
+     "buckets": {
+      "bearish": {
+       "n": 12152,
+       "rate": 0.1699,
+       "lift": 0.685
+      },
+      "bullish": {
+       "n": 18966,
+       "rate": 0.2984,
+       "lift": 1.202
+      }
+     }
+    },
+    "test": {
+     "base_rate": 0.1956,
+     "n": 38190,
+     "buckets": {
+      "bearish": {
+       "n": 17352,
+       "rate": 0.0834,
+       "lift": 0.427,
+       "rate_ci95": [
+        0.0611,
+        0.1076
+       ]
+      },
+      "bullish": {
+       "n": 20838,
+       "rate": 0.289,
+       "lift": 1.478,
+       "rate_ci95": [
+        0.2532,
+        0.328
+       ]
+      }
+     }
+    }
+   }
+  },
+  "model_vs_baselines": {
+   "n_train": 31118,
+   "n_test": 38190,
+   "base_rate_train": 0.2482,
+   "base_rate_test": 0.1956,
+   "features": [
+    "pit_relvol",
+    "pit_ret5",
+    "pit_ret20",
+    "pit_atr_pct",
+    "pit_regime_up",
+    "pit_direction",
+    "pit_catalyst_recurring",
+    "pit_catalyst_any",
+    "pit_catalyst_days"
+   ],
+   "model": {
+    "auc": 0.6841,
+    "top_fraction": 0.1,
+    "precision": 0.3077,
+    "base_rate": 0.1956,
+    "lift": 1.573,
+    "n_top": 3819
+   },
+   "baselines": {
+    "pit_atr_pct": {
+     "auc": 0.4156,
+     "top_fraction": 0.1,
+     "precision": 0.0861,
+     "base_rate": 0.1956,
+     "lift": 0.44,
+     "n_top": 3819
+    },
+    "pit_relvol": {
+     "auc": 0.4931,
+     "top_fraction": 0.1,
+     "precision": 0.1953,
+     "base_rate": 0.1956,
+     "lift": 0.999,
+     "n_top": 3819
+    }
+   },
+   "feature_importance": {
+    "pit_direction": 0.4495,
+    "pit_ret20": 0.1785,
+    "pit_atr_pct": 0.1318,
+    "pit_ret5": 0.0952,
+    "pit_regime_up": 0.0786,
+    "pit_catalyst_days": 0.0357,
+    "pit_relvol": 0.0308,
+    "pit_catalyst_recurring": 0.0,
+    "pit_catalyst_any": 0.0
+   }
+  },
+  "tier_counts_120": {
+   "ge_10r": 3361,
+   "ge_3r": 15660,
+   "ge_5r": 12659,
+   "none": 42352
+  }
+ },
  "ml_ready_table": {
   "file": "strategy_signal_outcomes.csv.gz",
   "rows": 74032,
@@ -6875,9 +7549,31 @@
    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap250__r_actual_net10",
    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap60__exit_reason",
    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap60__bars_held",
-   "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap60__initial_risk_atr"
+   "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap60__initial_risk_atr",
+   "hs_fav_r_h60",
+   "hs_fav_r_h120",
+   "hs_fav_r_h250",
+   "hs_fav_pct_h120",
+   "hs_bars_to_peak_h120",
+   "hs_adverse_before_peak_r_h120",
+   "hs_big_winner_tier_120",
+   "donchian_breakout__exit_a_atr_stop_fixed_2r__cap60__hs_capture_ratio",
+   "donchian_breakout__exit_a_atr_stop_fixed_2r__cap60__hs_missed_continuation_r",
+   "donchian_breakout__exit_a_atr_stop_fixed_2r__cap60__hs_premature_exit",
+   "donchian_breakout__exit_a_atr_stop_fixed_3r__cap60__hs_capture_ratio",
+   "donchian_breakout__exit_a_atr_stop_fixed_3r__cap60__hs_missed_continuation_r",
+   "donchian_breakout__exit_a_atr_stop_fixed_3r__cap60__hs_premature_exit",
+   "donchian_breakout__exit_b_donchian_trail_10__cap60__hs_capture_ratio",
+   "donchian_breakout__exit_b_donchian_trail_10__cap60__hs_missed_continuation_r",
+   "donchian_breakout__exit_b_donchian_trail_10__cap60__hs_premature_exit",
+   "donchian_breakout__exit_c_atr_trail_3x__cap60__hs_capture_ratio",
+   "donchian_breakout__exit_c_atr_trail_3x__cap60__hs_missed_continuation_r",
+   "donchian_breakout__exit_c_atr_trail_3x__cap60__hs_premature_exit",
+   "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap60__hs_capture_ratio",
+   "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap60__hs_missed_continuation_r",
+   "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap60__hs_premature_exit"
   ],
-  "sha256_of_csv": "bc79782bdd3b41a2fcf1193a01c29e754b13d1a5a36b8710957bf04e793a4602",
+  "sha256_of_csv": "039433a4ab5eb44090f514a6dfa18c241ed362e166f7d9040494660afa023990",
   "split_counts_cap60": {
    "embargo": 1157,
    "purged": 258,
@@ -6885,6 +7581,88 @@
    "train": 34427
   },
   "point_in_time": "features use bars <= the signal bar; the catalyst is the latest earnings event whose reaction session completed BEFORE the signal session, with its SEC acceptance timestamp",
+  "column_roles": {
+   "identity": [
+    "symbol",
+    "signal_date",
+    "direction"
+   ],
+   "decision_time_pit": [
+    "relvol_signal_bar",
+    "ret5_to_signal",
+    "ret20_to_signal",
+    "atr_pct",
+    "regime_up_prev_session",
+    "catalyst_class",
+    "catalyst_days_since",
+    "catalyst_decision_accepted_at",
+    "catalyst_release_accession"
+   ],
+   "hindsight_only": [
+    "hs_fav_r_h60",
+    "hs_fav_r_h120",
+    "hs_fav_r_h250",
+    "hs_fav_pct_h120",
+    "hs_bars_to_peak_h120",
+    "hs_adverse_before_peak_r_h120",
+    "hs_big_winner_tier_120",
+    "donchian_breakout__exit_a_atr_stop_fixed_2r__cap60__hs_capture_ratio",
+    "donchian_breakout__exit_a_atr_stop_fixed_2r__cap60__hs_missed_continuation_r",
+    "donchian_breakout__exit_a_atr_stop_fixed_2r__cap60__hs_premature_exit",
+    "donchian_breakout__exit_a_atr_stop_fixed_3r__cap60__hs_capture_ratio",
+    "donchian_breakout__exit_a_atr_stop_fixed_3r__cap60__hs_missed_continuation_r",
+    "donchian_breakout__exit_a_atr_stop_fixed_3r__cap60__hs_premature_exit",
+    "donchian_breakout__exit_b_donchian_trail_10__cap60__hs_capture_ratio",
+    "donchian_breakout__exit_b_donchian_trail_10__cap60__hs_missed_continuation_r",
+    "donchian_breakout__exit_b_donchian_trail_10__cap60__hs_premature_exit",
+    "donchian_breakout__exit_c_atr_trail_3x__cap60__hs_capture_ratio",
+    "donchian_breakout__exit_c_atr_trail_3x__cap60__hs_missed_continuation_r",
+    "donchian_breakout__exit_c_atr_trail_3x__cap60__hs_premature_exit",
+    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap60__hs_capture_ratio",
+    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap60__hs_missed_continuation_r",
+    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap60__hs_premature_exit"
+   ],
+   "exit_policy_outcome": [
+    "donchian_breakout__exit_a_atr_stop_fixed_2r__cap60__r_std_net10",
+    "donchian_breakout__exit_a_atr_stop_fixed_2r__cap60__r_actual_net10",
+    "donchian_breakout__exit_a_atr_stop_fixed_2r__cap250__r_std_net10",
+    "donchian_breakout__exit_a_atr_stop_fixed_2r__cap250__r_actual_net10",
+    "donchian_breakout__exit_a_atr_stop_fixed_2r__cap60__exit_reason",
+    "donchian_breakout__exit_a_atr_stop_fixed_2r__cap60__bars_held",
+    "donchian_breakout__exit_a_atr_stop_fixed_2r__cap60__initial_risk_atr",
+    "donchian_breakout__exit_a_atr_stop_fixed_3r__cap60__r_std_net10",
+    "donchian_breakout__exit_a_atr_stop_fixed_3r__cap60__r_actual_net10",
+    "donchian_breakout__exit_a_atr_stop_fixed_3r__cap250__r_std_net10",
+    "donchian_breakout__exit_a_atr_stop_fixed_3r__cap250__r_actual_net10",
+    "donchian_breakout__exit_a_atr_stop_fixed_3r__cap60__exit_reason",
+    "donchian_breakout__exit_a_atr_stop_fixed_3r__cap60__bars_held",
+    "donchian_breakout__exit_a_atr_stop_fixed_3r__cap60__initial_risk_atr",
+    "donchian_breakout__exit_b_donchian_trail_10__cap60__r_std_net10",
+    "donchian_breakout__exit_b_donchian_trail_10__cap60__r_actual_net10",
+    "donchian_breakout__exit_b_donchian_trail_10__cap250__r_std_net10",
+    "donchian_breakout__exit_b_donchian_trail_10__cap250__r_actual_net10",
+    "donchian_breakout__exit_b_donchian_trail_10__cap60__exit_reason",
+    "donchian_breakout__exit_b_donchian_trail_10__cap60__bars_held",
+    "donchian_breakout__exit_b_donchian_trail_10__cap60__initial_risk_atr",
+    "donchian_breakout__exit_c_atr_trail_3x__cap60__r_std_net10",
+    "donchian_breakout__exit_c_atr_trail_3x__cap60__r_actual_net10",
+    "donchian_breakout__exit_c_atr_trail_3x__cap250__r_std_net10",
+    "donchian_breakout__exit_c_atr_trail_3x__cap250__r_actual_net10",
+    "donchian_breakout__exit_c_atr_trail_3x__cap60__exit_reason",
+    "donchian_breakout__exit_c_atr_trail_3x__cap60__bars_held",
+    "donchian_breakout__exit_c_atr_trail_3x__cap60__initial_risk_atr",
+    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap60__r_std_net10",
+    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap60__r_actual_net10",
+    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap250__r_std_net10",
+    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap250__r_actual_net10",
+    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap60__exit_reason",
+    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap60__bars_held",
+    "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10__cap60__initial_risk_atr"
+   ],
+   "split": [
+    "split_cap60"
+   ]
+  },
   "purge_note": "split_cap60 = 'purged' for a train-period signal whose position under ANY variant (cap 60) is still open at the test start"
  },
  "paper_tracker_replay_validation": {
@@ -6897,7 +7675,7 @@
   "mismatches": 0,
   "tracker_extra_closed": 0,
   "first_mismatch": null,
-  "state_hash": "56fa6d02ed31bc22f43bc74646e254c879ab8f5f8701a77fcb565f9bce32fa25",
+  "state_hash": "194aac711632c4770f499f1ed21e3c4d495947d1cc999ce44edffbe03f1a194c",
   "open_at_end": 0,
   "summary": {
    "donchian_breakout__exit_a_atr_stop_fixed_2r": {

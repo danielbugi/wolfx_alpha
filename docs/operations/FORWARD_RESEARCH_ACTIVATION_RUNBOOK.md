@@ -63,7 +63,7 @@ Each step: **Action**, **Expected**, **Verify**, **Rollback**, **Reversible**. `
 git fetch origin && test "$(git rev-parse origin/lab/first-light-algo)" = "$CAND" && echo "branch tip is the candidate"
 gh run list --branch lab/first-light-algo --limit 10 --json databaseId,headSha,status,conclusion -q ".[]|select(.headSha==\"$CAND\")"
 git diff --quiet "$CAND" -- docs/operations deploy mechanism && echo "no drift"        # in a clean checkout of CAND
-while read -r h f; do [ "$(git show "$CAND:$f" | sha256sum | cut -c1-64)" = "$h" ] || echo "MISMATCH $f"; done < <(sed -n '/^> **2026-10-12 note.** The three `deploy/db/research_roles*.sql` digests below are the versions extended for migration 35 (`strategy_variant`, listed as append-only; two `research_strategy_variant_*` functions). The R1-R3 activation applied the previous versions (candidate `66b23b9`); the extension changes nothing for migrations 24-34 and is applied to production only with migration 35, under its own approval (`docs/operations/MIGRATION_35_STRATEGY_VARIANT.md`).
+while read -r h f; do [ "$(git show "$CAND:$f" | sha256sum | cut -c1-64)" = "$h" ] || echo "MISMATCH $f"; done < <(sed -n '/^> **2026-10-12 note.** The three `deploy/db/research_roles*.sql` digests below are the versions extended for migrations 35 (`strategy_variant`) and 36 (`paper_session`, `paper_observation`, `paper_event`), listed as append-only, with their `research_*` functions. The R1-R3 activation applied the previous versions (candidate `66b23b9`); the extension changes nothing for migrations 24-34 and is applied to production only with migration 35, under its own approval (`docs/operations/MIGRATION_35_STRATEGY_VARIANT.md`).
 
 ```manifest/,/^```$/p' docs/operations/FORWARD_RESEARCH_ACTIVATION_RUNBOOK.md | grep -E '^[0-9a-f]{64}  ')
 ```
@@ -292,9 +292,9 @@ a3da3cd6761e4224a46dea3ba83a52746f246d1dc9b39c25c8dc7bda0f22a6ea  mechanism/add_
 13b48ef0389874872a18f6b5a624100f356db1b0603a08f6e56388df2e2dad69  mechanism/add_dataset_experiment_registry_tables.sql
 6f2ac75347d04132c8f47891f27fc393d7b6d0ebcda244cd55570f7f2a0f364b  mechanism/add_sector_history_tables.sql
 18748a7a1ef5e13d7549e9ce71c6621ef57bcfcc3d9688a1f193c917a0b11946  mechanism/add_price_discontinuity_scan.sql
-143cb0ff24d553428429be42fddc8a971959d46ed6595b28a96b806f42e99122  deploy/db/research_roles.sql
-2f12877f75592c697981134c4de3d13f35e19240dcc3355b7e7f074088562039  deploy/db/research_roles_verify.sql
-7c15617f69c87651432f1fc01b9f4fdac7ce0d6167303f57f37f1a498cd51286  deploy/db/research_roles_rollback.sql
+89c10cba78e941fa606c3e43d490566728818e110f4daae48565be64af3b9e41  deploy/db/research_roles.sql
+cd59f125b51f66ad7138481d74ed319b48af07c43fceac807bd089929177069a  deploy/db/research_roles_verify.sql
+fb9dedaaf81dd46fb806821c744539883e9eb1b52ae646e7e617bb8bae2e41d9  deploy/db/research_roles_rollback.sql
 0a1f3a27d525051d776e93dc4f700e2ef8e51164f0b53e9a59310c9aee1f72d5  deploy/db/rollback_24_31.sql
 584dc1c714a444bb6f971bce8968c909ee66268efa9485d1dcb6fc77636a5401  deploy/db/rollback_32.sql
 e147ae29a396264330cd5b1ccc5e4e8d664b8cdd5b9a8028c15121e9b9ce00d1  deploy/db/pre_activation_backup.sh

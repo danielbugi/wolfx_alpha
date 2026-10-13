@@ -55,7 +55,7 @@
    "file": "strategy_experiments.json",
    "kind": "strategy_lab",
    "title": "Strategy experiments: registered variants, hold caps, risk bases and the paper tracker",
-   "headline": "74,032 breakout signals x 5 registered variants x 3 hold caps. Test-period net expectancy at the registered 60-bar cap runs from -0.049 R (a_atr_stop_fixed_3r) to -0.024 R (b_donchian_trail_10). Paper tracker replay: 12,157 positions, 0 mismatches."
+   "headline": "74,032 breakout signals x 5 registered variants x 3 hold caps. Test-period net expectancy at the registered 60-bar cap runs from -0.049 R (a_atr_stop_fixed_3r) to -0.024 R (b_donchian_trail_10). Paper tracker replay: 12,157 positions, 0 mismatches. Hindsight label: 22% of signals later reached a favourable excursion of at least 5R within 120 bars (a peak, not a P&L); the best registered variant's test-period net expectancy is -0.024 R (not positive)."
   },
   {
    "id": "performance_attribution",
@@ -69,7 +69,7 @@
    "file": "research_insights.json",
    "kind": "strategy_lab",
    "title": "Research insights: what the evidence supports, and what it does not",
-   "headline": "30 claims checked: 7 inconclusive, 13 not supported, 3 suggestive, 7 supported."
+   "headline": "32 claims checked: 7 inconclusive, 13 not supported, 4 suggestive, 8 supported."
   }
  ]
 }

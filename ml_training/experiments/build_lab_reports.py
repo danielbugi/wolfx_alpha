@@ -50,6 +50,8 @@ def build(evidence_dir, code_ref):
     sec = _load(evidence_dir, "sec_earnings_study.json")
     manifest = _load(evidence_dir, "sec_raw_manifest.json")
     exp = _load(evidence_dir, "strategy_experiment.json") if os.path.exists(os.path.join(evidence_dir, "strategy_experiment.json")) else None
+    if exp is not None:
+        exp = dict(exp, forward_tracker_shadow=shadow_summary(evidence_dir))
     runs = {}
     for name in ("train_momentum", "train_plan_profit", "train_momentum_novol"):
         with open(os.path.join(evidence_dir, name + ".txt"), encoding="utf-8") as fh:
@@ -131,7 +133,10 @@ def build(evidence_dir, code_ref):
                                     "Standardised R uses 1R = 2 x ATR14 for every variant. The variant's ACTUAL initial risk differs (B starts at the 10-bar channel low, C at 3 x ATR); both bases are shown, and actual-risk multiples blow up when that risk is tiny.",
                                     "The one-open-position rule skips most signals (breakouts cluster on consecutive days), so each variant's accounted positions are a minority of the signals; 'max drawdown (cum R)' is the drawdown of the running SUM of R over all of a variant's positions in exit order, with every position counted at 1R: it is not a sized portfolio.",
                                     "Train/test is chronological by signal date with an embargo and a purge. The selection rules are simple baselines fitted on train only; the per-signal oracle is an unattainable upper bound.",
-                                    f"Universe: {exp['design']['n_analysis_signals']:,} signals of the SEC study's liquid symbols; catalysts use only events whose reaction session completed before the signal session."],
+                                    f"Universe: {exp['design']['n_analysis_signals']:,} signals of the SEC study's liquid symbols; catalysts use only events whose reaction session completed before the signal session.",
+                                    "'Big winner' is a HINDSIGHT label: the maximum favourable excursion within 120 bars of the entry, a peak nobody can sell at. It is never a feature or a rule; decision-time (pit_) conditions and hindsight (hs_) measurements are separate columns.",
+                                    "Capture ratio, premature exit and missed continuation are measured after the fact. A model that ranks signals by decision-time features is judged chronologically, against single-feature baselines, with a purge of train labels that overlap the test period.",
+                                    "The forward paper tracker has been dry-run and shadow-tested on a scratch restore only. It has not been activated in production; no forward paper observation exists there."],
                         "provenance": {"source": "ml_breakout_dataset_v2 signals, stock_prices and the committed SEC event table on an isolated copy of the production backup; identities checked against the production registry rows",
                                        "manifest_hash": exp["manifest"]["manifest_hash"], "variants": exp["variants"], "design": exp["design"],
                                        "evidence_files": ["strategy_experiment.json", "strategy_signal_outcomes.csv.gz"]},
@@ -326,6 +331,36 @@ def insights(ex, rk, exitp, cat, runs, sec=None, exp=None):
         add("The forward paper tracker reproduces the batch experiment exactly when real history is replayed day by day", "supported" if rv["mismatches"] == 0 and rv["tracker_extra_closed"] == 0 and rv["batch_positions_compared"] >= 1000 else "not_supported",
             f"{rv['batch_positions_compared']:,} positions of {rv['variants']} variants over {rv['symbols']} symbols and {rv['sessions_replayed']:,} sessions compared field by field: {rv['mismatches']} mismatches; the tracker writes nothing and opens no trade",
             ["strategy_experiments"])
+        bw = exp.get("big_winner_intelligence")
+        if bw:
+            cap = bw["capture_by_variant_cap60"]
+            prem = {k.split("__exit_")[1]: v["big_winner_premature_exit_share"] for k, v in cap.items()}
+            add("The registered exits leave most of a big winner's move on the table (the exit comes before a further 2R continuation)", "supported" if min(prem.values()) >= 0.5 else "inconclusive",
+                "; ".join(f"{k} {v * 100:.0f}% of big-winner positions" for k, v in prem.items()) + "; premature = price continued at least 2R within 60 bars after the exit (hindsight measurement, not a rule)", ["strategy_experiments"])
+            m = bw["model_vs_baselines"]
+            best_base = max(b["auc"] for b in m["baselines"].values())
+            add("Out of sample, decision-time conditions rank which signals later become big winners better than a single feature does", "suggestive" if m["model"]["auc"] >= 0.6 and m["model"]["auc"] > best_base + 0.05 else "not_supported",
+                f"chronological test AUC {m['model']['auc']:.3f} against {best_base:.3f} for the best single-feature baseline; top decile precision {m['model']['precision'] * 100:.0f}% against a {m['base_rate_test'] * 100:.0f}% base rate (lift {m['model']['lift']:.2f}); "
+                f"direction and the index regime carry much of it (importances {m['feature_importance']['pit_direction']:.2f} and {m['feature_importance']['pit_regime_up']:.2f}), so this partly restates market direction; the label is a hindsight peak, not a P&L", ["strategy_experiments"])
+    return out
+
+
+def shadow_summary(evidence_dir):
+    """What the scratch dry-run / shadow tests of the forward paper tracker showed (evidence: paper_shadow_real.json, paper_shadow_historical.json). Read back verbatim, nothing recomputed."""
+    out = {"activated_in_production": False}
+    pr, ph = os.path.join(evidence_dir, "paper_shadow_real.json"), os.path.join(evidence_dir, "paper_shadow_historical.json")
+    if os.path.exists(pr):
+        r = _load(evidence_dir, "paper_shadow_real.json")
+        out["real_source"] = {"session": r["session"], "candidates": r["dry_run"]["counts"]["n_candidates"], "variants": r["dry_run"]["counts"]["n_variants"], "observations_written": r["write"]["written"]["observations"],
+                              "dry_run_wrote_nothing": r["dry_run"]["tables_unchanged_by_dry_run"], "write_matches_dry_run": r["write_matches_dry_run"], "snapshot_hash_verified": r["restore"]["snapshot_hash_verified"],
+                              "rerun_is_noop": r["rerun_same_session"]["status"] == "already_processed" and r["rerun_same_session"]["tables_unchanged"], "next_session_without_capture": r["next_session_without_capture"],
+                              "audit_problems": len(r["audit_problems"]), "context_availability": r["context_availability"]}
+    if os.path.exists(ph):
+        h = _load(evidence_dir, "paper_shadow_historical.json")
+        c = h["comparison_with_batch"]
+        out["historical_replay"] = {"design": h["design"], "sessions_processed": h["sessions_processed"], "positions": c["stored_observations"], "closed": c["stored_closed"], "hindsight_events": h["hindsight"]["events"],
+                                    "mismatches_vs_batch": c["mismatches"], "missing_closed": c["missing_closed"], "dry_run_equals_write": h["dry_run_equals_write_for_the_last_session"],
+                                    "rerun_is_noop": h["rerun_sessions"]["tables_unchanged"], "audit_problems": len(h["audit_problems"]), "seconds_per_session": h["seconds_per_session"], "bytes": h["bytes"]}
     return out
 
 
@@ -335,7 +370,16 @@ def exp_headline(exp):
     lo, hi = min(rows, key=lambda r: r[1]["expectancy_r"]), max(rows, key=lambda r: r[1]["expectancy_r"])
     rv = exp["paper_tracker_replay_validation"]
     return (f"{exp['design']['n_analysis_signals']:,} breakout signals x {len(exp['variants'])} registered variants x {len(exp['design']['hold_caps'])} hold caps. Test-period net expectancy at the registered 60-bar cap "
-            f"runs from {lo[1]['expectancy_r']:+.3f} R ({lo[0]}) to {hi[1]['expectancy_r']:+.3f} R ({hi[0]}). Paper tracker replay: {rv['batch_positions_compared']:,} positions, {rv['mismatches']} mismatches.")
+            f"runs from {lo[1]['expectancy_r']:+.3f} R ({lo[0]}) to {hi[1]['expectancy_r']:+.3f} R ({hi[0]}). Paper tracker replay: {rv['batch_positions_compared']:,} positions, {rv['mismatches']} mismatches."
+            + big_winner_sentence(exp, hi[1]['expectancy_r']))
+
+
+def big_winner_sentence(exp, best_expectancy):
+    b = exp.get("big_winner_intelligence")
+    if not b:
+        return ""
+    return (f" Hindsight label: {b['big_winner_rate'] * 100:.0f}% of signals later reached a favourable excursion of at least {b['definition']['big_winner'].split('>= ')[1].split('R')[0]}R within 120 bars (a peak, not a P&L); "
+            f"the best registered variant's test-period net expectancy is {best_expectancy:+.3f} R" + (" (not positive)." if best_expectancy <= 0 else "."))
 
 
 def sec_headline(sec):

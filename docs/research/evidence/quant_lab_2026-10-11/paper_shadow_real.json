@@ -1,0 +1,146 @@
+{
+ "mode": "real",
+ "database_user": "donchian_app",
+ "scratch": true,
+ "session": "2026-10-09",
+ "calendar_tail": [
+  "2026-10-07",
+  "2026-10-08",
+  "2026-10-09"
+ ],
+ "dry_run": {
+  "session": "2026-10-09",
+  "status": "dry_run",
+  "counts": {
+   "n_variants": 5,
+   "n_candidates": 250,
+   "n_registered": 1250,
+   "n_skipped_open": 0,
+   "n_entered": 0,
+   "n_closed": 0,
+   "n_not_enterable": 0,
+   "n_hindsight": 0,
+   "n_open_after": 1250
+  },
+  "written": {},
+  "skipped": {},
+  "events_by_type": {
+   "registered": 1250
+  },
+  "open_state_hash": "3147b93bbeb33049d59720a6a6128b0553c28688e9dcecf2384f206302c8f461",
+  "tables_unchanged_by_dry_run": true
+ },
+ "context_availability": {
+  "signals": 250,
+  "market_regime_available": 0,
+  "relative_strength_available": 0,
+  "catalysts_with_events": 0,
+  "sector_known": 249,
+  "guard_rejected": 10,
+  "tracked_intent": 240
+ },
+ "sample_context_shape": {
+  "decision_cutoff": "str",
+  "session": "str",
+  "candidate": [
+   "alignment_score",
+   "atr_source",
+   "breakout_dist_atr",
+   "candidate_observation_id",
+   "combined_score",
+   "distance_to_channel_pct",
+   "entry_close",
+   "guard_reasons",
+   "ml_model_version",
+   "ml_score",
+   "ml_status",
+   "passed_guard",
+   "quality_grade",
+   "session_rank",
+   "signal_type",
+   "tracked_intent"
+  ],
+  "features": [
+   "atr_pct",
+   "available_at",
+   "bar_range_atr",
+   "chan_squeeze_pctile",
+   "close_location",
+   "dist_sma200_pct",
+   "dist_sma50_pct",
+   "dollar_vol_20",
+   "gap_pct",
+   "pct_from_52w_high",
+   "pct_from_52w_low",
+   "ret_20d",
+   "ret_5d",
+   "ret_60d",
+   "sector",
+   "sector_asof",
+   "snapshot_id",
+   "vol_ratio_10",
+   "vol_ratio_50"
+  ],
+  "market_regime": [
+   "available",
+   "reason"
+  ],
+  "relative_strength": "NoneType",
+  "catalysts": [
+   "events",
+   "section"
+  ]
+ },
+ "write": {
+  "session": "2026-10-09",
+  "status": "processed",
+  "counts": {
+   "n_variants": 5,
+   "n_candidates": 250,
+   "n_registered": 1250,
+   "n_skipped_open": 0,
+   "n_entered": 0,
+   "n_closed": 0,
+   "n_not_enterable": 0,
+   "n_hindsight": 0,
+   "n_open_after": 1250
+  },
+  "written": {
+   "observations": 1250,
+   "events": 0
+  },
+  "skipped": {},
+  "events_by_type": {
+   "registered": 1250
+  },
+  "open_state_hash": "3147b93bbeb33049d59720a6a6128b0553c28688e9dcecf2384f206302c8f461",
+  "tables_after": {
+   "paper_session": 1,
+   "paper_observation": 1250,
+   "paper_event": 0
+  }
+ },
+ "write_matches_dry_run": true,
+ "restore": {
+  "snapshot_hash_verified": true,
+  "open_observations_in_snapshot": 1250,
+  "session": "2026-10-09"
+ },
+ "rerun_same_session": {
+  "status": "already_processed",
+  "tables_unchanged": true
+ },
+ "next_session_without_capture": "refused: input not ready: no complete candidate capture run for 2026-10-12",
+ "audit_problems": [],
+ "observations_distinct_hashes": [
+  1250,
+  1250
+ ],
+ "observations_linked_to_candidate_rows": {
+  "True": 1250
+ },
+ "bytes": {
+  "paper_observation": 2760704,
+  "paper_session": 262144
+ }
+}

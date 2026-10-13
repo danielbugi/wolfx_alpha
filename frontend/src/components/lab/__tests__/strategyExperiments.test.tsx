@@ -25,7 +25,7 @@ describe('Strategy experiments report', () => {
   it('renders every table from real numbers, never NaN or undefined', () => {
     const { container } = render(<LabReportView report={report} />);
     expect(container.textContent).not.toMatch(/NaN|undefined|null/);
-    expect(screen.getAllByRole('table').length).toBe(6);
+    expect(screen.getAllByRole('table').length).toBe(10);
     expect(screen.getByText(/Longer holding periods/)).toBeTruthy();
     expect(screen.getByText(/Actual initial risk vs the standardised/)).toBeTruthy();
     expect(screen.getByText(/Strategy-selection baselines/)).toBeTruthy();
@@ -41,6 +41,26 @@ describe('Strategy experiments report', () => {
     const first = d.position_accounting_primary_cost[d.variants[0].key]['60']['test|all'].std;
     expect(rows[0].textContent).toContain(first.n_positions.toLocaleString('en-US'));
     expect(rows[0].textContent).toMatch(/[−+]0\.\d{3}/);
+  });
+
+  it('shows big-winner intelligence as hindsight, with capture, premature exits and decision-time lifts, and never calls anything profitable', () => {
+    const { container } = render(<LabReportView report={report} />);
+    const d = (report as any).data;
+    expect(screen.getByText(/Big-winner intelligence \(hindsight measurements/)).toBeTruthy();
+    expect(screen.getByText(/How much of a big winner each registered exit captures/)).toBeTruthy();
+    expect(screen.getByText(/Decision-time conditions and the big-winner rate/)).toBeTruthy();
+    expect(container.textContent).toContain(d.big_winner_intelligence.model_vs_baselines.model.auc.toFixed(3));
+    expect(container.textContent).toMatch(/a peak that nobody can sell at/);
+    expect(container.textContent).toMatch(/no strategy here is labelled profitable/);
+    expect(container.textContent?.replace(/not profitable|labelled profitable/gi, '')).not.toMatch(/profitable/i);
+  });
+
+  it('reports the scratch shadow tests of the tracker and says it is not activated in production', () => {
+    const { container } = render(<LabReportView report={report} />);
+    const h = (report as any).data.forward_tracker_shadow.historical_replay;
+    expect(screen.getByText(/dry-run and shadow tests on a scratch restore \(not activated in production\)/)).toBeTruthy();
+    expect(container.textContent).toContain(`${h.mismatches_vs_batch} mismatches against the batch experiment`);
+    expect(container.textContent).toContain(`${h.positions.toLocaleString('en-US')} positions`);
   });
 
   it('states that the paper tracker is validated by replay and is not activated', () => {
