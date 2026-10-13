@@ -21,6 +21,8 @@ ROLLBACK = open(os.path.join(FE.ROOT, "deploy", "db", "rollback_35.sql"), encodi
 PREFLIGHT = open(os.path.join(FE.ROOT, "deploy", "db", "preflight_35.sql"), encoding="utf-8").read()
 MIGRATION_PATH = os.path.join(FE.ROOT, "mechanism", "add_strategy_variant_registry.sql")
 MIGRATION = open(MIGRATION_PATH, encoding="utf-8").read()
+ROLLBACK36 = open(os.path.join(FE.ROOT, "deploy", "db", "rollback_36.sql"), encoding="utf-8").read()
+MIGRATION36 = open(os.path.join(FE.ROOT, "mechanism", "add_paper_tracker_tables.sql"), encoding="utf-8").read()
 FUNCTIONS = {"research_strategy_variant_guard", "research_strategy_variant_stamp"}
 
 
@@ -80,6 +82,9 @@ def run_sql(env, sql, *, settings=(), search_path="public"):
 
 
 def rollback(env, *, approved=False, search_path="public"):
+    """Migration 36 depends on strategy_variant, so its (empty) tables are rolled back first when present; rollback_35 itself refuses otherwise (see the dependency test)."""
+    if search_path == "public" and scalar(env, "SELECT to_regclass('paper_observation') IS NOT NULL"):
+        run_sql(env, ROLLBACK36)
     return run_sql(env, ROLLBACK, settings=["SET research.rollback_data_loss_approved = 'yes'"] if approved else (), search_path=search_path)
 
 
@@ -87,6 +92,7 @@ def rollback(env, *, approved=False, search_path="public"):
 def restored(env):
     yield
     env.exec_admin(MIGRATION)
+    env.exec_admin(MIGRATION36)                                                   # 36 depends on 35: both are put back in order
 
 
 # ---- fresh bootstrap + permissions --------------------------------------------------------------------------------------------------------------------------------
@@ -221,3 +227,10 @@ def test_an_empty_table_is_dropped_a_second_run_is_a_no_op_and_the_wrong_schema_
     assert any("0 row(s) removed" in x for x in rollback(env))
     with pytest.raises(psycopg2.Error, match="wrong search_path"):
         rollback(env, search_path="pg_catalog")
+
+
+def test_the_rollback_refuses_while_the_paper_tracker_tables_depend_on_the_registry(env, restored):
+    assert scalar(env, "SELECT to_regclass('paper_observation') IS NOT NULL") is True
+    with pytest.raises(psycopg2.Error, match="roll back 36 first"):
+        run_sql(env, ROLLBACK, settings=["SET research.rollback_data_loss_approved = 'yes'"])
+    assert present(env) == (True, FUNCTIONS) and scalar(env, "SELECT to_regclass('paper_observation') IS NOT NULL") is True       # nothing was dropped

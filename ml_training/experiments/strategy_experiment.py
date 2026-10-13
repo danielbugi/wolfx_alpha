@@ -28,8 +28,10 @@ sys.path[:0] = ["/app", "/app/mechanism", "/exp"]
 from ml_training.features import price_features as pf  # noqa: E402
 from research import exit_policies as X  # noqa: E402
 from research import experiment_runner as E  # noqa: E402
+from research import opportunity as OP  # noqa: E402
 from research import paper_tracker as PT  # noqa: E402
 import _common as C  # noqa: E402
+import big_winner_analysis as BW  # noqa: E402
 
 T0 = time.time()
 OUT = "/out"
@@ -81,7 +83,7 @@ NV, NC = len(variants), len(CAPS)
 F = ["r_gross", "entry_price", "exit_price", "duration", "reason", "mfe", "mae", "initial_stop", "initial_risk", "atr", "entry_ord", "exit_ord", "taken"]
 FI = {k: i for i, k in enumerate(F)}
 skipped = Counter()
-meta, tensors = [], []
+meta, tensors, hsf_list, capt_list = [], [], [], []
 replay_pool = {}                                   # symbol -> arrays, kept only for the symbols used to validate the paper tracker
 replay_symbols = set(sorted(universe, key=lambda s: hashlib.md5(s.encode()).hexdigest())[:N_REPLAY_SYMBOLS])
 
@@ -131,6 +133,26 @@ for si, (sym, g) in enumerate(sig.groupby("symbol")):
                 T[k, vi, ci] = [t.r_gross, t.entry_price, t.exit_price, t.duration, REASONS.index(t.reason), t.mfe_r, t.mae_r, t.initial_stop, t.initial_risk, t.atr,
                                 pydates[t.entry_bar].toordinal(), pydates[t.exit_bar].toordinal(), 1.0 if (vv.key, cap, s_idx) in taken else 0.0]
     tensors.append(T)
+    # hindsight measurements (they need bars AFTER the decision: labels and outcomes only, never features)
+    HSF = np.full((len(order), len(OP.HORIZONS), 5), np.nan)
+    CAPT = np.full((len(order), NV, 3), np.nan)
+    for k, (s_idx, d) in enumerate(order):
+        e_i = s_idx + 1
+        fav = OP.favourable_excursion(d, float(o[e_i]), float(atr[s_idx]), o, h, l, c, e_i)
+        for hi, H in enumerate(OP.HORIZONS):
+            w = fav[f"h{H}"]
+            if w:
+                HSF[k, hi] = [w["max_favourable_pct"], w["max_favourable_r"], w["bars_to_peak"], w["max_adverse_before_peak_r"], w["close_return_pct"]]
+        for vi, vv in enumerate(variants):
+            t = standalone[(vv.key, 60)][k]
+            if t is None:
+                continue
+            cp = OP.capture(d, t.entry_price, t.exit_price, fav, t.duration)
+            mc = OP.missed_continuation(d, t.exit_price, float(atr[s_idx]), h, l, t.exit_bar)
+            CAPT[k, vi] = [np.nan if cp["capture_ratio"] is None else cp["capture_ratio"], np.nan if mc["missed_continuation_r"] is None else mc["missed_continuation_r"],
+                           np.nan if mc["premature"] is None else (1.0 if mc["premature"] else 0.0)]
+    hsf_list.append(HSF)
+    capt_list.append(CAPT)
     for k, (s_idx, d) in enumerate(order):
         f = E.signal_features(o, h, l, c, v, atr, s_idx)
         cat = E.catalyst_as_of(events.get(sym, []), pydates[s_idx])
@@ -143,6 +165,8 @@ for si, (sym, g) in enumerate(sig.groupby("symbol")):
         log("symbols", si, "analysis signals", sum(len(t) for t in tensors), "skipped", dict(skipped))
 
 S = np.concatenate(tensors, axis=0)
+HSF = np.concatenate(hsf_list, axis=0)
+CAPT = np.concatenate(capt_list, axis=0)
 M = pd.DataFrame(meta)
 NS = len(M)
 log("analysis set:", NS, "signals;", M.symbol.nunique(), "symbols; skipped", dict(skipped))
@@ -273,6 +297,44 @@ for gname, grp in (("direction", grp_dir), ("direction_x_catalyst", grp_cat), ("
 res["strategy_selection_baselines_cap60_std_net"] = {"n_by_split": {k: int(v_) for k, v_ in zip(*np.unique(split_sel, return_counts=True))}, "rules": sel,
                                                       "note": "rules are fitted on TRAIN rows only; the per-signal oracle is an unattainable upper bound; signals on their own (counterfactual), not position-accounted"}
 
+# 5b. big-winner intelligence: hindsight opportunity (labels) vs decision-time conditions (features); capture and premature exits per variant
+HI = {H: i for i, H in enumerate(OP.HORIZONS)}
+fav_r = {H: HSF[:, HI[H], 1] for H in (20, 60, 120, 250)}
+big = np.isfinite(fav_r[120]) & (fav_r[120] >= BW.BIG_R)
+known120 = np.isfinite(fav_r[120])
+realized_net = np.column_stack([net_std(vi, 0) for vi in range(NV)])
+mfe_cap60 = np.column_stack([S[:, vi, 0, FI["mfe"]] for vi in range(NV)])
+taken_cap60 = np.column_stack([S[:, vi, 0, FI["taken"]] == 1.0 for vi in range(NV)])
+tier = np.where(~known120, "unknown", np.where(fav_r[120] >= 10, "ge_10r", np.where(fav_r[120] >= 5, "ge_5r", np.where(fav_r[120] >= 3, "ge_3r", "none"))))
+bw_split = BW.purge_split(M.signal_date, TRAIN_END, TEST_START)
+bw_months = months_sig
+relvol_b = pd.cut(M.relvol_signal_bar, [0, 1.5, 3.0, 1e9], labels=["relvol<1.5", "relvol1.5-3", "relvol>=3"]).astype(str)
+ret20_b = pd.qcut(M.ret20_to_signal, 3, labels=["ret20_low", "ret20_mid", "ret20_high"]).astype(str)
+atr_b = pd.qcut(M.atr_pct, 3, labels=["atr_low", "atr_mid", "atr_high"]).astype(str)
+regime_b = M.regime_up_prev_session.map({1.0: "index_up", 0.0: "index_down"}).fillna("regime_na")
+dir_b = pd.Series(np.where(direction > 0, "bullish", "bearish"))
+lab = big.astype(int)
+use = known120
+lifts = {}
+for nm, ser in (("relative_volume", relvol_b), ("trend_ret20", ret20_b), ("volatility_atr_pct", atr_b), ("index_regime", regime_b), ("catalyst_class", M.catalyst_class), ("direction", dir_b)):
+    lifts[nm] = BW.lift_table(ser[use].reset_index(drop=True), lab[use], bw_split[use], bw_months[use])
+Xf = pd.DataFrame({"pit_relvol": M.relvol_signal_bar, "pit_ret5": M.ret5_to_signal, "pit_ret20": M.ret20_to_signal, "pit_atr_pct": M.atr_pct, "pit_regime_up": M.regime_up_prev_session,
+                   "pit_direction": direction, "pit_catalyst_recurring": (M.catalyst_class == "recurring_operating").astype(int), "pit_catalyst_any": (M.catalyst_class != "none").astype(int),
+                   "pit_catalyst_days": M.catalyst_days_since})
+res["big_winner_intelligence"] = {
+    "definition": {"big_winner": f"favourable excursion >= {BW.BIG_R:g}R (R = 2 x ATR) within {BW.LABEL_BARS} bars of the entry: a HINDSIGHT label, never a feature or a rule",
+                   "premature_exit": f"price continues >= {OP.PREMATURE_R:g}R beyond the exit within {OP.PREMATURE_BARS} bars (hindsight)", "capture_ratio": "realised return / favourable excursion over the shortest horizon covering the hold",
+                   "label_purge": f"train signals within {BW.LABEL_PURGE_DAYS} days of the test start are purged (their label window overlaps the test period)",
+                   "decision_time_vs_hindsight": "pit_* columns/features are known at the signal close; hs_* columns need later bars"},
+    "n_signals": int(NS), "n_with_known_120_bar_window": int(known120.sum()), "big_winner_rate": round(float(big[known120].mean()), 4),
+    "split_counts": {k: int(v_) for k, v_ in zip(*np.unique(bw_split, return_counts=True))},
+    "opportunity_distribution": BW.opportunity_distribution({H: fav_r[H] for H in (60, 120, 250)}, direction),
+    "capture_by_variant_cap60": BW.capture_by_variant(names, realized_net, mfe_cap60, CAPT[:, :, 0], CAPT[:, :, 1], CAPT[:, :, 2], big, taken_cap60),
+    "decision_time_lift": lifts,
+    "model_vs_baselines": BW.model_baselines(Xf[use].reset_index(drop=True), lab[use], bw_split[use], ["pit_atr_pct", "pit_relvol"]),
+    "tier_counts_120": {k: int(v_) for k, v_ in zip(*np.unique(tier, return_counts=True))}}
+log("big-winner intelligence done")
+
 cols = {"symbol": M.symbol, "signal_date": M.signal_date.astype(str), "direction": direction, "split_cap60": split_sel, "relvol_signal_bar": M.relvol_signal_bar.round(4),
         "ret5_to_signal": M.ret5_to_signal.round(5), "ret20_to_signal": M.ret20_to_signal.round(5), "atr_pct": M.atr_pct.round(4), "regime_up_prev_session": M.regime_up_prev_session,
         "catalyst_class": M.catalyst_class, "catalyst_days_since": M.catalyst_days_since, "catalyst_decision_accepted_at": M.catalyst_decision_accepted_at,
@@ -286,6 +348,17 @@ for vi, v in enumerate(variants):
     cols[f"{v.key}__cap60__exit_reason"] = [REASONS[int(x)] for x in S[:, vi, 0, FI["reason"]]]
     cols[f"{v.key}__cap60__bars_held"] = S[:, vi, 0, FI["duration"]].astype(int)
     cols[f"{v.key}__cap60__initial_risk_atr"] = np.round(S[:, vi, 0, FI["initial_risk"]] / S[:, vi, 0, FI["atr"]], 3)
+cols["hs_fav_r_h60"] = np.round(HSF[:, HI[60], 1], 4)
+cols["hs_fav_r_h120"] = np.round(HSF[:, HI[120], 1], 4)
+cols["hs_fav_r_h250"] = np.round(HSF[:, HI[250], 1], 4)
+cols["hs_fav_pct_h120"] = np.round(HSF[:, HI[120], 0], 4)
+cols["hs_bars_to_peak_h120"] = HSF[:, HI[120], 2]
+cols["hs_adverse_before_peak_r_h120"] = np.round(HSF[:, HI[120], 3], 4)
+cols["hs_big_winner_tier_120"] = tier
+for vi, v in enumerate(variants):
+    cols[f"{v.key}__cap60__hs_capture_ratio"] = np.round(CAPT[:, vi, 0], 4)
+    cols[f"{v.key}__cap60__hs_missed_continuation_r"] = np.round(CAPT[:, vi, 1], 4)
+    cols[f"{v.key}__cap60__hs_premature_exit"] = CAPT[:, vi, 2]
 tbl = pd.DataFrame(cols).sort_values(["signal_date", "symbol", "direction"]).reset_index(drop=True)
 csv_bytes = tbl.to_csv(index=False, float_format="%.6g", lineterminator="\n").encode("utf-8")
 with open(f"{OUT}/strategy_signal_outcomes.csv.gz", "wb") as fh:
@@ -293,6 +366,9 @@ with open(f"{OUT}/strategy_signal_outcomes.csv.gz", "wb") as fh:
 res["ml_ready_table"] = {"file": "strategy_signal_outcomes.csv.gz", "rows": int(len(tbl)), "columns": list(tbl.columns), "sha256_of_csv": hashlib.sha256(csv_bytes).hexdigest(),
                          "split_counts_cap60": {k: int(v_) for k, v_ in zip(*np.unique(split_sel, return_counts=True))},
                          "point_in_time": "features use bars <= the signal bar; the catalyst is the latest earnings event whose reaction session completed BEFORE the signal session, with its SEC acceptance timestamp",
+                         "column_roles": {"identity": ["symbol", "signal_date", "direction"], "decision_time_pit": [c_ for c_ in tbl.columns if c_.startswith(("relvol", "ret", "atr_pct", "regime", "catalyst"))],
+                                          "hindsight_only": [c_ for c_ in tbl.columns if "__hs_" in c_ or c_.startswith("hs_")],
+                                          "exit_policy_outcome": [c_ for c_ in tbl.columns if "__cap" in c_ and "__hs_" not in c_], "split": ["split_cap60"]},
                          "purge_note": "split_cap60 = 'purged' for a train-period signal whose position under ANY variant (cap 60) is still open at the test start"}
 log("table written", len(tbl))
 

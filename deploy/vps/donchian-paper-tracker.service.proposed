@@ -1,0 +1,13 @@
+# PROPOSED unit for the forward PAPER tracker -- NOT INSTALLED on the VPS (docs/research/FORWARD_PAPER_TRACKER.md). Renaming it into /etc/systemd/system needs the owner's separate approval.
+# One session per fire, all five registered variants, one transaction. Own pin (CURRENT_PAPER_SHA) and own arming file (PAPER_TRACKER_ARMED); independent of the collector, the pipeline, the bot and
+# their pins/timers. Exit 2 (input not ready: the capture has not finished) and 6 (up to date) are normal outcomes of a timer fire, 3 (another run holds the lock) too; 4 and 5 FAIL the unit.
+[Unit]
+Description=First Light: forward paper tracker (all registered variants, one trading session)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/donchian/scripts/run_paper_tracker.sh run
+TimeoutStartSec=30m
+SuccessExitStatus=2 3 6

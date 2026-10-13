@@ -1,13 +1,13 @@
 {
  "generated_at": "2026-10-11",
- "code_ref": "cc8ddda",
+ "code_ref": "5d8d666",
  "status": "research_only",
  "use": "Research evidence only. Not a trading signal, not advice, and not used by the live signal path.",
  "schema": "lab_report_v1",
  "id": "research_insights",
  "kind": "strategy_lab",
  "title": "Research insights: what the evidence supports, and what it does not",
- "headline": "30 claims checked: 7 inconclusive, 13 not supported, 3 suggestive, 7 supported.",
+ "headline": "32 claims checked: 7 inconclusive, 13 not supported, 4 suggestive, 8 supported.",
  "caveats": [
   "Statuses are assigned by fixed rules from the intervals and counts in the other reports; they are not model opinions.",
   "'Supported' means the sample supports the sign of the effect, not that it is tradeable after costs.",
@@ -261,6 +261,22 @@
     "claim": "The forward paper tracker reproduces the batch experiment exactly when real history is replayed day by day",
     "status": "supported",
     "evidence": "12,157 positions of 5 variants over 39 symbols and 2,528 sessions compared field by field: 0 mismatches; the tracker writes nothing and opens no trade",
+    "reports": [
+     "strategy_experiments"
+    ]
+   },
+   {
+    "claim": "The registered exits leave most of a big winner's move on the table (the exit comes before a further 2R continuation)",
+    "status": "supported",
+    "evidence": "a_atr_stop_fixed_2r 88% of big-winner positions; a_atr_stop_fixed_3r 89% of big-winner positions; b_donchian_trail_10 84% of big-winner positions; c_atr_trail_3x 85% of big-winner positions; d_hybrid_atr_stop_to_donchian_10 84% of big-winner positions; premature = price continued at least 2R within 60 bars after the exit (hindsight measurement, not a rule)",
+    "reports": [
+     "strategy_experiments"
+    ]
+   },
+   {
+    "claim": "Out of sample, decision-time conditions rank which signals later become big winners better than a single feature does",
+    "status": "suggestive",
+    "evidence": "chronological test AUC 0.684 against 0.493 for the best single-feature baseline; top decile precision 31% against a 20% base rate (lift 1.57); direction and the index regime carry much of it (importances 0.45 and 0.08), so this partly restates market direction; the label is a hindsight peak, not a P&L",
     "reports": [
      "strategy_experiments"
     ]

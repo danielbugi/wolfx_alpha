@@ -3,6 +3,7 @@
 --     PGOPTIONS='-c search_path=public -c research.rollback_data_loss_approved=yes'      (approve only with a verified backup in hand)
 -- Run atomically, with the target schema first on the search_path:
 --     PGOPTIONS='-c search_path=public' psql -v ON_ERROR_STOP=1 -1 -f deploy/db/rollback_35.sql
+-- Migration 36 (the paper tracker) references strategy_variant: roll 36 back FIRST (this script refuses while its tables exist).
 -- Touches ONLY the migration-35 objects (each is checked for its marker; no CASCADE). It never touches strategies, signal_ledger, roles or migrations 22-34.
 DO $rb$
 DECLARE
@@ -12,6 +13,9 @@ DECLARE
 BEGIN
     IF to_regclass('strategies') IS NULL THEN
         RAISE EXCEPTION 'rollback_35 refused: strategies is not in the current schema (wrong search_path)';
+    END IF;
+    IF to_regclass('paper_observation') IS NOT NULL THEN
+        RAISE EXCEPTION 'rollback_35 refused: migration 36 (the paper tracker tables) references strategy_variant; roll back 36 first (deploy/db/rollback_36.sql)';
     END IF;
     IF to_regclass('strategy_variant') IS NOT NULL THEN
         IF coalesce(obj_description(to_regclass('strategy_variant'), 'pg_class'), '') <> 'strategy_variant_migration_35' THEN

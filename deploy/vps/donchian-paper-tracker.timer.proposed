@@ -1,0 +1,14 @@
+# PROPOSED timer for donchian-paper-tracker.service -- NOT INSTALLED, NOT ENABLED. Two fires after the nightly pipeline and its candidate capture; the second retries a session whose capture was late
+# (exit 2). Weekends and holidays are no-ops (exit 6: the next session is not loaded). Persistent=false: a missed fire is not replayed by systemd; the runner itself refuses gaps and a later fire
+# processes sessions strictly in order.
+[Unit]
+Description=First Light: forward paper tracker timer
+
+[Timer]
+OnCalendar=*-*-* 05:30:00 Asia/Jerusalem
+OnCalendar=*-*-* 07:30:00 Asia/Jerusalem
+Persistent=false
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

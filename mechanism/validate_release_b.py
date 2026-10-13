@@ -63,7 +63,9 @@ MARKET_INTELLIGENCE_TABLES = ("universe_snapshot", "market_snapshot", "sector_sn
                               # migration 32 (append-only discontinuity-scan heartbeat)
                               "price_discontinuity_scan",
                               # migration 35 (append-only strategy-variant identity registry)
-                              "strategy_variant")
+                              "strategy_variant",
+                              # migration 36 (append-only paper-tracker evidence)
+                              "paper_session", "paper_observation", "paper_event")
 CAPTURE_ENV_VAR = "RESEARCH_CAPTURE_ENABLED"
 
 GUARD_MODE_RE = re.compile(r"Universe guards mode: (INERT|ACTIVE)\b[^\n]*")

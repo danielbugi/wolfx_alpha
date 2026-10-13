@@ -302,12 +302,71 @@ function StrategyExperiments({ d }: { d: any }) {
           No forward paper observation exists in production; activation needs separate approval.
         </p>
       </div>
+      {d.big_winner_intelligence && <BigWinners b={d.big_winner_intelligence} reg={reg} />}
+      {d.forward_tracker_shadow && <TrackerShadow t={d.forward_tracker_shadow} />}
       {d.ml_ready_table && (
         <p className="text-xs text-slate-500">
           ML-ready strategy-selection table: {fmtInt(d.ml_ready_table.rows)} signals with point-in-time features, the catalyst class with its SEC acceptance timestamp, and realised net R under every variant at {reg} and {caps[caps.length - 1]} bars on both risk bases.
           {' '}<span className="font-mono">{d.ml_ready_table.file}</span>; csv sha256 <span className="font-mono">{String(d.ml_ready_table.sha256_of_csv).slice(0, 16)}…</span>
         </p>
       )}
+    </div>
+  );
+}
+
+const share = (x: number | null | undefined, digits = 1): string => (x === null || x === undefined || Number.isNaN(x) ? '—' : `${(x * 100).toFixed(digits)}%`);
+
+function BigWinners({ b, reg }: { b: any; reg: number }) {
+  const od = b.opportunity_distribution;
+  const cap = b.capture_by_variant_cap60;
+  const lifts = b.decision_time_lift;
+  const m = b.model_vs_baselines;
+  const bestBase = Math.max(...Object.keys(m.baselines).map((k) => m.baselines[k].auc));
+  return (
+    <div className="space-y-4">
+      <h3 className="text-sm font-semibold text-slate-700">Big-winner intelligence (hindsight measurements, kept apart from what was known at the decision)</h3>
+      <p className="text-xs text-slate-500">
+        A big winner is a signal whose favourable excursion reached at least 5R (R = 2 x ATR) within 120 bars of the entry: {share(b.big_winner_rate)} of {fmtInt(b.n_signals)} signals. It is a peak that nobody can sell at, used only as a label.
+        Everything below the opportunity table that conditions on the signal bar uses decision-time information only.
+      </p>
+      <Table head={['Signals', 'Horizon (bars)', 'n', 'Median excursion (R)', 'Mean (R)', '90th pct', '99th pct', 'Top 5% share of the total']} rows={(['all', 'bullish', 'bearish'] as const).flatMap((g) => ['60', '120', '250'].map((h) => {
+        const x = od[g].by_horizon[h];
+        return [g, h, fmtInt(x.n), fmtR(x.median, 2), fmtR(x.mean, 2), fmtR(x.p90, 2), fmtR(x.p99, 2), share(x.top_5pct_share_of_positive)];
+      }))} />
+      <h3 className="text-sm font-semibold text-slate-700">How much of a big winner each registered exit captures ({reg}-bar cap, all positions, hindsight)</h3>
+      <Table head={['Variant', 'Positions', 'Big-winner positions', 'Median capture of the favourable move', 'Mean realised R on them', 'Mean MFE on them (R)', 'Premature exit, big winners', 'Premature exit, all', 'Missed continuation, all (R)', 'Realised R, 99th pct']} rows={Object.keys(cap).map((k) => {
+        const c = cap[k];
+        return [vlabel(k), fmtInt(c.positions), fmtInt(c.big_winner_positions), share(c.big_winner_capture_ratio?.median, 0), fmtR(c.big_winner_mean_realized_r, 2), fmtR(c.big_winner_mean_mfe_r, 2),
+          share(c.big_winner_premature_exit_share, 0), share(c.all_premature_exit_share, 0), fmtR(c.all_mean_missed_continuation_r, 2), fmtR(c.realized_r_tail?.p99, 2)];
+      })} />
+      <h3 className="text-sm font-semibold text-slate-700">Decision-time conditions and the big-winner rate (test period; base rate {share(m.base_rate_test)})</h3>
+      <Table head={['Condition known at the signal close', 'Bucket', 'n', 'Big-winner rate', '95% interval', 'Lift vs base rate']} rows={Object.keys(lifts).flatMap((name) => {
+        const bk = lifts[name].test.buckets;
+        return Object.keys(bk).map((k) => [name.replace(/_/g, ' '), k.replace(/_/g, ' '), fmtInt(bk[k].n), share(bk[k].rate), bk[k].rate_ci95 ? `${share(bk[k].rate_ci95[0])} to ${share(bk[k].rate_ci95[1])}` : '—', bk[k].lift.toFixed(2)]);
+      })} />
+      <p className="text-sm text-slate-700">
+        A gradient-boosted model on decision-time features only (chronological split, train labels overlapping the test period purged): test AUC <b>{m.model.auc.toFixed(3)}</b> against {bestBase.toFixed(3)} for the best single-feature baseline;
+        top-decile precision {share(m.model.precision, 0)} against the {share(m.base_rate_test, 0)} base rate (lift {m.model.lift.toFixed(2)}). Direction and the index regime carry much of the signal, so part of this is market direction in a rising market.
+        This ranks which signals later became big winners; it says nothing about profit after exits and costs, and no strategy here is labelled profitable.
+      </p>
+    </div>
+  );
+}
+
+function TrackerShadow({ t }: { t: any }) {
+  const r = t.real_source;
+  const h = t.historical_replay;
+  const yn = (x: boolean) => (x ? 'yes' : 'NO');
+  return (
+    <div className="space-y-2 rounded-md border border-slate-200 p-3 text-sm text-slate-700">
+      <div className="font-semibold text-slate-800">Forward paper tracker: dry-run and shadow tests on a scratch restore{t.activated_in_production ? '' : ' (not activated in production)'}</div>
+      <Table head={['Test', 'Scope', 'Result']} rows={[
+        ...(r ? [['Real forward capture', `session ${r.session}: ${fmtInt(r.candidates)} candidates x ${r.variants} variants`,
+          `dry run wrote nothing: ${yn(r.dry_run_wrote_nothing)}; write equals dry run: ${yn(r.write_matches_dry_run)}; ${fmtInt(r.observations_written)} observations; snapshot hash verified: ${yn(r.snapshot_hash_verified)}; re-run is a no-op: ${yn(r.rerun_is_noop)}; audit problems: ${r.audit_problems}`]] : []),
+        ...(h ? [['Historical replay, session by session', `${fmtInt(h.design.sessions)} sessions, ${fmtInt(h.design.symbols)} symbols, ${fmtInt(h.positions)} positions (${fmtInt(h.closed)} closed), ${fmtInt(h.hindsight_events)} hindsight events`,
+          `${h.mismatches_vs_batch} mismatches against the batch experiment; dry run equals write: ${yn(h.dry_run_equals_write)}; re-runs change nothing: ${yn(h.rerun_is_noop)}; audit problems: ${h.audit_problems}; ${h.seconds_per_session.mean} s per session on average`]] : []),
+      ]} />
+      {r && <p className="text-xs text-slate-500">Context available on the one real session: sector {fmtInt(r.context_availability.sector_known)} of {fmtInt(r.context_availability.signals)}, market regime {fmtInt(r.context_availability.market_regime_available)}, catalysts attached {fmtInt(r.context_availability.catalysts_with_events)}: absent context is recorded as absent, never filled in.</p>}
     </div>
   );
 }
