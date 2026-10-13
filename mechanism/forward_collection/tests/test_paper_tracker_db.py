@@ -392,7 +392,7 @@ def test_a_changed_registration_or_event_is_drift_and_is_never_overwritten(env):
           "payload": {"variant_key": k, "definition_hash": next(v.definition_hash for v in variants if v.key == k), "symbol": sym, "direction": d, "signal_session": sig.isoformat(), "atr": atr + 1.0,
                       "hold_cap": cap, "registered_cap": reg, "hist_h": hh, "hist_l": hl, "context": ctx}}
     with pytest.raises(ST.Drift):
-        ST.write_session(cur, session_date=DAYS[-1] + timedelta(days=1), scope="triggered", source="candidate_observation", variant_ids=ids, events=[ev], counts=dict(n_variants=5, n_candidates=0, n_registered=0,
+        ST.write_paper_session(cur, session_date=DAYS[-1] + timedelta(days=1), scope="triggered", source="candidate_observation", variant_ids=ids, events=[ev], counts=dict(n_variants=5, n_candidates=0, n_registered=0,
                          n_skipped_open=0, n_entered=0, n_closed=0, n_not_enterable=0), open_state={"schema": "paper_open_state_v1", "last_session": (DAYS[-1] + timedelta(days=1)).isoformat(), "active": []},
                          run_id="t", writer="t", code_ref="t", started_at=datetime.now(timezone.utc))
     conn.rollback()
@@ -405,13 +405,13 @@ def test_a_failed_session_leaves_nothing_behind(env, monkeypatch):
     cal = DAYS + [nxt]
     before = {t: count(env, t) for t in TABLES}
     boom = {"n": 0}
-    real = ST.write_session
+    real = ST.write_paper_session
 
     def failing(cur, **kw):
         real(cur, **kw)
         boom["n"] += 1
         raise RuntimeError("simulated crash after the rows were inserted")
-    monkeypatch.setattr(ST, "write_session", failing)
+    monkeypatch.setattr(ST, "write_paper_session", failing)
     conn = env.app_connect_factory()()
     try:
         cur = conn.cursor()

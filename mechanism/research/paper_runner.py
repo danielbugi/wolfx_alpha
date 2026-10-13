@@ -317,7 +317,7 @@ def process_session(cur, session_date: date, source, *, scope: str = "triggered"
     state = book.open_state()
     result = SessionResult(session_date, "dry_run" if not write else "processed", counts, {}, skipped, ST.sha(state), events)
     if write:
-        result.written = ST.write_session(cur, session_date=session_date, scope=scope, source=source.name, variant_ids=variant_ids, events=events, counts=counts, open_state=state,
+        result.written = ST.write_paper_session(cur, session_date=session_date, scope=scope, source=source.name, variant_ids=variant_ids, events=events, counts=counts, open_state=state,
                                           run_id=run_id or uuid.uuid4().hex, writer=writer, code_ref=code_ref, started_at=started_at, candidate_ids=cand_ids)
     return result
 

@@ -105,7 +105,7 @@ def _observation_id(cur, key: str, symbol: str, direction: int, signal_session: 
     return r[0]
 
 
-def write_session(cur, *, session_date: date, scope: str, source: str, variant_ids: Mapping[str, int], events: Sequence[Mapping[str, Any]], counts: Mapping[str, int],
+def write_paper_session(cur, *, session_date: date, scope: str, source: str, variant_ids: Mapping[str, int], events: Sequence[Mapping[str, Any]], counts: Mapping[str, int],
                   open_state: Mapping[str, Any], run_id: str, writer: str, code_ref: str, started_at: datetime, candidate_ids: Optional[Mapping[str, Optional[int]]] = None) -> Dict[str, int]:
     """Append one session: its new observations, its events, then its cursor row. All or nothing (the caller's transaction)."""
     written = {"observations": 0, "events": 0}
