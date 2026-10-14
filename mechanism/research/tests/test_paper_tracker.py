@@ -256,4 +256,4 @@ def test_the_tracker_has_no_io_and_touches_no_ledger_database_or_clock():
             imports |= {a.name for a in node.names}
         elif isinstance(node, ast.ImportFrom):
             imports |= {f"{node.module}.{a.name}" if node.module == "research" else node.module for a in node.names}
-    assert imports <= {"__future__", "dataclasses", "hashlib", "json", "datetime", "typing", "research.exit_policies", "research.experiment_runner"}, imports
+    assert imports <= {"__future__", "dataclasses", "hashlib", "json", "math", "datetime", "typing", "research.exit_policies", "research.experiment_runner"}, imports

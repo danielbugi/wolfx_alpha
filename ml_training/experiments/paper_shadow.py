@@ -98,7 +98,9 @@ if MODE == "real":
     for e in regs:
         per_signal.setdefault((e["payload"]["symbol"], e["payload"]["direction"]), e["payload"]["context"])
     avail = {"signals": len(per_signal), "market_regime_available": sum(1 for c in per_signal.values() if (c.get("market_regime") or {}).get("available")),
-             "relative_strength_available": sum(1 for c in per_signal.values() if c.get("relative_strength")), "catalysts_with_events": sum(1 for c in per_signal.values() if (c.get("catalysts") or {}).get("events")),
+             "relative_strength_available": sum(1 for c in per_signal.values() if (c.get("relative_strength") or {}).get("available")), "catalysts_with_events": sum(1 for c in per_signal.values() if (c.get("catalysts") or {}).get("events")),
+             "catalyst_sections": dict(sorted({k: sum(1 for c in per_signal.values() if (c.get("catalysts") or {}).get("section") == k) for k in {(c.get("catalysts") or {}).get("section") for c in per_signal.values()}}.items())),
+             "context_unavailable_reasons": dict(sorted({r: sum(1 for c in per_signal.values() if ((c.get("market_regime") or {}).get("reason") == r) or ((c.get("relative_strength") or {}).get("reason") == r)) for r in {x for c in per_signal.values() for x in ((c.get("market_regime") or {}).get("reason"), (c.get("relative_strength") or {}).get("reason")) if x}}.items())),
              "sector_known": sum(1 for c in per_signal.values() if (c.get("features") or {}).get("sector")), "guard_rejected": sum(1 for c in per_signal.values() if (c["candidate"]).get("passed_guard") is False),
              "tracked_intent": sum(1 for c in per_signal.values() if c["candidate"].get("tracked_intent"))}
     res["context_availability"] = avail

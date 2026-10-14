@@ -137,17 +137,26 @@ def _jsonable(v: Any) -> Any:
     return v
 
 
-def _try(cur, sql: str, params: Sequence[Any]) -> Optional[List[tuple]]:
-    """Run a read query for an OPTIONAL context section; a missing table or column makes the section unavailable, never the session fail."""
+ABSENT = "absent"
+
+
+def _try(cur, sql: str, params: Sequence[Any]):
+    """Run a read query for an OPTIONAL context section. Returns (rows, None) on success, (None, "absent") when the table does not exist (the migration is not applied) and (None, "query_error:<SQLSTATE>")
+    for any other failure. Neither ever fails the session, but they are recorded differently in the evidence: a broken query must not look like a table that was never there."""
     cur.execute("SAVEPOINT paper_ctx")
     try:
         cur.execute(sql, params)
         rows = cur.fetchall()
         cur.execute("RELEASE SAVEPOINT paper_ctx")
-        return rows
-    except Exception:  # noqa: BLE001
+        return rows, None
+    except Exception as e:  # noqa: BLE001
         cur.execute("ROLLBACK TO SAVEPOINT paper_ctx")
-        return None
+        code = getattr(e, "pgcode", None) or type(e).__name__
+        return None, (ABSENT if code == "42P01" else f"query_error:{code}")
+
+
+def _why(err: str, what: str) -> str:
+    return f"{what} not present" if err == ABSENT else f"{what}: {err}"
 
 
 class CandidateSource:
@@ -170,7 +179,7 @@ class CandidateSource:
         skipped: Dict[str, int] = {}
         symbols = sorted({r[1] for r in rows})
         hist = hist_for(cur, session_date, symbols)
-        rs = self._relative_strength(cur, session_date, symbols, cutoff)
+        rs = self._relative_strength(cur, session_date, symbols, cutoff)           # a string = the section is unavailable (the reason); a dict = per-symbol rows
         cat = self._catalysts(cur, session_date, symbols, cutoff)
         regime = self._regime(cur, session_date, cutoff)
         out: List[Signal] = []
@@ -189,38 +198,43 @@ class CandidateSource:
                                  "combined_score": _jsonable(comb), "session_rank": rank, "ml_status": mlst, "ml_score": _jsonable(mls), "ml_model_version": mlv, "tracked_intent": tracked,
                                  "atr_source": atr_src, "breakout_dist_atr": _jsonable(bdist), "distance_to_channel_pct": _jsonable(dist), "entry_close": _jsonable(close)},
                    "features": {"snapshot_id": fid, "available_at": _jsonable(cap_at), "sector": sector, "sector_asof": _jsonable(sector_asof), **{k: _jsonable((feats or {}).get(k)) for k in FEATURE_KEYS}},
-                   "market_regime": regime, "relative_strength": rs.get(sym), "catalysts": cat.get(sym, {"events": [], "section": "none_in_window"})}
+                   "market_regime": regime,
+                   "relative_strength": ({"available": False, "reason": _why(rs, "stock_relative_strength")} if isinstance(rs, str)
+                                         else rs.get(sym, {"available": False, "reason": "no observed relative-strength row at the cutoff"})),
+                   "catalysts": ({"section": "unavailable", "events": [], "reason": _why(cat, "market_event tables")} if isinstance(cat, str) else cat.get(sym, {"section": "none_in_window", "events": []}))}
             out.append(Signal(sym, int(d), float(atr), hh, ll, json.loads(json.dumps(ctx, allow_nan=False)), cid))
         return out, skipped
 
     def _regime(self, cur, session_date: date, cutoff: datetime) -> Dict[str, Any]:
-        rows = _try(cur, "SELECT regime_state, regime_score, regime_strength_label, provenance, created_at FROM market_snapshot WHERE session_date = %s AND created_at <= %s "
-                         "ORDER BY (provenance = 'observed') DESC, id DESC LIMIT 1", (session_date, cutoff))
+        rows, err = _try(cur, "SELECT regime_state, regime_score, regime_strength_label, provenance, captured_at FROM market_snapshot WHERE session_date = %s AND captured_at <= %s "
+                              "AND provenance = 'observed' ORDER BY id DESC LIMIT 1", (session_date, cutoff))
+        if err:
+            return {"available": False, "reason": _why(err, "market_snapshot")}
         if not rows:
-            return {"available": False, "reason": "no market snapshot available at the cutoff" if rows is not None else "market_snapshot not present"}
+            return {"available": False, "reason": "no observed market snapshot available at the cutoff"}
         s, sc, lab, prov, at = rows[0]
         return {"available": True, "regime_state": s, "regime_score": _jsonable(sc), "regime_strength_label": lab, "provenance": prov, "available_at": _jsonable(at)}
 
-    def _relative_strength(self, cur, session_date: date, symbols: Sequence[str], cutoff: datetime) -> Dict[str, Any]:
-        rows = _try(cur, "SELECT symbol, horizon_sessions, rs_percentile, vs_sector_pp, vs_spx_pp, sector, sector_pit_safe, provenance, created_at FROM stock_relative_strength "
+    def _relative_strength(self, cur, session_date: date, symbols: Sequence[str], cutoff: datetime):
+        rows, err = _try(cur, "SELECT symbol, horizon_sessions, rs_percentile, vs_sector_pp, vs_spx_pp, sector, sector_pit_safe, provenance, created_at FROM stock_relative_strength "
                          "WHERE session_date = %s AND symbol = ANY(%s) AND state = 'ok' AND provenance = 'observed' AND created_at <= %s ORDER BY symbol, horizon_sessions", (session_date, list(symbols), cutoff))
         out: Dict[str, Any] = {}
-        if rows is None:
-            return out
+        if err:
+            return err
         for sym, h, pct, vs_sec, vs_spx, sector, pit, prov, at in rows:
             out.setdefault(sym, {"available": True, "horizons": []})["horizons"].append({"horizon_sessions": h, "rs_percentile": _jsonable(pct), "vs_sector_pp": _jsonable(vs_sec), "vs_spx_pp": _jsonable(vs_spx),
                                                                                             "sector": sector, "sector_pit_safe": pit, "provenance": prov, "available_at": _jsonable(at)})
         return out
 
-    def _catalysts(self, cur, session_date: date, symbols: Sequence[str], cutoff: datetime) -> Dict[str, Any]:
-        rows = _try(cur, "SELECT e.symbol, e.event_type, r.event_time, r.session_timing, r.published_at, r.known_at, r.known_at_basis, r.pit_grade, r.source, r.eps_actual, r.eps_estimate, "
+    def _catalysts(self, cur, session_date: date, symbols: Sequence[str], cutoff: datetime):
+        rows, err = _try(cur, "SELECT e.symbol, e.event_type, r.event_time, r.session_timing, r.published_at, r.known_at, r.known_at_basis, r.pit_grade, r.source, r.eps_actual, r.eps_estimate, "
                          "(SELECT cc.label FROM catalyst_classification cc WHERE cc.revision_id = r.id AND cc.classified_at <= %s ORDER BY cc.classified_at DESC LIMIT 1) "
                          "FROM market_event e JOIN LATERAL (SELECT * FROM market_event_revision x WHERE x.event_key = e.event_key AND x.known_at IS NOT NULL AND x.known_at <= %s "
                          "ORDER BY x.revision DESC LIMIT 1) r ON TRUE WHERE e.symbol = ANY(%s) AND r.event_time BETWEEN %s AND %s ORDER BY e.symbol, r.event_time",
                     (cutoff, cutoff, list(symbols), session_date - timedelta(days=CATALYST_DAYS), session_date))
         out: Dict[str, Any] = {}
-        if rows is None:
-            return out
+        if err:
+            return err
         for sym, etype, etime, timing, pub, known, basis, grade, src, eps_a, eps_e, label in rows:
             out.setdefault(sym, {"section": "events", "events": []})["events"].append({"event_type": etype, "event_time": _jsonable(etime), "session_timing": timing, "published_at": _jsonable(pub),
                                                                                        "known_at": _jsonable(known), "known_at_basis": basis, "pit_grade": grade, "source": src,
