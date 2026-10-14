@@ -1,0 +1,174 @@
+{
+ "mode": "real_sequence",
+ "database_user": "donchian_app",
+ "scratch": true,
+ "captured_sessions": [
+  "2026-10-09",
+  "2026-10-12",
+  "2026-10-13"
+ ],
+ "processed_run": [
+  "2026-10-09",
+  "2026-10-12",
+  "2026-10-13"
+ ],
+ "sessions": [
+  {
+   "session": "2026-10-09",
+   "status": "processed",
+   "dry_equals_write": true,
+   "counts": {
+    "n_variants": 5,
+    "n_candidates": 250,
+    "n_registered": 1250,
+    "n_skipped_open": 0,
+    "n_entered": 0,
+    "n_closed": 0,
+    "n_not_enterable": 0,
+    "n_hindsight": 0,
+    "n_open_after": 1250
+   },
+   "events_by_type": {
+    "registered": 1250
+   },
+   "tables_after": {
+    "paper_session": 1,
+    "paper_observation": 1250,
+    "paper_event": 0
+   },
+   "context": {
+    "signals": 250,
+    "market_regime_available": 0,
+    "regime_states": {},
+    "relative_strength_available": 0,
+    "catalyst_sections": {
+     "none_in_window": 250
+    },
+    "unavailable_reasons": {
+     "no observed market snapshot available at the cutoff": 250,
+     "no observed relative-strength row at the cutoff": 250
+    }
+   }
+  },
+  {
+   "session": "2026-10-12",
+   "status": "processed",
+   "dry_equals_write": true,
+   "counts": {
+    "n_variants": 5,
+    "n_candidates": 359,
+    "n_registered": 1270,
+    "n_skipped_open": 525,
+    "n_entered": 1250,
+    "n_closed": 11,
+    "n_not_enterable": 0,
+    "n_hindsight": 0,
+    "n_open_after": 2509
+   },
+   "events_by_type": {
+    "entered": 1250,
+    "closed": 11,
+    "registered": 1270
+   },
+   "tables_after": {
+    "paper_session": 2,
+    "paper_observation": 2520,
+    "paper_event": 1261
+   },
+   "context": {
+    "signals": 254,
+    "market_regime_available": 254,
+    "regime_states": {
+     "NEUTRAL": 254
+    },
+    "relative_strength_available": 253,
+    "catalyst_sections": {
+     "none_in_window": 254
+    },
+    "unavailable_reasons": {
+     "no observed relative-strength row at the cutoff": 1
+    }
+   }
+  },
+  {
+   "session": "2026-10-13",
+   "status": "processed",
+   "dry_equals_write": true,
+   "counts": {
+    "n_variants": 5,
+    "n_candidates": 474,
+    "n_registered": 1365,
+    "n_skipped_open": 1005,
+    "n_entered": 1270,
+    "n_closed": 25,
+    "n_not_enterable": 0,
+    "n_hindsight": 0,
+    "n_open_after": 3849
+   },
+   "events_by_type": {
+    "entered": 1270,
+    "closed": 25,
+    "registered": 1365
+   },
+   "tables_after": {
+    "paper_session": 3,
+    "paper_observation": 3885,
+    "paper_event": 2556
+   },
+   "context": {
+    "signals": 273,
+    "market_regime_available": 273,
+    "regime_states": {
+     "NEUTRAL": 273
+    },
+    "relative_strength_available": 273,
+    "catalyst_sections": {
+     "none_in_window": 273
+    },
+    "unavailable_reasons": {}
+   }
+  }
+ ],
+ "restore": {
+  "snapshot_hash_verified": true,
+  "open_observations_in_snapshot": 3849,
+  "session": "2026-10-13"
+ },
+ "rerun": {
+  "statuses": [
+   "already_processed"
+  ],
+  "tables_unchanged": true
+ },
+ "resolve_next_after": [
+  null,
+  "up to date: no trading session after 2026-10-13 is loaded yet"
+ ],
+ "audit_problems": [],
+ "entered_closed_by_variant": {
+  "donchian_breakout__exit_a_atr_stop_fixed_2r": [
+   504,
+   10
+  ],
+  "donchian_breakout__exit_a_atr_stop_fixed_3r": [
+   504,
+   9
+  ],
+  "donchian_breakout__exit_b_donchian_trail_10": [
+   504,
+   4
+  ],
+  "donchian_breakout__exit_c_atr_trail_3x": [
+   504,
+   4
+  ],
+  "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10": [
+   504,
+   9
+  ]
+ },
+ "event_hashes": [
+  2556,
+  2556
+ ]
+}

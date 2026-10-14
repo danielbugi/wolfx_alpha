@@ -1,12 +1,13 @@
-# PROPOSED timer for donchian-paper-tracker.service -- NOT INSTALLED, NOT ENABLED. Two fires after the nightly pipeline and its candidate capture; the second retries a session whose capture was late
-# (exit 2). Weekends and holidays are no-ops (exit 6: the next session is not loaded). Persistent=false: a missed fire is not replayed by systemd; the runner itself refuses gaps and a later fire
-# processes sessions strictly in order.
+# PROPOSED timer for donchian-paper-tracker.service -- NOT INSTALLED, NOT ENABLED. Two fires AFTER the forward collector (06:45, retry 08:15 Asia/Jerusalem), because the observed market-regime and
+# relative-strength rows for the session are written by the collector and the tracker records only what exists when it runs: an earlier fire would record every session without market context.
+# The second fire retries a session whose capture or prices were late (exit 2). Weekends and holidays are no-ops (exit 6: the next session is not loaded). Persistent=false: a missed fire is not replayed
+# by systemd; the runner itself refuses gaps and a later fire processes sessions strictly in order. Both fires end well before the US open (16:30).
 [Unit]
 Description=First Light: forward paper tracker timer
 
 [Timer]
-OnCalendar=*-*-* 05:30:00 Asia/Jerusalem
-OnCalendar=*-*-* 07:30:00 Asia/Jerusalem
+OnCalendar=*-*-* 09:30:00 Asia/Jerusalem
+OnCalendar=*-*-* 11:30:00 Asia/Jerusalem
 Persistent=false
 RandomizedDelaySec=60
 

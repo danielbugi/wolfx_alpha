@@ -233,8 +233,58 @@ elif MODE == "historical":
     res["open_state_bytes"] = {"avg": int(a or 0), "max": int(m or 0)}
     conn.rollback()
     assert not mism and not res["audit_problems"], "shadow run differs from the batch experiment or the audit found problems"
+elif MODE == "real_sequence":
+    # every consecutive session with a complete REAL forward capture, processed in order exactly as the daily job would (first one an explicit activation session), dry-run first for each
+    src = PR.CandidateSource()
+    cur.execute("SELECT DISTINCT r.session_date FROM candidate_capture_run r JOIN strategies s ON s.id = r.strategy_id WHERE s.strategy_key = 'donchian_breakout' AND s.strategy_version = 'v1' AND r.status = 'complete' ORDER BY 1")
+    captured = [r[0] for r in cur.fetchall()]
+    conn.commit()
+    cal = PR.session_calendar(cur, captured[0])
+    conn.commit()
+    todo = []
+    for d in cal:
+        if d < captured[0]:
+            continue
+        if d not in captured:
+            break
+        todo.append(d)
+    res["captured_sessions"] = [d.isoformat() for d in captured]
+    res["processed_run"] = [d.isoformat() for d in todo]
+    per = []
+    for n, d in enumerate(todo):
+        before = counts()
+        dry = commit_session(d, src, "triggered", write=False, activation_session=(n == 0), calendar=cal)
+        assert counts() == before
+        w = commit_session(d, src, "triggered", write=True, activation_session=(n == 0), calendar=cal)
+        regs = [e for e in w.events if e["type"] == "registered"]
+        ctx = {}
+        for e in regs:
+            ctx.setdefault((e["payload"]["symbol"], e["payload"]["direction"]), e["payload"]["context"])
+        per.append({"session": d.isoformat(), "status": w.status, "dry_equals_write": dry.open_state_hash == w.open_state_hash and [e["type"] for e in dry.events] == [e["type"] for e in w.events], "counts": w.summary()["counts"],
+                    "events_by_type": w.summary().get("events_by_type"), "tables_after": counts(),
+                    "context": {"signals": len(ctx), "market_regime_available": sum(1 for c in ctx.values() if (c.get("market_regime") or {}).get("available")),
+                                "regime_states": dict(sorted({k: sum(1 for c in ctx.values() if (c.get("market_regime") or {}).get("regime_state") == k) for k in {(c.get("market_regime") or {}).get("regime_state") for c in ctx.values()} if k}.items())),
+                                "relative_strength_available": sum(1 for c in ctx.values() if (c.get("relative_strength") or {}).get("available")),
+                                "catalyst_sections": dict(sorted({k: sum(1 for c in ctx.values() if (c.get("catalysts") or {}).get("section") == k) for k in {(c.get("catalysts") or {}).get("section") for c in ctx.values()}}.items())),
+                                "unavailable_reasons": dict(sorted({r: sum(1 for c in ctx.values() if ((c.get("market_regime") or {}).get("reason") == r) or ((c.get("relative_strength") or {}).get("reason") == r)) for r in {x for c in ctx.values() for x in ((c.get("market_regime") or {}).get("reason"), (c.get("relative_strength") or {}).get("reason")) if x}}.items()))}})
+        log("session", d, per[-1]["counts"], per[-1]["context"]["market_regime_available"])
+    res["sessions"] = per
+    last = ST.latest_session(cur)
+    res["restore"] = {"snapshot_hash_verified": last["open_state_hash"] == ST.sha(last["open_state"]), "open_observations_in_snapshot": len(last["open_state"]["active"]), "session": last["session_date"].isoformat()}
+    before = counts()
+    res["rerun"] = {"statuses": sorted({commit_session(d, src, "triggered", write=True, activation_session=(i == 0), calendar=cal).status for i, d in enumerate(todo)}), "tables_unchanged": counts() == before}
+    nxt = PR.resolve_next(cur, cal)
+    conn.rollback()
+    res["resolve_next_after"] = [nxt[0].isoformat() if nxt[0] else None, nxt[1]]
+    res["audit_problems"] = ST.verify(cur)
+    conn.rollback()
+    cur.execute("SELECT v.variant_key, count(*) FILTER (WHERE e.event_type = 'entered'), count(*) FILTER (WHERE e.event_type = 'closed') FROM paper_event e JOIN paper_observation o ON o.id = e.observation_id JOIN strategy_variant v ON v.id = o.variant_id GROUP BY 1 ORDER BY 1")
+    res["entered_closed_by_variant"] = {k: [a, b] for k, a, b in cur.fetchall()}
+    cur.execute("SELECT count(*), count(DISTINCT event_hash) FROM paper_event")
+    res["event_hashes"] = list(cur.fetchone())
+    conn.rollback()
 else:
-    print("usage: paper_shadow.py real|historical", file=sys.stderr)
+    print("usage: paper_shadow.py real|real_sequence|historical", file=sys.stderr)
     sys.exit(2)
 
 json.dump(res, open(f"{OUT}/paper_shadow_{MODE}.json", "w"), indent=1, default=str)
