@@ -199,7 +199,14 @@ def test_absent_context_sections_are_recorded_as_absent_with_a_reason(worlds):
         # 1. the tables exist but hold nothing at the cutoff. This also proves every optional query's columns and syntax against the REAL schema: a broken query would come back as "query_error:...",
         #    never as an empty result (an earlier draft used a wrong column and was reported as "not present").
         assert src._regime(cur, d, cutoff) == {"available": False, "reason": "no observed market snapshot available at the cutoff"}
-        assert src._relative_strength(cur, d, ["AAA"], cutoff) == {} and src._catalysts(cur, d, ["AAA"], cutoff) == {}
+        assert src._relative_strength(cur, d, ["AAA"], cutoff) == {}
+        assert src._catalysts(cur, d, ["AAA"], cutoff) == "source_empty"                              # an EMPTY source is not "no catalysts in the window"
+        assert PR._why("source_empty", "market_event tables") == "market_event tables: no event has been recorded yet (no job feeds this source)"
+        # a source that holds events for other symbols does report "none in the window" for this one (the signals() composition uses the default)
+        cur.execute("INSERT INTO market_event (event_key, symbol, event_type) VALUES ('t:ZZZ:1', 'ZZZ', 'earnings_reported')")
+        cur.execute("INSERT INTO market_event_revision (event_key, revision, event_time, session_timing, published_at, known_at, known_at_basis, source, source_ref, pit_grade, status, provenance, ingested_at, payload_hash) "
+                    "VALUES ('t:ZZZ:1', 1, %s, 'AMC', now(), now(), 'vendor_published', 'test', 'r1', 'A', 'reported', 'observed', now(), repeat('a', 64))", (d,))
+        assert src._catalysts(cur, d, ["AAA"], dt.datetime(2099, 1, 1, tzinfo=dt.timezone.utc)) == {}
         # 2. a query that breaks is reported as a query error, not as an absent table (transaction rolled back below)
         cur.execute("ALTER TABLE market_snapshot RENAME COLUMN captured_at TO captured_at_x")
         reg = src._regime(cur, d, cutoff)

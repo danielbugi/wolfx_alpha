@@ -138,6 +138,7 @@ def _jsonable(v: Any) -> Any:
 
 
 ABSENT = "absent"
+SOURCE_EMPTY = "source_empty"
 
 
 def _try(cur, sql: str, params: Sequence[Any]):
@@ -156,6 +157,8 @@ def _try(cur, sql: str, params: Sequence[Any]):
 
 
 def _why(err: str, what: str) -> str:
+    if err == SOURCE_EMPTY:
+        return f"{what}: no event has been recorded yet (no job feeds this source)"
     return f"{what} not present" if err == ABSENT else f"{what}: {err}"
 
 
@@ -235,6 +238,12 @@ class CandidateSource:
         out: Dict[str, Any] = {}
         if err:
             return err
+        if not rows:                                                   # nothing for these symbols: is the source itself empty (no job feeds it), or are there simply no events in the window?
+            any_rows, err2 = _try(cur, "SELECT 1 FROM market_event_revision WHERE known_at IS NOT NULL AND known_at <= %s LIMIT 1", (cutoff,))
+            if err2:
+                return err2
+            if not any_rows:
+                return SOURCE_EMPTY
         for sym, etype, etime, timing, pub, known, basis, grade, src, eps_a, eps_e, label in rows:
             out.setdefault(sym, {"section": "events", "events": []})["events"].append({"event_type": etype, "event_time": _jsonable(etime), "session_timing": timing, "published_at": _jsonable(pub),
                                                                                        "known_at": _jsonable(known), "known_at_basis": basis, "pit_grade": grade, "source": src,
