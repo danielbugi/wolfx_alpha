@@ -12,7 +12,7 @@
 
 ```mermaid
 flowchart LR
-    A["donchian-nightly-backup.timer<br/>23:30 UTC"] --> B["nightly_backup.sh<br/>(on the VPS, as root)"]
+    A["donchian-nightly-backup.timer<br/>11:45 Asia/Jerusalem"] --> B["nightly_backup.sh<br/>(on the VPS, as root)"]
     B --> C["docker exec postgres pg_dump -Fc<br/>(read-only, no writer needed)"]
     C --> D["/opt/donchian/backups/nightly/&lt;UTC ts&gt;/<br/>production.dump + .sha256"]
     D --> E["lightweight integrity check:<br/>pg_restore -l (table-of-contents parses)"]
@@ -21,9 +21,8 @@ flowchart LR
     G --> H["scp + SHA-256 re-verified on both ends<br/>retention: 30 days"]
 ```
 
-- **On the VPS**: `donchian-nightly-backup.timer` fires at 23:30 UTC (note: **not** an
-  `Asia/Jerusalem`-tagged timer like every other one — see [../architecture/SCHEDULING.md](../architecture/SCHEDULING.md)
-  §2 for why that's a known, low-priority inconsistency). `nightly_backup.sh`:
+- **On the VPS**: `donchian-nightly-backup.timer` fires daily at **11:45 Asia/Jerusalem** (changed 2026-10-15 from a fixed 23:30 UTC;
+  why, the recovery point it defines and the day-by-day overlap analysis: [BACKUP_SCHEDULE.md](BACKUP_SCHEDULE.md)). `nightly_backup.sh`:
   1. Confirms the postgres container is actually running (fails loudly if not — never silently skips).
   2. `docker exec ... pg_dump -U trading_user -d trading_production -Fc -Z 6` — a compressed custom-format
      dump, read-only, no writer needs to stop.

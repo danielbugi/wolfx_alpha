@@ -22,20 +22,21 @@
 ## 1. All timers, one table
 
 All Israel-local schedules use systemd's native per-timer `Asia/Jerusalem` calendar tag — DST-safe
-by construction — **except `donchian-nightly-backup.timer`**, which predates that convention and
-hardcodes a UTC offset (a known, low-priority inconsistency: it will drift an hour at the next DST
-change; not yet fixed).
+by construction. Two timers use another zone on purpose: `donchian-pipeline.timer` is anchored to `America/New_York`
+(17:45 and 19:15, so the run keeps a fixed distance from the US close through both countries' clock changes), and the
+nightly backup, which used to hardcode a UTC offset, now uses `Asia/Jerusalem` (11:45; see
+[../operations/BACKUP_SCHEDULE.md](../operations/BACKUP_SCHEDULE.md)).
 
 | Timer | Israel schedule | Executable | Purpose | Updates data? | Sends Telegram? |
 |---|---|---|---|---|---|
-| `donchian-pipeline.timer` | 23:45, 01:00 (= 20:45, 22:00 UTC in summer) | `run_pipeline.sh` → `automation_pipeline.sh` (in the `pipeline` compose service) | **The only path that runs screener, ML and the signal-ledger write**, plus the full 13-step daily pipeline | Yes (price/index, weekly, monthly, fundamentals, quarterly, screener, ML, ledger) | Yes — calls the post-market publisher inline (step ~3) and again as a retry (step 13) |
+| `donchian-pipeline.timer` | 17:45, 19:15 **America/New_York** (= 21:45, 23:15 UTC in US summer time; 00:45 and 02:15 Israel time normally) | `run_pipeline.sh` → `automation_pipeline.sh` (in the `pipeline` compose service) | **The only path that runs screener, ML and the signal-ledger write**, plus the full 13-step daily pipeline | Yes (price/index, weekly, monthly, fundamentals, quarterly, screener, ML, ledger) | Yes — calls the post-market publisher inline (step ~3) and again as a retry (step 13) |
 | `donchian-postmarket-retry.timer` | 23:45, then every ~20 min through 06:00 | `run_postmarket_retry.sh` → `publish_post_market.py` (in the `channel-sender` service) | Bounded freshness retry for **just** the 4 post-market posts. **Does not rescue the screening pipeline.** | Yes, but only market index + daily price (never the heavy steps; never screener/ML/ledger) | Yes |
 | `donchian-firstlight1-prices.timer` | 05:00 | `firstlight1_updateonly.sh` | Price safety-net + bot snapshot | Yes | No (`--snapshot-only`) |
 | `donchian-signal-ledger-eval.timer` | 03:30 | `run_channel_sender.sh mechanism/screeners/evaluate_signal_ledger.py` | Walks **already-written** `signal_ledger` rows forward to a result; never creates signals | Writes only ledger outcome fields | No |
 | `donchian-earnings-today.timer` | 10:00 | `run_channel_sender.sh mechanism/alerts/send_earnings_today.py` | Pre-market "who reports today" | No | Yes (one post, own kind) |
 | `donchian-notice-midday.timer` | 12:00 | `run_channel_sender.sh mechanism/alerts/send_channel_notices.py --slot 1` | Disclaimer + assistant-promo reminder, slot 1 | No | Yes (2 posts) |
 | `donchian-notice-evening.timer` | 20:00 | Same, `--slot 2` | Same, slot 2 | No | Yes |
-| `donchian-nightly-backup.timer` | 23:30 **UTC** (not Israel-tagged) | `nightly_backup.sh trading_production` | Production DB dump | No (read-only) | No |
+| `donchian-nightly-backup.timer` | 11:45 Israel time (changed 2026-10-15) | `nightly_backup.sh trading_production` | Production DB dump | No (read-only) | No |
 | `donchian-bot.service` (not a timer) | continuous, `enabled` (2026-09-25) | `docker compose --profile bot up -d bot` | Private assistant, long-polling | No | DMs only, never the channel |
 | `donchian-docker-firewall.service` (not a timer) | boot / `docker.service` restart | `donchian-docker-firewall.sh` | Re-applies the DOCKER-USER iptables filter | No | No |
 
@@ -44,14 +45,14 @@ change; not yet fixed).
 ### `donchian-pipeline.timer` / `.service`
 ```
 [Timer]
-OnCalendar=*-*-* 23:45:00 Asia/Jerusalem
-OnCalendar=*-*-* 01:00:00 Asia/Jerusalem
+OnCalendar=*-*-* 17:45:00 America/New_York
+OnCalendar=*-*-* 19:15:00 America/New_York
 Persistent=true
 ```
-Two fires a day: 23:45 (the primary attempt, ~45 min after the 16:00 ET close given
-`MARKET_SETTLE_MINUTES=30`) and 01:00 (a same-session retry if the vendor bar wasn't published yet
-at 23:45). In UTC (summer) these are 20:45 and 22:00 — which is why the updater's session logic must
-never be based on the container's UTC calendar date (see §2a). **The 01:00 fire is a no-op once the day is already marked done** by
+Two fires a day (changed 2026-10-15, Stage 1 of [../operations/PIPELINE_FIRST_FIRE_RELIABILITY.md](../operations/PIPELINE_FIRST_FIRE_RELIABILITY.md)):
+17:45 New York (the primary attempt, 1h45 after the 16:00 ET close all year; the previous 23:45 Jerusalem fire found only 0-7% of the day's bars
+and failed its freshness gate every trading night) and 19:15 (a retry 90 minutes later). In UTC (summer) these are 21:45 and 23:15 — which is why the updater's session logic must
+never be based on the container's UTC calendar date (see §2a). **The second fire is a no-op once the day is already marked done** by
 `mechanism/shared/market_calendar.py`'s session-mark step — `Persistent=true` means a missed fire
 (e.g. VPS was down) catches up on next boot rather than being silently skipped. `TimeoutStartSec=4h`.
 Runs steps 1–13 of `automation_pipeline.sh`; see [SYSTEM_OVERVIEW.md](SYSTEM_OVERVIEW.md) §3 for how
@@ -91,16 +92,16 @@ package — its own gate is `market_calendar.is_trading_day()` (a different chec
 ### `donchian-nightly-backup.timer` / `.service`
 ```
 [Timer]
-# 02:30 Israel time -- after the (not-yet-enabled) 23:45/01:00 VPS pipeline window
-OnCalendar=*-*-* 23:30:00 UTC
+# 11:45 Israel time (was a fixed 23:30 UTC until 2026-10-15)
+OnCalendar=*-*-* 11:45:00 Asia/Jerusalem
 Persistent=true
 RandomizedDelaySec=300
 ```
 Runs `nightly_backup.sh trading_production` — a read-only `pg_dump` inside the container, no app
-health dependency. **This is the one timer that predates the Asia/Jerusalem-tag convention** used by
-every timer above; its comment computes the Israel-time equivalent by hand instead of letting systemd
-do it, so it will silently drift by an hour whenever Israel's DST offset changes. See
-[../operations/BACKUPS.md](../operations/BACKUPS.md) for the full backup/restore story.
+health dependency. Since 2026-10-15 it runs at 11:45 Israel time: after the previous US session's pipeline capture, the forward collector,
+the notices and the paper tracker, and before the evening notice and the next pipeline, so one dump is a complete recovery point and it never
+overlaps a pipeline run (checked day by day for two years by `test_backup_schedule_timeline.py`). See
+[../operations/BACKUP_SCHEDULE.md](../operations/BACKUP_SCHEDULE.md) and [../operations/BACKUPS.md](../operations/BACKUPS.md) for the full backup/restore story.
 
 ### `donchian-bot.service` (continuous, not a timer)
 `Type=oneshot RemainAfterExit=yes`, `WantedBy=multi-user.target`. Starts (and, via `ExecStop`, stops)

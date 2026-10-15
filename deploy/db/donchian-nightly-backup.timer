@@ -2,9 +2,15 @@
 Description=Run the First Light nightly production database backup
 
 [Timer]
-# 02:30 Israel time -- after the (not-yet-enabled) 23:45/01:00 VPS pipeline window, matching the
-# Windows schedule's own timing logic (CUTOVER_PLAN.md).
-OnCalendar=*-*-* 23:30:00 UTC
+# Daily at 11:45 Asia/Jerusalem (changed 2026-10-15 from a fixed 23:30 UTC). Chosen from the measured timeline, see
+# docs/operations/BACKUP_SCHEDULE.md (the day-by-day timeline analysis is recomputed by its schedule test):
+#   * the pipeline now fires at 17:45 / 19:15 America/New_York and runs 85 min normally (133 min at its slowest, ~141 min worst case with the bounded
+#     quarterly step), so it can occupy 21:45Z-01:36Z in summer and 22:45Z-02:36Z in winter; a fixed 23:30 UTC dump overlapped it every US winter night;
+#   * 11:45 Jerusalem is after everything that writes irreplaceable evidence for the previous US session: the pipeline's capture and ledger (done by ~04:40
+#     even on the slowest retry path), the forward collector (06:45 / 08:15), the midday notice (09:00) and the paper tracker (09:30 / 11:30), and it is
+#     before the 17:00 evening notice and the next pipeline by 12+ hours. One dump is therefore a COMPLETE recovery point for the previous trading day.
+#   * Anchored to Jerusalem time so these relationships hold through both countries' clock changes (the US and Israeli changes fall on different dates).
+OnCalendar=*-*-* 11:45:00 Asia/Jerusalem
 Persistent=true
 RandomizedDelaySec=300
 
