@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Spinner, Button } from '@nextui-org/react';
 import { labApi, LabReport, LabReportList } from '@/services/labApi';
 import LabReportView from '@/components/lab/LabReportView';
+import ForwardTracker from '@/components/lab/ForwardTracker';
 import { usePagePerf } from '@/hooks/usePagePerf';
 
 const KIND_LABEL: Record<string, string> = { strategy_lab: 'Strategy Lab', ml: 'ML Intelligence', catalyst: 'Catalyst Intelligence' };
@@ -15,6 +16,7 @@ export default function LabPage() {
   const [report, setReport] = useState<LabReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<'reports' | 'forward'>('reports');
 
   const load = useCallback(async () => {
     try {
@@ -51,7 +53,14 @@ export default function LabPage() {
           <Button size="sm" className="bg-slate-700 text-white shrink-0" onClick={load} isLoading={loading}>Refresh</Button>
         </div>
 
-        {loading && !list ? (
+        <div role="tablist" aria-label="Quant Lab views" className="flex gap-2">
+          <button role="tab" aria-selected={view === 'reports'} onClick={() => setView('reports')} className={`px-3 py-1.5 rounded-md text-sm border ${view === 'reports' ? 'bg-white border-cyan-400 shadow-sm font-medium' : 'bg-white/60 border-slate-200'}`}>Research reports (historical)</button>
+          <button role="tab" aria-selected={view === 'forward'} onClick={() => setView('forward')} className={`px-3 py-1.5 rounded-md text-sm border ${view === 'forward' ? 'bg-white border-cyan-400 shadow-sm font-medium' : 'bg-white/60 border-slate-200'}`}>Forward paper tracker (live)</button>
+        </div>
+
+        {view === 'forward' ? (
+          <ForwardTracker />
+        ) : loading && !list ? (
           <div className="flex justify-center py-16"><Spinner color="primary" /></div>
         ) : error ? (
           <p className="text-center text-red-500 text-sm py-16">{error}</p>

@@ -1,0 +1,996 @@
+{
+ "schema": "forward_tracker_dashboard_v1",
+ "source": "forward",
+ "banner": "Forward paper observation: simulated positions only. No order is placed and nothing here is advice.",
+ "definitions": {
+  "R": "1R = 2 x ATR14 of the signal bar (the tracker's standardised unit); the variant's actual initial risk is also recorded on each closed event",
+  "net_r": "realised R after a round-trip cost charged in R: gross minus bps/10000 x entry / 1R; 0, 10 (primary) and 25 bps are recorded by the tracker on every closed event",
+  "interval": "normal-approximation 95% interval of the mean, shown only from 30 closed positions",
+  "hindsight": "uses bars after the decision; never known at decision time",
+  "replay_separation": "historical replay and shadow-test results are never part of this payload"
+ },
+ "cost_bps": [
+  "0",
+  "10",
+  "25"
+ ],
+ "primary_cost_bps": "10",
+ "available": true,
+ "since": "2026-10-14",
+ "sessions_processed": 2,
+ "latest_session": {
+  "session_date": "2026-10-15",
+  "scope": "triggered",
+  "n_variants": 5,
+  "n_candidates": 2,
+  "n_registered": 10,
+  "n_skipped_open": 0,
+  "n_entered": 20,
+  "n_closed": 30,
+  "n_not_enterable": 0,
+  "n_open_after": 15,
+  "code_ref": "45c2ac39249d",
+  "open_state_hash_prefix": "aaaaaaaaaaaaaaaa"
+ },
+ "variants": [
+  {
+   "variant_key": "donchian_breakout__exit_a_atr_stop_fixed_2r",
+   "name": "a_atr_stop_fixed_2r",
+   "version": "v1",
+   "definition_hash": "hhhhhhhhhhhhhhhh",
+   "positions": {
+    "registered": 10,
+    "pending_entry": 1,
+    "open": 2,
+    "closed": 6,
+    "not_enterable": 1
+   },
+   "closed": {
+    "n": 6,
+    "net_r_std": {
+     "0": {
+      "n": 6,
+      "mean": 0.45,
+      "median": 0.0,
+      "win_rate": 0.5,
+      "profit_factor": 2.1739,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     },
+     "10": {
+      "n": 6,
+      "mean": 0.35,
+      "median": -0.1,
+      "win_rate": 0.5,
+      "profit_factor": 1.8077,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     },
+     "25": {
+      "n": 6,
+      "mean": 0.25,
+      "median": -0.2,
+      "win_rate": 0.5,
+      "profit_factor": 1.5172,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     }
+    },
+    "net_r_actual": {
+     "0": {
+      "n": 6,
+      "mean": 0.45,
+      "median": 0.0,
+      "win_rate": 0.5,
+      "profit_factor": 2.1739,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     },
+     "10": {
+      "n": 6,
+      "mean": 0.35,
+      "median": -0.1,
+      "win_rate": 0.5,
+      "profit_factor": 1.8077,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     },
+     "25": {
+      "n": 6,
+      "mean": 0.25,
+      "median": -0.2,
+      "win_rate": 0.5,
+      "profit_factor": 1.5172,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     }
+    },
+    "exit_reasons": {
+     "stop": 3,
+     "target": 3
+    },
+    "bars_held": {
+     "n": 6,
+     "mean": 4.5,
+     "median": 4.5
+    },
+    "mfe_r": {
+     "n": 6,
+     "mean": 1.4333,
+     "median": 0.85
+    },
+    "mae_r": {
+     "n": 6,
+     "mean": 0.5,
+     "median": 0.5
+    },
+    "stale_sessions_total": 0
+   },
+   "open": {
+    "n": 2,
+    "marked": 2,
+    "unmarked": 0,
+    "unrealised_gross_r": {
+     "n": 2,
+     "mean": 2.75,
+     "median": 2.75
+    },
+    "unrealised_net_r_10bps": {
+     "n": 2,
+     "mean": 2.7312,
+     "median": 2.7312
+    },
+    "running_mfe_r": {
+     "n": 2,
+     "mean": 3.75,
+     "median": 3.75
+    },
+    "running_mae_r": {
+     "n": 2,
+     "mean": 0.5,
+     "median": 0.5
+    },
+    "bars_since_entry": {
+     "n": 2,
+     "mean": 1.0,
+     "median": 1.0
+    },
+    "label": "marked at the last loaded close; an open position is not a result"
+   },
+   "big_winner": {
+    "decision_time_information": false,
+    "window": "so_far",
+    "entered_positions": 8,
+    "peak_ge_3r": 4,
+    "peak_ge_5r": 1,
+    "capture_ratio": {
+     "n": 6,
+     "mean": 0.3436,
+     "median": 0.1307
+    },
+    "continuation_after_exit_r": {
+     "n": 6,
+     "mean": 2.3833,
+     "median": 1.85
+    },
+    "premature_exit_share": 0.5,
+    "premature_exit_n": 6,
+    "stored_hindsight_events": 0,
+    "note": "Peak favourable excursion since entry, share of it captured, and further movement after the exit, measured on bars loaded so far. Needs bars after the decision: hindsight, not known when the position was opened. Windows are still short.",
+    "top_open_by_peak_r": [
+     {
+      "symbol": "OPN1",
+      "direction": 1,
+      "entry_session": "2026-10-15",
+      "peak_favourable_r_so_far": 6.0,
+      "unrealised_gross_r": 4.5,
+      "bars_since_entry": 1
+     }
+    ]
+   }
+  },
+  {
+   "variant_key": "donchian_breakout__exit_a_atr_stop_fixed_3r",
+   "name": "a_atr_stop_fixed_3r",
+   "version": "v1",
+   "definition_hash": "hhhhhhhhhhhhhhhh",
+   "positions": {
+    "registered": 10,
+    "pending_entry": 1,
+    "open": 2,
+    "closed": 6,
+    "not_enterable": 1
+   },
+   "closed": {
+    "n": 6,
+    "net_r_std": {
+     "0": {
+      "n": 6,
+      "mean": 0.46,
+      "median": 0.01,
+      "win_rate": 0.5,
+      "profit_factor": 2.2159,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     },
+     "10": {
+      "n": 6,
+      "mean": 0.36,
+      "median": -0.09,
+      "win_rate": 0.5,
+      "profit_factor": 1.8405,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     },
+     "25": {
+      "n": 6,
+      "mean": 0.26,
+      "median": -0.19,
+      "win_rate": 0.5,
+      "profit_factor": 1.5436,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     }
+    },
+    "net_r_actual": {
+     "0": {
+      "n": 6,
+      "mean": 0.46,
+      "median": 0.01,
+      "win_rate": 0.5,
+      "profit_factor": 2.2159,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     },
+     "10": {
+      "n": 6,
+      "mean": 0.36,
+      "median": -0.09,
+      "win_rate": 0.5,
+      "profit_factor": 1.8405,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     },
+     "25": {
+      "n": 6,
+      "mean": 0.26,
+      "median": -0.19,
+      "win_rate": 0.5,
+      "profit_factor": 1.5436,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     }
+    },
+    "exit_reasons": {
+     "stop": 3,
+     "target": 3
+    },
+    "bars_held": {
+     "n": 6,
+     "mean": 4.5,
+     "median": 4.5
+    },
+    "mfe_r": {
+     "n": 6,
+     "mean": 1.4333,
+     "median": 0.85
+    },
+    "mae_r": {
+     "n": 6,
+     "mean": 0.5,
+     "median": 0.5
+    },
+    "stale_sessions_total": 0
+   },
+   "open": {
+    "n": 2,
+    "marked": 2,
+    "unmarked": 0,
+    "unrealised_gross_r": {
+     "n": 2,
+     "mean": 2.75,
+     "median": 2.75
+    },
+    "unrealised_net_r_10bps": {
+     "n": 2,
+     "mean": 2.7312,
+     "median": 2.7312
+    },
+    "running_mfe_r": {
+     "n": 2,
+     "mean": 3.75,
+     "median": 3.75
+    },
+    "running_mae_r": {
+     "n": 2,
+     "mean": 0.5,
+     "median": 0.5
+    },
+    "bars_since_entry": {
+     "n": 2,
+     "mean": 1.0,
+     "median": 1.0
+    },
+    "label": "marked at the last loaded close; an open position is not a result"
+   },
+   "big_winner": {
+    "decision_time_information": false,
+    "window": "so_far",
+    "entered_positions": 8,
+    "peak_ge_3r": 4,
+    "peak_ge_5r": 1,
+    "capture_ratio": {
+     "n": 6,
+     "mean": 0.3436,
+     "median": 0.1307
+    },
+    "continuation_after_exit_r": {
+     "n": 6,
+     "mean": 2.3833,
+     "median": 1.85
+    },
+    "premature_exit_share": 0.5,
+    "premature_exit_n": 6,
+    "stored_hindsight_events": 0,
+    "note": "Peak favourable excursion since entry, share of it captured, and further movement after the exit, measured on bars loaded so far. Needs bars after the decision: hindsight, not known when the position was opened. Windows are still short.",
+    "top_open_by_peak_r": [
+     {
+      "symbol": "OPN1",
+      "direction": 1,
+      "entry_session": "2026-10-15",
+      "peak_favourable_r_so_far": 6.0,
+      "unrealised_gross_r": 4.5,
+      "bars_since_entry": 1
+     }
+    ]
+   }
+  },
+  {
+   "variant_key": "donchian_breakout__exit_b_donchian_trail_10",
+   "name": "b_donchian_trail_10",
+   "version": "v1",
+   "definition_hash": "hhhhhhhhhhhhhhhh",
+   "positions": {
+    "registered": 10,
+    "pending_entry": 1,
+    "open": 2,
+    "closed": 6,
+    "not_enterable": 1
+   },
+   "closed": {
+    "n": 6,
+    "net_r_std": {
+     "0": {
+      "n": 6,
+      "mean": 0.47,
+      "median": 0.02,
+      "win_rate": 0.5,
+      "profit_factor": 2.2589,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     },
+     "10": {
+      "n": 6,
+      "mean": 0.37,
+      "median": -0.08,
+      "win_rate": 0.5,
+      "profit_factor": 1.874,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     },
+     "25": {
+      "n": 6,
+      "mean": 0.27,
+      "median": -0.18,
+      "win_rate": 0.5,
+      "profit_factor": 1.5704,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     }
+    },
+    "net_r_actual": {
+     "0": {
+      "n": 6,
+      "mean": 0.47,
+      "median": 0.02,
+      "win_rate": 0.5,
+      "profit_factor": 2.2589,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     },
+     "10": {
+      "n": 6,
+      "mean": 0.37,
+      "median": -0.08,
+      "win_rate": 0.5,
+      "profit_factor": 1.874,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     },
+     "25": {
+      "n": 6,
+      "mean": 0.27,
+      "median": -0.18,
+      "win_rate": 0.5,
+      "profit_factor": 1.5704,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     }
+    },
+    "exit_reasons": {
+     "stop": 3,
+     "target": 3
+    },
+    "bars_held": {
+     "n": 6,
+     "mean": 4.5,
+     "median": 4.5
+    },
+    "mfe_r": {
+     "n": 6,
+     "mean": 1.4333,
+     "median": 0.85
+    },
+    "mae_r": {
+     "n": 6,
+     "mean": 0.5,
+     "median": 0.5
+    },
+    "stale_sessions_total": 0
+   },
+   "open": {
+    "n": 2,
+    "marked": 2,
+    "unmarked": 0,
+    "unrealised_gross_r": {
+     "n": 2,
+     "mean": 2.75,
+     "median": 2.75
+    },
+    "unrealised_net_r_10bps": {
+     "n": 2,
+     "mean": 2.7312,
+     "median": 2.7312
+    },
+    "running_mfe_r": {
+     "n": 2,
+     "mean": 3.75,
+     "median": 3.75
+    },
+    "running_mae_r": {
+     "n": 2,
+     "mean": 0.5,
+     "median": 0.5
+    },
+    "bars_since_entry": {
+     "n": 2,
+     "mean": 1.0,
+     "median": 1.0
+    },
+    "label": "marked at the last loaded close; an open position is not a result"
+   },
+   "big_winner": {
+    "decision_time_information": false,
+    "window": "so_far",
+    "entered_positions": 8,
+    "peak_ge_3r": 4,
+    "peak_ge_5r": 1,
+    "capture_ratio": {
+     "n": 6,
+     "mean": 0.3436,
+     "median": 0.1307
+    },
+    "continuation_after_exit_r": {
+     "n": 6,
+     "mean": 2.3833,
+     "median": 1.85
+    },
+    "premature_exit_share": 0.5,
+    "premature_exit_n": 6,
+    "stored_hindsight_events": 0,
+    "note": "Peak favourable excursion since entry, share of it captured, and further movement after the exit, measured on bars loaded so far. Needs bars after the decision: hindsight, not known when the position was opened. Windows are still short.",
+    "top_open_by_peak_r": [
+     {
+      "symbol": "OPN1",
+      "direction": 1,
+      "entry_session": "2026-10-15",
+      "peak_favourable_r_so_far": 6.0,
+      "unrealised_gross_r": 4.5,
+      "bars_since_entry": 1
+     }
+    ]
+   }
+  },
+  {
+   "variant_key": "donchian_breakout__exit_c_atr_trail_3x",
+   "name": "c_atr_trail_3x",
+   "version": "v1",
+   "definition_hash": "hhhhhhhhhhhhhhhh",
+   "positions": {
+    "registered": 10,
+    "pending_entry": 1,
+    "open": 2,
+    "closed": 6,
+    "not_enterable": 1
+   },
+   "closed": {
+    "n": 6,
+    "net_r_std": {
+     "0": {
+      "n": 6,
+      "mean": 0.48,
+      "median": 0.03,
+      "win_rate": 0.5,
+      "profit_factor": 2.3032,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     },
+     "10": {
+      "n": 6,
+      "mean": 0.38,
+      "median": -0.07,
+      "win_rate": 0.5,
+      "profit_factor": 1.9084,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     },
+     "25": {
+      "n": 6,
+      "mean": 0.28,
+      "median": -0.17,
+      "win_rate": 0.5,
+      "profit_factor": 1.5979,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     }
+    },
+    "net_r_actual": {
+     "0": {
+      "n": 6,
+      "mean": 0.48,
+      "median": 0.03,
+      "win_rate": 0.5,
+      "profit_factor": 2.3032,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     },
+     "10": {
+      "n": 6,
+      "mean": 0.38,
+      "median": -0.07,
+      "win_rate": 0.5,
+      "profit_factor": 1.9084,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     },
+     "25": {
+      "n": 6,
+      "mean": 0.28,
+      "median": -0.17,
+      "win_rate": 0.5,
+      "profit_factor": 1.5979,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     }
+    },
+    "exit_reasons": {
+     "stop": 3,
+     "target": 3
+    },
+    "bars_held": {
+     "n": 6,
+     "mean": 4.5,
+     "median": 4.5
+    },
+    "mfe_r": {
+     "n": 6,
+     "mean": 1.4333,
+     "median": 0.85
+    },
+    "mae_r": {
+     "n": 6,
+     "mean": 0.5,
+     "median": 0.5
+    },
+    "stale_sessions_total": 0
+   },
+   "open": {
+    "n": 2,
+    "marked": 2,
+    "unmarked": 0,
+    "unrealised_gross_r": {
+     "n": 2,
+     "mean": 2.75,
+     "median": 2.75
+    },
+    "unrealised_net_r_10bps": {
+     "n": 2,
+     "mean": 2.7312,
+     "median": 2.7312
+    },
+    "running_mfe_r": {
+     "n": 2,
+     "mean": 3.75,
+     "median": 3.75
+    },
+    "running_mae_r": {
+     "n": 2,
+     "mean": 0.5,
+     "median": 0.5
+    },
+    "bars_since_entry": {
+     "n": 2,
+     "mean": 1.0,
+     "median": 1.0
+    },
+    "label": "marked at the last loaded close; an open position is not a result"
+   },
+   "big_winner": {
+    "decision_time_information": false,
+    "window": "so_far",
+    "entered_positions": 8,
+    "peak_ge_3r": 4,
+    "peak_ge_5r": 1,
+    "capture_ratio": {
+     "n": 6,
+     "mean": 0.3436,
+     "median": 0.1307
+    },
+    "continuation_after_exit_r": {
+     "n": 6,
+     "mean": 2.3833,
+     "median": 1.85
+    },
+    "premature_exit_share": 0.5,
+    "premature_exit_n": 6,
+    "stored_hindsight_events": 0,
+    "note": "Peak favourable excursion since entry, share of it captured, and further movement after the exit, measured on bars loaded so far. Needs bars after the decision: hindsight, not known when the position was opened. Windows are still short.",
+    "top_open_by_peak_r": [
+     {
+      "symbol": "OPN1",
+      "direction": 1,
+      "entry_session": "2026-10-15",
+      "peak_favourable_r_so_far": 6.0,
+      "unrealised_gross_r": 4.5,
+      "bars_since_entry": 1
+     }
+    ]
+   }
+  },
+  {
+   "variant_key": "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10",
+   "name": "d_hybrid_atr_stop_to_donchian_10",
+   "version": "v1",
+   "definition_hash": "hhhhhhhhhhhhhhhh",
+   "positions": {
+    "registered": 10,
+    "pending_entry": 1,
+    "open": 2,
+    "closed": 6,
+    "not_enterable": 1
+   },
+   "closed": {
+    "n": 6,
+    "net_r_std": {
+     "0": {
+      "n": 6,
+      "mean": 0.49,
+      "median": 0.04,
+      "win_rate": 0.5,
+      "profit_factor": 2.3486,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     },
+     "10": {
+      "n": 6,
+      "mean": 0.39,
+      "median": -0.06,
+      "win_rate": 0.5,
+      "profit_factor": 1.9435,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     },
+     "25": {
+      "n": 6,
+      "mean": 0.29,
+      "median": -0.16,
+      "win_rate": 0.5,
+      "profit_factor": 1.6259,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     }
+    },
+    "net_r_actual": {
+     "0": {
+      "n": 6,
+      "mean": 0.49,
+      "median": 0.04,
+      "win_rate": 0.5,
+      "profit_factor": 2.3486,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     },
+     "10": {
+      "n": 6,
+      "mean": 0.39,
+      "median": -0.06,
+      "win_rate": 0.5,
+      "profit_factor": 1.9435,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     },
+     "25": {
+      "n": 6,
+      "mean": 0.29,
+      "median": -0.16,
+      "win_rate": 0.5,
+      "profit_factor": 1.6259,
+      "interval95": null,
+      "interval_note": "n_too_small"
+     }
+    },
+    "exit_reasons": {
+     "stop": 3,
+     "target": 3
+    },
+    "bars_held": {
+     "n": 6,
+     "mean": 4.5,
+     "median": 4.5
+    },
+    "mfe_r": {
+     "n": 6,
+     "mean": 1.4333,
+     "median": 0.85
+    },
+    "mae_r": {
+     "n": 6,
+     "mean": 0.5,
+     "median": 0.5
+    },
+    "stale_sessions_total": 0
+   },
+   "open": {
+    "n": 2,
+    "marked": 2,
+    "unmarked": 0,
+    "unrealised_gross_r": {
+     "n": 2,
+     "mean": 2.75,
+     "median": 2.75
+    },
+    "unrealised_net_r_10bps": {
+     "n": 2,
+     "mean": 2.7312,
+     "median": 2.7312
+    },
+    "running_mfe_r": {
+     "n": 2,
+     "mean": 3.75,
+     "median": 3.75
+    },
+    "running_mae_r": {
+     "n": 2,
+     "mean": 0.5,
+     "median": 0.5
+    },
+    "bars_since_entry": {
+     "n": 2,
+     "mean": 1.0,
+     "median": 1.0
+    },
+    "label": "marked at the last loaded close; an open position is not a result"
+   },
+   "big_winner": {
+    "decision_time_information": false,
+    "window": "so_far",
+    "entered_positions": 8,
+    "peak_ge_3r": 4,
+    "peak_ge_5r": 1,
+    "capture_ratio": {
+     "n": 6,
+     "mean": 0.3436,
+     "median": 0.1307
+    },
+    "continuation_after_exit_r": {
+     "n": 6,
+     "mean": 2.3833,
+     "median": 1.85
+    },
+    "premature_exit_share": 0.5,
+    "premature_exit_n": 6,
+    "stored_hindsight_events": 0,
+    "note": "Peak favourable excursion since entry, share of it captured, and further movement after the exit, measured on bars loaded so far. Needs bars after the decision: hindsight, not known when the position was opened. Windows are still short.",
+    "top_open_by_peak_r": [
+     {
+      "symbol": "OPN1",
+      "direction": 1,
+      "entry_session": "2026-10-15",
+      "peak_favourable_r_so_far": 6.0,
+      "unrealised_gross_r": 4.5,
+      "bars_since_entry": 1
+     }
+    ]
+   }
+  }
+ ],
+ "comparison": [
+  {
+   "name": "a_atr_stop_fixed_2r",
+   "registered": 10,
+   "open": 2,
+   "pending_entry": 1,
+   "closed": 6,
+   "net_r_10bps_mean": 0.35,
+   "net_r_10bps_median": -0.1,
+   "win_rate": 0.5,
+   "profit_factor": 1.8077,
+   "interval95": null,
+   "status": "n_too_small",
+   "mfe_r_mean": 1.4333,
+   "mae_r_mean": 0.5,
+   "unrealised_net_r_10bps_mean": 2.7312,
+   "peak_ge_3r": 4,
+   "peak_ge_5r": 1,
+   "capture_ratio_median": 0.1307,
+   "premature_exit_share": 0.5
+  },
+  {
+   "name": "a_atr_stop_fixed_3r",
+   "registered": 10,
+   "open": 2,
+   "pending_entry": 1,
+   "closed": 6,
+   "net_r_10bps_mean": 0.36,
+   "net_r_10bps_median": -0.09,
+   "win_rate": 0.5,
+   "profit_factor": 1.8405,
+   "interval95": null,
+   "status": "n_too_small",
+   "mfe_r_mean": 1.4333,
+   "mae_r_mean": 0.5,
+   "unrealised_net_r_10bps_mean": 2.7312,
+   "peak_ge_3r": 4,
+   "peak_ge_5r": 1,
+   "capture_ratio_median": 0.1307,
+   "premature_exit_share": 0.5
+  },
+  {
+   "name": "b_donchian_trail_10",
+   "registered": 10,
+   "open": 2,
+   "pending_entry": 1,
+   "closed": 6,
+   "net_r_10bps_mean": 0.37,
+   "net_r_10bps_median": -0.08,
+   "win_rate": 0.5,
+   "profit_factor": 1.874,
+   "interval95": null,
+   "status": "n_too_small",
+   "mfe_r_mean": 1.4333,
+   "mae_r_mean": 0.5,
+   "unrealised_net_r_10bps_mean": 2.7312,
+   "peak_ge_3r": 4,
+   "peak_ge_5r": 1,
+   "capture_ratio_median": 0.1307,
+   "premature_exit_share": 0.5
+  },
+  {
+   "name": "c_atr_trail_3x",
+   "registered": 10,
+   "open": 2,
+   "pending_entry": 1,
+   "closed": 6,
+   "net_r_10bps_mean": 0.38,
+   "net_r_10bps_median": -0.07,
+   "win_rate": 0.5,
+   "profit_factor": 1.9084,
+   "interval95": null,
+   "status": "n_too_small",
+   "mfe_r_mean": 1.4333,
+   "mae_r_mean": 0.5,
+   "unrealised_net_r_10bps_mean": 2.7312,
+   "peak_ge_3r": 4,
+   "peak_ge_5r": 1,
+   "capture_ratio_median": 0.1307,
+   "premature_exit_share": 0.5
+  },
+  {
+   "name": "d_hybrid_atr_stop_to_donchian_10",
+   "registered": 10,
+   "open": 2,
+   "pending_entry": 1,
+   "closed": 6,
+   "net_r_10bps_mean": 0.39,
+   "net_r_10bps_median": -0.06,
+   "win_rate": 0.5,
+   "profit_factor": 1.9435,
+   "interval95": null,
+   "status": "n_too_small",
+   "mfe_r_mean": 1.4333,
+   "mae_r_mean": 0.5,
+   "unrealised_net_r_10bps_mean": 2.7312,
+   "peak_ge_3r": 4,
+   "peak_ge_5r": 1,
+   "capture_ratio_median": 0.1307,
+   "premature_exit_share": 0.5
+  }
+ ],
+ "completeness": {
+  "sessions": [
+   {
+    "session": "2026-10-14",
+    "candidates": 10,
+    "market_regime_attached": 10,
+    "relative_strength_attached": 10,
+    "sector_known": 10,
+    "guard_rejected": 0,
+    "catalysts_with_events": 0,
+    "catalysts_unavailable": 10,
+    "unavailable_reasons": {
+     "catalysts: market_event tables: no event has been recorded yet (no job feeds this source)": 10
+    },
+    "registered": 40,
+    "entered": 0,
+    "closed": 0,
+    "not_enterable": 0,
+    "skipped_open": 0
+   },
+   {
+    "session": "2026-10-15",
+    "candidates": 0,
+    "market_regime_attached": 0,
+    "relative_strength_attached": 0,
+    "sector_known": 0,
+    "guard_rejected": 0,
+    "catalysts_with_events": 0,
+    "catalysts_unavailable": 0,
+    "unavailable_reasons": {},
+    "registered": 10,
+    "entered": 20,
+    "closed": 30,
+    "not_enterable": 0,
+    "skipped_open": 0
+   }
+  ],
+  "captured_not_processed": [],
+  "as_of": "2026-10-16"
+ },
+ "health": [
+  {
+   "name": "session_continuity",
+   "status": "ok",
+   "detail": "every trading session since activation was processed"
+  },
+  {
+   "name": "captured_sessions_processed",
+   "status": "ok",
+   "detail": "no completed capture is waiting"
+  },
+  {
+   "name": "market_regime_coverage",
+   "status": "ok",
+   "detail": "lowest session coverage 100.0% (threshold 95%)"
+  },
+  {
+   "name": "relative_strength_coverage",
+   "status": "ok",
+   "detail": "lowest session coverage 100.0% (threshold 95%)"
+  },
+  {
+   "name": "catalyst_context",
+   "status": "info",
+   "detail": "no catalyst feed: every candidate is explicitly marked unavailable"
+  },
+  {
+   "name": "open_positions_marked",
+   "status": "ok",
+   "detail": "every open position has a loaded bar"
+  },
+  {
+   "name": "stored_hindsight_events",
+   "status": "info",
+   "detail": "0 recorded by the tracker (it writes them only 250+ bars after entry)"
+  }
+ ]
+}
