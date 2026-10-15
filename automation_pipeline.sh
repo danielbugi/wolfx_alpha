@@ -145,9 +145,9 @@ run_optional_step() {
     if [ "$rc" -eq 0 ]; then
         log_success "${step_label} completed"
     elif [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
-        log "${YELLOW}WARNING: ${step_label} hit its ${limit_seconds}s limit (exit ${rc}); continuing -- nothing downstream reads its output${NC}"
+        log "${YELLOW}OPTIONAL_STEP_WARNING step=${step_num} reason=timeout rc=${rc} limit=${limit_seconds}s -- ${step_label} hit its limit; continuing, nothing downstream reads its output${NC}"
     else
-        log "${YELLOW}WARNING: ${step_label} failed (exit ${rc}); continuing -- nothing downstream reads its output${NC}"
+        log "${YELLOW}OPTIONAL_STEP_WARNING step=${step_num} reason=failed rc=${rc} -- ${step_label} failed; continuing, nothing downstream reads its output${NC}"
     fi
 }
 

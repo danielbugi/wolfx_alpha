@@ -78,6 +78,11 @@ def test_the_due_list_is_ordered_stalest_first_with_never_succeeded_symbols_last
     assert re.search(r"ORDER BY \(qf\.last_checked IS NULL\), qf\.last_checked, sp\.symbol", seen["query"]) and seen["params"] == (25,)
 
 
+def test_the_updater_prints_one_machine_readable_summary_line_for_monitoring():
+    src = open(Q.__file__, encoding="utf-8").read()
+    assert 'print("QUARTERLY_SUMMARY "' in src and all(k in src for k in ("symbols_due", "symbols_remaining", "stopped_by_budget"))
+
+
 def test_the_cli_exposes_the_budget_flag():
     src = open(Q.__file__, encoding="utf-8").read()
     assert "--time-budget-seconds" in src and "time_budget_seconds=args.time_budget_seconds" in src
@@ -110,13 +115,13 @@ def test_an_optional_step_that_succeeds_logs_success_and_the_pipeline_continues(
 @linux_only
 def test_an_optional_step_that_fails_warns_and_the_pipeline_continues(tmp_path):
     r = _run(tmp_path, "echo boom >&2; exit 3", 30)
-    assert r.returncode == 0 and "WARNING: quarterly fundamentals updater failed (exit 3)" in r.stdout and "AFTER-STEP-REACHED" in r.stdout
+    assert r.returncode == 0 and "OPTIONAL_STEP_WARNING step=8 reason=failed rc=3" in r.stdout and "AFTER-STEP-REACHED" in r.stdout
 
 
 @linux_only
 def test_an_optional_step_that_hangs_is_killed_at_its_limit_warns_and_the_pipeline_continues(tmp_path):
     r = _run(tmp_path, "sleep 60", 2)
-    assert r.returncode == 0 and "hit its 2s limit" in r.stdout and "AFTER-STEP-REACHED" in r.stdout
+    assert r.returncode == 0 and "OPTIONAL_STEP_WARNING step=8 reason=timeout rc=124 limit=2s" in r.stdout and "AFTER-STEP-REACHED" in r.stdout
 
 
 def test_step_8_is_the_only_optional_step_and_carries_both_the_budget_and_the_hard_limit():
@@ -124,3 +129,36 @@ def test_step_8_is_the_only_optional_step_and_carries_both_the_budget_and_the_ha
     assert re.findall(r"^run_optional_step (\d+) ", text, flags=re.M) == ["8"]
     assert 'run_optional_step 8 "quarterly fundamentals updater" 3300 mechanism/data_updaters/quarterly_fundamentals_updater.py --time-budget-seconds 2700' in text
     assert "run_step 9 " in text and "run_step 5 " in text                      # every other step still aborts the pipeline on failure
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------- the non-blocking design stays true
+CHAIN_DIRS = ["mechanism/screeners", "ml_training/data_preparation", "ml_training/models", "ml_training/features", "mechanism/ml_enhancement", "mechanism/strategy_analytics",
+              "mechanism/forward_collection", "mechanism/alerts", "mechanism/research", "mechanism/market_intelligence"]
+
+
+def test_nothing_in_the_steps_after_the_quarterly_updater_reads_quarterly_fundamentals():
+    """Step 8 is optional only because steps 9-13 (screener, ML dataset, both ML trainings, post-market package) and the capture / collector / ledger code never read its table. If this fails,
+    someone added a dependency: step 8 must stop being optional (or the new reader must tolerate stale data) before this guard is edited."""
+    hits = []
+    for d in CHAIN_DIRS:
+        base = os.path.join(ROOT, d)
+        for dirpath, dirnames, filenames in os.walk(base):
+            dirnames[:] = [x for x in dirnames if x not in ("__pycache__", "tests")]
+            for f in filenames:
+                if f.endswith(".py"):
+                    path = os.path.join(dirpath, f)
+                    with open(path, encoding="utf-8", errors="ignore") as fh:
+                        if "quarterly_fundamentals" in fh.read():
+                            hits.append(os.path.relpath(path, ROOT).replace("\\", "/"))
+    assert hits == [], hits
+
+
+def test_step_order_keeps_the_critical_steps_after_the_optional_one_and_unconditional():
+    text = open(os.path.join(ROOT, "automation_pipeline.sh"), encoding="utf-8").read().replace("\r\n", "\n")
+    order = [(m.start(), m.group(1)) for m in re.finditer(r"^run_(?:optional_)?step (\d+) ", text, flags=re.M)]
+    nums = [n for _, n in order]
+    assert nums == [str(i) for i in range(1, 13)]
+    assert [n for _, n in order if int(n) >= 9] == ["9", "10", "11", "12"]
+    for n in (9, 10, 11, 12):
+        assert re.search(rf"^run_step {n} ", text, flags=re.M)                      # critical steps keep run_step: a failure there still aborts
+    assert "OPTIONAL_STEP_WARNING" in text

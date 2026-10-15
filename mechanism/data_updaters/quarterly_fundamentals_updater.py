@@ -551,6 +551,9 @@ def main():
         updater.logger.info("🚀 Running full quarterly fundamentals update")
         result = updater.run_update(limit=args.limit, time_budget_seconds=args.time_budget_seconds)
 
+    # One machine-readable line for monitoring (grep QUARTERLY_SUMMARY in the pipeline log): how many were due, attempted, left over, ok, failed, and whether the time budget stopped the run.
+    import json as _json
+    print("QUARTERLY_SUMMARY " + _json.dumps({k: result.get(k) for k in ("symbols_due", "symbols_processed", "symbols_remaining", "symbols_successful", "symbols_failed", "stopped_by_budget", "duration")}, default=str, sort_keys=True))
     if result['success']:
         print("🎉 Quarterly fundamentals update completed successfully!")
     else:

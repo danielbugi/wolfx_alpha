@@ -1,7 +1,7 @@
 [Unit]
 Description=First Light: run the daily pipeline (17:45 New York, retry 19:15 New York; the second fire is a no-op once the day is already marked done by market_calendar.py)
 
-# PROPOSED 2026-10-15 (NOT installed on the VPS until separately approved). The previous schedule (23:45 and 01:00 Asia/Jerusalem = 20:45Z and 22:00Z in summer) failed its FIRST fire on every
+# INSTALLED 2026-10-15 (Stage 1 of docs/operations/PIPELINE_FIRST_FIRE_RELIABILITY.md; timer only, no image change). The previous schedule (23:45 and 01:00 Asia/Jerusalem = 20:45Z and 22:00Z in summer) failed its FIRST fire on every
 # trading night since at least 2026-10-05: 45 minutes after the US close the vendor has 0-7% of the day's bars, and the freshness gate (needs 90%) stops the run fast. Measured on the
 # price rows' insert times, the bars arrive progressively and 90% are fetchable by 21:28-21:43Z in summer (1h30-1h45 after the 20:00Z close). The daily updater itself takes ~14.5 minutes
 # before the gate is evaluated, so a first fire at 21:45Z checks at ~22:00Z with a wide margin. Anchoring to America/New_York keeps that distance (1h45 after the close) all year, through

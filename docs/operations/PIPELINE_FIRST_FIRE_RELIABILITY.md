@@ -1,6 +1,6 @@
 # Pipeline reliability: the daily first-fire failure and the quarterly-fundamentals timeout
 
-Status 2026-10-15: **PROPOSAL, nothing applied.** No timer, unit, pin or image on the VPS was changed. Evidence below is from read-only logs and queries.
+Status 2026-10-15: **Stage 1 (timer only) APPLIED 07:15Z on the owner's approval (section 8); Stage 2 (image + re-pin) PREPARED, not deployed** (`STAGE2_MECHANISM_REPIN_RUNBOOK.md`). Evidence below is from read-only logs and queries.
 
 ## 1. What happens today
 
@@ -82,3 +82,14 @@ The freshness gate (90%), the unmarked-session retry semantics, the pipeline loc
 
 ## 7. Not proposed
 Moving step 8 to the end of the script (a possible later simplification), changing the freshness threshold, and any change to the post-market retry timer.
+
+## 8. Stage 1 as applied (2026-10-15)
+
+* Pre-checks at 07:15:22Z: `donchian-pipeline.service` inactive, `.pipeline.lock` free, no pipeline container, no other donchian service running.
+* Backup of the previous unit: `/opt/donchian/donchian-pipeline.timer.pre-stage1-20261015T071522Z` (sha256 `d8a0f41d1aa535ef`, byte-identical to the previous repo version). Ready-to-run rollback (not executed): `/root/rollback_pipeline_timer_stage1.sh`.
+* Installed: the reviewed unit (only the description, a comment block and the two `OnCalendar` lines differ). `systemctl show` reports `OnCalendar=*-*-* 17:45:00 America/New_York` (next 21:45Z) and `*-*-* 19:15:00 America/New_York` (next 23:15Z), `Persistent=yes`, `RandomizedDelaySec=1min`; timer enabled and active.
+* Calendar behaviour across both clock changes, from `systemd-analyze calendar --iterations=45` on the VPS: the primary fire is 1.75 h after the 16:00 ET close and the retry 3.25 h after it on every date; in Jerusalem time 00:45 / 02:15 normally and 23:45 / 01:15 between 2026-10-25 and 2026-10-31 (21:45Z / 23:15Z until the US change, then 22:45Z / 00:15Z from 2026-11-01).
+* Overlap: the service is `Type=oneshot` (systemd never starts a second instance) and `run_pipeline.sh` takes a non-blocking `flock` on `.pipeline.lock` and exits 0 with "SKIP: another pipeline run is already in progress".
+* **Observed side effect (harmless, recorded):** restarting a `Persistent=true` timer after a calendar change caused ONE catch-up fire at 07:15:47Z. Touching the stamp file before the restart did not prevent it (stopping the timer re-saves its in-memory last-trigger time). The run was a one-second gated no-op: `SKIPPED: no new US session: latest completed is 2026-10-14, already processed by 'pipeline'`; no table count changed. A rollback restart will do the same; it is harmless for the same reason.
+* Downstream timing under the new schedule (Jerusalem time, summer): the primary run completes about 02:10 and the retry path about 03:40; tracker 09:30, collector 06:45 / 08:15 and discontinuity scan 06:20 are all later; the signal-ledger evaluation at 03:30 is unchanged and precedes only the retry path's end.
+* **Open interaction, not changed:** `donchian-nightly-backup.timer` is fixed at 23:30 UTC (02:30 Jerusalem in summer, 01:30 in winter). From 2026-11-02 the primary run (22:45Z-00:10Z) will overlap it every night, and in summer it overlaps whenever the retry path runs. `pg_dump` takes a consistent snapshot, so this is safe, but the dump may be taken before that day's capture. A companion change anchoring the backup to `America/New_York` (for example 21:30, i.e. 01:30Z in summer and 02:30Z in winter) would restore the old ordering; it is a separate timer change and needs its own approval, ideally before 2026-11-02.
