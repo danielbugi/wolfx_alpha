@@ -134,6 +134,23 @@ run_step() {
     fi
 }
 
+# An OPTIONAL step: one whose output no later step in this script reads (verified for step 8: the screener, the ML dataset/training, the signal ledger and the post-market package
+# never read quarterly_fundamentals). It gets a hard wall-clock limit (`timeout`, then SIGKILL 30 s later); if it fails, times out or is cut short, the pipeline logs a loud
+# WARNING and CONTINUES instead of aborting (and instead of letting a slow vendor stall the screener, the capture and the publication until the service's own timeout).
+run_optional_step() {
+    local step_num="$1" step_label="$2" limit_seconds="$3"; shift 3
+    log "${YELLOW}Step ${step_num}/${TOTAL_STEPS}: Running ${step_label} (optional; hard limit ${limit_seconds}s)...${NC}"
+    local rc=0
+    timeout --kill-after=30 "$limit_seconds" "$PYTHON" "$@" 2>&1 | tee -a "$LOG_FILE" || rc=$?
+    if [ "$rc" -eq 0 ]; then
+        log_success "${step_label} completed"
+    elif [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+        log "${YELLOW}OPTIONAL_STEP_WARNING step=${step_num} reason=timeout rc=${rc} limit=${limit_seconds}s -- ${step_label} hit its limit; continuing, nothing downstream reads its output${NC}"
+    else
+        log "${YELLOW}OPTIONAL_STEP_WARNING step=${step_num} reason=failed rc=${rc} -- ${step_label} failed; continuing, nothing downstream reads its output${NC}"
+    fi
+}
+
 # Step 1: Market Index / Macro Data Update
 # Added 2026-09-19, part of the dashboard data-representation review (see
 # CLAUDE.md). Fetches S&P 500/Nasdaq/Russell 2000/Dow/VIX/10Y yield/Gold/
@@ -230,7 +247,10 @@ run_step 7 "earnings calendar updater" mechanism/data_updaters/earnings_calendar
 # exits 0 even when some symbols fail (closed-end funds with no real
 # quarterly financials are expected, not a pipeline error), so this step
 # won't abort the pipeline over that.
-run_step 8 "quarterly fundamentals updater" mechanism/data_updaters/quarterly_fundamentals_updater.py
+# 2026-10-15: bounded and optional. On 2026-10-13 the whole universe (~3,055 symbols) fell due on the same night (every symbol was last checked on the same day 25 days
+# earlier), the step needed ~4.9 s/symbol, and the unit's 4 h TimeoutStartSec killed the pipeline in this step with ~116 symbols left. The updater now stops cleanly after
+# --time-budget-seconds (the unreached symbols stay due, stalest first, and are worked off on the following nights) and `timeout` is the backstop.
+run_optional_step 8 "quarterly fundamentals updater" 3300 mechanism/data_updaters/quarterly_fundamentals_updater.py --time-budget-seconds 2700
 
 # Step 9: Multi-timeframe Screening
 run_step 9 "multi-timeframe screener" mechanism/screeners/multi_timeframe_screener.py "${SESSION_ARGS[@]}"
