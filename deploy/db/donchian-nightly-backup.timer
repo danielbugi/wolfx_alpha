@@ -3,7 +3,7 @@ Description=Run the First Light nightly production database backup
 
 [Timer]
 # Daily at 11:45 Asia/Jerusalem (changed 2026-10-15 from a fixed 23:30 UTC). Chosen from the measured timeline, see
-# docs/operations/BACKUP_SCHEDULE.md and mechanism/forward_collection/tests/test_backup_schedule_timeline.py:
+# docs/operations/BACKUP_SCHEDULE.md (the day-by-day timeline analysis is recomputed by its schedule test):
 #   * the pipeline now fires at 17:45 / 19:15 America/New_York and runs 85 min normally (133 min at its slowest, ~141 min worst case with the bounded
 #     quarterly step), so it can occupy 21:45Z-01:36Z in summer and 22:45Z-02:36Z in winter; a fixed 23:30 UTC dump overlapped it every US winter night;
 #   * 11:45 Jerusalem is after everything that writes irreplaceable evidence for the previous US session: the pipeline's capture and ledger (done by ~04:40
