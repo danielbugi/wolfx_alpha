@@ -4,6 +4,7 @@ import {
   BeakerIcon,
   BellAlertIcon,
   BoltIcon,
+  CalendarDaysIcon,
   ChartBarIcon,
   CpuChipIcon,
   FunnelIcon,
@@ -38,6 +39,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { name: 'Dashboard', href: '/', icon: Squares2X2Icon, description: 'Overview & breakouts' },
       { name: 'Markets', href: '/markets', icon: GlobeAltIcon, description: 'Futures, commodities, currencies, crypto' },
+      { name: 'Earnings', href: '/earnings', icon: CalendarDaysIcon, description: 'Earnings calendar: who reports, day by day' },
       { name: 'Screener', href: '/screener', icon: FunnelIcon, description: 'Search & filter the universe' },
       { name: 'Position Plans', href: '/strategy', icon: ChartBarIcon, description: 'Ranked position plans' },
       { name: 'Strategies', href: '/strategies', icon: PresentationChartLineIcon, description: 'Strategy intelligence: outcomes, signals, data health' },

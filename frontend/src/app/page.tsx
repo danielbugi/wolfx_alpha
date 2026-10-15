@@ -20,6 +20,7 @@ import MomentumBoard, { BoardCategory } from '@/components/dashboard/MomentumBoa
 import MomentumLeaders from '@/components/dashboard/MomentumLeaders';
 import MarketMovers from '@/components/dashboard/MarketMovers';
 import WatchlistCard from '@/components/dashboard/WatchlistCard';
+import EarningsCard from '@/components/earnings/EarningsCard';
 import SummaryTiles from '@/components/dashboard/SummaryTiles';
 import CommoditiesCard, { COMMODITY_SYMBOLS } from '@/components/dashboard/CommoditiesCard';
 import SegmentedControl from '@/components/ui/SegmentedControl';
@@ -331,6 +332,9 @@ export default function DashboardPage() {
 
         {/* Watchlist -- stocks starred on their stock page (this browser); renders nothing when empty */}
         <WatchlistCard />
+
+        {/* Earnings -- yesterday / today / tomorrow / this week, as New York sessions */}
+        <EarningsCard />
 
         {/* Sectors and commodities side by side */}
         <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
