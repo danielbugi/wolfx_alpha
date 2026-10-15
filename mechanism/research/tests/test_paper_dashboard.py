@@ -210,6 +210,34 @@ def test_big_winner_tiers_capture_and_premature_exit_are_hindsight_and_labelled(
     assert "hindsight" in bw["note"] and "not known" in bw["note"]
 
 
+def test_every_mfe_mae_and_big_winner_number_states_its_observation_window():
+    w = World()
+    w.add(V2R, "WIN", entered=entered(100.0), closed=closed_payload(1.9, exit_session=S2, exit_price=108.0, ret=8.0))
+    w.bar("WIN", [(S2, 100.0, 109.0, 99.0, 108.0), (S2 + timedelta(days=1), 108.0, 115.0, 107.0, 114.0), (S2 + timedelta(days=2), 114.0, 122.0, 113.0, 121.0)])
+    w.add(V2R, "RUN", entered=entered(100.0))
+    w.bar("RUN", [(S2, 100.0, 118.0, 99.0, 117.0)])
+    v = w.payload()["variants"][0]
+    assert "holding period" in v["closed"]["mfe_mae_window"] and "still running" in v["open"]["mfe_mae_window"]
+    ow = v["big_winner"]["observation_window"]
+    assert ow["bars_since_entry"]["n"] == 2 and ow["bars_since_entry"]["max"] == 3 and ow["bars_since_entry"]["mean"] == pytest.approx(2.0)      # WIN 3 bars, RUN 1 bar
+    assert ow["bars_after_exit"]["n"] == 1 and ow["bars_after_exit"]["mean"] == pytest.approx(2.0) and ow["bars_after_exit"]["max"] == 2           # two bars after the exit bar
+    assert "Short windows understate" in ow["note"]
+
+
+def test_the_state_production_is_in_right_after_activation_renders_as_pending_only_with_nothing_invented():
+    w = World()
+    for v in ALL5:
+        for i in range(3):
+            w.add(v, f"P{i}")                                                            # registered, entry at the next open: nothing entered or closed yet
+    p = w.payload(sessions=[sess(S1, n_registered=15, n_open_after=15)], as_of=S2)
+    for v in p["variants"]:
+        assert v["positions"] == {"registered": 3, "pending_entry": 3, "open": 0, "closed": 0, "not_enterable": 0}
+        assert v["closed"]["n"] == 0 and v["closed"]["net_r_std"]["10"]["mean"] is None and v["open"]["n"] == 0 and v["open"]["unrealised_gross_r"]["mean"] is None
+        assert v["big_winner"]["entered_positions"] == 0 and v["big_winner"]["peak_ge_5r"] == 0 and v["big_winner"]["capture_ratio"]["median"] is None
+    assert all(c["closed"] == 0 and c["net_r_10bps_mean"] is None and c["status"] == "n_too_small" for c in p["comparison"])
+    json.dumps(p, allow_nan=False)
+
+
 def test_stored_hindsight_events_are_only_counted_never_used_for_the_open_window_numbers():
     w = World()
     o = w.add(V2R, "AAA", entered=entered(), closed=closed_payload(1.0))

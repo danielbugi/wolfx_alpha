@@ -6,6 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { ForwardTrackerView } from '@/components/lab/ForwardTracker';
 import type { ForwardTrackerPayload } from '@/services/forwardTrackerApi';
 import payloadJson from './fixtures/forward_tracker.json';
+import pendingOnlyJson from './fixtures/forward_tracker_pending_only.json';
 
 const payload = structuredClone(payloadJson) as unknown as ForwardTrackerPayload;
 afterEach(() => cleanup());
@@ -44,7 +45,7 @@ describe('Forward paper tracker view', () => {
   it('marks open positions as marks, not results, and counts unmarked ones', () => {
     render(<ForwardTrackerView data={payload} />);
     expect(screen.getByText(/an open position is not a result/)).toBeTruthy();
-    const t = screen.getByText(/Open positions by variant/).nextElementSibling as HTMLElement;
+    const t = screen.getByText(/Open positions by variant/).nextElementSibling?.nextElementSibling as HTMLElement;      // heading, then its note, then the table
     expect(t.textContent).toContain('Unmarked');
   });
 
@@ -61,6 +62,37 @@ describe('Forward paper tracker view', () => {
     const comp = screen.getByText(/Completeness and missing context/).nextElementSibling as HTMLElement;
     expect(comp.textContent).toContain('Market regime attached');
     expect(within(comp).getAllByRole('row').length).toBe(1 + (payload as any).completeness.sessions.length);
+  });
+
+  it('states the observation window of MFE, MAE and the big-winner metrics', () => {
+    const { container } = render(<ForwardTrackerView data={payload} />);
+    expect(container.textContent).toContain("each closed position's own holding period, entry to exit");
+    expect(container.textContent).toContain('since entry, up to the last loaded bar (still running)');
+    expect(container.textContent).toContain('Bars observed since entry (mean / max)');
+    expect(container.textContent).toContain('Bars observed after exit (mean / max)');
+    expect(container.textContent).toContain('Short windows understate both');
+  });
+
+  it('distinguishes pending entry from open from closed', () => {
+    const { container } = render(<ForwardTrackerView data={payload} />);
+    expect(container.textContent).toContain('Pending entry = registered, enters at the next session');
+    const cmp = screen.getByText(/Variant comparison/).nextElementSibling as HTMLElement;
+    for (const h of ['Pending entry', 'Open', 'Closed']) expect(cmp.textContent).toContain(h);
+  });
+
+  it('renders the right-after-activation state (everything pending, nothing entered) without inventing numbers', () => {
+    const { container } = render(<ForwardTrackerView data={pendingOnlyJson as unknown as ForwardTrackerPayload} />);
+    expect(container.textContent).not.toMatch(/NaN|undefined|null/);
+    const cmp = screen.getByText(/Variant comparison/).nextElementSibling as HTMLElement;
+    const rows = within(cmp).getAllByRole('row').slice(1);
+    expect(rows).toHaveLength(5);
+    for (const r of rows) {
+      const cells = within(r).getAllByRole('cell').map((c) => c.textContent);
+      expect(cells[2]).toBe('3');                       // pending entry
+      expect(cells[3]).toBe('0');                       // open
+      expect(cells[4]).toBe('0');                       // closed
+      expect(cells[5]).toBe('—');                       // no realised result
+    }
   });
 
   it('answers an unavailable payload with the reason and no tables', () => {

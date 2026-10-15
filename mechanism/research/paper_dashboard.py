@@ -162,6 +162,7 @@ def _closed_block(closed: Sequence[_Pos]) -> Dict[str, Any]:
         reasons[str(x.get("reason"))] += 1
     return {"n": len(pl), "net_r_std": net_std, "net_r_actual": net_act, "exit_reasons": dict(sorted(reasons.items())),
             "bars_held": _mean_median([x.get("bars_held") for x in pl]), "mfe_r": _mean_median([x.get("mfe_r_std") for x in pl]), "mae_r": _mean_median([x.get("mae_r_std") for x in pl]),
+            "mfe_mae_window": "each closed position's own holding period, entry to exit (recorded by the tracker when it closed)",
             "stale_sessions_total": sum(int(x.get("stale_sessions") or 0) for x in pl)}
 
 
@@ -181,7 +182,7 @@ def _open_block(open_pos: Sequence[_Pos], paths: Mapping[Any, Optional[Dict[str,
         bars.append(pa["bars"])
         details.append((pa["peak_fav_r"], p, pa, g))
     return {"n": len(open_pos), "marked": marked, "unmarked": unmarked,
-            "unrealised_gross_r": _mean_median(gross), "unrealised_net_r_10bps": _mean_median(net10), "running_mfe_r": _mean_median(mfe), "running_mae_r": _mean_median(mae),
+            "unrealised_gross_r": _mean_median(gross), "unrealised_net_r_10bps": _mean_median(net10), "running_mfe_r": _mean_median(mfe), "running_mae_r": _mean_median(mae), "mfe_mae_window": "since entry, up to the last loaded bar (still running)",
             "bars_since_entry": _mean_median(bars), "label": "marked at the last loaded close; an open position is not a result", "_details": details}
 
 
@@ -189,7 +190,7 @@ def _big_winner_block(variant_pos: Sequence[_Pos], paths: Mapping[Any, Optional[
     entered = [(p, paths.get(p.obs["id"])) for p in variant_pos if p.status in ("open", "closed")]
     entered = [(p, pa) for p, pa in entered if pa and pa["peak_fav_r"] is not None]
     tiers = {f"peak_ge_{t:g}r": sum(1 for _, pa in entered if pa["peak_fav_r"] >= t) for t in BIG_WINNER_TIERS}
-    caps, prem, cont = [], [], []
+    caps, prem, cont, after_counts = [], [], [], []
     for p, pa in entered:
         if p.status != "closed" or not p.closed:
             continue
@@ -200,13 +201,18 @@ def _big_winner_block(variant_pos: Sequence[_Pos], paths: Mapping[Any, Optional[
         if fav_pct > 0:
             caps.append(realised_pct / fav_pct)
         after = [b for b in seq if _d(b[0]) > exit_date]
+        after_counts.append(len(after))
         if after:
             exit_price = float(p.closed["exit_price"])
             c = max(pa["direction"] * ((b[2] if pa["direction"] > 0 else b[3]) - exit_price) / pa["unit"] for b in after)
             c = max(c, 0.0)
             cont.append(c)
             prem.append(1.0 if c >= PREMATURE_R else 0.0)
+    since_entry = [pa["bars"] for _, pa in entered]
     return {"decision_time_information": False, "window": "so_far", "entered_positions": len(entered), **tiers,
+            "observation_window": {"bars_since_entry": {**_mean_median(since_entry), "max": max(since_entry) if since_entry else None},
+                                   "bars_after_exit": {**_mean_median(after_counts), "max": max(after_counts) if after_counts else None},
+                                   "note": "How many loaded bars each measurement could see. Peak and capture use the bars since entry; continuation uses the bars after the exit. Short windows understate both."},
             "capture_ratio": _mean_median(caps), "continuation_after_exit_r": _mean_median(cont),
             "premature_exit_share": _r(sum(prem) / len(prem)) if prem else None, "premature_exit_n": len(prem),
             "stored_hindsight_events": stored_hindsight,

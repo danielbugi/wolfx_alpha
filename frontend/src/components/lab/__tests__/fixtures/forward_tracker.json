@@ -124,6 +124,7 @@
      "mean": 0.5,
      "median": 0.5
     },
+    "mfe_mae_window": "each closed position's own holding period, entry to exit (recorded by the tracker when it closed)",
     "stale_sessions_total": 0
    },
    "open": {
@@ -150,6 +151,7 @@
      "mean": 0.5,
      "median": 0.5
     },
+    "mfe_mae_window": "since entry, up to the last loaded bar (still running)",
     "bars_since_entry": {
      "n": 2,
      "mean": 1.0,
@@ -163,6 +165,21 @@
     "entered_positions": 8,
     "peak_ge_3r": 4,
     "peak_ge_5r": 1,
+    "observation_window": {
+     "bars_since_entry": {
+      "n": 8,
+      "mean": 1.75,
+      "median": 2.0,
+      "max": 2
+     },
+     "bars_after_exit": {
+      "n": 6,
+      "mean": 1.0,
+      "median": 1.0,
+      "max": 1
+     },
+     "note": "How many loaded bars each measurement could see. Peak and capture use the bars since entry; continuation uses the bars after the exit. Short windows understate both."
+    },
     "capture_ratio": {
      "n": 6,
      "mean": 0.3436,
@@ -280,6 +297,7 @@
      "mean": 0.5,
      "median": 0.5
     },
+    "mfe_mae_window": "each closed position's own holding period, entry to exit (recorded by the tracker when it closed)",
     "stale_sessions_total": 0
    },
    "open": {
@@ -306,6 +324,7 @@
      "mean": 0.5,
      "median": 0.5
     },
+    "mfe_mae_window": "since entry, up to the last loaded bar (still running)",
     "bars_since_entry": {
      "n": 2,
      "mean": 1.0,
@@ -319,6 +338,21 @@
     "entered_positions": 8,
     "peak_ge_3r": 4,
     "peak_ge_5r": 1,
+    "observation_window": {
+     "bars_since_entry": {
+      "n": 8,
+      "mean": 1.75,
+      "median": 2.0,
+      "max": 2
+     },
+     "bars_after_exit": {
+      "n": 6,
+      "mean": 1.0,
+      "median": 1.0,
+      "max": 1
+     },
+     "note": "How many loaded bars each measurement could see. Peak and capture use the bars since entry; continuation uses the bars after the exit. Short windows understate both."
+    },
     "capture_ratio": {
      "n": 6,
      "mean": 0.3436,
@@ -436,6 +470,7 @@
      "mean": 0.5,
      "median": 0.5
     },
+    "mfe_mae_window": "each closed position's own holding period, entry to exit (recorded by the tracker when it closed)",
     "stale_sessions_total": 0
    },
    "open": {
@@ -462,6 +497,7 @@
      "mean": 0.5,
      "median": 0.5
     },
+    "mfe_mae_window": "since entry, up to the last loaded bar (still running)",
     "bars_since_entry": {
      "n": 2,
      "mean": 1.0,
@@ -475,6 +511,21 @@
     "entered_positions": 8,
     "peak_ge_3r": 4,
     "peak_ge_5r": 1,
+    "observation_window": {
+     "bars_since_entry": {
+      "n": 8,
+      "mean": 1.75,
+      "median": 2.0,
+      "max": 2
+     },
+     "bars_after_exit": {
+      "n": 6,
+      "mean": 1.0,
+      "median": 1.0,
+      "max": 1
+     },
+     "note": "How many loaded bars each measurement could see. Peak and capture use the bars since entry; continuation uses the bars after the exit. Short windows understate both."
+    },
     "capture_ratio": {
      "n": 6,
      "mean": 0.3436,
@@ -592,6 +643,7 @@
      "mean": 0.5,
      "median": 0.5
     },
+    "mfe_mae_window": "each closed position's own holding period, entry to exit (recorded by the tracker when it closed)",
     "stale_sessions_total": 0
    },
    "open": {
@@ -618,6 +670,7 @@
      "mean": 0.5,
      "median": 0.5
     },
+    "mfe_mae_window": "since entry, up to the last loaded bar (still running)",
     "bars_since_entry": {
      "n": 2,
      "mean": 1.0,
@@ -631,6 +684,21 @@
     "entered_positions": 8,
     "peak_ge_3r": 4,
     "peak_ge_5r": 1,
+    "observation_window": {
+     "bars_since_entry": {
+      "n": 8,
+      "mean": 1.75,
+      "median": 2.0,
+      "max": 2
+     },
+     "bars_after_exit": {
+      "n": 6,
+      "mean": 1.0,
+      "median": 1.0,
+      "max": 1
+     },
+     "note": "How many loaded bars each measurement could see. Peak and capture use the bars since entry; continuation uses the bars after the exit. Short windows understate both."
+    },
     "capture_ratio": {
      "n": 6,
      "mean": 0.3436,
@@ -748,6 +816,7 @@
      "mean": 0.5,
      "median": 0.5
     },
+    "mfe_mae_window": "each closed position's own holding period, entry to exit (recorded by the tracker when it closed)",
     "stale_sessions_total": 0
    },
    "open": {
@@ -774,6 +843,7 @@
      "mean": 0.5,
      "median": 0.5
     },
+    "mfe_mae_window": "since entry, up to the last loaded bar (still running)",
     "bars_since_entry": {
      "n": 2,
      "mean": 1.0,
@@ -787,6 +857,21 @@
     "entered_positions": 8,
     "peak_ge_3r": 4,
     "peak_ge_5r": 1,
+    "observation_window": {
+     "bars_since_entry": {
+      "n": 8,
+      "mean": 1.75,
+      "median": 2.0,
+      "max": 2
+     },
+     "bars_after_exit": {
+      "n": 6,
+      "mean": 1.0,
+      "median": 1.0,
+      "max": 1
+     },
+     "note": "How many loaded bars each measurement could see. Peak and capture use the bars since entry; continuation uses the bars after the exit. Short windows understate both."
+    },
     "capture_ratio": {
      "n": 6,
      "mean": 0.3436,

@@ -59,8 +59,9 @@ export function ForwardTrackerView({ data }: { data: ForwardTrackerPayload }) {
         <Tile label="Open or pending after it" value={fmtInt(ls.n_open_after)} />
       </div>
 
+      <p className="text-xs text-slate-500"><b>Pending entry</b> = registered, enters at the next session&apos;s open (no position yet). <b>Open</b> = entered and still held. <b>Closed</b> = exited; only closed positions have a realised result.</p>
       <h3 className="text-sm font-semibold text-slate-700">Variant comparison (the same candidates followed by each registered strategy variant)</h3>
-      <Table head={['Variant', 'Registered', 'Pending entry', 'Open', 'Closed', 'Net R, 10 bps (mean)', '95% interval', 'Win rate', 'Profit factor', 'Avg MFE / MAE (R)', 'Status']} rows={cmp.map((c) => [
+      <Table head={['Variant', 'Registered', 'Pending entry', 'Open', 'Closed', 'Net R, 10 bps (mean)', '95% interval', 'Win rate', 'Profit factor', 'Avg MFE / MAE over the holding period (R)', 'Status']} rows={cmp.map((c) => [
         vlabel(c.name), fmtInt(c.registered), fmtInt(c.pending_entry), fmtInt(c.open), fmtInt(c.closed), c.closed ? fmtR(c.net_r_10bps_mean) : '—', c.interval95 ? fmtInterval(c.interval95) : '—',
         c.closed ? share(c.win_rate) : '—', c.profit_factor === null || c.profit_factor === undefined ? '—' : String(c.profit_factor), c.closed ? `${fmtR(c.mfe_r_mean, 2)} / ${fmtR(c.mae_r_mean, 2)}` : '—',
         c.status === 'n_too_small' ? 'n too small for an interval' : 'interval shown'])} />
@@ -72,19 +73,22 @@ export function ForwardTrackerView({ data }: { data: ForwardTrackerPayload }) {
           c.n ? String(c.bars_held.mean) : '—', Object.keys(c.exit_reasons).map((k) => `${k} ${c.exit_reasons[k]}`).join(' · ') || '—'];
       })} />
 
+      <p className="text-xs text-slate-500">MFE / MAE of closed positions: {variants[0].closed.mfe_mae_window}.</p>
       <h3 className="text-sm font-semibold text-slate-700">Open positions by variant (marked at the last loaded close; an open position is not a result)</h3>
-      <Table head={['Variant', 'Open', 'Marked', 'Unmarked', 'Unrealised gross R (mean)', 'Unrealised net R, 10 bps (mean)', 'Running MFE (mean)', 'Running MAE (mean)', 'Avg bars since entry']} rows={variants.map((v) => {
+      <p className="text-xs text-slate-500">Running MFE / MAE: {variants[0].open.mfe_mae_window}. A position with no loaded price is counted as unmarked, never as zero.</p>
+      <Table head={['Variant', 'Open', 'Marked', 'Unmarked', 'Unrealised gross R (mean)', 'Unrealised net R, 10 bps (mean)', 'Running MFE since entry (mean)', 'Running MAE since entry (mean)', 'Avg bars since entry']} rows={variants.map((v) => {
         const o = v.open;
         return [vlabel(v.name), fmtInt(o.n), fmtInt(o.marked), fmtInt(o.unmarked), o.marked ? fmtR(o.unrealised_gross_r.mean) : '—', o.marked ? fmtR(o.unrealised_net_r_10bps.mean) : '—',
           o.marked ? fmtR(o.running_mfe_r.mean, 2) : '—', o.marked ? fmtR(o.running_mae_r.mean, 2) : '—', o.marked ? String(o.bars_since_entry.mean) : '—'];
       })} />
 
       <h3 className="text-sm font-semibold text-slate-700">Big-winner opportunity so far</h3>
-      <p className="text-xs text-slate-500">{HINDSIGHT}. Windows are still short; &ldquo;peak&rdquo; is the best price reached since entry, not something that could have been sold.</p>
-      <Table head={['Variant', 'Entered', 'Peak >= 3R', 'Peak >= 5R', 'Median share of the move captured (closed)', 'Premature exits (closed)', 'Further move after exit, mean R']} rows={variants.map((v) => {
+      <p className="text-xs text-slate-500">{HINDSIGHT}. Windows are still short; &ldquo;peak&rdquo; is the best price reached since entry, not something that could have been sold. {variants[0].big_winner.observation_window.note}</p>
+      <Table head={['Variant', 'Entered', 'Peak >= 3R', 'Peak >= 5R', 'Bars observed since entry (mean / max)', 'Median share of the move captured (closed)', 'Premature exits (closed)', 'Bars observed after exit (mean / max)', 'Further move after exit, mean R']} rows={variants.map((v) => {
         const b = v.big_winner;
-        return [vlabel(v.name), fmtInt(b.entered_positions), fmtInt(b.peak_ge_3r), fmtInt(b.peak_ge_5r), b.capture_ratio.n ? share(b.capture_ratio.median) : '—',
-          b.premature_exit_n ? `${share(b.premature_exit_share)} of ${fmtInt(b.premature_exit_n)}` : '—', b.continuation_after_exit_r.n ? fmtR(b.continuation_after_exit_r.mean, 2) : '—'];
+        const w = b.observation_window;
+        return [vlabel(v.name), fmtInt(b.entered_positions), fmtInt(b.peak_ge_3r), fmtInt(b.peak_ge_5r), w.bars_since_entry.n ? `${w.bars_since_entry.mean} / ${w.bars_since_entry.max}` : '—', b.capture_ratio.n ? share(b.capture_ratio.median) : '—',
+          b.premature_exit_n ? `${share(b.premature_exit_share)} of ${fmtInt(b.premature_exit_n)}` : '—', w.bars_after_exit.n ? `${w.bars_after_exit.mean} / ${w.bars_after_exit.max}` : '—', b.continuation_after_exit_r.n ? fmtR(b.continuation_after_exit_r.mean, 2) : '—'];
       })} />
 
       <h3 className="text-sm font-semibold text-slate-700">Data health</h3>
