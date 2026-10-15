@@ -12,23 +12,22 @@ Status 2026-10-15: **PREPARED, NOT DEPLOYED.** Needs the owner's separate approv
 
 Wrappers that read `CURRENT_MECHANISM_SHA` (checked on the box): `run_pipeline.sh`, `run_postmarket_retry.sh`, `run_channel_sender.sh`, `run_discontinuity_scan.sh`, `run_forward_collection.sh` (the only one with an arming file). `run_paper_tracker.sh` reads its own pin.
 
-## 2. Which image: a minimal-delta image, not "main"
+## 2. Which image: a DERIVED image (pinned image + only the reviewed files), not a rebuild and not "main"
 
-The pinned image `5c511899505a` was built from the R1-R3 commit. Between that commit and today's `main` there are 66 changed files under `mechanism/` and `ml_training/`, including pipeline step 1 (`market_index_updater.py`), the Telegram notice and bot code (`mechanism/alerts/*`) and the research modules. An image built from `main` would therefore re-pin **all of that** on the notice, post-market and pipeline paths, not only the quarterly fix.
+The pinned image `5c511899505a` (digest `sha256:be0ec3ce31176dcb1b7ee7713765705b64d0b10e79b05ce784721b41b0cc1760`) was built from the R1-R3 commit. Two things make a fresh build a bigger change than the quarterly fix:
 
-**Recommendation:** build the Stage 2 image from the pinned commit plus only the three pipeline files, so the production-proven code is otherwise byte-identical:
+* Between that commit and today's `main` there are 66 changed files under `mechanism/` and `ml_training/` (pipeline step 1 `market_index_updater.py`, the Telegram notice and bot code, the research modules). Building from `main` would re-pin all of it.
+* Even building from the pinned commit is not byte-reproducible: `mechanism/Dockerfile` builds `FROM python:3.11-slim` (a floating tag; its base layers happen to be unchanged today), runs `apt-get install`, and installs requirements of which 5 of 17 are unpinned ranges (`aiogram>=3.13,<4`, `pillow`, `matplotlib`, `mplfinance`, ...). A rebuild could silently move the Telegram library or Debian packages.
 
-* base branch `release/r1r3-5c51189` = commit `5c51189`;
-* head branch `release/stage2-quarterly-minimal` = that commit + `automation_pipeline.sh`, `mechanism/data_updaters/quarterly_fundamentals_updater.py` and their tests (these files are identical between `5c51189` and `main`, so the change applies cleanly);
-* a draft PR head -> base runs the repository's own CI on exactly that content; the image is then built from the head commit with the existing manual build-and-push (`cd.yml`, service `mechanism`, which deploys nothing).
+**Chosen:** `mechanism/Dockerfile.stage2` on the release branch `release/stage2-quarterly-minimal` (base branch `release/r1r3-5c51189` = commit `5c51189`): `FROM` the pinned image **by digest**, then `COPY --chmod=755 automation_pipeline.sh`, `quarterly_fundamentals_updater.py` and two test files. The release branch's `cd.yml` builds that Dockerfile and pushes the commit tag only (never `latest`). CI (draft PR #20, base = the pinned commit) runs on exactly this content.
 
-Option B (build from `main`) is possible but is a much larger release and would need its own review of the notice/bot/market-index changes.
+**Verified complete image diff (pinned vs derived, run on the VPS, ~35,900 files):** full-filesystem sha256 listing, `pip freeze`, `dpkg` versions, Python version, environment, symlinks, runtime config (`User`, `WorkingDir`, `Cmd`, `Entrypoint`) and the mode of the changed script: **only the four copied files differ** (plus `/etc/hostname`, a per-container runtime artifact). The 15 original layers are unchanged and 4 are added. The real `automation_pipeline.sh` from the derived image was also run with a recording stand-in for the interpreter: identical 17-step sequence to the pinned image except step 8's `--time-budget-seconds 2700`; a failing or hanging step 8 only warns and steps 9-13 still run; a failing critical step (screener) still aborts with exit 1 and no session mark.
 
 ## 3. Preconditions (all must hold; any failure = stop)
 
 1. CI green on the minimal-delta PR; image built and pushed; tag `T2` (12 hex) and digest recorded.
 2. On the VPS: `docker pull ghcr.io/danielbugi/wolfx_alpha-mechanism:T2`; the pulled digest equals the recorded one.
-3. In isolation (no production container touched): the quarterly tests pass **inside the image**; `bash -n automation_pipeline.sh`; the updater `--help` shows `--time-budget-seconds`; a scratch rehearsal (aged universe, 150 s budget, real vendor) stops cleanly and prints `QUARTERLY_SUMMARY`.
+3. In isolation (no production container touched): the quarterly tests pass **inside the image**; the real pipeline script runs through the stand-in harness (section 2); a scratch rehearsal with the real image (aged universe, short budget, real vendor) stops cleanly and prints `QUARTERLY_SUMMARY`.
 4. Quiet window (section 4): no donchian unit running, `.pipeline.lock`, `.forward_collection.lock`, `.paper_tracker.lock` free, no timer due within the next 30 minutes.
 5. Pre-state captured: `prod_state.sh` snapshot, `sha256` of the three pin/arming files, row counts of the research and evidence tables.
 
@@ -36,29 +35,23 @@ Option B (build from `main`) is possible but is a much larger release and would 
 
 Weekday daytime in Asia/Jerusalem, after the 11:30 tracker fire and well before the 17:00 evening notice: **Wednesday 2026-10-21, 12:00-14:00** (primary), **Tuesday 2026-10-27, 12:00-14:00** (fallback). Both are before the pipeline's next first fire (00:45) and leave 2+ weeks before the 2026-11-07 cohort. Avoid 2026-10-25 and 2026-11-01/02 (clock changes).
 
-## 5. Procedure (root on the VPS; each step has a stop condition)
+## 5. Procedure: one tested tool, `deploy/vps/stage2_repin.sh` (root on the VPS; dormant, referenced by nothing)
 
 ```
-D=/opt/donchian     NEW=<T2>     OLD=5c511899505a
-0. snapshot:   bash prod_state.sh > before.txt ; sha256sum $D/CURRENT_MECHANISM_SHA $D/FORWARD_COLLECTION_ARMED $D/env/mechanism_image_tag.env $D/CURRENT_PAPER_SHA $D/PAPER_TRACKER_ARMED > pins_before.txt
-               cp -p $D/CURRENT_MECHANISM_SHA $D/CURRENT_MECHANISM_SHA.prev-$(date -u +%Y%m%dT%H%M%SZ) ; cp -p $D/FORWARD_COLLECTION_ARMED $D/FORWARD_COLLECTION_ARMED.prev-<same ts>
-1. quiet check: systemctl list-units 'donchian-*' --state=running  (none) ; flock -n on the three lock files (all free) ; systemctl list-timers (nothing due in 30 min)
-2. pin:        printf '%s\n' $NEW > $D/CURRENT_MECHANISM_SHA.new && mv $D/CURRENT_MECHANISM_SHA.new $D/CURRENT_MECHANISM_SHA
-   >> from this moment run_forward_collection.sh REFUSES (exit 5: armed for a different image) until step 3; do not leave the window between 2 and 3.
-3. re-arm:     printf '%s\n' $NEW > $D/FORWARD_COLLECTION_ARMED        (explicit; this is the only place the arming file is written)
-4. re-verify the collector (idempotent: it re-checks the latest completed session and applies nothing new when it is already complete):
-               /opt/donchian/scripts/run_forward_collection.sh
-   expect: exit 0 and 'next_action: none: the session is complete and verified'; row counts of candidate_observation / feature_snapshot / market_snapshot / stock_relative_strength / sector tables identical to before.
-5. smoke the other consumers (read-only or gated no-ops):
-               /opt/donchian/scripts/run_pipeline.sh          -> 'SKIPPED: no new US session' (daytime), exit 0 ; the log line shows the NEW sha
-               /opt/donchian/scripts/run_postmarket_retry.sh  -> OK (it is idempotent and bounded)       [only if no post-market package is pending]
-               docker run --rm --network none -e PYTHONPATH=/app/mechanism --entrypoint python ghcr.io/danielbugi/wolfx_alpha-mechanism:$NEW -c 'import alerts.channel_content, alerts.publish_post_market'   (import smoke for the notice path)
-6. verify:     bash prod_state.sh > after.txt ; diff before/after: only CURRENT_MECHANISM_SHA, FORWARD_COLLECTION_ARMED, and the image id of freshly started one-off containers differ ;
-               sha256 of mechanism_image_tag.env, CURRENT_PAPER_SHA, PAPER_TRACKER_ARMED identical ; tracker timer, bot container and backend untouched ; paper_* and evidence counts identical.
-7. watch the next cycle (section 7).
+T=<new 12-hex tag>   DIGEST=sha256:<recorded digest>    S=/root/stage2_repin.sh    (copy of deploy/vps/stage2_repin.sh from the reviewed commit, LF endings; checksum compared with the repo)
+1. $S preflight $T $DIGEST     read-only. FAILS (exit 1) unless: tag/digest well-formed; CURRENT_MECHANISM_SHA is 5c511899505a (the rollback image) and FORWARD_COLLECTION_ARMED equals it;
+                               tracker pin and arming present and equal; the new image is local and its digest equals the recorded one; the rollback image is local; no donchian service running; every
+                               .lock file free (pipeline, collector, tracker, notices, backup, postmarket); no timer due within 30 min; the trading-day gate says "no new session" (so the pipeline wrapper is a
+                               no-op); disk free.
+2. $S backup                   fresh production dump via pre_activation_backup.sh stage2-repin + checksum verified. Then restore-check it into a throwaway database (row counts == live) BEFORE step 3.
+3. $S apply $T $DIGEST         repeats the preflight; requires that backup (younger than 45 min, checksum OK); snapshots pins, row counts of every table and the container list into /opt/donchian/stage2-repin/<ts>/;
+                               writes the new pin and then the new arming file (atomic renames); runs run_forward_collection.sh once (idempotent) and requires exit 0. It NEVER rolls back by itself.
+4. $S verify <state dir>       pin and arming are the new tag; tracker pin, tracker arming and the bot's tag file are byte-identical; every public table has the same row count; no long-lived container was
+                               recreated; run_pipeline.sh exits 0 as a gated no-op with the new image (skipped, and reported, if a new session is pending).
+5. (only if anything FAILS)    $S rollback <state dir>      restores the saved pin and arming file and re-runs the collector wrapper. Existing forward observations are never rewritten.
 ```
 
-**Stop conditions:** any step 1 check fails (do not start); step 4 exit != 0 or any count changes (roll back at once); anything unexpected in step 6.
+Between the two writes in step 3 (milliseconds) the collector wrapper would refuse (exit 5); no timer is due within 30 minutes by construction. The tool is covered by 24 tests against a fake tree with stub docker/systemctl/wrappers (every stop condition stops before anything changes; apply writes exactly the two files; a failing collector re-verification does not auto-roll-back; verify catches a changed row count, a recreated container and a changed tracker pin; rollback restores the bytes).
 
 ## 6. Rollback (rehearsed on paper; each file restore is a single `cp`)
 
