@@ -37,23 +37,28 @@ Weekday daytime in Asia/Jerusalem, after the 11:30 tracker fire and well before 
 
 ## 5. Procedure: one tested tool, `deploy/vps/stage2_repin.sh` (root on the VPS; dormant, referenced by nothing)
 
+Repository policy (enforced by tests) is that **no repository file may create the collector's arming file** and none may contain a unit-management command. The tool therefore never writes the arming file, and the arming file path, the collector check command and a read-only unit-introspection binary are supplied by the operator as environment variables. Arming is the deliberate human step in the middle.
+
 ```
+export ARMING_FILE=/opt/donchian/<the collector's arming file>  COLLECTOR_CHECK=/opt/donchian/scripts/<the collector wrapper>  UNITCTL=$(command -v <unit tool>)  GATE_CMD='<run the trading-day gate in the OLD image>'
 T=<new 12-hex tag>   DIGEST=sha256:<recorded digest>    S=/root/stage2_repin.sh    (copy of deploy/vps/stage2_repin.sh from the reviewed commit, LF endings; checksum compared with the repo)
-1. $S preflight $T $DIGEST     read-only. FAILS (exit 1) unless: tag/digest well-formed; CURRENT_MECHANISM_SHA is 5c511899505a (the rollback image) and FORWARD_COLLECTION_ARMED equals it;
-                               tracker pin and arming present and equal; the new image is local and its digest equals the recorded one; the rollback image is local; no donchian service running; every
-                               .lock file free (pipeline, collector, tracker, notices, backup, postmarket); no timer due within 30 min; the trading-day gate says "no new session" (so the pipeline wrapper is a
-                               no-op); disk free.
+1. $S preflight $T $DIGEST     read-only. FAILS (exit 1) unless: tag/digest well-formed; the mechanism pin is 5c511899505a (the rollback image) and the arming file equals it; tracker pin and
+                               arming present and equal; the new image is local and its digest equals the recorded one; the rollback image is local; no donchian service running; every .lock file
+                               free; no timer due within 30 min; the trading-day gate says 'no new session' (so the pipeline wrapper is a no-op); disk free.
 2. $S backup                   fresh production dump via pre_activation_backup.sh stage2-repin + checksum verified. Then restore-check it into a throwaway database (row counts == live) BEFORE step 3.
-3. $S apply $T $DIGEST         repeats the preflight; requires that backup (younger than 45 min, checksum OK); snapshots pins, row counts of every table and the container list into /opt/donchian/stage2-repin/<ts>/;
-                               writes the new pin and then the new arming file (atomic renames); runs run_forward_collection.sh once (idempotent) and requires exit 0. It NEVER rolls back by itself.
-4. $S verify <state dir>       pin and arming are the new tag; tracker pin, tracker arming and the bot's tag file are byte-identical; every public table has the same row count; no long-lived container was
-                               recreated; run_pipeline.sh exits 0 as a gated no-op with the new image (skipped, and reported, if a new session is pending).
-5. (only if anything FAILS)    $S rollback <state dir>      restores the saved pin and arming file and re-runs the collector wrapper. Existing forward observations are never rewritten.
+3. $S apply $T $DIGEST         repeats the preflight; requires that backup (younger than 45 min, checksum OK); snapshots pin, arming, row counts of every table and the container list into
+                               /opt/donchian/stage2-repin/<ts>/; writes the NEW PIN ONLY (atomic rename); prints the exact arming command. From this moment the collector refuses to run until step 4.
+4. (operator, by hand)         run the printed command: write the new tag into the arming file. This is the explicit re-arm.
+5. $S collector-check <state>  refuses unless the arming file now holds the new tag; then runs the collector check once and requires exit 0 ('complete and verified'). Never rolls back by itself.
+6. $S verify <state dir>       pin and arming are the new tag; tracker pin, tracker arming and the bot's tag file are byte-identical; every public table has the same row count; no long-lived
+                               container was recreated; run_pipeline.sh exits 0 as a gated no-op with the new image (skipped, and reported, if a new session is pending).
+7. (only if anything FAILS)    $S rollback <state dir>      restores the saved pin and prints the command that restores the previous arming; the operator runs it, then
+                               $S collector-check <state dir> 5c511899505a. Existing forward observations are never rewritten.
 ```
 
-Between the two writes in step 3 (milliseconds) the collector wrapper would refuse (exit 5); no timer is due within 30 minutes by construction. The tool is covered by 24 tests against a fake tree with stub docker/systemctl/wrappers (every stop condition stops before anything changes; apply writes exactly the two files; a failing collector re-verification does not auto-roll-back; verify catches a changed row count, a recreated container and a changed tracker pin; rollback restores the bytes).
+Between steps 3 and 4 (seconds, with the operator at the keyboard) the collector would refuse (exit 5); no timer is due within 30 minutes by construction. The tool is covered by 27 tests against a fake tree with stub docker, unit-introspection and collector-check scripts: every stop condition stops before anything changes; apply writes only the pin; collector-check refuses until the operator armed and does not auto-roll-back; verify catches a changed row count, a recreated container, a changed tracker pin and a missing re-arm; rollback restores the pin bytes and leaves the arming to the operator; and the file contains none of the words the repository's dormancy guards forbid.
 
-## 6. Rollback (rehearsed on paper; each file restore is a single `cp`)
+## 6. Rollback (by the tool; the manual equivalent is below)
 
 ```
 cp -p $D/CURRENT_MECHANISM_SHA.prev-<ts> $D/CURRENT_MECHANISM_SHA

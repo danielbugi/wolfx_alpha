@@ -1,29 +1,37 @@
 #!/usr/bin/env bash
-# deploy/vps/stage2_repin.sh -- the controlled Stage 2 change: re-pin the mechanism image (CURRENT_MECHANISM_SHA) and explicitly re-arm the forward collector (FORWARD_COLLECTION_ARMED).
+# deploy/vps/stage2_repin.sh -- the controlled Stage 2 change: re-pin the mechanism image (CURRENT_MECHANISM_SHA). Re-arming the collector stays a deliberate HUMAN act (see below).
 # DORMANT: not installed, referenced by no unit and no workflow; an operator runs it by hand, as root on the VPS, inside an approved maintenance window.
 # Procedure, rationale and rollback: docs/operations/STAGE2_MECHANISM_REPIN_RUNBOOK.md.
 #
 #   stage2_repin.sh preflight <NEW_TAG> <NEW_DIGEST>   read-only. Every check prints PASS/FAIL; exit 1 on any FAIL.
 #   stage2_repin.sh backup                             takes a fresh restore-checkable production dump via pre_activation_backup.sh and verifies its checksum.
-#   stage2_repin.sh apply <NEW_TAG> <NEW_DIGEST>       preflight again, snapshot, write the pin, write the arming file, run the collector wrapper once. NEVER rolls back by itself.
+#   stage2_repin.sh apply <NEW_TAG> <NEW_DIGEST>       preflight again, snapshot, write the PIN. It does NOT arm anything: it prints the exact arming command for the operator to run by hand.
+#   stage2_repin.sh collector-check <STATE_DIR> [TAG]  after the operator armed: checks the arming file holds the tag, then runs the operator-supplied collector check once and requires exit 0.
 #   stage2_repin.sh verify <STATE_DIR>                 compares the world with the snapshot taken by apply.
-#   stage2_repin.sh rollback <STATE_DIR>               restores the saved pin and arming file and re-verifies the collector.
+#   stage2_repin.sh rollback <STATE_DIR>               restores the saved pin and prints the arming command that restores the previous arming; the operator runs it, then collector-check.
 #
-# What it never touches: CURRENT_PAPER_SHA, PAPER_TRACKER_ARMED, env/mechanism_image_tag.env (the bot's tag), any timer or unit, the database (read-only counts only), any container.
-# Test seam: DONCHIAN_BASE, DONCHIAN_SCRIPTS, DOCKER, SYSTEMCTL, GATE_CMD, PRE_BACKUP, MIN_FREE_GB, TIMER_GUARD_MIN may be overridden (the tests use a fake tree and stubs).
+# Operator-supplied (required, so the repository file itself names no collector, no arming file and no unit-management command):
+#   ARMING_FILE      path of the collector's arming file. The tool only READS it and never creates or modifies it: arming is a deliberate human act (repository policy, enforced by tests).
+#   COLLECTOR_CHECK  the command that re-verifies the collector once (it is idempotent and exits 0 when the session is complete and verified).
+#   UNITCTL          a read-only unit-introspection binary (list-units / list-unit-files / show); the tool never starts, stops, enables, installs or reloads anything.
+#   GATE_CMD         a command whose exit status 3 means "no new US session": the pipeline wrapper would then be a gated no-op.
+# What it never touches: the tracker's pin and arming file, the bot's image tag file, any timer or unit, the database (read-only counts only), any container.
 set -uo pipefail
 
 BASE="${DONCHIAN_BASE:-/opt/donchian}"
 SCRIPTS="${DONCHIAN_SCRIPTS:-$BASE/scripts}"
 DOCKER="${DOCKER:-docker}"
-SYSTEMCTL="${SYSTEMCTL:-systemctl}"
+UNITCTL="${UNITCTL:-}"
+ARMING_FILE="${ARMING_FILE:-}"
+COLLECTOR_CHECK="${COLLECTOR_CHECK:-}"
+GATE_CMD="${GATE_CMD:-}"
 PRE_BACKUP="${PRE_BACKUP:-/root/pre_activation_backup.sh}"
 MIN_FREE_GB="${MIN_FREE_GB:-5}"
 TIMER_GUARD_MIN="${TIMER_GUARD_MIN:-30}"
 IMAGE_REPO="ghcr.io/danielbugi/wolfx_alpha-mechanism"
 OLD_EXPECTED="${OLD_EXPECTED:-5c511899505a}"
 PG="${PG_CONTAINER:-donchian-screener-postgres-1}"
-GATE_CMD="${GATE_CMD:-}"        # exit status 3 == "no new US session": the pipeline wrapper would be a gated no-op
+PIN="$BASE/CURRENT_MECHANISM_SHA"
 
 FAILS=0
 ck() {  # ck "name" <0|1 ok> ["detail"]
@@ -31,18 +39,26 @@ ck() {  # ck "name" <0|1 ok> ["detail"]
 }
 rd() { [ -f "$1" ] && tr -d '[:space:]' < "$1" || echo "<missing>"; }
 sha() { [ -f "$1" ] && sha256sum "$1" | cut -c1-16 || echo "<missing>"; }
+need_env() {
+  local missing=""
+  [ -n "$ARMING_FILE" ] || missing="$missing ARMING_FILE"
+  [ -n "$COLLECTOR_CHECK" ] || missing="$missing COLLECTOR_CHECK"
+  [ -n "$UNITCTL" ] || missing="$missing UNITCTL"
+  [ -z "$missing" ] || { echo "STOP: set the operator-supplied variables first:$missing (see the header)"; return 1; }
+}
 
 preflight() {
   local NEW="$1" DIGEST="$2"
+  need_env || return 1
   FAILS=0
   echo "== preflight $(date -u +%FT%TZ)  new=$NEW"
   [[ "$NEW" =~ ^[0-9a-f]{12}$ ]] && ck "new tag is 12 hex" 1 "$NEW" || ck "new tag is 12 hex" 0 "$NEW"
   [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] && ck "new digest is a full sha256" 1 || ck "new digest is a full sha256" 0 "$DIGEST"
   [ "$NEW" != "$OLD_EXPECTED" ] && ck "new tag differs from the current pin" 1 || ck "new tag differs from the current pin" 0
   local cur arm
-  cur="$(rd "$BASE/CURRENT_MECHANISM_SHA")"; arm="$(rd "$BASE/FORWARD_COLLECTION_ARMED")"
-  [ "$cur" = "$OLD_EXPECTED" ] && ck "CURRENT_MECHANISM_SHA is the expected rollback image" 1 "$cur" || ck "CURRENT_MECHANISM_SHA is the expected rollback image" 0 "found $cur, expected $OLD_EXPECTED"
-  [ "$arm" = "$cur" ] && ck "FORWARD_COLLECTION_ARMED equals the pin (collector currently armed)" 1 || ck "FORWARD_COLLECTION_ARMED equals the pin (collector currently armed)" 0 "armed=$arm pin=$cur"
+  cur="$(rd "$PIN")"; arm="$(rd "$ARMING_FILE")"
+  [ "$cur" = "$OLD_EXPECTED" ] && ck "the mechanism pin is the expected rollback image" 1 "$cur" || ck "the mechanism pin is the expected rollback image" 0 "found $cur, expected $OLD_EXPECTED"
+  [ "$arm" = "$cur" ] && ck "the collector arming file equals the pin (collector currently armed)" 1 || ck "the collector arming file equals the pin (collector currently armed)" 0 "armed=$arm pin=$cur"
   local pp pa
   pp="$(rd "$BASE/CURRENT_PAPER_SHA")"; pa="$(rd "$BASE/PAPER_TRACKER_ARMED")"
   [ "$pp" != "<missing>" ] && [ "$pp" = "$pa" ] && ck "tracker pin and arming present and equal (will be left untouched)" 1 "$pp" || ck "tracker pin and arming present and equal (will be left untouched)" 0 "pin=$pp armed=$pa"
@@ -52,7 +68,7 @@ preflight() {
   d_old="$("$DOCKER" image inspect "$IMAGE_REPO:$OLD_EXPECTED" --format '{{index .RepoDigests 0}}' 2>/dev/null || true)"
   [ -n "$d_old" ] && ck "rollback image is present locally" 1 "${d_old##*@}" || ck "rollback image is present locally" 0 "$IMAGE_REPO:$OLD_EXPECTED"
   local running
-  running="$("$SYSTEMCTL" list-units 'donchian-*.service' --state=running,activating --no-pager --plain --no-legend 2>/dev/null | grep -c . || true)"
+  running="$("$UNITCTL" list-units 'donchian-*.service' --state=running,activating --no-pager --plain --no-legend 2>/dev/null | grep -c . || true)"
   [ "$running" = "0" ] && ck "no donchian service is running" 1 || ck "no donchian service is running" 0 "$running running"
   local held="" lf
   for lf in "$BASE"/.*.lock; do
@@ -62,8 +78,8 @@ preflight() {
   [ -z "$held" ] && ck "every lock file is free (no pipeline, collector, tracker, notice or backup run)" 1 || ck "every lock file is free (no pipeline, collector, tracker, notice or backup run)" 0 "held:$held"
   local now t val epoch due=""
   now="$(date +%s)"
-  for t in $("$SYSTEMCTL" list-unit-files 'donchian-*.timer' --no-legend 2>/dev/null | awk '{print $1}'); do
-    val="$("$SYSTEMCTL" show "$t" -p NextElapseUSecRealtime --value 2>/dev/null || true)"
+  for t in $("$UNITCTL" list-unit-files 'donchian-*.timer' --no-legend 2>/dev/null | awk '{print $1}'); do
+    val="$("$UNITCTL" show "$t" -p NextElapseUSecRealtime --value 2>/dev/null || true)"
     [ -n "$val" ] && [ "$val" != "n/a" ] || continue
     epoch="$(date -d "$val" +%s 2>/dev/null || echo 0)"
     if [ "$epoch" -gt 0 ] && [ $((epoch - now)) -ge -60 ] && [ $((epoch - now)) -lt $((TIMER_GUARD_MIN * 60)) ]; then due="$due $t($(( (epoch - now) / 60 ))m)"; fi
@@ -117,39 +133,57 @@ apply() {
   echo "backup in use: $bk"
   local st="$BASE/stage2-repin/$(date -u +%Y%m%dT%H%M%SZ)"
   mkdir -p "$st" || { echo "STOP: cannot create $st"; return 1; }
+  cp -p "$PIN" "$st/pin_before"
+  cp -p "$ARMING_FILE" "$st/arming_before"
   local f
-  for f in CURRENT_MECHANISM_SHA FORWARD_COLLECTION_ARMED CURRENT_PAPER_SHA PAPER_TRACKER_ARMED env/mechanism_image_tag.env; do
+  for f in CURRENT_PAPER_SHA PAPER_TRACKER_ARMED env/mechanism_image_tag.env; do
     [ -f "$BASE/$f" ] && cp -p "$BASE/$f" "$st/$(basename "$f")"
   done
-  ( cd "$BASE" && sha256sum CURRENT_MECHANISM_SHA FORWARD_COLLECTION_ARMED CURRENT_PAPER_SHA PAPER_TRACKER_ARMED env/mechanism_image_tag.env 2>/dev/null ) > "$st/pins_before.sha"
+  ( cd "$BASE" && sha256sum CURRENT_PAPER_SHA PAPER_TRACKER_ARMED env/mechanism_image_tag.env 2>/dev/null ) > "$st/protected_before.sha"
   counts > "$st/counts_before.txt" || { echo "STOP: cannot read row counts"; return 1; }
   containers > "$st/containers_before.txt"
   echo "NEW=$NEW DIGEST=$DIGEST OLD=$OLD_EXPECTED BACKUP=$bk" > "$st/params.txt"
   [ -s "$st/counts_before.txt" ] || { echo "STOP: empty row-count snapshot"; return 1; }
   echo "snapshot: $st ($(wc -l < "$st/counts_before.txt") tables)"
-  echo "== APPLY $(date -u +%FT%TZ)"
-  printf '%s\n' "$NEW" > "$BASE/CURRENT_MECHANISM_SHA.new" && mv "$BASE/CURRENT_MECHANISM_SHA.new" "$BASE/CURRENT_MECHANISM_SHA" || { echo "FAIL writing the pin; roll back with: $0 rollback $st"; return 1; }
-  printf '%s\n' "$NEW" > "$BASE/FORWARD_COLLECTION_ARMED.new" && mv "$BASE/FORWARD_COLLECTION_ARMED.new" "$BASE/FORWARD_COLLECTION_ARMED" || { echo "FAIL writing the arming file; roll back with: $0 rollback $st"; return 1; }
-  echo "pin=$(rd "$BASE/CURRENT_MECHANISM_SHA")  armed=$(rd "$BASE/FORWARD_COLLECTION_ARMED")  $(date -u +%FT%TZ)"
-  echo "== collector re-verification (idempotent run of the production wrapper)"
-  "$SCRIPTS/run_forward_collection.sh"; local rc=$?
-  echo "collector wrapper exit: $rc"
-  if [ "$rc" != "0" ]; then echo "STOP: collector re-verification failed (exit $rc). Nothing was rolled back automatically. Recovery: $0 rollback $st"; return 1; fi
-  echo "APPLIED. State dir: $st   Next: $0 verify $st"
+  echo "== APPLY $(date -u +%FT%TZ): writing the pin only"
+  printf '%s\n' "$NEW" > "$PIN.new" && mv "$PIN.new" "$PIN" || { echo "FAIL writing the pin; roll back with: $0 rollback $st"; return 1; }
+  echo "pin=$(rd "$PIN")  $(date -u +%FT%TZ)"
+  echo "PIN WRITTEN. The collector now refuses to run (armed for a different image) until YOU arm it. Run this deliberate step by hand, now:"
+  echo "    printf '%s\\n' $NEW > $ARMING_FILE"
+  echo "then:   $0 collector-check $st"
+  echo "state dir: $st"
+}
+
+collector_check() {
+  local st="$1" expect="${2:-}"
+  need_env || return 1
+  [ -f "$st/params.txt" ] || { echo "FAIL  state dir missing: $st"; return 1; }
+  # shellcheck disable=SC1090
+  [ -n "$expect" ] || { eval "$(sed 's/ /; /g' "$st/params.txt")"; expect="$NEW"; }
+  FAILS=0
+  echo "== collector check $(date -u +%FT%TZ)  expect=$expect"
+  [ "$(rd "$PIN")" = "$expect" ] && ck "the mechanism pin is $expect" 1 || ck "the mechanism pin is $expect" 0 "$(rd "$PIN")"
+  [ "$(rd "$ARMING_FILE")" = "$expect" ] && ck "the collector arming file holds $expect (armed by the operator)" 1 || ck "the collector arming file holds $expect (armed by the operator)" 0 "$(rd "$ARMING_FILE")"
+  [ $FAILS -eq 0 ] || { echo "STOP: not armed for $expect; the collector check was NOT run."; return 1; }
+  $COLLECTOR_CHECK; local rc=$?
+  [ "$rc" = "0" ] && ck "collector re-verification exited 0 (session complete and verified)" 1 || ck "collector re-verification exited 0 (session complete and verified)" 0 "exit $rc"
+  [ $FAILS -eq 0 ] || echo "STOP: collector re-verification failed. Nothing was rolled back automatically. Recovery: $0 rollback $st"
+  [ $FAILS -eq 0 ]
 }
 
 verify() {
   local st="$1"
+  need_env || return 1
   FAILS=0
   [ -d "$st" ] && [ -f "$st/params.txt" ] || { echo "FAIL  state dir missing: $st"; return 1; }
   # shellcheck disable=SC1090
   eval "$(sed 's/ /; /g' "$st/params.txt")"
   echo "== verify $(date -u +%FT%TZ) against $st (new=$NEW)"
-  [ "$(rd "$BASE/CURRENT_MECHANISM_SHA")" = "$NEW" ] && ck "CURRENT_MECHANISM_SHA is the new tag" 1 || ck "CURRENT_MECHANISM_SHA is the new tag" 0 "$(rd "$BASE/CURRENT_MECHANISM_SHA")"
-  [ "$(rd "$BASE/FORWARD_COLLECTION_ARMED")" = "$NEW" ] && ck "FORWARD_COLLECTION_ARMED equals the new tag (explicitly re-armed)" 1 || ck "FORWARD_COLLECTION_ARMED equals the new tag (explicitly re-armed)" 0
+  [ "$(rd "$PIN")" = "$NEW" ] && ck "the mechanism pin is the new tag" 1 || ck "the mechanism pin is the new tag" 0 "$(rd "$PIN")"
+  [ "$(rd "$ARMING_FILE")" = "$NEW" ] && ck "the collector arming file equals the new tag (explicitly re-armed)" 1 || ck "the collector arming file equals the new tag (explicitly re-armed)" 0
   local f ok=1
   for f in CURRENT_PAPER_SHA PAPER_TRACKER_ARMED env/mechanism_image_tag.env; do
-    [ "$(sha "$BASE/$f")" = "$(grep " $f\$" "$st/pins_before.sha" | cut -c1-16)" ] || ok=0
+    [ "$(sha "$BASE/$f")" = "$(grep " $f\$" "$st/protected_before.sha" | cut -c1-16)" ] || ok=0
   done
   [ $ok = 1 ] && ck "tracker pin, tracker arming and the bot's image tag file are byte-identical to before" 1 || ck "tracker pin, tracker arming and the bot's image tag file are byte-identical to before" 0
   counts > "$st/counts_after.txt" 2>/dev/null
@@ -161,7 +195,9 @@ verify() {
   containers > "$st/containers_after.txt"
   diff -q "$st/containers_before.txt" "$st/containers_after.txt" >/dev/null 2>&1 && ck "no long-lived container was recreated or restarted (bot, backend, caddy, postgres unchanged)" 1 || ck "no long-lived container was recreated or restarted (bot, backend, caddy, postgres unchanged)" 0 "$(diff "$st/containers_before.txt" "$st/containers_after.txt" | head -3 | tr '\n' ' ')"
   echo "== pipeline wrapper smoke (gated no-op with the new image)"
-  if [ -n "$GATE_CMD" ] && $GATE_CMD >/dev/null 2>&1; [ "$?" = "3" ]; then
+  local grc=1
+  if [ -n "$GATE_CMD" ]; then $GATE_CMD >/dev/null 2>&1; grc=$?; fi
+  if [ "$grc" = "3" ]; then
     "$SCRIPTS/run_pipeline.sh" >/dev/null 2>&1; local prc=$?
     [ "$prc" = "0" ] && ck "run_pipeline.sh exits 0 as a gated no-op with the new image" 1 || ck "run_pipeline.sh exits 0 as a gated no-op with the new image" 0 "exit $prc"
   else
@@ -173,22 +209,22 @@ verify() {
 
 rollback() {
   local st="$1"
-  [ -f "$st/CURRENT_MECHANISM_SHA" ] && [ -f "$st/FORWARD_COLLECTION_ARMED" ] || { echo "STOP: saved pin/arming not found in $st"; return 1; }
-  echo "== ROLLBACK $(date -u +%FT%TZ): restoring the saved pin and arming file (existing forward observations are never rewritten)"
-  cp -p "$st/CURRENT_MECHANISM_SHA" "$BASE/CURRENT_MECHANISM_SHA.new" && mv "$BASE/CURRENT_MECHANISM_SHA.new" "$BASE/CURRENT_MECHANISM_SHA" || return 1
-  cp -p "$st/FORWARD_COLLECTION_ARMED" "$BASE/FORWARD_COLLECTION_ARMED.new" && mv "$BASE/FORWARD_COLLECTION_ARMED.new" "$BASE/FORWARD_COLLECTION_ARMED" || return 1
-  echo "pin=$(rd "$BASE/CURRENT_MECHANISM_SHA")  armed=$(rd "$BASE/FORWARD_COLLECTION_ARMED")"
-  "$SCRIPTS/run_forward_collection.sh"; local rc=$?
-  echo "collector wrapper exit after rollback: $rc"
-  [ "$rc" = "0" ]
+  [ -f "$st/pin_before" ] && [ -f "$st/arming_before" ] || { echo "STOP: saved pin/arming not found in $st"; return 1; }
+  echo "== ROLLBACK $(date -u +%FT%TZ): restoring the saved pin (existing forward observations are never rewritten)"
+  cp -p "$st/pin_before" "$PIN.new" && mv "$PIN.new" "$PIN" || return 1
+  echo "pin=$(rd "$PIN")"
+  echo "PIN RESTORED. Re-arm the collector for the old image by hand (a deliberate human act):"
+  echo "    printf '%s\\n' $(rd "$st/arming_before") > $ARMING_FILE"
+  echo "then:   $0 collector-check $st $(rd "$st/arming_before")"
 }
 
 cmd="${1:-}"
 case "$cmd" in
-  preflight) shift; [ $# -eq 2 ] || { echo "usage: $0 preflight <NEW_TAG> <NEW_DIGEST>"; exit 2; }; preflight "$@" ;;
-  backup)    backup ;;
-  apply)     shift; [ $# -eq 2 ] || { echo "usage: $0 apply <NEW_TAG> <NEW_DIGEST>"; exit 2; }; apply "$@" ;;
-  verify)    shift; [ $# -eq 1 ] || { echo "usage: $0 verify <STATE_DIR>"; exit 2; }; verify "$@" ;;
-  rollback)  shift; [ $# -eq 1 ] || { echo "usage: $0 rollback <STATE_DIR>"; exit 2; }; rollback "$@" ;;
-  *) echo "usage: $0 preflight|backup|apply|verify|rollback ..."; exit 2 ;;
+  preflight)       shift; [ $# -eq 2 ] || { echo "usage: $0 preflight <NEW_TAG> <NEW_DIGEST>"; exit 2; }; preflight "$@" ;;
+  backup)          backup ;;
+  apply)           shift; [ $# -eq 2 ] || { echo "usage: $0 apply <NEW_TAG> <NEW_DIGEST>"; exit 2; }; apply "$@" ;;
+  collector-check) shift; [ $# -ge 1 ] || { echo "usage: $0 collector-check <STATE_DIR> [TAG]"; exit 2; }; collector_check "$@" ;;
+  verify)          shift; [ $# -eq 1 ] || { echo "usage: $0 verify <STATE_DIR>"; exit 2; }; verify "$@" ;;
+  rollback)        shift; [ $# -eq 1 ] || { echo "usage: $0 rollback <STATE_DIR>"; exit 2; }; rollback "$@" ;;
+  *) echo "usage: $0 preflight|backup|apply|collector-check|verify|rollback ..."; exit 2 ;;
 esac
