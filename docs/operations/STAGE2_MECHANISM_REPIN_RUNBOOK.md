@@ -83,3 +83,21 @@ The old image remains in the local Docker cache and in the registry. A pin chang
 ## 9. Rehearsal evidence (2026-10-15, scratch copy of production, real vendor; nothing in production touched)
 
 A live read-only snapshot of production was restored into a throwaway database; every symbol's `updated_at` was aged to 26-60 days so the **whole universe (3,075 symbols) was due**, the 2026-10-13 scenario. The new updater was run with `--time-budget-seconds 150`: exit 0 at 153 s wall time, 41 symbols attempted, 41 ok, 0 failed, `stopped_by_budget: true`, 3,034 symbols left due, a `QUARTERLY_SUMMARY` line printed. The refreshed symbols were the stalest (their mean synthetic age 60 days against 43 for those still due), ~3.7 s per symbol. At that rate a 45-minute budget handles about 700 symbols a night, so a 3,000-symbol cohort is cleared in about five nights. The scratch environment was removed afterwards.
+
+## 10. Readiness record (2026-10-15, for the 2026-10-21 12:00-14:00 Asia/Jerusalem window)
+
+| Item | Value |
+|---|---|
+| Stage 2 image | `ghcr.io/danielbugi/wolfx_alpha-mechanism:0384c9b91c63` |
+| Stage 2 digest | `sha256:4a12328919eb1e3c8edf0a773dd9d9ae1485656d86368d8c3bd968f0593de66b` (19 layers; the first 15 are identical to the pinned image) |
+| Built from | `release/stage2-quarterly-minimal` @ `0384c9b91c63bb1612b1246f1f721696bf07e631` (base branch `release/r1r3-5c51189` = `5c51189`), CI green on that exact head (6/6 jobs), built by the existing build-and-push (the workflow's `deploy` job is refused for non-`main` refs by the `production` environment and, for mechanism, only prints a skip notice; nothing was deployed) |
+| Rollback image | `ghcr.io/danielbugi/wolfx_alpha-mechanism:5c511899505a`, digest `sha256:be0ec3ce31176dcb1b7ee7713765705b64d0b10e79b05ce784721b41b0cc1760`, present in the VPS image cache |
+| Complete image diff (registry-built vs pinned) | 40,458 vs 40,462 lines: files (sha256), `pip freeze`, `dpkg` versions, Python version, environment, symlinks, directories, modes of all `/app` files: **only** `automation_pipeline.sh`, `quarterly_fundamentals_updater.py` and the two new test files (+ their 644 modes) differ |
+| Pipeline script from the image | 4 scenarios, identical 17-step sequence to the pinned image except step 8's `--time-budget-seconds 2700`; failing/hanging step 8 warns and steps 9-13 + the session mark still run (exit 0); a failing critical step aborts (exit 1, no mark) |
+| Image tests (inside the image, throwaway DB, release-branch fixture data mounted read-only) | 14 passed (budget, wrapper, isolation guard, real-SQL ordering, multi-night starvation simulation) |
+| Final scratch rehearsal (registry image, live read-only snapshot, real vendor) | steady state: 116 due (all never-succeeded), 100 s budget stops cleanly, due count unchanged; cohort night (3,075 due): 27 ok in 100 s (~3.7 s/symbol), 3,048 left, `QUARTERLY_SUMMARY` printed; no scratch leftovers |
+| Window tool preflight on production (today, real tag + digest) | ALL PASS, 13 checks (pin and arming consistent, tracker pin/arming equal, image digest equal, rollback image present, no running service, all locks free, no timer within 30 min, gate = no new session, 75 GB free) |
+| Nightly backup | now 11:45 Jerusalem (`BACKUP_SCHEDULE.md`): the window starts at 12:00, after that day's dump; the window's own fresh backup is still taken first |
+| Untouched by design | `CURRENT_PAPER_SHA`, `PAPER_TRACKER_ARMED`, `env/mechanism_image_tag.env` (bot), every timer and unit, all forward evidence |
+
+The window begins by re-running `preflight` (it must be ALL PASS on the day) and the backup + restore check; if any item has changed, the window does not proceed.
