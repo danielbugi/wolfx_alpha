@@ -8,7 +8,10 @@
 #   stage2_repin.sh apply <NEW_TAG> <NEW_DIGEST>       preflight again, snapshot, write the PIN. It does NOT arm anything: it prints the exact arming command for the operator to run by hand.
 #   stage2_repin.sh collector-check <STATE_DIR> [TAG]  after the operator armed: checks the arming file holds the tag, then runs the operator-supplied collector check once and requires exit 0.
 #   stage2_repin.sh verify <STATE_DIR>                 compares the world with the snapshot taken by apply.
+#   stage2_repin.sh status <STATE_DIR>                 read-only. Classifies the pin/arming state (consistent new, consistent old, or one of the two PARTIAL states), checks for concurrent activity
+#                                                      (running services, held locks, tables whose row counts moved since the snapshot) and prints the recommended recovery action.
 #   stage2_repin.sh rollback <STATE_DIR>               restores the saved pin and prints the arming command that restores the previous arming; the operator runs it, then collector-check.
+#                                                      REFUSES while any run is active or a lock is held (concurrent writes), unless FORCE_ROLLBACK=1 is set deliberately.
 #
 # Operator-supplied (required, so the repository file itself names no collector, no arming file and no unit-management command):
 #   ARMING_FILE      path of the collector's arming file. The tool only READS it and never creates or modifies it: arming is a deliberate human act (repository policy, enforced by tests).
@@ -207,9 +210,62 @@ verify() {
   [ $FAILS -eq 0 ]
 }
 
+# Concurrent-activity probe shared by status and rollback: prints one line per finding and returns 1 when anything is active.
+activity() {
+  local st="$1" found=0 running lf held="" t
+  running="$("$UNITCTL" list-units 'donchian-*.service' --state=running,activating --no-pager --plain --no-legend 2>/dev/null | awk '{print $1}' | tr '\n' ' ')"
+  [ -z "${running// }" ] || { echo "ACTIVE  services running: $running"; found=1; }
+  for lf in "$BASE"/.*.lock; do
+    [ -e "$lf" ] || continue
+    ( exec 8>"$lf"; flock -n 8 ) 2>/dev/null || held="$held $(basename "$lf")"
+  done
+  [ -z "$held" ] || { echo "ACTIVE  locks held:$held"; found=1; }
+  if [ -f "$st/counts_before.txt" ]; then
+    counts > "$st/counts_now.txt" 2>/dev/null
+    local moved
+    moved="$(diff "$st/counts_before.txt" "$st/counts_now.txt" 2>/dev/null | grep '^>' | sed 's/^> //' | tr '\n' ' ')"
+    [ -z "$moved" ] || { echo "ACTIVE  row counts moved since the snapshot (concurrent writes or an effect of this change): $moved"; found=1; }
+  fi
+  [ $found -eq 0 ] && echo "QUIET   no running service, no held lock, no row count moved since the snapshot"
+  return $found
+}
+
+status() {
+  local st="$1"
+  need_env || return 1
+  [ -f "$st/params.txt" ] && [ -f "$st/pin_before" ] || { echo "STOP: state dir missing or incomplete: $st"; return 1; }
+  # shellcheck disable=SC1090
+  eval "$(sed 's/ /; /g' "$st/params.txt")"
+  local old="$(rd "$st/pin_before")" pin arm cls action
+  pin="$(rd "$PIN")"; arm="$(rd "$ARMING_FILE")"
+  echo "== status $(date -u +%FT%TZ)   pin=$pin  arming=$arm   (old=$old new=$NEW)"
+  if   [ "$pin" = "$NEW" ] && [ "$arm" = "$NEW" ]; then cls="CONSISTENT_NEW"; action="run: collector-check $st   then: verify $st   (nothing to recover if both pass)"
+  elif [ "$pin" = "$old" ] && [ "$arm" = "$old" ]; then cls="CONSISTENT_OLD"; action="the previous state is in place; run: collector-check $st $old   to re-confirm the collector; the change is simply not applied"
+  elif [ "$pin" = "$NEW" ] && [ "$arm" = "$old" ]; then cls="PARTIAL_PIN_NEW_ARMING_OLD"; action="the collector currently REFUSES to run (armed for a different image). Either finish: write $NEW into the arming file by hand, then collector-check $st; or undo: rollback $st (restores the pin), then run the printed arming command"
+  elif [ "$pin" = "$old" ] && [ "$arm" = "$NEW" ]; then cls="PARTIAL_PIN_OLD_ARMING_NEW"; action="the collector currently REFUSES to run. Restore the arming by hand: write $old into the arming file (or finish the change by writing the pin), then collector-check $st $old"
+  else cls="UNEXPECTED"; action="neither file holds the old or the new tag: do nothing automatic; compare with $st/pin_before and $st/arming_before and restore each file by hand from those copies"
+  fi
+  echo "CLASS   $cls"
+  echo "ACTION  $action"
+  activity "$st"; local act=$?
+  [ $act -eq 0 ] || echo "NOTE    activity was detected: wait for the active run to finish (or confirm it is a timer-driven run unrelated to this change) BEFORE restoring anything"
+  local ok=1 f
+  for f in CURRENT_PAPER_SHA PAPER_TRACKER_ARMED env/mechanism_image_tag.env; do
+    [ "$(sha "$BASE/$f")" = "$(grep " $f\$" "$st/protected_before.sha" | cut -c1-16)" ] || ok=0
+  done
+  [ $ok = 1 ] && echo "PASS    tracker pin, tracker arming and the bot's image tag file are byte-identical to the snapshot" || echo "FAIL    a tracker/bot file differs from the snapshot: do NOT touch it from this tool; report"
+  [ "$cls" = "CONSISTENT_NEW" ] || [ "$cls" = "CONSISTENT_OLD" ]
+}
+
 rollback() {
   local st="$1"
   [ -f "$st/pin_before" ] && [ -f "$st/arming_before" ] || { echo "STOP: saved pin/arming not found in $st"; return 1; }
+  need_env || return 1
+  echo "== concurrency check before restoring anything"
+  if ! activity "$st"; then
+    if [ "${FORCE_ROLLBACK:-0}" = "1" ]; then echo "FORCE_ROLLBACK=1: continuing despite the activity above (deliberate operator decision)"
+    else echo "STOP: activity detected (see above). Nothing was restored. Wait for it to finish and rerun, or set FORCE_ROLLBACK=1 only after deciding it is safe."; return 1; fi
+  fi
   echo "== ROLLBACK $(date -u +%FT%TZ): restoring the saved pin (existing forward observations are never rewritten)"
   cp -p "$st/pin_before" "$PIN.new" && mv "$PIN.new" "$PIN" || return 1
   echo "pin=$(rd "$PIN")"
@@ -225,6 +281,7 @@ case "$cmd" in
   apply)           shift; [ $# -eq 2 ] || { echo "usage: $0 apply <NEW_TAG> <NEW_DIGEST>"; exit 2; }; apply "$@" ;;
   collector-check) shift; [ $# -ge 1 ] || { echo "usage: $0 collector-check <STATE_DIR> [TAG]"; exit 2; }; collector_check "$@" ;;
   verify)          shift; [ $# -eq 1 ] || { echo "usage: $0 verify <STATE_DIR>"; exit 2; }; verify "$@" ;;
+  status)          shift; [ $# -eq 1 ] || { echo "usage: $0 status <STATE_DIR>"; exit 2; }; status "$@" ;;
   rollback)        shift; [ $# -eq 1 ] || { echo "usage: $0 rollback <STATE_DIR>"; exit 2; }; rollback "$@" ;;
-  *) echo "usage: $0 preflight|backup|apply|collector-check|verify|rollback ..."; exit 2 ;;
+  *) echo "usage: $0 preflight|backup|apply|collector-check|verify|status|rollback ..."; exit 2 ;;
 esac

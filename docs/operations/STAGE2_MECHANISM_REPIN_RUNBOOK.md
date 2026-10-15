@@ -56,7 +56,7 @@ T=<new 12-hex tag>   DIGEST=sha256:<recorded digest>    S=/root/stage2_repin.sh 
                                $S collector-check <state dir> 5c511899505a. Existing forward observations are never rewritten.
 ```
 
-Between steps 3 and 4 (seconds, with the operator at the keyboard) the collector would refuse (exit 5); no timer is due within 30 minutes by construction. The tool is covered by 27 tests against a fake tree with stub docker, unit-introspection and collector-check scripts: every stop condition stops before anything changes; apply writes only the pin; collector-check refuses until the operator armed and does not auto-roll-back; verify catches a changed row count, a recreated container, a changed tracker pin and a missing re-arm; rollback restores the pin bytes and leaves the arming to the operator; and the file contains none of the words the repository's dormancy guards forbid.
+Between steps 3 and 4 (seconds, with the operator at the keyboard) the collector would refuse (exit 5); no timer is due within 30 minutes by construction. The tool is covered by 36 tests against a fake tree with stub docker, unit-introspection and collector-check scripts: every stop condition stops before anything changes; apply writes only the pin; collector-check refuses until the operator armed and does not auto-roll-back; verify catches a changed row count, a recreated container, a changed tracker pin and a missing re-arm; rollback restores the pin bytes and leaves the arming to the operator; and the file contains none of the words the repository's dormancy guards forbid.
 
 ## 6. Rollback (by the tool; the manual equivalent is below)
 
@@ -66,6 +66,20 @@ cp -p $D/FORWARD_COLLECTION_ARMED.prev-<ts> $D/FORWARD_COLLECTION_ARMED       # 
 /opt/donchian/scripts/run_forward_collection.sh                                # expect exit 0, 'complete and verified'
 ```
 The old image remains in the local Docker cache and in the registry. A pin change takes effect at the next one-off container start; nothing long-lived runs from the mechanism image except the bot, which has its own pin.
+
+### 6a. Recovery from a partial failure (pin and arming out of step)
+
+The only unsafe end state is a pin and an arming file that disagree, or a change made while something else is writing. `status <state dir>` is read-only and can be run at any moment; it classifies the pair and prints the action. `rollback` is guarded: it refuses (exit 1, nothing restored) while a donchian service is running, a `.lock` file is held, or any table's row count moved since the snapshot, unless the operator sets `FORCE_ROLLBACK=1` after deciding that is safe.
+
+| `status` class | What it means | Collector right now | Recovery (only after `status` shows QUIET) |
+|---|---|---|---|
+| CONSISTENT_NEW | pin and arming both the new tag | runs | finish: `collector-check`, then `verify` |
+| CONSISTENT_OLD | pin and arming both 5c511899505a | runs | nothing to restore; confirm with `collector-check <state> 5c511899505a` |
+| PARTIAL_PIN_NEW_ARMING_OLD | `apply` done, arming not yet changed (or the arming step failed) | refuses (exit 5) | either arm for the new tag by hand, then `collector-check`; or `rollback`, which restores the pin to the old tag and leaves a consistent old pair |
+| PARTIAL_PIN_OLD_ARMING_NEW | pin was restored (or never written) but arming is new | refuses (exit 5) | write the old tag into the arming file by hand, then `collector-check <state> 5c511899505a`; or write the new pin and `collector-check` |
+| UNEXPECTED | neither file holds the old or the new tag | refuses | do nothing automatic; compare with `pin_before` and `arming_before` in the state dir and restore each file by hand |
+
+Order of operations on any failure: (1) stop, do not retry the failed step; (2) `status <state dir>` and read CLASS, ACTIVITY and the tracker/bot line; (3) if ACTIVE lines appear, wait for the run to finish (a timer-driven run is not an error) and run `status` again; (4) take the recovery action from the table; (5) `collector-check` for whichever tag is now armed; (6) `verify` (or the baseline verifier for the old state). Existing forward observations, the tracker pin/arming and the bot's tag are never touched by any step; if `status` reports a difference in them, do not repair it from this tool.
 
 ## 7. Monitoring after the change (step 8 can no longer fail the pipeline, so it must be watched)
 

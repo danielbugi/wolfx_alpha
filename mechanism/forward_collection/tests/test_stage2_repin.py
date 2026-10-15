@@ -241,6 +241,87 @@ def test_rollback_restores_the_saved_pin_bytes_and_leaves_the_arming_to_the_oper
     assert c.returncode == 0 and (w["fake"] / "collector.log").read_text().strip() == f"collector-check pin={OLD} arm={OLD}"
 
 
+# ---------------------------------------------------------------------------------------------------------------------------------- recovery from a partial change: classify, check for concurrent writes, guarded rollback
+@linux_only
+@pytest.mark.parametrize("pin,arm,cls", [
+    (NEW, NEW, "CONSISTENT_NEW"),
+    (OLD, OLD, "CONSISTENT_OLD"),
+    (NEW, OLD, "PARTIAL_PIN_NEW_ARMING_OLD"),
+    (OLD, NEW, "PARTIAL_PIN_OLD_ARMING_NEW"),
+    ("deadbeefcafe", NEW, "UNEXPECTED"),
+])
+def test_status_classifies_every_pin_and_arming_combination_and_names_the_recovery_action(w, pin, arm, cls):
+    st = _applied(w)
+    put(w["base"] / "CURRENT_MECHANISM_SHA", pin + "\n")
+    put(w["arming"], arm + "\n")
+    before = snap(w, PIN_AND_ARM + UNTOUCHED)
+    r = run(w, "status", st)
+    assert f"CLASS   {cls}" in r.stdout and "ACTION" in r.stdout
+    assert (r.returncode == 0) == (cls in ("CONSISTENT_NEW", "CONSISTENT_OLD"))
+    if cls.startswith("PARTIAL"):
+        assert "REFUSES to run" in r.stdout
+    if cls == "UNEXPECTED":
+        assert "by hand from" in r.stdout
+    assert snap(w, PIN_AND_ARM + UNTOUCHED) == before                                       # status is read-only
+
+
+@linux_only
+def test_status_reports_quiet_when_nothing_is_running_and_names_each_kind_of_activity(w):
+    st = _applied(w)
+    put(w["arming"], NEW + "\n")
+    assert "QUIET" in run(w, "status", st).stdout
+    put(w["fake"] / "running", "donchian-pipeline.service loaded active running First Light\n")
+    r = run(w, "status", st)
+    assert "ACTIVE  services running: donchian-pipeline.service" in r.stdout and "NOTE    activity was detected" in r.stdout
+    put(w["fake"] / "running", "")
+    put(w["fake"] / "counts", COUNTS.replace("2202", "2250"))
+    r = run(w, "status", st)
+    assert "ACTIVE  row counts moved since the snapshot" in r.stdout and "signal_ledger|2250" in r.stdout
+
+
+@linux_only
+def test_status_flags_a_changed_tracker_or_bot_file_and_says_not_to_touch_it(w):
+    st = _applied(w)
+    put(w["arming"], NEW + "\n")
+    put(w["base"] / "PAPER_TRACKER_ARMED", "ffffffffffff\n")
+    assert "FAIL    a tracker/bot file differs from the snapshot" in run(w, "status", st).stdout
+
+
+@linux_only
+def test_rollback_refuses_while_a_run_is_active_or_a_lock_is_held_and_changes_nothing(w):
+    st = _applied(w)
+    put(w["arming"], NEW + "\n")
+    before = snap(w, PIN_AND_ARM)
+    put(w["fake"] / "running", "donchian-paper-tracker.service loaded active running tracker\n")
+    r = run(w, "rollback", st)
+    assert r.returncode == 1 and "STOP: activity detected" in r.stdout and snap(w, PIN_AND_ARM) == before
+    put(w["fake"] / "running", "")
+    lock = w["base"] / ".sample_job.lock"
+    lock.write_text("")
+    holder = subprocess.Popen(["bash", "-c", f"exec 9>{lock}; flock -n 9; sleep 20"])
+    try:
+        time.sleep(0.7)
+        r = run(w, "rollback", st)
+        assert r.returncode == 1 and "locks held: .sample_job.lock" in r.stdout and snap(w, PIN_AND_ARM) == before
+        forced = run(w, "rollback", st, env={"FORCE_ROLLBACK": "1"})
+        assert forced.returncode == 0 and "FORCE_ROLLBACK=1" in forced.stdout and (w["base"] / "CURRENT_MECHANISM_SHA").read_text() == OLD + "\n"
+    finally:
+        holder.kill()
+
+
+@linux_only
+def test_the_full_partial_failure_recovery_path_pin_written_arming_never_done(w):
+    """The realistic failure: the pin was written, the arming never happened. The collector would refuse; status says so and rollback restores the old, consistent state."""
+    st = _applied(w)                                               # pin = NEW, arming still OLD
+    s1 = run(w, "status", st)
+    assert "CLASS   PARTIAL_PIN_NEW_ARMING_OLD" in s1.stdout and s1.returncode == 1
+    r = run(w, "rollback", st)
+    assert r.returncode == 0 and (w["base"] / "CURRENT_MECHANISM_SHA").read_text() == OLD + "\n" and w["arming"].read_text() == OLD + "\n"
+    s2 = run(w, "status", st)
+    assert "CLASS   CONSISTENT_OLD" in s2.stdout and s2.returncode == 0
+    assert run(w, "collector-check", st, OLD).returncode == 0
+
+
 # ---------------------------------------------------------------------------------------------------------------------------------- what the repository's dormancy guards require of this file
 def _code():
     text = SCRIPT.read_text(encoding="utf-8")
