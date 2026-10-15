@@ -396,8 +396,10 @@ class QuarterlyFundamentalsUpdater:
                 qf.last_checked IS NULL
                 OR qf.last_checked <= NOW() - INTERVAL '%s days'
             )
-            ORDER BY sp.symbol
+            ORDER BY (qf.last_checked IS NULL), qf.last_checked, sp.symbol
             """
+            # Stalest successful symbol first; symbols that have NEVER produced a quarterly row (closed-end funds and the like, which fail every night) come last, so under a
+            # time budget they can never starve the symbols that genuinely need a refresh.
             params = (recheck_after_days,)
             if limit:
                 query += " LIMIT %s"
@@ -415,8 +417,11 @@ class QuarterlyFundamentalsUpdater:
             self.logger.error(f"Error getting symbols: {e}")
             return []
 
-    def run_update(self, symbols: Optional[List[str]] = None, limit: Optional[int] = None):
+    def run_update(self, symbols: Optional[List[str]] = None, limit: Optional[int] = None, time_budget_seconds: Optional[float] = None, clock=time.monotonic):
+        """`time_budget_seconds`: stop cleanly before starting a symbol once this much wall-clock time has been spent. Symbols not reached keep their old `updated_at`, so they are still
+        due, and (ordering above) first in line, on the next run: a 25-day cohort that is due all at once is worked off over several nights instead of one unbounded run."""
         start_time = datetime.now()
+        t0 = clock()
         self.logger.info(f"🚀 Starting quarterly fundamentals update at {start_time}")
 
         if symbols is None:
@@ -429,9 +434,16 @@ class QuarterlyFundamentalsUpdater:
 
         successful_updates = 0
         failed_updates = 0
+        attempted = 0
+        stopped_by_budget = False
 
         progress = ProgressBar(len(symbols), prefix="Quarterly fundamentals", logger=self.logger)
         for i, symbol in enumerate(symbols, 1):
+            if time_budget_seconds is not None and clock() - t0 >= time_budget_seconds:
+                stopped_by_budget = True
+                self.logger.warning(f"Time budget of {time_budget_seconds:.0f}s reached after {attempted} of {len(symbols)} symbols; the rest stay due for the next run")
+                break
+            attempted += 1
             try:
                 success = self.update_symbol(symbol)
                 if success:
@@ -454,19 +466,22 @@ class QuarterlyFundamentalsUpdater:
         progress.close()
 
         duration = datetime.now() - start_time
-        success_rate = (successful_updates / len(symbols) * 100) if symbols else 0
+        success_rate = (successful_updates / attempted * 100) if attempted else 0
         self.logger.info(f"""
         🎉 Quarterly fundamentals update completed in {duration}:
         ✅ Successful updates: {successful_updates}
         ❌ Failed updates: {failed_updates}
-        📊 Total symbols: {len(symbols)}
+        📊 Symbols attempted: {attempted} of {len(symbols)} due{' (stopped by time budget)' if stopped_by_budget else ''}
         📈 Success rate: {success_rate:.1f}%
         """)
 
         return {
             'success': failed_updates == 0,
             'duration': duration.total_seconds(),
-            'symbols_processed': len(symbols),
+            'symbols_processed': attempted,
+            'symbols_due': len(symbols),
+            'symbols_remaining': len(symbols) - attempted,
+            'stopped_by_budget': stopped_by_budget,
             'symbols_successful': successful_updates,
             'symbols_failed': failed_updates,
             'success_rate': success_rate,
@@ -515,6 +530,7 @@ def main():
     parser.add_argument('--batch', type=int, help='Run in batch mode with specified limit')
     parser.add_argument('--from-file', help='Load symbols from a stock_lists CSV/TXT/JSON file instead of the DB')
     parser.add_argument('--only-new', action='store_true', help='With --from-file: only symbols not already in quarterly_fundamentals')
+    parser.add_argument('--time-budget-seconds', type=float, help='Stop cleanly (exit 0) before starting a new symbol once this much wall-clock time has been spent; the rest stay due')
 
     args = parser.parse_args()
 
@@ -530,11 +546,14 @@ def main():
         result = updater.run_update(symbols=symbols)
     elif args.batch:
         updater.logger.info(f"📦 Running batch update with limit: {args.batch}")
-        result = updater.run_update(limit=args.batch)
+        result = updater.run_update(limit=args.batch, time_budget_seconds=args.time_budget_seconds)
     else:
         updater.logger.info("🚀 Running full quarterly fundamentals update")
-        result = updater.run_update(limit=args.limit)
+        result = updater.run_update(limit=args.limit, time_budget_seconds=args.time_budget_seconds)
 
+    # One machine-readable line for monitoring (grep QUARTERLY_SUMMARY in the pipeline log): how many were due, attempted, left over, ok, failed, and whether the time budget stopped the run.
+    import json as _json
+    print("QUARTERLY_SUMMARY " + _json.dumps({k: result.get(k) for k in ("symbols_due", "symbols_processed", "symbols_remaining", "symbols_successful", "symbols_failed", "stopped_by_budget", "duration")}, default=str, sort_keys=True))
     if result['success']:
         print("🎉 Quarterly fundamentals update completed successfully!")
     else:

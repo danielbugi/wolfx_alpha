@@ -108,13 +108,11 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: mechanism/Dockerfile
+          # STAGE 2 RELEASE BRANCH ONLY: a derived image (pinned production image + the reviewed quarterly-fundamentals files), pushed under the commit tag ONLY -- the registry's `latest` is not touched.
+          file: mechanism/Dockerfile.stage2
           push: true
           tags: |
             ghcr.io/danielbugi/wolfx_alpha-mechanism:${{ steps.sha.outputs.short_sha }}
-            ghcr.io/danielbugi/wolfx_alpha-mechanism:latest
-          cache-from: type=gha,scope=mechanism
-          cache-to: type=gha,mode=max,scope=mechanism
 
   deploy:
     needs: build-and-push
