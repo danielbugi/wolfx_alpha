@@ -1,0 +1,13 @@
+# mechanism/Dockerfile.stage2 -- the Stage 2 image: the production-pinned mechanism image PLUS ONLY the reviewed quarterly-fundamentals correction.
+#
+# Why a derived image and not a rebuild of mechanism/Dockerfile: that Dockerfile builds FROM the floating tag python:3.11-slim, runs apt-get install and installs requirements, 5 of which are
+# unpinned ranges (aiogram>=3.13,<4, pillow>=10.1, matplotlib>=3.8, mplfinance, ...). A rebuild today could therefore change the base layers' packages and third-party libraries (for example the
+# Telegram bot library the notices use) even though only one source file changed. Starting FROM the pinned image's immutable digest makes the image diff exactly the files copied below.
+#
+# Base: ghcr.io/danielbugi/wolfx_alpha-mechanism:5c511899505a  (the image CURRENT_MECHANISM_SHA points at since 2026-10-10).
+FROM ghcr.io/danielbugi/wolfx_alpha-mechanism@sha256:be0ec3ce31176dcb1b7ee7713765705b64d0b10e79b05ce784721b41b0cc1760
+
+COPY --chmod=755 automation_pipeline.sh /app/automation_pipeline.sh
+COPY mechanism/data_updaters/quarterly_fundamentals_updater.py /app/mechanism/data_updaters/quarterly_fundamentals_updater.py
+COPY mechanism/data_updaters/tests/test_quarterly_budget.py /app/mechanism/data_updaters/tests/test_quarterly_budget.py
+COPY mechanism/forward_collection/tests/test_quarterly_ordering_db.py /app/mechanism/forward_collection/tests/test_quarterly_ordering_db.py
