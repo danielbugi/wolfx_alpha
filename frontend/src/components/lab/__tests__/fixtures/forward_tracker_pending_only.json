@@ -1,0 +1,1000 @@
+{
+ "schema": "forward_tracker_dashboard_v1",
+ "source": "forward",
+ "banner": "Forward paper observation: simulated positions only. No order is placed and nothing here is advice.",
+ "definitions": {
+  "R": "1R = 2 x ATR14 of the signal bar (the tracker's standardised unit); the variant's actual initial risk is also recorded on each closed event",
+  "net_r": "realised R after a round-trip cost charged in R: gross minus bps/10000 x entry / 1R; 0, 10 (primary) and 25 bps are recorded by the tracker on every closed event",
+  "interval": "normal-approximation 95% interval of the mean, shown only from 30 closed positions",
+  "hindsight": "uses bars after the decision; never known at decision time",
+  "replay_separation": "historical replay and shadow-test results are never part of this payload"
+ },
+ "cost_bps": [
+  "0",
+  "10",
+  "25"
+ ],
+ "primary_cost_bps": "10",
+ "available": true,
+ "since": "2026-10-14",
+ "sessions_processed": 1,
+ "latest_session": {
+  "session_date": "2026-10-14",
+  "scope": "triggered",
+  "n_variants": 5,
+  "n_candidates": 2,
+  "n_registered": 15,
+  "n_skipped_open": 0,
+  "n_entered": 0,
+  "n_closed": 0,
+  "n_not_enterable": 0,
+  "n_open_after": 15,
+  "code_ref": "45c2ac39249d",
+  "open_state_hash_prefix": "aaaaaaaaaaaaaaaa"
+ },
+ "variants": [
+  {
+   "variant_key": "donchian_breakout__exit_a_atr_stop_fixed_2r",
+   "name": "a_atr_stop_fixed_2r",
+   "version": "v1",
+   "definition_hash": "hhhhhhhhhhhhhhhh",
+   "positions": {
+    "registered": 3,
+    "pending_entry": 3,
+    "open": 0,
+    "closed": 0,
+    "not_enterable": 0
+   },
+   "closed": {
+    "n": 0,
+    "net_r_std": {
+     "0": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     },
+     "10": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     },
+     "25": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     }
+    },
+    "net_r_actual": {
+     "0": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     },
+     "10": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     },
+     "25": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     }
+    },
+    "exit_reasons": {},
+    "bars_held": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "mfe_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "mae_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "mfe_mae_window": "each closed position's own holding period, entry to exit (recorded by the tracker when it closed)",
+    "stale_sessions_total": 0
+   },
+   "open": {
+    "n": 0,
+    "marked": 0,
+    "unmarked": 0,
+    "unrealised_gross_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "unrealised_net_r_10bps": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "running_mfe_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "running_mae_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "mfe_mae_window": "since entry, up to the last loaded bar (still running)",
+    "bars_since_entry": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "label": "marked at the last loaded close; an open position is not a result"
+   },
+   "big_winner": {
+    "decision_time_information": false,
+    "window": "so_far",
+    "entered_positions": 0,
+    "peak_ge_3r": 0,
+    "peak_ge_5r": 0,
+    "observation_window": {
+     "bars_since_entry": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "max": null
+     },
+     "bars_after_exit": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "max": null
+     },
+     "note": "How many loaded bars each measurement could see. Peak and capture use the bars since entry; continuation uses the bars after the exit. Short windows understate both."
+    },
+    "capture_ratio": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "continuation_after_exit_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "premature_exit_share": null,
+    "premature_exit_n": 0,
+    "stored_hindsight_events": 0,
+    "note": "Peak favourable excursion since entry, share of it captured, and further movement after the exit, measured on bars loaded so far. Needs bars after the decision: hindsight, not known when the position was opened. Windows are still short.",
+    "top_open_by_peak_r": []
+   }
+  },
+  {
+   "variant_key": "donchian_breakout__exit_a_atr_stop_fixed_3r",
+   "name": "a_atr_stop_fixed_3r",
+   "version": "v1",
+   "definition_hash": "hhhhhhhhhhhhhhhh",
+   "positions": {
+    "registered": 3,
+    "pending_entry": 3,
+    "open": 0,
+    "closed": 0,
+    "not_enterable": 0
+   },
+   "closed": {
+    "n": 0,
+    "net_r_std": {
+     "0": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     },
+     "10": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     },
+     "25": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     }
+    },
+    "net_r_actual": {
+     "0": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     },
+     "10": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     },
+     "25": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     }
+    },
+    "exit_reasons": {},
+    "bars_held": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "mfe_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "mae_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "mfe_mae_window": "each closed position's own holding period, entry to exit (recorded by the tracker when it closed)",
+    "stale_sessions_total": 0
+   },
+   "open": {
+    "n": 0,
+    "marked": 0,
+    "unmarked": 0,
+    "unrealised_gross_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "unrealised_net_r_10bps": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "running_mfe_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "running_mae_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "mfe_mae_window": "since entry, up to the last loaded bar (still running)",
+    "bars_since_entry": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "label": "marked at the last loaded close; an open position is not a result"
+   },
+   "big_winner": {
+    "decision_time_information": false,
+    "window": "so_far",
+    "entered_positions": 0,
+    "peak_ge_3r": 0,
+    "peak_ge_5r": 0,
+    "observation_window": {
+     "bars_since_entry": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "max": null
+     },
+     "bars_after_exit": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "max": null
+     },
+     "note": "How many loaded bars each measurement could see. Peak and capture use the bars since entry; continuation uses the bars after the exit. Short windows understate both."
+    },
+    "capture_ratio": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "continuation_after_exit_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "premature_exit_share": null,
+    "premature_exit_n": 0,
+    "stored_hindsight_events": 0,
+    "note": "Peak favourable excursion since entry, share of it captured, and further movement after the exit, measured on bars loaded so far. Needs bars after the decision: hindsight, not known when the position was opened. Windows are still short.",
+    "top_open_by_peak_r": []
+   }
+  },
+  {
+   "variant_key": "donchian_breakout__exit_b_donchian_trail_10",
+   "name": "b_donchian_trail_10",
+   "version": "v1",
+   "definition_hash": "hhhhhhhhhhhhhhhh",
+   "positions": {
+    "registered": 3,
+    "pending_entry": 3,
+    "open": 0,
+    "closed": 0,
+    "not_enterable": 0
+   },
+   "closed": {
+    "n": 0,
+    "net_r_std": {
+     "0": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     },
+     "10": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     },
+     "25": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     }
+    },
+    "net_r_actual": {
+     "0": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     },
+     "10": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     },
+     "25": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     }
+    },
+    "exit_reasons": {},
+    "bars_held": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "mfe_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "mae_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "mfe_mae_window": "each closed position's own holding period, entry to exit (recorded by the tracker when it closed)",
+    "stale_sessions_total": 0
+   },
+   "open": {
+    "n": 0,
+    "marked": 0,
+    "unmarked": 0,
+    "unrealised_gross_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "unrealised_net_r_10bps": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "running_mfe_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "running_mae_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "mfe_mae_window": "since entry, up to the last loaded bar (still running)",
+    "bars_since_entry": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "label": "marked at the last loaded close; an open position is not a result"
+   },
+   "big_winner": {
+    "decision_time_information": false,
+    "window": "so_far",
+    "entered_positions": 0,
+    "peak_ge_3r": 0,
+    "peak_ge_5r": 0,
+    "observation_window": {
+     "bars_since_entry": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "max": null
+     },
+     "bars_after_exit": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "max": null
+     },
+     "note": "How many loaded bars each measurement could see. Peak and capture use the bars since entry; continuation uses the bars after the exit. Short windows understate both."
+    },
+    "capture_ratio": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "continuation_after_exit_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "premature_exit_share": null,
+    "premature_exit_n": 0,
+    "stored_hindsight_events": 0,
+    "note": "Peak favourable excursion since entry, share of it captured, and further movement after the exit, measured on bars loaded so far. Needs bars after the decision: hindsight, not known when the position was opened. Windows are still short.",
+    "top_open_by_peak_r": []
+   }
+  },
+  {
+   "variant_key": "donchian_breakout__exit_c_atr_trail_3x",
+   "name": "c_atr_trail_3x",
+   "version": "v1",
+   "definition_hash": "hhhhhhhhhhhhhhhh",
+   "positions": {
+    "registered": 3,
+    "pending_entry": 3,
+    "open": 0,
+    "closed": 0,
+    "not_enterable": 0
+   },
+   "closed": {
+    "n": 0,
+    "net_r_std": {
+     "0": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     },
+     "10": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     },
+     "25": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     }
+    },
+    "net_r_actual": {
+     "0": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     },
+     "10": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     },
+     "25": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     }
+    },
+    "exit_reasons": {},
+    "bars_held": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "mfe_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "mae_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "mfe_mae_window": "each closed position's own holding period, entry to exit (recorded by the tracker when it closed)",
+    "stale_sessions_total": 0
+   },
+   "open": {
+    "n": 0,
+    "marked": 0,
+    "unmarked": 0,
+    "unrealised_gross_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "unrealised_net_r_10bps": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "running_mfe_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "running_mae_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "mfe_mae_window": "since entry, up to the last loaded bar (still running)",
+    "bars_since_entry": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "label": "marked at the last loaded close; an open position is not a result"
+   },
+   "big_winner": {
+    "decision_time_information": false,
+    "window": "so_far",
+    "entered_positions": 0,
+    "peak_ge_3r": 0,
+    "peak_ge_5r": 0,
+    "observation_window": {
+     "bars_since_entry": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "max": null
+     },
+     "bars_after_exit": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "max": null
+     },
+     "note": "How many loaded bars each measurement could see. Peak and capture use the bars since entry; continuation uses the bars after the exit. Short windows understate both."
+    },
+    "capture_ratio": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "continuation_after_exit_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "premature_exit_share": null,
+    "premature_exit_n": 0,
+    "stored_hindsight_events": 0,
+    "note": "Peak favourable excursion since entry, share of it captured, and further movement after the exit, measured on bars loaded so far. Needs bars after the decision: hindsight, not known when the position was opened. Windows are still short.",
+    "top_open_by_peak_r": []
+   }
+  },
+  {
+   "variant_key": "donchian_breakout__exit_d_hybrid_atr_stop_to_donchian_10",
+   "name": "d_hybrid_atr_stop_to_donchian_10",
+   "version": "v1",
+   "definition_hash": "hhhhhhhhhhhhhhhh",
+   "positions": {
+    "registered": 3,
+    "pending_entry": 3,
+    "open": 0,
+    "closed": 0,
+    "not_enterable": 0
+   },
+   "closed": {
+    "n": 0,
+    "net_r_std": {
+     "0": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     },
+     "10": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     },
+     "25": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     }
+    },
+    "net_r_actual": {
+     "0": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     },
+     "10": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     },
+     "25": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win_rate": null,
+      "profit_factor": null,
+      "interval95": null,
+      "interval_note": "no_data"
+     }
+    },
+    "exit_reasons": {},
+    "bars_held": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "mfe_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "mae_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "mfe_mae_window": "each closed position's own holding period, entry to exit (recorded by the tracker when it closed)",
+    "stale_sessions_total": 0
+   },
+   "open": {
+    "n": 0,
+    "marked": 0,
+    "unmarked": 0,
+    "unrealised_gross_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "unrealised_net_r_10bps": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "running_mfe_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "running_mae_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "mfe_mae_window": "since entry, up to the last loaded bar (still running)",
+    "bars_since_entry": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "label": "marked at the last loaded close; an open position is not a result"
+   },
+   "big_winner": {
+    "decision_time_information": false,
+    "window": "so_far",
+    "entered_positions": 0,
+    "peak_ge_3r": 0,
+    "peak_ge_5r": 0,
+    "observation_window": {
+     "bars_since_entry": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "max": null
+     },
+     "bars_after_exit": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "max": null
+     },
+     "note": "How many loaded bars each measurement could see. Peak and capture use the bars since entry; continuation uses the bars after the exit. Short windows understate both."
+    },
+    "capture_ratio": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "continuation_after_exit_r": {
+     "n": 0,
+     "mean": null,
+     "median": null
+    },
+    "premature_exit_share": null,
+    "premature_exit_n": 0,
+    "stored_hindsight_events": 0,
+    "note": "Peak favourable excursion since entry, share of it captured, and further movement after the exit, measured on bars loaded so far. Needs bars after the decision: hindsight, not known when the position was opened. Windows are still short.",
+    "top_open_by_peak_r": []
+   }
+  }
+ ],
+ "comparison": [
+  {
+   "name": "a_atr_stop_fixed_2r",
+   "registered": 3,
+   "open": 0,
+   "pending_entry": 3,
+   "closed": 0,
+   "net_r_10bps_mean": null,
+   "net_r_10bps_median": null,
+   "win_rate": null,
+   "profit_factor": null,
+   "interval95": null,
+   "status": "n_too_small",
+   "mfe_r_mean": null,
+   "mae_r_mean": null,
+   "unrealised_net_r_10bps_mean": null,
+   "peak_ge_3r": 0,
+   "peak_ge_5r": 0,
+   "capture_ratio_median": null,
+   "premature_exit_share": null
+  },
+  {
+   "name": "a_atr_stop_fixed_3r",
+   "registered": 3,
+   "open": 0,
+   "pending_entry": 3,
+   "closed": 0,
+   "net_r_10bps_mean": null,
+   "net_r_10bps_median": null,
+   "win_rate": null,
+   "profit_factor": null,
+   "interval95": null,
+   "status": "n_too_small",
+   "mfe_r_mean": null,
+   "mae_r_mean": null,
+   "unrealised_net_r_10bps_mean": null,
+   "peak_ge_3r": 0,
+   "peak_ge_5r": 0,
+   "capture_ratio_median": null,
+   "premature_exit_share": null
+  },
+  {
+   "name": "b_donchian_trail_10",
+   "registered": 3,
+   "open": 0,
+   "pending_entry": 3,
+   "closed": 0,
+   "net_r_10bps_mean": null,
+   "net_r_10bps_median": null,
+   "win_rate": null,
+   "profit_factor": null,
+   "interval95": null,
+   "status": "n_too_small",
+   "mfe_r_mean": null,
+   "mae_r_mean": null,
+   "unrealised_net_r_10bps_mean": null,
+   "peak_ge_3r": 0,
+   "peak_ge_5r": 0,
+   "capture_ratio_median": null,
+   "premature_exit_share": null
+  },
+  {
+   "name": "c_atr_trail_3x",
+   "registered": 3,
+   "open": 0,
+   "pending_entry": 3,
+   "closed": 0,
+   "net_r_10bps_mean": null,
+   "net_r_10bps_median": null,
+   "win_rate": null,
+   "profit_factor": null,
+   "interval95": null,
+   "status": "n_too_small",
+   "mfe_r_mean": null,
+   "mae_r_mean": null,
+   "unrealised_net_r_10bps_mean": null,
+   "peak_ge_3r": 0,
+   "peak_ge_5r": 0,
+   "capture_ratio_median": null,
+   "premature_exit_share": null
+  },
+  {
+   "name": "d_hybrid_atr_stop_to_donchian_10",
+   "registered": 3,
+   "open": 0,
+   "pending_entry": 3,
+   "closed": 0,
+   "net_r_10bps_mean": null,
+   "net_r_10bps_median": null,
+   "win_rate": null,
+   "profit_factor": null,
+   "interval95": null,
+   "status": "n_too_small",
+   "mfe_r_mean": null,
+   "mae_r_mean": null,
+   "unrealised_net_r_10bps_mean": null,
+   "peak_ge_3r": 0,
+   "peak_ge_5r": 0,
+   "capture_ratio_median": null,
+   "premature_exit_share": null
+  }
+ ],
+ "completeness": {
+  "sessions": [
+   {
+    "session": "2026-10-14",
+    "candidates": 3,
+    "market_regime_attached": 3,
+    "relative_strength_attached": 3,
+    "sector_known": 3,
+    "guard_rejected": 0,
+    "catalysts_with_events": 0,
+    "catalysts_unavailable": 3,
+    "unavailable_reasons": {
+     "catalysts: market_event tables: no event has been recorded yet (no job feeds this source)": 3
+    },
+    "registered": 15,
+    "entered": 0,
+    "closed": 0,
+    "not_enterable": 0,
+    "skipped_open": 0
+   }
+  ],
+  "captured_not_processed": [],
+  "as_of": "2026-10-15"
+ },
+ "health": [
+  {
+   "name": "captured_sessions_processed",
+   "status": "ok",
+   "detail": "no completed capture is waiting"
+  },
+  {
+   "name": "market_regime_coverage",
+   "status": "ok",
+   "detail": "lowest session coverage 100.0% (threshold 95%)"
+  },
+  {
+   "name": "relative_strength_coverage",
+   "status": "ok",
+   "detail": "lowest session coverage 100.0% (threshold 95%)"
+  },
+  {
+   "name": "catalyst_context",
+   "status": "info",
+   "detail": "no catalyst feed: every candidate is explicitly marked unavailable"
+  },
+  {
+   "name": "open_positions_marked",
+   "status": "ok",
+   "detail": "every open position has a loaded bar"
+  },
+  {
+   "name": "stored_hindsight_events",
+   "status": "info",
+   "detail": "0 recorded by the tracker (it writes them only 250+ bars after entry)"
+  }
+ ]
+}

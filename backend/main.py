@@ -399,6 +399,17 @@ except ImportError as e:
 except Exception as e:
     logger.error(f"❌ Error including lab reports router: {e}")
 
+# Import and include the forward paper tracker dashboard router (READ-ONLY aggregation of the stored paper_* rows; answers available:false when the storage is absent)
+try:
+    from routers.forward_tracker import forward_tracker_router
+
+    app.include_router(forward_tracker_router)
+    logger.info("✅ Forward tracker router included successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  Forward tracker router not available: {e}")
+except Exception as e:
+    logger.error(f"❌ Failed to include forward tracker router: {e}")
+
 # Import and include performance router (endpoint/DB/frontend-route latency
 # tracking and scoring — see services/performance_service.py)
 try:
