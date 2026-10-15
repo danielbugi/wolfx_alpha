@@ -1,9 +1,15 @@
 [Unit]
-Description=First Light: run the daily pipeline (23:45 Israel, 01:00 retry -- matches the disabled Windows DonchianScreenerDailyPipeline task; the 01:00 fire is a no-op once the day is already marked done by market_calendar.py)
+Description=First Light: run the daily pipeline (17:45 New York, retry 19:15 New York; the second fire is a no-op once the day is already marked done by market_calendar.py)
+
+# INSTALLED 2026-10-15 (Stage 1 of docs/operations/PIPELINE_FIRST_FIRE_RELIABILITY.md; timer only, no image change). The previous schedule (23:45 and 01:00 Asia/Jerusalem = 20:45Z and 22:00Z in summer) failed its FIRST fire on every
+# trading night since at least 2026-10-05: 45 minutes after the US close the vendor has 0-7% of the day's bars, and the freshness gate (needs 90%) stops the run fast. Measured on the
+# price rows' insert times, the bars arrive progressively and 90% are fetchable by 21:28-21:43Z in summer (1h30-1h45 after the 20:00Z close). The daily updater itself takes ~14.5 minutes
+# before the gate is evaluated, so a first fire at 21:45Z checks at ~22:00Z with a wide margin. Anchoring to America/New_York keeps that distance (1h45 after the close) all year, through
+# both clock changes (the Jerusalem anchor drifted between 0h45 and 1h45 after the close around late October / March). The retry stays 90 minutes later.
 
 [Timer]
-OnCalendar=*-*-* 23:45:00 Asia/Jerusalem
-OnCalendar=*-*-* 01:00:00 Asia/Jerusalem
+OnCalendar=*-*-* 17:45:00 America/New_York
+OnCalendar=*-*-* 19:15:00 America/New_York
 Persistent=true
 RandomizedDelaySec=60
 
