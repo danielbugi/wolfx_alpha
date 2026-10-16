@@ -66,8 +66,9 @@ def test_items_are_kept_verbatim_and_a_bad_item_is_refused():
 
 
 def test_an_unlisted_form_is_a_valid_fact_with_no_family():
-    f = fact(form_type="NT 10-K")
-    assert f.form_type == "NT 10-K" and f.form_family is None
+    f = fact(form_type="ARS")
+    assert f.form_type == "ARS" and f.form_family is None
+    assert fact(form_type="NT 10-K").form_family == "late_filing_notice" and fact(form_type="NT 10-Q").form_family == "late_filing_notice"
     assert fact().form_family == "current_report"
 
 

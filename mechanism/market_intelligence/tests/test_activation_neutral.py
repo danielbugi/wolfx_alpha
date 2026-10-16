@@ -9,6 +9,9 @@ from mi_samples import ROOT
 
 SKIP_DIRS = {"node_modules", ".git", "__pycache__", ".venv", "tests", "docs", "history", "backups", "SKILLS", ".next"}
 RUNNER = "mechanism/market_intelligence/runner.py"          # the one, unscheduled, operator-run caller of the writers
+EDGAR_STORE = "mechanism/market_intelligence/edgar_store.py"     # Phase 1A SEC ingest: also operator-run only (see the guards below)
+SCRATCH_DRY_RUN = "ml_training/experiments/catalyst_phase1a_dryrun.py"
+SCRATCH_SCRIPTS = (SCRATCH_DRY_RUN, "ml_training/experiments/catalyst_latency_probe.py")
 WRITERS = re.compile(r"\b(write_session|write_universe_snapshot|append_event_revision)\b")
 
 
@@ -31,11 +34,35 @@ def test_nothing_outside_the_package_and_its_tests_writes_the_market_intelligenc
     for top in ("mechanism", "backend", "ml_training", "deploy"):
         for p in _files(top, (".py", ".sh", ".service", ".timer", ".yml", ".yaml")):
             rel = os.path.relpath(p, ROOT).replace("\\", "/")
-            if rel in ("mechanism/market_intelligence/store.py", RUNNER):
+            if rel in ("mechanism/market_intelligence/store.py", RUNNER, EDGAR_STORE):
                 continue
             if WRITERS.search(_read(p)):
                 callers.append(rel)
     assert callers == []
+
+
+def test_the_sec_ingest_is_referenced_only_by_its_own_package_its_tests_and_the_scratch_dry_run():
+    """Phase 1A: nothing scheduled, imported by a pipeline stage, a router, a bot path, a workflow or a unit file may reach the SEC transport or the ingest."""
+    hits = []
+    pat = re.compile(r"edgar_store|sec_transport|SecTransport|ingest_facts|refresh_links|catalyst_phase1a_dryrun|add_catalyst_ingest_tables")
+    for top in ("mechanism", "backend", "ml_training", "deploy", ".github"):
+        for p in _files(top, (".py", ".sh", ".service", ".timer", ".yml", ".yaml")):
+            rel = os.path.relpath(p, ROOT).replace("\\", "/")
+            if rel.startswith("mechanism/market_intelligence/") or rel in SCRATCH_SCRIPTS:
+                continue
+            if pat.search(_read(p)):
+                hits.append(rel)
+    # docker-compose.yml only MOUNTS the migration file for a fresh database; it runs no code
+    assert [h for h in hits if h != "docker-compose.yml"] == [], hits
+
+
+def test_the_scratch_scripts_cannot_be_started_by_anything_but_a_person():
+    for rel in SCRATCH_SCRIPTS:
+        text = _read(os.path.join(ROOT, rel))
+        assert 'if __name__ == "__main__":' in text and "SEC_USER_AGENT is required" in text
+        assert not re.search(r"^(main|connect)\(", text, re.M)
+    assert "PHASE1A_SCRATCH" in _read(os.path.join(ROOT, SCRATCH_DRY_RUN))                  # the dry run writes to a database: it demands an explicit scratch switch
+    assert not re.search(r"psycopg2|INSERT|UPDATE|DELETE", _read(os.path.join(ROOT, "ml_training/experiments/catalyst_latency_probe.py")))   # the probe touches no database
 
 
 # Slice 7 (dormant, lab): the one composition root that orchestrates the runner. Nothing else may reference it; forward_collection's own guard test

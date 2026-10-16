@@ -15,7 +15,7 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.dirname(__file__))
 
 MIGRATIONS = ["add_market_snapshot_tables.sql", "add_market_event_tables.sql", "add_source_observation_tables.sql",
-              "add_catalyst_classification_table.sql", "add_stock_relative_strength_table.sql"]
+              "add_catalyst_classification_table.sql", "add_stock_relative_strength_table.sql", "add_catalyst_ingest_tables.sql"]
 
 
 def _args():

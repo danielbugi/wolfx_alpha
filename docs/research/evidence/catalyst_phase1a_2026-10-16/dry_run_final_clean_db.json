@@ -1,0 +1,207 @@
+{
+ "acceptance_reconciliation": {
+  "counters": {
+   "header_fetched": 123,
+   "reconciled_agree": 42,
+   "reconciled_feed_late": 81
+  },
+  "feed_minus_header_hours_for_new_filings": {
+   "0.0": 42,
+   "4.0": 81
+  },
+  "note": "feed_late = the submissions feed value was later than the SEC header record and the header instant was used"
+ },
+ "fetch_errors": {},
+ "finished_at": "2026-10-16T13:38:20+00:00",
+ "idempotency_reingest_of_last_batch": {
+  "classifications_created": 0,
+  "events_created": 0,
+  "facts": 123,
+  "observations_written": 0,
+  "revisions_created": 0,
+  "unchanged": 123,
+  "writes_nothing": true
+ },
+ "latency_minutes_observed_minus_accepted": {
+  "max": null,
+  "min": null,
+  "n_first_observed_after_poll_0": 0,
+  "p50": null,
+  "p90": null,
+  "poll_interval_minutes": 1.0,
+  "reading": "the true acceptance->first-sight lag is in (value - one poll interval, value]; filings first observed in poll 0 are history and carry no latency"
+ },
+ "poll_log": [
+  [
+   "complete",
+   3,
+   123
+  ]
+ ],
+ "polls": [
+  {
+   "ciks_complete": 120,
+   "ciks_failed": 0,
+   "classifications_created": 26,
+   "counters": {
+    "older_pages_not_read": 118,
+    "records": 105753,
+    "rejected": 32,
+    "skipped_before_since": 17267,
+    "skipped_form": 88331
+   },
+   "events_created": 123,
+   "facts_parsed": 123,
+   "ingest_errors": [],
+   "poll": 0,
+   "revisions_created": 0,
+   "seconds": 51.1,
+   "started": "2026-10-16T13:36:01+00:00",
+   "unchanged": 0
+  },
+  {
+   "ciks_complete": 120,
+   "ciks_failed": 0,
+   "classifications_created": 0,
+   "counters": {
+    "older_pages_not_read": 118,
+    "records": 105753,
+    "rejected": 32,
+    "skipped_before_since": 17267,
+    "skipped_form": 88331
+   },
+   "events_created": 0,
+   "facts_parsed": 123,
+   "ingest_errors": [],
+   "poll": 1,
+   "revisions_created": 0,
+   "seconds": 27.0,
+   "started": "2026-10-16T13:37:53+00:00",
+   "unchanged": 123
+  }
+ ],
+ "rejected_records": {
+  "FilingContractError: item '12' is not an 8-K style item number": 12,
+  "FilingContractError: item '2' is not an 8-K style item number": 4,
+  "FilingContractError: item '4' is not an 8-K style item number": 4,
+  "FilingContractError: item '5' is not an 8-K style item number": 22,
+  "FilingContractError: item '7' is not an 8-K style item number": 22
+ },
+ "run_id": "20261016T133555Z",
+ "scratch_database": true,
+ "since": "2026-09-01",
+ "snapshot_date": "2026-10-16",
+ "snapshot_storage_by_kind": {
+  "company_tickers": {
+   "bytes_gzip": 220347,
+   "bytes_raw": 799355,
+   "rows": 1
+  },
+  "filing_header": {
+   "bytes_gzip": 60202,
+   "bytes_raw": 119055,
+   "rows": 123
+  },
+  "submissions": {
+   "bytes_gzip": 2726156,
+   "bytes_raw": 17320317,
+   "rows": 120
+  }
+ },
+ "snapshots_stored": 244,
+ "started_at": "2026-10-16T13:35:55.451960+00:00",
+ "stored": {
+  "by_form": {
+   "10-K": 1,
+   "10-Q": 10,
+   "8-K": 108,
+   "8-K/A": 4
+  },
+  "by_session_timing": {
+   "AMC": 73,
+   "BMO": 41,
+   "INTRADAY": 9
+  },
+  "filings": 123,
+  "parsed_by_form_all_polls": {
+   "10-K": 2,
+   "10-Q": 20,
+   "8-K": 216,
+   "8-K/A": 8
+  },
+  "pit_violations_known_le_observed_le_ingested": 0
+ },
+ "strict_reader": {
+  "links_observed": 10444,
+  "links_reconstructed": 10444,
+  "must_be_zero": true,
+  "visible_at_end": {
+   "observed_links_only": 0,
+   "with_reconstructed_links": 123,
+   "with_unmapped": 123
+  },
+  "visible_one_microsecond_before_the_first_ingest_in_this_database": 0
+ },
+ "strict_reader_basis_counts": {
+  "reconstructed": 123
+ },
+ "symbols": {
+  "ciks": 120,
+  "requested": 124,
+  "resolved_to_a_cik": 121,
+  "symbols_with_several_ciks": {},
+  "unresolved": [
+   "HES",
+   "JNPR",
+   "WBA"
+  ]
+ },
+ "ticker_file": {
+  "bytes": 799355,
+  "links": {
+   "applied": true,
+   "links_created": 20888,
+   "links_ended": 0,
+   "links_unchanged": 0,
+   "parse": {
+    "entries": 10444,
+    "pairs": 10444,
+    "rejected": 0
+   },
+   "plan": {
+    "closures": 0,
+    "new_by_basis": {
+     "observed": 10444,
+     "reconstructed": 10444
+    },
+    "new_links": 20888,
+    "snapshot_date": "2026-10-16",
+    "unchanged": 0
+   },
+   "rejected_entries": 0,
+   "symbols_on_several_ciks": 0
+  },
+  "pairs": 10444,
+  "rejected_entries": 0,
+  "sha256": "5df1323d2c05ca6dea661d2b7c73cb8c86649bbf43f28e83280f484c214837d6",
+  "symbols_on_several_ciks": 0
+ },
+ "transport": {
+  "attempts": 364,
+  "backoff_s": 0.0,
+  "bytes_received": 35559044,
+  "circuit_open": false,
+  "duration_s": {
+   "max": 0.697,
+   "p50": 0.084,
+   "p95": 0.264
+  },
+  "errors": {},
+  "requests": 364,
+  "retries": 0,
+  "statuses": {
+   "200": 364
+  }
+ },
+ "user_agent_declared": true
+}

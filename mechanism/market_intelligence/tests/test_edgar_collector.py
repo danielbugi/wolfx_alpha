@@ -67,11 +67,11 @@ def test_the_source_record_hash_is_of_the_record_as_received():
 
 
 def test_unlisted_forms_are_skipped_not_rejected_and_a_form_filter_can_widen_it():
-    d = doc(CIK_A, [r(ACC1), r(ACC2, form="NT 10-Q")])
+    d = doc(CIK_A, [r(ACC1), r(ACC2, form="ARS")])
     rep, _, _ = run({CIK_A: d}, [CIK_A])
     assert len(rep.facts) == 1 and rep.counters["skipped_form"] == 1 and rep.rejected == []
-    rep2, _, _ = run({CIK_A: d}, [CIK_A], forms=frozenset({"8-K", "NT 10-Q"}))
-    assert {f.fact.form_type for f in rep2.facts} == {"8-K", "NT 10-Q"}
+    rep2, _, _ = run({CIK_A: d}, [CIK_A], forms=frozenset({"8-K", "ARS"}))
+    assert {f.fact.form_type for f in rep2.facts} == {"8-K", "ARS"}
 
 
 # ---------------------------------------------------------------- reject, never repair

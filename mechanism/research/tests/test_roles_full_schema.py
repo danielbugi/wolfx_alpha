@@ -34,7 +34,7 @@ RESEARCH = {"feature_set_registry", "feature_snapshot", "candidate_observation",
             # lab slice 10 (migration 31): append-only sector history
             "sector_observation", "sector_poll", "sector_reconstruction",
             # migration 32: append-only scan heartbeat
-            "price_discontinuity_scan", "strategy_variant", "paper_session", "paper_observation", "paper_event"}
+            "price_discontinuity_scan", "strategy_variant", "paper_session", "paper_observation", "paper_event", "source_snapshot", "identifier_link", "identifier_link_end"}
 APP_PASSWORD = "rb-full-schema-test-only"
 
 
@@ -406,7 +406,7 @@ def test_rollback_strips_views_sequences_and_functions_too(full):
 MI_TABLES = ["universe_snapshot", "market_snapshot", "sector_snapshot", "market_event", "market_event_revision",
              "forward_return_label",
              "source_observation", "source_poll", "catalyst_classification", "stock_relative_strength", "dataset_manifest", "experiment_registration", "experiment_result",
-             "sector_observation", "sector_poll", "sector_reconstruction", "price_discontinuity_scan", "strategy_variant", "paper_session", "paper_observation", "paper_event"]
+             "sector_observation", "sector_poll", "sector_reconstruction", "price_discontinuity_scan", "strategy_variant", "paper_session", "paper_observation", "paper_event", "source_snapshot", "identifier_link", "identifier_link_end"]
 
 
 def test_mi_tables_are_append_only_for_the_runtime_role(full):

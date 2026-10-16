@@ -1,0 +1,136 @@
+{
+ "started": "2026-10-16T12:47:56+00:00",
+ "finished": "2026-10-16T13:33:57+00:00",
+ "cycle_seconds": 120,
+ "cycles": 24,
+ "forms": [
+  "8-K",
+  "10-Q",
+  "10-K"
+ ],
+ "new_filings_timed": 11,
+ "submissions_confirmed": 11,
+ "atom_listed_lag_minutes": {
+  "p50": 1.7,
+  "p90": 2.4,
+  "max": 2.4,
+  "min": 0.9
+ },
+ "submissions_lag_minutes": {
+  "p50": 2.0,
+  "p90": 2.4,
+  "max": 3.0,
+  "min": 1.0
+ },
+ "feed_minus_atom_hours": {
+  "0.0": 11
+ },
+ "transport": {
+  "requests": 84,
+  "attempts": 84,
+  "retries": 0,
+  "backoff_s": 0.0,
+  "statuses": {
+   "200": 84
+  },
+  "errors": {},
+  "bytes_received": 3499741,
+  "duration_s": {
+   "p50": 0.238,
+   "p95": 0.361,
+   "max": 0.554
+  },
+  "circuit_open": false
+ },
+ "filings": [
+  {
+   "accession": "0001193125-26-423431",
+   "form": "8-K",
+   "accepted_utc": "2026-10-16T12:53:32+00:00",
+   "atom_listed_lag_min": 2.4,
+   "submissions_lag_min": 2.4,
+   "feed_minus_atom_hours": 0.0
+  },
+  {
+   "accession": "0001213900-26-110041",
+   "form": "8-K",
+   "accepted_utc": "2026-10-16T13:01:00+00:00",
+   "atom_listed_lag_min": 0.9,
+   "submissions_lag_min": 3.0,
+   "feed_minus_atom_hours": 0.0
+  },
+  {
+   "accession": "0001193125-26-423434",
+   "form": "8-K",
+   "accepted_utc": "2026-10-16T13:00:14+00:00",
+   "atom_listed_lag_min": 1.7,
+   "submissions_lag_min": 1.7,
+   "feed_minus_atom_hours": 0.0
+  },
+  {
+   "accession": "0001193125-26-423433",
+   "form": "8-K",
+   "accepted_utc": "2026-10-16T13:00:14+00:00",
+   "atom_listed_lag_min": 1.7,
+   "submissions_lag_min": 1.7,
+   "feed_minus_atom_hours": 0.0
+  },
+  {
+   "accession": "0001213900-26-110039",
+   "form": "8-K",
+   "accepted_utc": "2026-10-16T13:00:13+00:00",
+   "atom_listed_lag_min": 1.7,
+   "submissions_lag_min": 1.8,
+   "feed_minus_atom_hours": 0.0
+  },
+  {
+   "accession": "0000100885-26-000305",
+   "form": "8-K",
+   "accepted_utc": "2026-10-16T13:01:58+00:00",
+   "atom_listed_lag_min": 2.0,
+   "submissions_lag_min": 2.0,
+   "feed_minus_atom_hours": 0.0
+  },
+  {
+   "accession": "0001213900-26-110051",
+   "form": "8-K",
+   "accepted_utc": "2026-10-16T13:17:41+00:00",
+   "atom_listed_lag_min": 2.3,
+   "submissions_lag_min": 2.3,
+   "feed_minus_atom_hours": 0.0
+  },
+  {
+   "accession": "0001213900-26-110053",
+   "form": "8-K",
+   "accepted_utc": "2026-10-16T13:20:58+00:00",
+   "atom_listed_lag_min": 1.0,
+   "submissions_lag_min": 1.0,
+   "feed_minus_atom_hours": 0.0
+  },
+  {
+   "accession": "0001213900-26-110060",
+   "form": "8-K",
+   "accepted_utc": "2026-10-16T13:30:12+00:00",
+   "atom_listed_lag_min": 1.7,
+   "submissions_lag_min": 1.8,
+   "feed_minus_atom_hours": 0.0
+  },
+  {
+   "accession": "0001104659-26-116465",
+   "form": "8-K",
+   "accepted_utc": "2026-10-16T13:29:55+00:00",
+   "atom_listed_lag_min": 2.0,
+   "submissions_lag_min": 2.0,
+   "feed_minus_atom_hours": 0.0
+  },
+  {
+   "accession": "0001437749-26-032762",
+   "form": "8-K",
+   "accepted_utc": "2026-10-16T13:29:32+00:00",
+   "atom_listed_lag_min": 2.4,
+   "submissions_lag_min": 2.4,
+   "feed_minus_atom_hours": 0.0
+  }
+ ],
+ "reading": "lags are upper bounds within one cycle; Atom <updated> is the acceptance instant (explicit offset)"
+}

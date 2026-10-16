@@ -42,6 +42,7 @@ ITEM_RE = re.compile(r"^\d{1,2}\.\d{2}$")
 FORM_FAMILY: Mapping[str, str] = {
     "8-K": "current_report", "8-K/A": "current_report", "6-K": "current_report_foreign",
     "10-Q": "periodic_report", "10-Q/A": "periodic_report", "10-K": "periodic_report", "10-K/A": "periodic_report",
+    "NT 10-K": "late_filing_notice", "NT 10-Q": "late_filing_notice",
     "20-F": "periodic_report_foreign", "40-F": "periodic_report_foreign",
     "S-1": "registration", "S-3": "registration", "424B5": "prospectus", "424B2": "prospectus",
     "SC 13D": "ownership", "SC 13G": "ownership", "SC 13D/A": "ownership", "SC 13G/A": "ownership",
