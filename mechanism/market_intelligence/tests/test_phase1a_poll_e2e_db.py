@@ -139,7 +139,8 @@ def test_a_fresh_filing_whose_feed_value_is_hours_in_the_future_is_stored_at_its
     now = C.db_now(conn)
     header_utc = (now - timedelta(minutes=3)).replace(microsecond=0).astimezone(UTC)
     wall = header_utc.astimezone(__import__("zoneinfo").ZoneInfo("America/New_York")).strftime("%Y%m%d%H%M%S")
-    feed = (header_utc + timedelta(hours=4)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    from market_intelligence import acceptance_check as A
+    feed = (header_utc + A.eastern_offset(header_utc)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     w = world_with([r(acc(9), filed=header_utc.date().isoformat(), accepted=feed)], {9: wall})
     rep, res, ready, rejected, hstats, offs = cycle(conn, w, "run-1", since=header_utc.date())
     assert res.events_created == 1 and res.errors == [] and not rep.rejected, (rep.counters, rep.rejected, hstats)

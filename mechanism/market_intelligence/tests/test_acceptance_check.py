@@ -74,11 +74,34 @@ def test_an_unexplained_disagreement_is_refused_not_repaired(header_utc):
         A.reconcile(collected("2026-10-15T20:47:20.000Z"), header_utc)
 
 
-def test_the_boundary_of_the_documented_range_is_inclusive_at_six_hours_and_exclusive_beyond():
-    c = collected("2026-10-16T02:00:00.000Z")
-    assert A.reconcile(c, datetime(2026, 10, 15, 20, 0, 0, tzinfo=UTC)).draft.payload["acceptance"]["source"] == "feed_late"
-    with pytest.raises(A.AcceptanceError):
-        A.reconcile(c, datetime(2026, 10, 15, 19, 59, 59, tzinfo=UTC))
+@pytest.mark.parametrize("header,feed_extra_h,ok", [
+    (datetime(2026, 10, 15, 20, 47, 20, tzinfo=UTC), 4, True),            # daylight time: the Eastern offset is 4 h
+    (datetime(2026, 10, 15, 20, 47, 20, tzinfo=UTC), 5, False),           # 5 h in daylight time is NOT explained
+    (datetime(2026, 10, 15, 20, 47, 20, tzinfo=UTC), 3, False),
+    (datetime(2026, 1, 15, 21, 47, 20, tzinfo=UTC), 5, True),             # standard time: 5 h
+    (datetime(2026, 1, 15, 21, 47, 20, tzinfo=UTC), 4, False),            # 4 h in standard time is NOT explained
+    (datetime(2026, 3, 8, 6, 0, 0, tzinfo=UTC), 5, True),                 # 01:00 EST on the day daylight time starts (02:00 -> 03:00): still standard time
+    (datetime(2026, 3, 8, 6, 0, 0, tzinfo=UTC), 4, False),
+    (datetime(2026, 3, 8, 11, 0, 0, tzinfo=UTC), 4, True),                # 07:00 EDT the same day
+    (datetime(2026, 3, 8, 11, 0, 0, tzinfo=UTC), 5, False),
+    (datetime(2026, 11, 1, 5, 30, 0, tzinfo=UTC), 4, True),               # 01:30 EDT, before the repeated hour on the day daylight time ends
+    (datetime(2026, 11, 1, 12, 0, 0, tzinfo=UTC), 5, True),               # 07:00 EST the same day
+    (datetime(2026, 11, 1, 12, 0, 0, tzinfo=UTC), 4, False),
+])
+def test_only_the_eastern_offset_in_force_at_the_acceptance_instant_is_an_explained_gap_across_the_dst_changes(header, feed_extra_h, ok):
+    feed = header + timedelta(hours=feed_extra_h)
+    c = collected(feed.strftime("%Y-%m-%dT%H:%M:%S.000Z"), filed=header.date().isoformat())
+    if ok:
+        out = A.reconcile(c, header)
+        assert out.fact.accepted_at == header and out.draft.payload["acceptance"]["feed_minus_header_hours"] == float(feed_extra_h)
+    else:
+        with pytest.raises(A.AcceptanceError, match="only 0 or exactly the Eastern UTC offset"):
+            A.reconcile(c, header)
+
+
+def test_eastern_offset_is_four_hours_in_daylight_time_and_five_in_standard_time():
+    assert A.eastern_offset(datetime(2026, 7, 1, 12, tzinfo=UTC)) == timedelta(hours=4) and A.eastern_offset(datetime(2026, 12, 1, 12, tzinfo=UTC)) == timedelta(hours=5)
+    assert A.eastern_offset(datetime(2026, 3, 8, 6, 59, 59, tzinfo=UTC)) == timedelta(hours=5) and A.eastern_offset(datetime(2026, 3, 8, 7, 0, 0, tzinfo=UTC)) == timedelta(hours=4)
 
 
 def test_a_naive_header_time_is_refused():

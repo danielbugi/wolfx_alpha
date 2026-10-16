@@ -1,0 +1,16 @@
+candidate filings in the five 'recent' blocks: 428 oldest filing date: 2015-09-17
+compared: 89 errors: 0 | page 'Accepted' equals header wall clock in 89 of 89
+  EST(5): feed-minus-true hours -> {5.0: 28}
+  EDT(4): feed-minus-true hours -> {4.0: 61}
+UNEXPLAINED (diff not in {0, expected Eastern offset}): 0 []
+filings within 1 day of a DST transition: 2 -> [('2022-11-07 11:27', 5.0, 5.0), ('2023-11-06 21:14', 5.0, 5.0)]
+by transition (count, diffs):
+   2022-03-13 3 {(5.0, 5.0): 2, (4.0, 4.0): 1}
+   2022-11-06 1 {(5.0, 5.0): 1}
+   2023-03-12 2 {(5.0, 5.0): 2}
+   2023-11-05 5 {(4.0, 4.0): 4, (5.0, 5.0): 1}
+   2024-03-10 2 {(5.0, 5.0): 1, (4.0, 4.0): 1}
+   2024-11-03 7 {(4.0, 4.0): 6, (5.0, 5.0): 1}
+   2025-03-09 1 {(5.0, 5.0): 1}
+   2025-11-02 7 {(4.0, 4.0): 6, (5.0, 5.0): 1}
+   2026-03-08 2 {(4.0, 4.0): 1, (5.0, 5.0): 1}

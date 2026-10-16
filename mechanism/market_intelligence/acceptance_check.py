@@ -1,14 +1,16 @@
 """Reconcile a filing's SEC acceptance time against the SEC's own header record. PURE: stdlib + filing_contract (no database, clock, network, environment).
 
-Why this exists (found by the real-SEC dry run, 2026-10-16): in a sample of 123 filings, `submissions` JSON `acceptanceDateTime` was exactly +4.00 h later than the instant
-given by the filing's own SGML header (`<ACCEPTANCE-DATETIME>`, Eastern wall clock) and by its index page, for 81 of them (66%), and EQUAL for the other 42; never earlier. The
-header, the index page and the live Atom list agree with each other. Consequences of using the feed value alone: a filing could look "from the future" for up to 4 hours (and
-be refused by the database rule known_at <= ingested_at), and BMO / intraday / AMC timing would be wrong for the shifted ones.
+Why this exists (found by the real-SEC dry run, 2026-10-16): the `submissions` JSON `acceptanceDateTime` is, for most filings once they are a few hours old, LATER than the instant
+given by the filing's own SGML header (`<ACCEPTANCE-DATETIME>`, Eastern wall clock) and by its index page, and never earlier. The header, the index page and the live Atom list agree with each other.
 
-Policy (strict, no repair beyond one documented, evidenced correction):
-  * header == feed                      -> use it; source "agree".
-  * header earlier than feed by 0 < d <= MAX_FEED_LATE (6 h) -> the feed is late: use the HEADER time (the earlier, SEC-recorded instant); source "feed_late".
-  * anything else (header later than the feed, or the feed later by more than 6 h, or an unparsable / ambiguous header) -> REFUSED with a reason; nothing is stored.
+The discrepancy is explained and exact (validated on 89 filings of five large filers, 2015-2026, including the week of every daylight-saving change since 2022: 61 in daylight time, 28 in
+standard time, 0 unexplained): feed minus true instant is EXACTLY the Eastern UTC offset in force at the acceptance instant, 4 h in daylight time and 5 h in standard time, i.e. the
+Eastern offset applied a second time. Brand-new filings are served correctly (difference 0) and are replaced later.
+
+Policy (strict; one documented, evidenced correction and nothing else):
+  * feed == header                                   -> use it; source "agree".
+  * feed - header == the Eastern offset at the header instant (4 h EDT / 5 h EST, exactly) -> the feed is late by the known double offset: use the HEADER instant; source "feed_late".
+  * anything else (the header later than the feed, any other gap, an unparsable or ambiguous header) -> REFUSED with a reason; nothing is stored.
 Both values and the decision travel in the event payload (`acceptance`) so the correction is auditable. The fact's other fields are untouched.
 """
 from __future__ import annotations
@@ -24,7 +26,7 @@ from market_intelligence.edgar_collector import CollectedFact
 from market_intelligence.events import EventDraft
 
 NY = ZoneInfo("America/New_York")
-MAX_FEED_LATE = timedelta(hours=6)
+MAX_FEED_LATE = timedelta(hours=6)          # only the clock allowance for the collector (the largest explained gap is 5 h); the reconcile rule itself is exact
 _HEADER_RE = re.compile(r"<ACCEPTANCE-DATETIME>(\d{14})\b")
 
 
@@ -62,18 +64,25 @@ def parse_header_acceptance(text: str) -> datetime:
     return a.astimezone(timezone.utc)
 
 
+def eastern_offset(instant_utc: datetime) -> timedelta:
+    """The Eastern UTC offset in force at `instant_utc` as a positive duration: 4 h during daylight time, 5 h during standard time."""
+    return -instant_utc.astimezone(NY).utcoffset()
+
+
 def reconcile(c: CollectedFact, header_utc: datetime) -> CollectedFact:
     """The collected fact with its acceptance time reconciled against the header, and the event draft rebuilt from it. Raises AcceptanceError when the policy refuses."""
     if header_utc.tzinfo is None:
         raise AcceptanceError("header time must be timezone-aware")
     feed = c.fact.accepted_at
     late = feed - header_utc
+    expected = eastern_offset(header_utc)
     if late == timedelta(0):
         used, source = feed, "agree"
-    elif timedelta(0) < late <= MAX_FEED_LATE:
+    elif late == expected:
         used, source = header_utc, "feed_late"
     else:
-        raise AcceptanceError(f"feed acceptance {feed.isoformat()} and header acceptance {header_utc.isoformat()} differ by {late.total_seconds() / 3600:+.2f} h (outside the documented 0 < d <= 6 h)")
+        raise AcceptanceError(f"feed acceptance {feed.isoformat()} and header acceptance {header_utc.isoformat()} differ by {late.total_seconds() / 3600:+.2f} h "
+                              f"(only 0 or exactly the Eastern UTC offset at that instant, +{expected.total_seconds() / 3600:.0f} h, is explained)")
     fact = c.fact if used == feed else F.FilingFact(accession=c.fact.accession, cik=c.fact.cik, form_type=c.fact.form_type, filing_date=c.fact.filing_date, accepted_at=used,
                                                     items=c.fact.items, report_period=c.fact.report_period, primary_document=c.fact.primary_document,
                                                     amends_accession=c.fact.amends_accession)

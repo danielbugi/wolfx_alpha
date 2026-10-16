@@ -78,7 +78,7 @@ Caveats a consumer must respect (all documented, none hidden):
 
 **Update 2026-10-16 (Phase 1A, real-SEC dry run).** `accepted_at` is NOT taken blindly from the submissions feed. In a live sample of 123 filings the feed's `acceptanceDateTime` was
 exactly 4.00 h later than the filing's own SGML header (`<ACCEPTANCE-DATETIME>`, Eastern wall clock) for 81 (66%) and equal for 42; never earlier. The header, the index page and the Atom
-list agree with each other. `market_intelligence/acceptance_check.py` reconciles the two (equal -> keep; feed later by 0 < d <= 6 h -> use the header instant; anything else -> refuse) and
+list agree with each other. `market_intelligence/acceptance_check.py` reconciles the two (equal -> keep; feed later by exactly the Eastern UTC offset at that instant, 4 h in daylight time and 5 h in standard time -> use the header instant; anything else -> refuse) and
 records both values and the decision in `payload.acceptance`. See [CATALYST_PHASE1A.md](CATALYST_PHASE1A.md). The earlier statements in this section about the feed value being the
 acceptance instant describe the contract's intent; the reconciliation is how it is met.
 
