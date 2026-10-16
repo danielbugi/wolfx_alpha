@@ -284,3 +284,51 @@ def test_rollback_37_on_an_empty_schema_just_works_and_a_second_run_is_a_no_op(c
     cur = conn.cursor()
     assert "migration 37 rolled back (0 row(s) removed)" in _run_script(cur, RB)
     assert "migration 37 rolled back (0 row(s) removed)" in _run_script(cur, RB)
+
+
+# ---------------------------------------------------------------- acceptance-time reconciliation against the SEC header (found by the real-SEC dry run)
+def _fresh_filing(conn, minutes_ago=2, feed_extra_hours=4):
+    """A filing accepted `minutes_ago` minutes ago by the SEC header's account, whose submissions-feed value is `feed_extra_hours` later (the shift seen live)."""
+    from datetime import datetime, timedelta, timezone
+    now = C.db_now(conn)
+    header = (now - timedelta(minutes=minutes_ago)).replace(microsecond=0)
+    feed = header + timedelta(hours=feed_extra_hours)
+    stamp = feed.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    filed = header.astimezone(timezone.utc).date().isoformat()
+    facts, rej, _ = E.parse_submissions(doc(CIK_A, [r(C.ACC.format(7), filed=filed, accepted=stamp)]), CIK_A, now=feed + timedelta(hours=1))
+    assert not rej
+    return facts[0], header
+
+
+def test_a_feed_that_is_four_hours_late_is_refused_by_the_database_unless_reconciled_and_stored_with_the_header_time_when_it_is(conn):
+    from market_intelligence import acceptance_check as A
+    raw, header = _fresh_filing(conn)
+    bad = C.ingest(conn, [raw])
+    assert bad.events_created == 0 and len(bad.errors) == 1                           # known_at would be 4 hours in the future: the PIT rule refuses it
+    good = C.ingest(conn, [A.reconcile(raw, header)], run="run-2")
+    assert good.events_created == 1 and good.errors == []
+    cur = conn.cursor()
+    cur.execute("SELECT known_at, payload->'acceptance' FROM market_event_revision")
+    known, audit = cur.fetchone()
+    assert known == header and audit["source"] == "feed_late" and audit["feed_minus_header_hours"] == 4.0
+
+
+def test_a_re_poll_reconciles_known_filings_against_the_stored_header_and_writes_nothing(conn):
+    from market_intelligence import acceptance_check as A
+    raw, header = _fresh_filing(conn)
+    C.ingest(conn, [A.reconcile(raw, header)])
+    cur = conn.cursor()
+    known = ES.load_known_headers(cur)
+    conn.rollback()
+    assert known == {C.ACC.format(7): header}
+    again = C.ingest(conn, [A.reconcile(raw, known[raw.fact.accession])], run="run-2")             # the next poll sees the same feed value and the stored header
+    assert (again.events_created, again.revisions_created, again.unchanged, again.observations_written) == (0, 0, 1, 0)
+
+
+def test_a_filing_whose_two_records_disagree_beyond_the_documented_range_is_never_stored(conn):
+    from datetime import timedelta
+    from market_intelligence import acceptance_check as A
+    raw, header = _fresh_filing(conn)
+    with pytest.raises(A.AcceptanceError):
+        A.reconcile(raw, header + timedelta(hours=5))                                  # the header claims a LATER instant than the feed
+    assert C.count(conn, "market_event_revision") == 0

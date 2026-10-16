@@ -16,7 +16,7 @@ import gzip
 import hashlib
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import psycopg2
@@ -159,6 +159,14 @@ def ingest_facts(cur, facts: Sequence[CollectedFact], run_key: str, code_ref: st
                 "ON CONFLICT (run_key, source, dataset) DO NOTHING",
                 (run_key, SOURCE, DATASET, poll_status, sorted(set(poll_subjects)), res.observations_written, Json(dict(poll_detail or {})), code_ref))
     return res
+
+
+def load_known_headers(cur) -> Dict[str, datetime]:
+    """accession -> the header acceptance instant already stored for it (latest revision). A re-poll reconciles a known filing against THIS value instead of fetching the
+    header again, so an unchanged filing yields an identical payload and writes nothing."""
+    cur.execute("SELECT DISTINCT ON (source_ref) source_ref, payload->'acceptance'->>'header' FROM market_event_revision "
+                "WHERE source = %s AND payload ? 'acceptance' ORDER BY source_ref, revision DESC", (SOURCE,))
+    return {acc: datetime.fromisoformat(h) for acc, h in cur.fetchall() if h}
 
 
 def _latest_revision(cur, event_key: str) -> Optional[int]:

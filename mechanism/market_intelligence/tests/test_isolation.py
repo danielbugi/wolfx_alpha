@@ -7,7 +7,7 @@ from mi_samples import ROOT
 
 PKG = os.path.join(ROOT, "mechanism", "market_intelligence")
 PURE = ["risk_regime.py", "relative_strength.py", "events.py", "provenance.py", "breadth.py", "sector_intel.py", "filing_contract.py",
-        "first_seen.py", "stock_rs_rows.py", "edgar_collector.py", "vendor_trial.py", "sec_financials.py", "financial_anomaly.py", "catalyst_timing.py", "identifier_links.py", "catalyst_rules.py"]
+        "first_seen.py", "stock_rs_rows.py", "edgar_collector.py", "vendor_trial.py", "sec_financials.py", "financial_anomaly.py", "catalyst_timing.py", "identifier_links.py", "catalyst_rules.py", "acceptance_check.py"]
 DB_MODULES = ["store.py", "first_seen_store.py", "classification_store.py", "edgar_store.py"]   # the only modules that may import a driver; none reads a clock
 READ_ONLY_IO = ["inputs.py", "runner.py", "catalyst_reader.py"]          # touch a database only through a connection handed in; never read the clock or the environment
 NO_CLOCK = re.compile(r"datetime\.now|date\.today|utcnow|time\.time\(|os\.environ|requests|urllib|yfinance|sqlalchemy")

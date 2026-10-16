@@ -11,7 +11,8 @@ What it does (each step is reported):
   1. fetch the SEC ticker file, keep it as a source snapshot, record OBSERVED links (valid from today) and RECONSTRUCTED links (today's file projected back, labelled);
   2. resolve the requested symbols to CIKs (the unresolved ones are listed: they can never be matched);
   3. poll every CIK's submissions feed `--polls` times, `--interval` seconds apart, with the real transport (declared User-Agent, rate limit, retries);
-     keep every distinct body as a snapshot; ingest the Phase 1A forms (first-seen log -> event -> rule labels), idempotently;
+     keep every distinct body as a snapshot; for each NEW filing fetch its SEC header record and reconcile the acceptance time (the feed was found 4 h late for 66% of a
+     real sample, see acceptance_check); ingest the Phase 1A forms (first-seen log -> event -> rule labels), idempotently;
   4. LATENCY: for filings FIRST OBSERVED after the first poll, observed_at - accepted_at (the true lag lies within one poll interval below that);
   5. PIT AUDIT of everything stored, then the strict reader at a cutoff before the run (must return nothing) and at the end;
   6. idempotency: the last batch is ingested again and must write nothing.
@@ -30,12 +31,13 @@ sys.path.insert(0, os.path.join(ROOT, "mechanism"))
 
 import psycopg2  # noqa: E402
 
+from market_intelligence import acceptance_check as AC  # noqa: E402
 from market_intelligence import catalyst_reader as CR  # noqa: E402
 from market_intelligence import catalyst_rules as R  # noqa: E402
 from market_intelligence import edgar_collector as E  # noqa: E402
 from market_intelligence import edgar_store as ES  # noqa: E402
 from market_intelligence import identifier_links as IL  # noqa: E402
-from market_intelligence.sec_transport import SecTransport  # noqa: E402
+from market_intelligence.sec_transport import SecFetchError, SecTransport  # noqa: E402
 
 UTC = timezone.utc
 CODE_REF = "catalyst_phase1a_dryrun"
@@ -63,6 +65,48 @@ def connect():
 def pct(vals, q):
     v = sorted(vals)
     return round(v[min(len(v) - 1, int(q * len(v)))], 1) if v else None
+
+
+def poll_once(conn, cur, tr, cfg, ciks, since, run_key, rejected_all, hdr_stats, offsets):
+    """One polling cycle: fetch every CIK's submissions, keep the snapshots, reconcile the acceptance time of each filing against its SEC header (a known filing reuses the stored
+    header time; a new one costs one small request), then ingest. Returns (collection report, ingest result, the reconciled facts that were offered to the ingest)."""
+    tr.captured.clear()
+    rep = E.collect(cfg, tr, ciks, now=AC.collector_now(datetime.now(UTC)), clock=time.monotonic, sleep=time.sleep, forms=R.PHASE1A_FORMS, since=since)
+    for fetched in tr.captured:
+        cik = fetched.url.rsplit("CIK", 1)[1].split(".")[0].lstrip("0")
+        ES.store_snapshot(cur, "sec_edgar", "submissions", cik, fetched.url, fetched.sha256, fetched.body, run_key, CODE_REF)
+    conn.commit()                                       # the submissions snapshots stored above are evidence: keep them whatever happens next
+    known_headers = ES.load_known_headers(cur)
+    ready = []
+    for c in rep.facts:
+        acc = c.fact.accession
+        hdr = known_headers.get(acc)
+        if hdr is None:
+            url_h = AC.header_url(c.fact.cik, acc)
+            try:
+                got_h = tr.fetch(url_h, capture=False)
+                ES.store_snapshot(cur, "sec_edgar", "filing_header", acc, url_h, got_h.sha256, got_h.body, run_key, CODE_REF)
+                hdr = AC.parse_header_acceptance(got_h.body.decode("utf-8", "replace"))
+                hdr_stats["header_fetched"] += 1
+            except (SecFetchError, AC.AcceptanceError) as e:
+                hdr_stats["header_unavailable_retry_next_poll:" + type(e).__name__] += 1
+                continue
+        try:
+            rec_c = AC.reconcile(c, hdr)
+        except AC.AcceptanceError as e:
+            hdr_stats["refused"] += 1
+            rejected_all["acceptance: " + str(e)[:80]] += 1
+            continue
+        a = rec_c.draft.payload["acceptance"]
+        if acc not in known_headers:
+            hdr_stats["reconciled_" + a["source"]] += 1
+            offsets[a["feed_minus_header_hours"]] += 1
+        ready.append(rec_c)
+    conn.commit()
+    res = ES.ingest_facts(cur, ready, run_key, CODE_REF, apply=True, poll_subjects=[f"cik:{c}" for c in rep.ciks_complete],
+                          poll_status="complete" if rep.complete else "partial", poll_detail={"fetch_errors": len(rep.fetch_errors)})
+    conn.commit()
+    return rep, res, ready
 
 
 def main():
@@ -125,19 +169,14 @@ def main():
     rejected_all, errors_all = Counter(), Counter()
     form_counts = Counter()
     last_batch = []
+    hdr_stats = Counter()
+    offsets = Counter()
     for i in range(args.polls):
         if i:
             time.sleep(args.interval)
-        tr.captured.clear()
         t0 = datetime.now(UTC)
-        rep = E.collect(cfg, tr, sorted(ciks), now=datetime.now(UTC), clock=time.monotonic, sleep=time.sleep, forms=R.PHASE1A_FORMS, since=since)
-        for fetched in tr.captured:
-            cik = fetched.url.rsplit("CIK", 1)[1].split(".")[0].lstrip("0")
-            ES.store_snapshot(cur, "sec_edgar", "submissions", cik, fetched.url, fetched.sha256, fetched.body, f"phase1a-{run_id}-{i}", CODE_REF)
-        res = ES.ingest_facts(cur, rep.facts, f"phase1a-{run_id}-{i}", CODE_REF, apply=True, poll_subjects=[f"cik:{c}" for c in rep.ciks_complete],
-                              poll_status="complete" if rep.complete else "partial", poll_detail={"fetch_errors": len(rep.fetch_errors)})
-        conn.commit()
-        last_batch = rep.facts
+        rep, res, ready = poll_once(conn, cur, tr, cfg, sorted(ciks), since, f"phase1a-{run_id}-{i}", rejected_all, hdr_stats, offsets)
+        last_batch = ready
         for r_ in rep.rejected:
             rejected_all[r_.reason[:90]] += 1
         for e in rep.fetch_errors.values():
@@ -149,6 +188,8 @@ def main():
                       "unchanged": res.unchanged, "classifications_created": res.classifications_created, "ingest_errors": res.errors[:3], "counters": dict(rep.counters)})
         log("poll", i, polls[-1]["ciks_complete"], "ok", polls[-1]["ciks_failed"], "failed", polls[-1]["events_created"], "new events")
     report["polls"] = polls
+    report["acceptance_reconciliation"] = {"counters": dict(hdr_stats), "feed_minus_header_hours_for_new_filings": {str(k): v for k, v in sorted(offsets.items())},
+                                           "note": "feed_late = the submissions feed value was later than the SEC header record and the header instant was used"}
     report["rejected_records"] = dict(rejected_all)
     report["fetch_errors"] = dict(errors_all)
     report["transport"] = tr.stats.summary()
@@ -197,6 +238,10 @@ def main():
                                "must_be_zero": len(before_run) == 0}
     cur.execute("SELECT count(*) FROM source_snapshot")
     report["snapshots_stored"] = cur.fetchone()[0]
+    cur.execute("SELECT kind, count(*), sum(byte_length), sum(length(body_gz)) FROM source_snapshot GROUP BY 1 ORDER BY 1")
+    report["snapshot_storage_by_kind"] = {k: {"rows": n, "bytes_raw": int(b), "bytes_gzip": int(g)} for k, n, b, g in cur.fetchall()}
+    if report["snapshots_stored"] == 0 and tr.stats.requests > 1:
+        raise SystemExit("INVARIANT BROKEN: documents were fetched but no source snapshot was kept")
     cur.execute("SELECT status, count(*), sum(n_new_observations) FROM source_poll GROUP BY 1")
     report["poll_log"] = [list(r_) for r_ in cur.fetchall()]
     conn.rollback()
