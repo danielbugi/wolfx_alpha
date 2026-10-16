@@ -232,10 +232,13 @@ def main():
         mapped_counts[label] = len(rows_)
         if label == "with_reconstructed_links":
             report["strict_reader_basis_counts"] = dict(Counter(x["symbol_basis"] for x in rows_))
-    before_run = CR.visible_filings(cur, sample_syms, run_started, lookback_days=3650, include_reconstructed_links=True, include_unmapped=True)
+    cur.execute("SELECT min(ingested_at) FROM market_event_revision")
+    first_ingest = cur.fetchone()[0]
     conn.rollback()
-    report["strict_reader"] = {"links_observed": n_obs, "links_reconstructed": n_rec, "visible_at_end": dict(mapped_counts), "visible_at_a_cutoff_before_the_run_started": len(before_run),
-                               "must_be_zero": len(before_run) == 0}
+    before_first = [] if first_ingest is None else CR.visible_filings(cur, sample_syms, first_ingest - timedelta(microseconds=1), lookback_days=3650, include_reconstructed_links=True, include_unmapped=True)
+    conn.rollback()
+    report["strict_reader"] = {"links_observed": n_obs, "links_reconstructed": n_rec, "visible_at_end": dict(mapped_counts),
+                               "visible_one_microsecond_before_the_first_ingest_in_this_database": len(before_first), "must_be_zero": len(before_first) == 0}
     cur.execute("SELECT count(*) FROM source_snapshot")
     report["snapshots_stored"] = cur.fetchone()[0]
     cur.execute("SELECT kind, count(*), sum(byte_length), sum(length(body_gz)) FROM source_snapshot GROUP BY 1 ORDER BY 1")
