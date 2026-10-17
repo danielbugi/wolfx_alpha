@@ -203,7 +203,10 @@ def test_nothing_else_in_the_repository_imports_the_harness_and_no_unit_or_timer
     hits = []
     for top in ("mechanism", "backend", "ml_training", "deploy", ".github"):
         for base, dirs, files in os.walk(os.path.join(ROOT, top)):
+            # market_participation is a sibling research package that reuses the harness's read-only IO and episode rule; it has its own isolation test (test_market_participation.py)
             dirs[:] = [d for d in dirs if d not in ("__pycache__", "node_modules", "bw_harness", "tests", ".venv")]
+            if os.path.relpath(base, ROOT).replace(os.sep, "/") == "ml_training/experiments":
+                dirs[:] = [d for d in dirs if d != "market_participation"]               # only THIS path is exempt, not any directory of that name anywhere in mechanism / backend / deploy
             for f in files:
                 if f.endswith((".py", ".sh", ".service", ".timer", ".yml", ".yaml")):
                     p = os.path.join(base, f)
