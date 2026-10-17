@@ -29,11 +29,27 @@ The pinned image `5c511899505a` (digest `sha256:be0ec3ce31176dcb1b7ee7713765705b
 2. On the VPS: `docker pull ghcr.io/danielbugi/wolfx_alpha-mechanism:T2`; the pulled digest equals the recorded one.
 3. In isolation (no production container touched): the quarterly tests pass **inside the image**; the real pipeline script runs through the stand-in harness (section 2); a scratch rehearsal with the real image (aged universe, short budget, real vendor) stops cleanly and prints `QUARTERLY_SUMMARY`.
 4. Quiet window (section 4): no donchian unit running, `.pipeline.lock`, `.forward_collection.lock`, `.paper_tracker.lock` free, no timer due within the next 30 minutes.
-5. Pre-state captured: `prod_state.sh` snapshot, `sha256` of the three pin/arming files, row counts of the research and evidence tables.
+5. The fresh-backup helper is installed on the box at the path the tool expects (`/root/pre_activation_backup.sh`, root-owned, mode 700) and its sha256 equals the trusted value recorded in `FORWARD_RESEARCH_ACTIVATION_RUNBOOK.md` and in the tool (`e147ae29a396264330cd5b1ccc5e4e8d664b8cdd5b9a8028c15121e9b9ce00d1`). The preflight now checks this and fails safely when the helper is missing, not executable, a symlink, writable by group or others, or has a different hash; the `backup` step refuses to run it in any of those cases.
+6. Pre-state captured: `prod_state.sh` snapshot, `sha256` of the three pin/arming files, row counts of the research and evidence tables.
 
 ## 4. Proposed window
 
-Weekday daytime in Asia/Jerusalem, after the 11:30 tracker fire and well before the 17:00 evening notice: **Wednesday 2026-10-21, 12:00-14:00** (primary), **Tuesday 2026-10-27, 12:00-14:00** (fallback). Both are before the pipeline's next first fire (00:45) and leave 2+ weeks before the 2026-11-07 cohort. Avoid 2026-10-25 and 2026-11-01/02 (clock changes).
+Weekday daytime in Asia/Jerusalem: **Wednesday 2026-10-21, 12:00-14:00** (primary), **Tuesday 2026-10-27, 12:00-14:00** (fallback). Both leave 2+ weeks before the 2026-11-07 cohort. Avoid 2026-10-25 and 2026-11-01/02 (clock changes). The window itself is unchanged.
+
+**Timer schedule around the window (read from the installed units on 2026-10-17; the VPS clock is UTC, every calendar below is in the zone stated).** The earlier text of this section said "after the 11:30 tracker fire and well before the 17:00 evening notice"; that was incomplete and the evening time was wrong.
+
+| Time (Asia/Jerusalem) | Unit | Notes |
+|---|---|---|
+| 09:30 and 11:30 (+0-60 s) | `donchian-paper-tracker` | the 11:30 fire finishes before the window |
+| 10:00 (+0-60 s) | `donchian-earnings-today` | |
+| 11:45 (+0-300 s) | `donchian-nightly-backup` | a dump takes seconds; it is done well before 12:00 |
+| **12:00 (+0-60 s)** | **`donchian-notice-midday`** | **fires at the very start of the window.** A channel-sender job that runs from the mechanism pin: it must have finished before anything is changed |
+| 20:00 (+0-60 s) | `donchian-notice-evening` | not 17:00 |
+| 00:45 and 02:15 on the following night (17:45 and 19:15 America/New_York) | `donchian-pipeline` | after the window; on 2026-10-21 the new image would be used from this fire |
+| 23:45, then every 20 min 00:00-05:40, then 06:00 | `donchian-postmarket-retry` | |
+| 03:30 / 05:00 / 06:20 / 06:45 and 08:15 | signal-ledger eval / firstlight1 prices / discontinuity scan / forward collection | overnight and early morning |
+
+**Consequence:** the preflight is run **no earlier than about 12:05**, after `donchian-notice-midday` and the nightly backup have completed (confirm with the unit status, not by assuming a duration), and only when its own check "no timer is due within 30 minutes" passes. If it fails because of the midday notice, wait and run it again; do not override it. This leaves nearly two hours inside the window. The window is not moved.
 
 ## 5. Procedure: one tested tool, `deploy/vps/stage2_repin.sh` (root on the VPS; dormant, referenced by nothing)
 
@@ -42,7 +58,7 @@ Repository policy (enforced by tests) is that **no repository file may create th
 ```
 export ARMING_FILE=/opt/donchian/<the collector's arming file>  COLLECTOR_CHECK=/opt/donchian/scripts/<the collector wrapper>  UNITCTL=$(command -v <unit tool>)  GATE_CMD='<run the trading-day gate in the OLD image>'
 T=<new 12-hex tag>   DIGEST=sha256:<recorded digest>    S=/root/stage2_repin.sh    (copy of deploy/vps/stage2_repin.sh from the reviewed commit, LF endings; checksum compared with the repo)
-1. $S preflight $T $DIGEST     read-only. FAILS (exit 1) unless: tag/digest well-formed; the mechanism pin is 5c511899505a (the rollback image) and the arming file equals it; tracker pin and
+1. $S preflight $T $DIGEST     read-only. FAILS (exit 1) unless: tag/digest well-formed; the fresh-backup helper is present, executable, not group/world-writable, not a symlink and matches the trusted sha256 (the 14th check); the mechanism pin is 5c511899505a (the rollback image) and the arming file equals it; tracker pin and
                                arming present and equal; the new image is local and its digest equals the recorded one; the rollback image is local; no donchian service running; every .lock file
                                free; no timer due within 30 min; the trading-day gate says 'no new session' (so the pipeline wrapper is a no-op); disk free.
 2. $S backup                   fresh production dump via pre_activation_backup.sh stage2-repin + checksum verified. Then restore-check it into a throwaway database (row counts == live) BEFORE step 3.
@@ -110,8 +126,15 @@ A live read-only snapshot of production was restored into a throwaway database; 
 | Pipeline script from the image | 4 scenarios, identical 17-step sequence to the pinned image except step 8's `--time-budget-seconds 2700`; failing/hanging step 8 warns and steps 9-13 + the session mark still run (exit 0); a failing critical step aborts (exit 1, no mark) |
 | Image tests (inside the image, throwaway DB, release-branch fixture data mounted read-only) | 14 passed (budget, wrapper, isolation guard, real-SQL ordering, multi-night starvation simulation) |
 | Final scratch rehearsal (registry image, live read-only snapshot, real vendor) | steady state: 116 due (all never-succeeded), 100 s budget stops cleanly, due count unchanged; cohort night (3,075 due): 27 ok in 100 s (~3.7 s/symbol), 3,048 left, `QUARTERLY_SUMMARY` printed; no scratch leftovers |
-| Window tool preflight on production (today, real tag + digest) | ALL PASS, 13 checks (pin and arming consistent, tracker pin/arming equal, image digest equal, rollback image present, no running service, all locks free, no timer within 30 min, gate = no new session, 75 GB free) |
+| Window tool preflight on production (2026-10-15, real tag + digest; the tool had 13 checks then, 14 now) | ALL PASS, 13 checks (pin and arming consistent, tracker pin/arming equal, image digest equal, rollback image present, no running service, all locks free, no timer within 30 min, gate = no new session, 75 GB free) |
 | Nightly backup | now 11:45 Jerusalem (`BACKUP_SCHEDULE.md`): the window starts at 12:00, after that day's dump; the window's own fresh backup is still taken first |
 | Untouched by design | `CURRENT_PAPER_SHA`, `PAPER_TRACKER_ARMED`, `env/mechanism_image_tag.env` (bot), every timer and unit, all forward evidence |
 
 The window begins by re-running `preflight` (it must be ALL PASS on the day) and the backup + restore check; if any item has changed, the window does not proceed.
+
+### 10a. Preparation record (2026-10-17, read-only audit plus one file install)
+
+* Re-verified on the box (no change): pin `5c511899505a` = arming; tracker `45c2ac39249d` = arming; bot tag `575fa5dc0599`; new image `0384c9b91c63` present with digest `sha256:4a123289...de66b` (equals the recorded one); rollback image present; no donchian service running; 68 GB free; PostgreSQL healthy; the newest nightly dump checksum OK; the installed `/root/stage2_repin.sh` was byte-identical to `main` at that time (it must be refreshed from the reviewed commit once the 14th check is merged, then compared by checksum).
+* Found missing: `/root/pre_activation_backup.sh`. Installed from the repository blob after its sha256 matched the recorded value (`e147ae29...ce00d1`); root:root, mode 700; **not executed**.
+* Preflight changes: the 14th check described above (tested, including on Linux).
+* Still to repeat inside the window: all preflight checks (services, locks, timers, the trading-day gate), the fresh backup and its restore check into a throwaway database, apply, the manual arming step, collector check, verify.
