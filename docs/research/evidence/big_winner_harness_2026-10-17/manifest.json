@@ -1,14 +1,14 @@
 {
  "boundary": "read-only research; hypothesis-generation or replication evidence on history that was examined before; no untouched historical holdout; no model trained",
- "code_ref": "bb0e956631d2",
- "config_hash": "3c99d0fa58afee351b092f8ee6165b2152c3fe1841081d75b2fe094715b64400",
+ "code_ref": "a56e27ed363f",
+ "config_hash": "cf3994d94c2a8d14ad99990a92515dbec46fc5900dfbb9a1c9649a90d1868617",
  "dataset": {
-  "bytes_gzip": 174144987,
+  "bytes_gzip": 174145006,
   "bytes_uncompressed": 439249268,
   "columns": 94,
   "file": "dataset.csv.gz",
   "rows": 602962,
-  "sha256_uncompressed": "9cb6fef94c8017142480a00037ced302a859422b51678a84c53c87f636ba607b"
+  "sha256_uncompressed": "c0b0d976ded96f526ba5f715df74b35d6a29a188c7d524f689fedb8aff3e617c"
  },
  "harness_version": "bw_harness_v1",
  "inputs": {
@@ -33,8 +33,10 @@
    "symbols": 3114
   }
  },
+ "posthoc_note": "POST-HOC SENSITIVITY: NOT PRE-REGISTERED; no verdict is derived from it; hypothesis-generating at most; two matching designs mean multiplicity.",
+ "posthoc_sha256": "6ac6ffde14f3635b17785ac451012940da009e1bd58a4b97de6bcdd6eb3163ee",
  "provenance_sha256": "6e182a0d288ef868dfe41ecc325fddbccef4403ab04895ba8003f70e429fd3a9",
- "results_sha256": "f98b9f73db6acebee934837c4faaee6d947f346c73b4d14fa59aaa562f5ae070",
+ "results_sha256": "32f3f90d4c833a7234149b5f61b080ce76ae544f00535f3affa24fcb8e930d1e",
  "sample_counts": {
   "eligible": 586761,
   "independent_episodes_labelled": 61583,
