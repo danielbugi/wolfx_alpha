@@ -29,6 +29,8 @@ ARMING_FILE="${ARMING_FILE:-}"
 COLLECTOR_CHECK="${COLLECTOR_CHECK:-}"
 GATE_CMD="${GATE_CMD:-}"
 PRE_BACKUP="${PRE_BACKUP:-/root/pre_activation_backup.sh}"
+# sha256 of deploy/db/pre_activation_backup.sh as reviewed (recorded in FORWARD_RESEARCH_ACTIVATION_RUNBOOK.md). The tool refuses to run any other file as the backup step. Override only in tests.
+PRE_BACKUP_SHA256="${PRE_BACKUP_SHA256:-e147ae29a396264330cd5b1ccc5e4e8d664b8cdd5b9a8028c15121e9b9ce00d1}"
 MIN_FREE_GB="${MIN_FREE_GB:-5}"
 TIMER_GUARD_MIN="${TIMER_GUARD_MIN:-30}"
 IMAGE_REPO="ghcr.io/danielbugi/wolfx_alpha-mechanism"
@@ -48,6 +50,17 @@ need_env() {
   [ -n "$COLLECTOR_CHECK" ] || missing="$missing COLLECTOR_CHECK"
   [ -n "$UNITCTL" ] || missing="$missing UNITCTL"
   [ -z "$missing" ] || { echo "STOP: set the operator-supplied variables first:$missing (see the header)"; return 1; }
+}
+
+backup_script_state() {  # prints "ok" or the reason the backup script may not be used; never executes it
+  [ -e "$PRE_BACKUP" ] || { echo "missing: $PRE_BACKUP"; return 1; }
+  [ -f "$PRE_BACKUP" ] && [ ! -L "$PRE_BACKUP" ] || { echo "not a regular file: $PRE_BACKUP"; return 1; }
+  [ -x "$PRE_BACKUP" ] || { echo "not executable: $PRE_BACKUP"; return 1; }
+  local mode; mode="$(stat -c %a "$PRE_BACKUP" 2>/dev/null || echo 777)"
+  case "${mode: -2}" in *[2367]*) echo "writable by group or others (mode $mode): $PRE_BACKUP"; return 1;; esac
+  local h; h="$(sha256sum "$PRE_BACKUP" 2>/dev/null | awk '{print $1}')"
+  [ "$h" = "$PRE_BACKUP_SHA256" ] || { echo "sha256 ${h:-<unreadable>} is not the trusted ${PRE_BACKUP_SHA256:0:12}...: $PRE_BACKUP"; return 1; }
+  echo ok
 }
 
 preflight() {
@@ -97,6 +110,7 @@ preflight() {
   local free
   free="$(df -Pk "$BASE" 2>/dev/null | awk 'NR==2 {printf "%d", $4/1048576}')"
   [ "${free:-0}" -ge "$MIN_FREE_GB" ] && ck "free disk on the data volume" 1 "${free} GB" || ck "free disk on the data volume" 0 "${free:-0} GB < ${MIN_FREE_GB} GB"
+  local bs; bs="$(backup_script_state)" && ck "the fresh-backup script is present, executable, not group/world-writable and matches the trusted sha256" 1 "$PRE_BACKUP" || ck "the fresh-backup script is present, executable, not group/world-writable and matches the trusted sha256" 0 "$bs"
   echo "== preflight result: $([ $FAILS -eq 0 ] && echo ALL PASS || echo "$FAILS FAILED")"
   [ $FAILS -eq 0 ]
 }
@@ -111,7 +125,7 @@ SQL
 containers() { "$DOCKER" ps -a --format '{{.Names}} {{.Image}} {{.ID}}' 2>/dev/null | grep -v -- '-run-' | sort; }
 
 backup() {
-  [ -x "$PRE_BACKUP" ] || { echo "FAIL  fresh-backup script not found/executable: $PRE_BACKUP"; return 1; }
+  local bs; bs="$(backup_script_state)" || { echo "FAIL  the fresh-backup script cannot be used: $bs"; return 1; }
   local out dir
   out="$("$PRE_BACKUP" stage2-repin 2>&1)"; local rc=$?
   echo "$out" | tail -6

@@ -71,7 +71,9 @@ esac
 d="{base}/backups/pre-release-b/stage2-repin-$(date -u +%Y%m%dT%H%M%SZ)"; mkdir -p "$d"; echo dump > "$d/production.dump"; (cd "$d" && sha256sum production.dump > production.dump.sha256)
 echo "BK=$d"; echo "OK label=stage2-repin"
 """, 0o755)
-    env = dict(os.environ, DONCHIAN_BASE=str(base), DONCHIAN_SCRIPTS=str(scripts), DOCKER=str(fake / "docker"), UNITCTL=str(fake / "unitctl"), GATE_CMD=str(fake / "gate"),
+    import hashlib
+    fake_backup_sha = hashlib.sha256((fake / "pre_backup").read_bytes()).hexdigest()
+    env = dict(os.environ, PRE_BACKUP_SHA256=fake_backup_sha, DONCHIAN_BASE=str(base), DONCHIAN_SCRIPTS=str(scripts), DOCKER=str(fake / "docker"), UNITCTL=str(fake / "unitctl"), GATE_CMD=str(fake / "gate"),
                ARMING_FILE=str(arming), COLLECTOR_CHECK=str(fake / "collector_check"), PRE_BACKUP=str(fake / "pre_backup"), MIN_FREE_GB="0")
     return {"base": base, "fake": fake, "env": env, "arming": arming}
 
@@ -96,6 +98,33 @@ PIN_AND_ARM = ["CURRENT_MECHANISM_SHA", "ARMING"]
 def test_preflight_passes_in_a_clean_world(w):
     r = run(w, "preflight", NEW, DIG_NEW)
     assert r.returncode == 0 and r.stdout.count("FAIL") == 0 and "ALL PASS" in r.stdout
+
+
+@linux_only
+@pytest.mark.parametrize("name,mutate,needle", [
+    ("backup script missing", lambda w: (w["fake"] / "pre_backup").unlink(), "missing:"),
+    ("backup script not executable", lambda w: (w["fake"] / "pre_backup").chmod(0o644), "not executable"),
+    ("backup script is a different file", lambda w: put(w["fake"] / "pre_backup", "#!/usr/bin/env bash\necho tampered\n", 0o755), "is not the trusted"),
+    ("backup script writable by others", lambda w: (w["fake"] / "pre_backup").chmod(0o757), "writable by group or others"),
+    ("backup script is a symlink", lambda w: (lambda p: (p.rename(w["fake"] / "real_backup"), p.symlink_to(w["fake"] / "real_backup")))(w["fake"] / "pre_backup"), "not a regular file"),
+])
+def test_an_unusable_or_untrusted_backup_script_fails_the_preflight_and_the_backup_step_executes_nothing(w, name, mutate, needle):
+    mutate(w)
+    r = run(w, "preflight", NEW, DIG_NEW)
+    assert r.returncode == 1 and any(l.startswith("FAIL") and "fresh-backup script" in l and needle in l for l in r.stdout.splitlines()), (name, r.stdout)
+    b = run(w, "backup")
+    assert b.returncode == 1 and "cannot be used" in b.stdout and not (w["base"] / "backups").exists()
+    a = run(w, "apply", NEW, DIG_NEW)
+    assert a.returncode == 1 and "STOP: preflight failed" in a.stdout
+
+
+def test_the_default_trusted_hash_is_the_one_recorded_for_the_repository_backup_script():
+    import hashlib
+    import re as _re
+    text = SCRIPT.read_text(encoding="utf-8").replace("\r", "")
+    default = _re.search(r'PRE_BACKUP_SHA256="\$\{PRE_BACKUP_SHA256:-([0-9a-f]{64})\}"', text).group(1)
+    repo_copy = (REPO / "deploy" / "db" / "pre_activation_backup.sh").read_bytes().replace(b"\r\n", b"\n")
+    assert hashlib.sha256(repo_copy).hexdigest() == default
 
 
 @linux_only
