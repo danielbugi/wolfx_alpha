@@ -1,0 +1,48 @@
+price panel 2024-05-23..2026-09-23, 3114 symbols, split-like days excluded 47
+quarterly rows used 14905 (fiscal_year IS NOT NULL), with a report date 13639
+
+A. TURNAROUND EVENT STUDY -- loss->profit flips with a report date and clean prices: 827 (entries 2025-07-25..2026-09-11)
+   excess = stock return minus equal-weight mean of all clean symbols over the same window; t = mean/SE (overlapping windows -> overstated)
+                                                      n  n21  mean_x21%  median_x21%  beat21%   t21  n63  mean_x63%  median_x63%  beat63%   t63
+group                                                                                                                                          
+all flips                                           827  815       0.11        -1.08    44.17  0.18  556      -0.56        -4.48    42.45 -0.45
+flips near 12m low                                  107  102      -1.71        -2.31    36.27 -1.68   77      -9.33        -9.19    33.77 -3.52
+  + no balance-sheet fail (= page rule)              90   85      -2.31        -2.31    35.29 -2.25   64      -9.14       -11.24    32.81 -3.01
+    of which yr-ago quarter profitable (seasonal?)   22   17      -1.84        -0.24    29.41 -0.94    0        NaN          NaN      NaN   NaN
+    of which yr-ago quarter a loss                    4    4       4.81        -1.13    25.00  0.69    0        NaN          NaN      NaN   NaN
+    of which yr-ago quarter unknown                  64   64      -2.88        -3.17    37.50 -2.43   64      -9.14       -11.24    32.81 -3.01
+flips NOT near low                                  720  713       0.37        -0.90    45.30  0.54  479       0.85        -3.64    43.84  0.62
+near low, balance-sheet FAIL                         17   17       1.27        -3.06    41.18  0.38   13     -10.26        -4.58    38.46 -2.07
+
+   page rule by fiscal quarter:
+             n  mean_x21  mean_x63
+quarter                           
+2025-06-30   1     -2.50    -40.87
+2025-08-31   3     -6.34     -2.57
+2025-09-30  31     -4.34    -18.62
+2025-10-31   1     -6.65      6.02
+2025-12-31  20     -1.67     -1.65
+2026-01-31   2     -1.54      1.82
+2026-02-28   1    -18.06    -28.05
+2026-03-31   5      6.54     18.43
+2026-05-31   1      9.01       NaN
+2026-06-30  23     -1.05       NaN
+2026-07-31   2       NaN       NaN
+
+B. BASELINE -- all stocks within 15% of the 252-day low, first trading day of each month
+   h=21: 15 cohorts, avg 513 stocks/cohort, mean excess -1.00%, cohorts negative 9/15, mean beat 40.4%
+   h=63: 13 cohorts, avg 530 stocks/cohort, mean excess -3.50%, cohorts negative 10/13, mean beat 34.1%
+    cohort  h  n_near  excess%  beat%
+2025-06-02 63     530    -3.00  32.45
+2025-07-01 63     355    -6.74  21.97
+2025-08-01 63     654    -9.64  17.28
+2025-09-02 63     405    -7.27  23.70
+2025-10-01 63     520    -4.00  31.92
+2025-11-03 63     695     0.85  46.91
+2025-12-01 63     576    -3.68  38.72
+2026-01-02 63     562    -5.03  35.94
+2026-02-02 63     465    -6.16  28.17
+2026-03-02 63     444    -1.10  35.81
+2026-04-01 63     671    -2.28  35.62
+2026-05-01 63     471     0.66  44.80
+2026-06-01 63     544     1.82  50.37

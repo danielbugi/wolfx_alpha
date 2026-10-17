@@ -687,14 +687,36 @@ export interface StrategyRankParams {
   limit?: number;
 }
 
+export type BalanceSheetCheckStatus = 'pass' | 'warn' | 'fail' | 'unknown' | 'n/a';
+
+export interface BalanceSheetAssessment {
+  quarter: string | null;
+  checks: {
+    equity: BalanceSheetCheckStatus;
+    leverage: BalanceSheetCheckStatus;
+    liquidity: BalanceSheetCheckStatus;
+    cash_flow: BalanceSheetCheckStatus;
+  };
+  values: {
+    debt_to_equity: number | null;
+    current_ratio: number | null;
+    operating_cash_flow: number | null;
+    cash_runway_quarters: number | null;
+  };
+}
+
 export interface DeepValueEntry {
   symbol: string;
   sector: string;
   current_price: number;
+  // price_date / balance_sheet / excluded_balance_sheet are absent from a backend older than the Alerts
+  // balance-sheet change (e.g. after a backend rollback) -- typed optional so the page must handle that.
+  price_date?: string;
   distance_from_low_pct: number;
   donchian_low_12m: number;
   valuation_score: number;
-  financial_health_score: number;
+  financial_health_score?: number | null;
+  balance_sheet?: BalanceSheetAssessment;
   overall_quality_score: number | null;
   quality_grade: string | null;
   pe_ratio: number | null;
@@ -704,17 +726,19 @@ export interface DeepValueEntry {
   latest_net_income?: number;
   previous_quarter?: string;
   previous_net_income?: number;
+  year_ago_quarter?: string | null;
+  year_ago_net_income?: number | null;
 }
 
 export interface DeepValueScanResponse {
   turnaround_alerts: DeepValueEntry[];
   deep_value_watch: DeepValueEntry[];
+  excluded_balance_sheet?: number;
 }
 
 export interface DeepValueScanParams {
   near_low_pct?: number;
   min_valuation_score?: number;
-  min_financial_health_score?: number;
 }
 
 // System health types

@@ -14,11 +14,13 @@ import {
   TableCell,
   Chip,
   Divider,
-  Spinner,
-  Input,
   Button,
 } from '@nextui-org/react';
-import { deepValueApi, DeepValueEntry } from '@/services/api';
+import { TextField } from '@/components/ui/Field';
+import { deepValueApi, DeepValueEntry, BalanceSheetAssessment, BalanceSheetCheckStatus } from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
+import ErrorAlert from '@/components/common/ErrorAlert';
+import SymbolHoverLink from '@/components/dashboard/SymbolHoverLink';
 
 function gradeColor(grade: string | null) {
   switch (grade) {
@@ -31,6 +33,56 @@ function gradeColor(grade: string | null) {
     default:
       return 'bg-red-100 text-red-700';
   }
+}
+
+// Thresholds mirror backend/services/deep_value_service.py -- keep in sync.
+type CheckKey = keyof BalanceSheetAssessment['checks'];
+
+const BALANCE_SHEET_RULES: { key: CheckKey; label: string; rule: string }[] = [
+  { key: 'equity', label: 'Eq', rule: 'Shareholders’ equity > 0' },
+  { key: 'leverage', label: 'D/E', rule: 'Debt / equity ≤ 2.0 (n/a for Financial Services)' },
+  { key: 'liquidity', label: 'CR', rule: 'Current ratio ≥ 1.0 (n/a for Financial Services)' },
+  { key: 'cash_flow', label: 'CF', rule: 'Operating cash flow > 0, or cash ≥ 4 quarters of FCF burn' },
+];
+
+function checkColor(status: BalanceSheetCheckStatus) {
+  switch (status) {
+    case 'pass':
+      return 'bg-emerald-100 text-emerald-800';
+    case 'warn':
+      return 'bg-amber-100 text-amber-800';
+    case 'fail':
+      return 'bg-red-100 text-red-700';
+    default:
+      return 'bg-slate-100 text-slate-500';
+  }
+}
+
+function checkDetail(bs: BalanceSheetAssessment, key: CheckKey): string {
+  const v = bs.values;
+  const status = bs.checks[key];
+  if (key === 'leverage' && v.debt_to_equity != null) return `D/E ${v.debt_to_equity.toFixed(2)} (${status})`;
+  if (key === 'liquidity' && v.current_ratio != null) return `Current ratio ${v.current_ratio.toFixed(2)} (${status})`;
+  if (key === 'cash_flow' && v.cash_runway_quarters != null) return `Cash runway ${v.cash_runway_quarters.toFixed(1)} quarters (${status})`;
+  return status;
+}
+
+function BalanceSheetChips({ e }: { e: DeepValueEntry }) {
+  const bs = e.balance_sheet;
+  if (!bs) return <span className="text-slate-400">—</span>; // backend predates the balance-sheet checks
+  return (
+    <div className="flex gap-1" title={`Quarter ending ${bs.quarter ?? '—'}`}>
+      {BALANCE_SHEET_RULES.map((r) => (
+        <span
+          key={r.key}
+          title={`${r.rule}: ${checkDetail(bs, r.key)}`}
+          className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${checkColor(bs.checks[r.key])}`}
+        >
+          {r.label}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function fmtMoney(v: number | undefined): string {
@@ -46,10 +98,10 @@ function fmtMoney(v: number | undefined): string {
 export default function AlertsPage() {
   const [nearLowPct, setNearLowPct] = useState(15);
   const [minValuationScore, setMinValuationScore] = useState(12);
-  const [minFinancialHealthScore, setMinFinancialHealthScore] = useState(10);
 
   const [turnaroundAlerts, setTurnaroundAlerts] = useState<DeepValueEntry[]>([]);
   const [deepValueWatch, setDeepValueWatch] = useState<DeepValueEntry[]>([]);
+  const [excludedBalanceSheet, setExcludedBalanceSheet] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,41 +112,44 @@ export default function AlertsPage() {
       const resp = await deepValueApi.scan({
         near_low_pct: nearLowPct,
         min_valuation_score: minValuationScore,
-        min_financial_health_score: minFinancialHealthScore,
       });
       setTurnaroundAlerts(resp.turnaround_alerts);
       setDeepValueWatch(resp.deep_value_watch);
+      setExcludedBalanceSheet(resp.excluded_balance_sheet ?? null);
     } catch {
       setError('Failed to load deep value scan');
     } finally {
       setLoading(false);
     }
-  }, [nearLowPct, minValuationScore, minFinancialHealthScore]);
+  }, [nearLowPct, minValuationScore]);
 
   useEffect(() => {
     fetchScan();
   }, [fetchScan]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-cyan-50">
-      <div className="container mx-auto p-4 max-w-7xl space-y-4">
-        <div className="p-4 bg-white rounded-lg shadow-sm border border-slate-200">
-          <h1 className="text-2xl font-bold text-slate-800">Deep Value & Turnaround Alerts</h1>
-          <p className="text-slate-600 text-sm mt-1">
-            Stocks trading near their 12-month low at a cheap valuation, without being a financial-health
-            trap. <span className="font-semibold text-slate-700">Turnaround Alerts</span> are the subset that
-            also just flipped from a quarterly net loss to a net profit — the highest-conviction setup.
+    <div className="min-h-screen bg-slate-50">
+      <div className="container mx-auto px-4 pb-12 pt-6 sm:px-6 lg:px-8 max-w-7xl space-y-4">
+        <div className="px-1 pt-2 pb-1">
+          <h1 className="large-title">Deep Value & Turnaround Screen</h1>
+          <p className="mt-1.5 max-w-3xl text-[15px] leading-relaxed text-slate-500">
+            Stocks trading near their 12-month low at a cheap valuation that don&apos;t fail a balance-sheet
+            check. <span className="font-semibold text-slate-700">Turnaround flips</span> are the subset that
+            also just flipped from a quarterly net loss to a net profit in two consecutive quarters. These are
+            screening rules that describe the current data, not a prediction or a recommendation, and there is no
+            track record for this screen. In one historical test (about 15 months; see the research notes in the repository)
+            stocks matching these rules did not outperform the market.
           </p>
         </div>
 
         {/* Thresholds */}
-        <Card className="shadow-sm border border-slate-200">
-          <CardBody className="p-4 flex flex-wrap gap-4 items-end">
+        <Card className="border border-black/[0.05] shadow-sm">
+          <CardBody className="p-5 flex-row flex-wrap gap-x-5 gap-y-4 items-end">
             <div className="w-44">
-              <Input
+              <TextField
                 type="number"
-                size="sm"
-                label="Near Low % (max above 12mo low)"
+                label="Near low (max above 12-mo low)"
+                suffix="%"
                 value={nearLowPct.toString()}
                 min={0}
                 max={100}
@@ -103,10 +158,9 @@ export default function AlertsPage() {
               />
             </div>
             <div className="w-44">
-              <Input
+              <TextField
                 type="number"
-                size="sm"
-                label="Min Valuation Score (/25)"
+                label="Min valuation score (of 25)"
                 value={minValuationScore.toString()}
                 min={0}
                 max={25}
@@ -114,41 +168,40 @@ export default function AlertsPage() {
                 onChange={(e) => setMinValuationScore(Number(e.target.value) || 0)}
               />
             </div>
-            <div className="w-48">
-              <Input
-                type="number"
-                size="sm"
-                label="Min Financial Health (/25)"
-                value={minFinancialHealthScore.toString()}
-                min={0}
-                max={25}
-                step={1}
-                onChange={(e) => setMinFinancialHealthScore(Number(e.target.value) || 0)}
-              />
-            </div>
-            <Button size="sm" className="bg-slate-700 text-white" onClick={fetchScan} isLoading={loading}>
+            <Button size="sm" className="rounded-full bg-slate-900 px-4 font-medium text-white" onClick={fetchScan} isLoading={loading}>
               Rescan
             </Button>
-            <p className="text-xs text-slate-400 max-w-xs">
-              The financial-health floor exists to filter out stocks that are cheap because they&apos;re failing,
-              not because they&apos;re undervalued.
-            </p>
+            <div className="text-xs text-slate-500 max-w-md">
+              <p className="font-semibold text-slate-600 mb-1">Balance-sheet checks (latest quarter)</p>
+              <ul className="space-y-0.5">
+                {BALANCE_SHEET_RULES.map((r) => (
+                  <li key={r.key}>
+                    <span className="font-medium">{r.label}</span> — {r.rule}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-slate-400">
+                Green = pass. Amber = breached but operating cash flow is positive (or unreported) — shown,
+                not excluded. A breach with operating cash flow ≤ 0, or a short cash runway, is a fail and
+                excludes the stock. Grey = data not reported or n/a, never assumed.{!loading && !error && excludedBalanceSheet != null && ` ${excludedBalanceSheet} otherwise-matching stocks excluded.`}
+              </p>
+            </div>
           </CardBody>
         </Card>
 
         {loading ? (
           <div className="flex justify-center py-16">
-            <Spinner color="primary" />
+            <LoadingSpinner />
           </div>
         ) : error ? (
-          <p className="text-center text-red-500 text-sm py-16">{error}</p>
+          <ErrorAlert title="Couldn’t run the scan" message={error} onRetry={fetchScan} className="my-4" />
         ) : (
           <>
-            {/* Turnaround Alerts */}
+            {/* Turnaround flips */}
             <Card className="shadow-sm border-2 border-emerald-300">
               <CardHeader className="bg-emerald-600 text-white p-4">
                 <div>
-                  <h3 className="text-base font-semibold">🚀 Turnaround Alerts</h3>
+                  <h3 className="text-base font-semibold">Turnaround flips</h3>
                   <p className="text-emerald-100 text-xs mt-1">Near lows + cheap + just flipped loss → profit</p>
                 </div>
               </CardHeader>
@@ -167,14 +220,17 @@ export default function AlertsPage() {
                         className="block border border-emerald-200 rounded-lg p-3 hover:shadow-md transition-shadow"
                       >
                         <div className="flex justify-between items-center mb-1">
-                          <span className="font-bold text-slate-800">{e.symbol}</span>
+                          <SymbolHoverLink symbol={e.symbol} asText className="font-bold text-slate-800" />
                           {e.quality_grade && (
                             <Chip size="sm" className={`text-xs ${gradeColor(e.quality_grade)}`}>
                               Grade {e.quality_grade}
                             </Chip>
                           )}
                         </div>
-                        <p className="text-xs text-slate-500 mb-2">{e.sector} · ${e.current_price.toFixed(2)}</p>
+                        <p className="text-xs text-slate-500 mb-2">
+                          {e.sector} · ${e.current_price.toFixed(2)}
+                          {e.price_date ? ` close ${e.price_date}` : ''}
+                        </p>
                         <p className="text-sm">
                           <span className="text-red-600 font-semibold">{fmtMoney(e.previous_net_income)}</span>
                           <span className="text-slate-400 mx-1">→</span>
@@ -183,9 +239,24 @@ export default function AlertsPage() {
                         <p className="text-[10px] text-slate-400 mt-1">
                           {e.previous_quarter} → {e.latest_quarter}
                         </p>
-                        <div className="flex gap-3 mt-2 text-xs text-slate-500">
+                        <p className="text-[11px] mt-1">
+                          {e.year_ago_net_income == null ? (
+                            <span className="text-slate-400">Same quarter last year: —</span>
+                          ) : e.year_ago_net_income > 0 ? (
+                            <span className="text-amber-700">
+                              Same quarter last year ({e.year_ago_quarter}) was also profitable (
+                              {fmtMoney(e.year_ago_net_income)}) — the flip may be seasonal
+                            </span>
+                          ) : (
+                            <span className="text-slate-500">
+                              Same quarter last year ({e.year_ago_quarter}): {fmtMoney(e.year_ago_net_income)}
+                            </span>
+                          )}
+                        </p>
+                        <div className="flex gap-3 mt-2 text-xs text-slate-500 items-center">
                           <span>{e.distance_from_low_pct.toFixed(1)}% above 12mo low</span>
                           <span>Valuation {e.valuation_score}/25</span>
+                          <BalanceSheetChips e={e} />
                         </div>
                       </Link>
                     ))}
@@ -195,9 +266,9 @@ export default function AlertsPage() {
             </Card>
 
             {/* Deep Value Watch */}
-            <Card className="shadow-sm border border-slate-200">
-              <CardHeader className="p-3 pb-2">
-                <h3 className="text-sm font-semibold text-slate-700">
+            <Card className="border border-black/[0.05] shadow-sm">
+              <CardHeader className="px-5 pt-4 pb-2">
+                <h3 className="text-[15px] font-semibold text-slate-900">
                   👀 Deep Value Watch {`(${deepValueWatch.length})`}
                 </h3>
               </CardHeader>
@@ -207,9 +278,10 @@ export default function AlertsPage() {
                   <p className="text-center text-slate-400 text-sm py-8">No matches for these thresholds.</p>
                 ) : (
                   <Table
+                    aria-label="Deep value watch"
                     removeWrapper
                     className="text-xs"
-                    classNames={{ th: 'bg-slate-50 text-slate-600 font-medium text-xs h-8', td: 'text-xs py-2' }}
+                    classNames={{ th: 'bg-slate-50/70 text-slate-500 font-medium text-[11px] h-8', td: 'text-xs py-2' }}
                   >
                     <TableHeader>
                       <TableColumn>SYMBOL</TableColumn>
@@ -217,7 +289,7 @@ export default function AlertsPage() {
                       <TableColumn align="end">PRICE</TableColumn>
                       <TableColumn align="end">% ABOVE 12MO LOW</TableColumn>
                       <TableColumn align="end">VALUATION</TableColumn>
-                      <TableColumn align="end">FIN. HEALTH</TableColumn>
+                      <TableColumn>BALANCE SHEET</TableColumn>
                       <TableColumn>GRADE</TableColumn>
                       <TableColumn align="end">P/E</TableColumn>
                     </TableHeader>
@@ -225,17 +297,19 @@ export default function AlertsPage() {
                       {deepValueWatch.map((e) => (
                         <TableRow key={e.symbol} className="hover:bg-slate-50">
                           <TableCell>
-                            <Link href={`/stock/${e.symbol}`} className="font-semibold text-slate-800 hover:text-cyan-700">
-                              {e.symbol}
-                            </Link>
+                            <SymbolHoverLink symbol={e.symbol} />
                           </TableCell>
                           <TableCell className="text-slate-500">{e.sector}</TableCell>
-                          <TableCell className="text-right text-slate-700">${e.current_price.toFixed(2)}</TableCell>
+                          <TableCell className="text-right text-slate-700" title={e.price_date ? `Close ${e.price_date}` : undefined}>
+                            ${e.current_price.toFixed(2)}
+                          </TableCell>
                           <TableCell className="text-right font-semibold text-slate-700">
                             {e.distance_from_low_pct.toFixed(1)}%
                           </TableCell>
                           <TableCell className="text-right">{e.valuation_score}/25</TableCell>
-                          <TableCell className="text-right">{e.financial_health_score}/25</TableCell>
+                          <TableCell>
+                            <BalanceSheetChips e={e} />
+                          </TableCell>
                           <TableCell>
                             {e.quality_grade && (
                               <Chip size="sm" className={`text-xs ${gradeColor(e.quality_grade)}`}>
