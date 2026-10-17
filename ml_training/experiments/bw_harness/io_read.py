@@ -30,20 +30,27 @@ def connect_readonly():
 
 
 def load_prices(conn) -> Dict[str, pd.DataFrame]:
+    """All bars, one float64 frame per symbol, converted AS THEY ARE READ (numeric columns are cast in SQL so no Decimal objects are created: a naive read of 6.5 million rows needs several GB)."""
     sc = conn.cursor(name="bw_px")
     sc.itersize = 200000
-    sc.execute("SELECT symbol, date, open, high, low, close, volume FROM stock_prices ORDER BY symbol, date")
+    sc.execute("SELECT symbol, date, open::float8, high::float8, low::float8, close::float8, volume::float8 FROM stock_prices ORDER BY symbol, date")
     out: Dict[str, pd.DataFrame] = {}
-    cur_sym, buf = None, []
     cols = ["date", "open", "high", "low", "close", "volume"]
+
+    def frame(buf):
+        a = pd.DataFrame(buf, columns=cols)
+        a["date"] = pd.to_datetime(a["date"])
+        return a
+
+    cur_sym, buf = None, []
     for sym, *rest in sc:
         if sym != cur_sym:
             if cur_sym is not None:
-                out[cur_sym] = pd.DataFrame(buf, columns=cols)
+                out[cur_sym] = frame(buf)
             cur_sym, buf = sym, []
         buf.append(rest)
     if cur_sym is not None:
-        out[cur_sym] = pd.DataFrame(buf, columns=cols)
+        out[cur_sym] = frame(buf)
     conn.rollback()
     return out
 

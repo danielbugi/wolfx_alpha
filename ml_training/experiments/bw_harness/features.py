@@ -60,13 +60,12 @@ class Panel:
     def __init__(self, prices: Mapping[str, pd.DataFrame], sector_snaps: Optional[pd.DataFrame], cfg: Config):
         self.cfg = cfg
         self.symbols = sorted(prices)
-        frames = {s: clean_prices(prices[s]) for s in self.symbols}
-        self.dates = pd.DatetimeIndex(np.unique(np.concatenate([f["date"].to_numpy() for f in frames.values()])))
+        self.dates = pd.DatetimeIndex(np.unique(np.concatenate([pd.to_datetime(prices[s]["date"]).to_numpy() for s in self.symbols])))
         T, S = len(self.dates), len(self.symbols)
         close = np.full((T, S), np.nan)
         vol = np.full((T, S), np.nan)
         for j, s in enumerate(self.symbols):
-            f = frames[s]
+            f = clean_prices(prices[s])                               # one symbol at a time: no second copy of the whole price table is kept
             p = self.dates.get_indexer(f["date"])
             close[p, j] = f["close"].to_numpy()
             vol[p, j] = f["volume"].to_numpy()
