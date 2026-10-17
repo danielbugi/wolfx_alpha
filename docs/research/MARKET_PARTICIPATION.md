@@ -49,6 +49,21 @@ Properties and the tests that pin them (`ml_training/tests/test_market_participa
 - deterministic and independent of symbol order; the hash changes if any value changes;
 - the pure module has no I/O, clock or SQL; the runner only reads (read-only session) and writes files; nothing in `mechanism/`, `backend/` or `deploy/` references it.
 
+
+### 3a. Point-in-time contract (owner review)
+
+The causal columns are `session_date, n_eligible, n_long, n_short, n_long_new_episode, n_short_new_episode, pct_long, pct_short, state, version, provenance` (`CAUSAL_COLUMNS`). Every value for session t is a function of bars up to and including t: the indicators are causal, eligibility looks back 253 bars for discontinuities and never forward, there is no total-series-length condition, and episodes are chained greedily in bar order (a signal's episode status depends only on earlier signals). Pinned by test: truncating all data at a date, or injecting a price jump after it, leaves every causal column up to that date identical.
+
+The existing research dataset (`ml_breakout_dataset_v2`, `bw_harness.features.detect_signals`) is **not** point in time: it drops a signal when a price discontinuity falls in the NEXT 20 bars and requires the symbol to have 80+ bars in total. The two columns `n_long_dropped_by_research_rule` and `n_short_dropped_by_research_rule` (`AUDIT_COLUMNS`) deliberately use that future information, only to size the difference (194 of 603,156 signals); they are audit columns, never context, and a test pins that they are the only columns that can change when the future changes. The frozen Big Winner hypotheses were not modified or rerun.
+
+Validity: only `state == "ok"` sessions are statistics. `insufficient_eligible` rows (the only one in the real series is the 2026-02-16 holiday with one stray bar) keep their counts for audit, have no percentage, and are excluded by `valid()` and by `summary()` (every figure in section 4 is from valid sessions, 2,210 of 2,211); a test with a stray Saturday bar pins this.
+
+### 3b. Isolation boundary (owner review)
+
+Structure: a pure core (`participation.py`: no I/O, clock, SQL, adapter import or model code) and an isolated read-only adapter (`run.py`: the harness's read-only session, which refuses a writable server; writes files only to `--out`).
+
+The one change to an existing test was an exemption in the harness's "nothing else imports the harness" scan. It is safe because that scan only protects against production-side imports of the harness, and the exemption was first a directory name and is now **only the exact path `ml_training/experiments/market_participation`**, so a same-named directory under `mechanism/`, `backend/` or `deploy/` is still scanned. The protections against database writes, production imports and model execution are not carried by that scan: the harness package keeps its own read-only / no-write / no-model tests, and the new package has equivalents (no write SQL, no model code, no adapter import in the core, not referenced from `mechanism/`, `backend/`, `deploy/`, and no unit or timer). The exempt package is therefore checked by its own tests rather than left unchecked.
+
 ## 4. Real-data evidence (read-only, 2026-10-17)
 
 Two independent runs (separate containers, mechanism image `5c511899505a` used only as a Python runtime) produced the identical table:

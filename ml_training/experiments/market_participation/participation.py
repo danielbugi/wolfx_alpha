@@ -53,6 +53,15 @@ COLUMNS = ["session_date", "n_eligible", "n_long", "n_short", "n_long_new_episod
            "n_long_dropped_by_research_rule", "n_short_dropped_by_research_rule", "state", "version", "provenance"]
 
 
+CAUSAL_COLUMNS = ["session_date", "n_eligible", "n_long", "n_short", "n_long_new_episode", "n_short_new_episode", "pct_long", "pct_short", "state", "version", "provenance"]
+AUDIT_COLUMNS = ["n_long_dropped_by_research_rule", "n_short_dropped_by_research_rule"]      # NOT point in time: they use bars after the session and exist only to size the lookahead of the research dataset
+
+
+def valid(df: pd.DataFrame) -> pd.DataFrame:
+    """The sessions whose participation statistics may be used: state `ok` only. `insufficient_eligible` rows (a holiday with a stray bar, a partial load) carry counts for audit but no percentage and are not statistics."""
+    return df[df["state"] == OK].reset_index(drop=True)
+
+
 def _symbol_rows(sym: str, px: pd.DataFrame) -> Optional[pd.DataFrame]:
     px = clean_prices(px)
     n = len(px)
@@ -118,7 +127,7 @@ def table_hash(df: pd.DataFrame) -> str:
 
 
 def summary(df: pd.DataFrame) -> Dict[str, object]:
-    ok = df[df["state"] == OK]
+    ok = valid(df)
     if len(ok) == 0:
         return {"sessions": int(len(df)), "sessions_ok": 0}
     q = lambda s: {k: round(float(v), 4) for k, v in zip(("min", "p10", "p50", "p90", "p99", "max"), np.percentile(s, [0, 10, 50, 90, 99, 100]))}

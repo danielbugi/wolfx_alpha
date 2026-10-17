@@ -156,3 +156,47 @@ def test_nothing_in_production_code_imports_it_and_no_unit_or_timer_references_i
                     if "breakout_participation" in text or re.search(r"(from|import)\s+market_participation", text):
                         pytest.fail(f"{os.path.join(dp, f)} references the participation module")
     assert needle.search(_src()["run.py"])
+
+
+def test_the_pure_core_imports_no_data_adapter_and_nothing_here_runs_a_model():
+    files = _src()
+    core = files["participation.py"]
+    assert "io_read" not in core and "connect_readonly" not in core                 # the pure core never touches the adapter
+    for name, text in files.items():
+        assert not re.search(r"xgboost|sklearn|torch|\.fit\(|joblib|pickle", re.sub(r'"""[\s\S]*?"""', "", text)), name
+
+
+def test_only_the_exact_exempt_path_is_excluded_from_the_harness_import_scan():
+    src = open(os.path.join(ROOT, "ml_training", "tests", "test_bw_harness_forward_repro.py"), encoding="utf-8").read()
+    assert '"market_participation"' in src and 'relpath(base, ROOT)' in src and '== "ml_training/experiments"' in src
+    assert 'node_modules", "bw_harness", "market_participation"' not in src         # not a blanket directory-name exemption
+
+
+def test_causal_columns_are_point_in_time_and_the_audit_columns_are_the_only_exceptions():
+    assert set(P.COLUMNS) == set(P.CAUSAL_COLUMNS) | set(P.AUDIT_COLUMNS) and not set(P.CAUSAL_COLUMNS) & set(P.AUDIT_COLUMNS)
+    prices = panel(n=20, seed=21)
+    sym = "S002"
+    px = prices[sym].reset_index(drop=True)
+    for col in ("open", "high", "low", "close"):
+        px.loc[500:, col] = px.loc[500:, col] * 6.0                                   # a future jump
+    p2 = dict(prices)
+    p2[sym] = px
+    a, b = table(prices), table(p2)
+    cut = pd.Timestamp(px.loc[497, "date"])
+    pd.testing.assert_frame_equal(a[a["session_date"] <= cut][P.CAUSAL_COLUMNS].reset_index(drop=True), b[b["session_date"] <= cut][P.CAUSAL_COLUMNS].reset_index(drop=True))
+    assert not a[a["session_date"] <= cut][P.AUDIT_COLUMNS].reset_index(drop=True).equals(b[b["session_date"] <= cut][P.AUDIT_COLUMNS].reset_index(drop=True))
+
+
+def test_insufficient_eligible_sessions_are_excluded_from_every_statistic():
+    prices = panel(n=12, seed=4)
+    stray = prices["S000"].iloc[[300]].copy()
+    stray["date"] = pd.DatetimeIndex(["2018-06-16"]).astype(prices["S000"]["date"].dtype)   # a Saturday: one symbol has a bar, nobody else does
+    prices["S000"] = pd.concat([prices["S000"], stray], ignore_index=True)
+    t = P.session_table(prices, start="2018-01-01", min_eligible=5)
+    row = t[t["session_date"] == pd.Timestamp("2018-06-16")]
+    assert len(row) == 1 and row.iloc[0]["state"] == P.INSUFFICIENT and np.isnan(row.iloc[0]["pct_long"])
+    v = P.valid(t)
+    assert (v["state"] == P.OK).all() and pd.Timestamp("2018-06-16") not in set(v["session_date"])
+    s = P.summary(t)
+    assert s["sessions"] == len(t) and s["sessions_ok"] == len(v) and s["sessions_ok"] < s["sessions"]
+    assert s["long_signals"] == int(v["n_long"].sum())                              # totals count valid sessions only
