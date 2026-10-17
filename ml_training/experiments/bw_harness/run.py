@@ -21,6 +21,7 @@ import pandas as pd
 from . import features as F
 from . import hypotheses as H
 from . import io_read as IO
+from . import posthoc as PH
 from . import provenance as P
 from . import quality as Q
 from . import splits as S
@@ -37,7 +38,7 @@ def reconcile_signals(table_keys: pd.DataFrame, redetected: pd.DataFrame) -> Dic
 
 def run_pipeline(prices: Mapping[str, pd.DataFrame], keys: pd.DataFrame, sector_snaps: Optional[pd.DataFrame], realised: Optional[pd.DataFrame], cfg: Config, out_dir: str,
                  reconciliation: Optional[Dict[str, Any]] = None, fingerprints: Optional[Dict[str, Any]] = None, code_ref: str = "unknown", forward: Optional[Dict[str, Any]] = None,
-                 write_data: bool = True) -> Dict[str, Any]:
+                 write_data: bool = True, posthoc: bool = True) -> Dict[str, Any]:
     os.makedirs(out_dir, exist_ok=True)
     df = F.build_dataset(prices, keys, sector_snaps, cfg)
     df = IO.merge_realised(df, realised)
@@ -51,6 +52,7 @@ def run_pipeline(prices: Mapping[str, pd.DataFrame], keys: pd.DataFrame, sector_
     if missing:
         raise SystemExit(f"columns without provenance: {missing}")
     results = H.run_all(df, thr, cfg)
+    post = PH.run(df, thr, cfg) if posthoc else None
     surv = SV.analyse(results, cfg)
     quality = Q.report(df, cfg, reconciliation or {})
     quality["purge_check"] = purge
@@ -72,7 +74,9 @@ def run_pipeline(prices: Mapping[str, pd.DataFrame], keys: pd.DataFrame, sector_
             "survivorship_sensitivity": surv, "data_quality": quality, "forward_report": forward}
     results_hash = IO.write_json(body, os.path.join(out_dir, "results.json"))
     prov_hash = IO.write_json(prov, os.path.join(out_dir, "provenance.json"))
-    manifest = {"harness_version": cfg.version, "code_ref": code_ref, "config_hash": cfg.hash(), "dataset": ds_info, "results_sha256": results_hash, "provenance_sha256": prov_hash,
+    post_hash = IO.write_json(post, os.path.join(out_dir, "posthoc.json")) if post is not None else None
+    manifest = {"harness_version": cfg.version, "code_ref": code_ref, "config_hash": cfg.hash(), "dataset": ds_info, "results_sha256": results_hash, "provenance_sha256": prov_hash, "posthoc_sha256": post_hash,
+                "posthoc_note": PH.LABEL,
                 "inputs": fingerprints or {}, "sample_counts": {"signals": int(len(df)), "eligible": int(df["eligible"].sum()),
                                                                  "independent_episodes_labelled": int((df["is_episode_first"] & df["eligible"] & (df["status_120"] == "ok")).sum())},
                 "seeds": {"seed": cfg.seed, "n_boot": cfg.n_boot, "n_perm": cfg.n_perm},

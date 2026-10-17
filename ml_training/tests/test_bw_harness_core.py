@@ -219,3 +219,18 @@ def test_sector_provenance_is_observed_only_from_the_first_dated_snapshot():
     obs = df[df.sector_provenance == "OBSERVED_PIT"]
     assert len(obs) and obs.signal_date.min() >= pd.Timestamp("2023-07-11")
     assert (df[df.signal_date < "2023-07-11"].sector_provenance == "RECONSTRUCTED").all()
+
+
+def test_the_purge_is_enforced_on_the_actual_window_end_date():
+    """Found by the first full run: a symbol with missing bars stretches 120 bars over more calendar days, so a signal inside its segment can have a window that reaches the next segment."""
+    df = pd.DataFrame({
+        "signal_date": pd.to_datetime(["2021-06-29", "2021-06-30", "2023-06-29", "2023-06-30", "2024-02-01"]),
+        "segment": ["train", "train", "validation", "validation", "test"],
+        "window_end_date": pd.to_datetime(["2021-12-20", "2022-01-04", "2023-12-15", "2024-01-03", "2024-07-30"]),
+        "status_120": "ok"})
+    assert S.purge_check(df, CFG)["ok"] is False
+    df["segment"] = S.apply_purge(df, CFG)
+    assert list(df.segment) == ["train", "purged", "validation", "purged", "test"]
+    chk = S.purge_check(df, CFG)
+    assert chk["ok"] and chk["purged_signals"] == 2 and chk["train_windows_reaching_validation"] == 0
+    assert list(S.apply_purge(df.assign(window_end_date=pd.NaT), CFG)) == list(df.segment)                  # an unknown window end purges nothing (those rows have no label anyway)

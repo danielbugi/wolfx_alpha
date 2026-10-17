@@ -1,0 +1,48 @@
+{
+ "boundary": "read-only research; hypothesis-generation or replication evidence on history that was examined before; no untouched historical holdout; no model trained",
+ "code_ref": "bb0e956631d2",
+ "config_hash": "3c99d0fa58afee351b092f8ee6165b2152c3fe1841081d75b2fe094715b64400",
+ "dataset": {
+  "bytes_gzip": 174144987,
+  "bytes_uncompressed": 439249268,
+  "columns": 94,
+  "file": "dataset.csv.gz",
+  "rows": 602962,
+  "sha256_uncompressed": "9cb6fef94c8017142480a00037ced302a859422b51678a84c53c87f636ba607b"
+ },
+ "harness_version": "bw_harness_v1",
+ "inputs": {
+  "daily_fundamentals_with_sector": {
+   "max_date": "2026-10-16",
+   "min_date": "2023-07-11",
+   "rows": 562832,
+   "symbols": 3092
+  },
+  "ml_breakout_dataset_v2": {
+   "created_at_max": "2026-10-17 02:07:18.921915",
+   "created_at_min": "2026-10-17 02:04:02.662869",
+   "max_date": "2026-10-16",
+   "min_date": "2018-01-02",
+   "rows": 602962
+  },
+  "stock_prices": {
+   "max_date": "2026-10-16",
+   "min_date": "2016-09-20",
+   "rows": 6489090,
+   "sum_close": 1853482608.36,
+   "symbols": 3114
+  }
+ },
+ "provenance_sha256": "6e182a0d288ef868dfe41ecc325fddbccef4403ab04895ba8003f70e429fd3a9",
+ "results_sha256": "f98b9f73db6acebee934837c4faaee6d947f346c73b4d14fa59aaa562f5ae070",
+ "sample_counts": {
+  "eligible": 586761,
+  "independent_episodes_labelled": 61583,
+  "signals": 602962
+ },
+ "seeds": {
+  "n_boot": 1000,
+  "n_perm": 2000,
+  "seed": 20261017
+ }
+}

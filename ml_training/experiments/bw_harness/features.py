@@ -21,7 +21,7 @@ from ml_training.features import price_features as pf  # noqa: E402
 from . import labels as L
 from .config import Config
 from .episodes import assign_episodes
-from .splits import assign_segment
+from .splits import apply_purge, assign_segment
 
 MIN_BAR_INDEX = 60
 
@@ -214,6 +214,7 @@ def build_dataset(prices: Mapping[str, pd.DataFrame], signals: pd.DataFrame, sec
     df["group_breakouts_10"] = _group_counts(df, code, panel, cfg)
     df["episode_id"], df["is_episode_first"] = assign_episodes(df["symbol"].to_numpy(), df["direction"].to_numpy(), df["bar_index"].to_numpy(), cfg.episode_gap_bars)
     df["segment"] = assign_segment(df["signal_date"], cfg)
+    df["segment"] = apply_purge(df, cfg)
     df["eligible"] = df["history_ok"] & np.isfinite(df["atr14"]) & ok & (df["dollar_vol_20"] >= cfg.min_dollar_volume_20)
     df = df.sort_values(["symbol", "signal_date", "direction"]).reset_index(drop=True)
     return df

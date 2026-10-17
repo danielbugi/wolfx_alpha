@@ -53,6 +53,7 @@ class Config:
     atr_pct_bins: int = 10                                 # ATR% deciles (edges frozen on train, within direction)
     dollar_vol_bins: int = 3
     ret60_bins: int = 3
+    match_on_ret60: bool = True                            # pre-registered: True. The post-hoc sensitivity run (posthoc.py) sets it False and is reported separately, never used for a verdict
     # ---- inference
     n_boot: int = 1000
     n_perm: int = 2000

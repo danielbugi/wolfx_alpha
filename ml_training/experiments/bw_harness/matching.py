@@ -75,6 +75,8 @@ def match(pool: pd.DataFrame, treated: np.ndarray, control: np.ndarray, cfg: Con
     date_i = pool["date_index"].to_numpy()
     sym = pool["symbol"].to_numpy()
     atr, dv, ret = pool["atr_decile"].to_numpy(), pool["dv_tercile"].to_numpy(), pool["ret60_tercile"].to_numpy()
+    if not cfg.match_on_ret60:
+        ret = np.where(ret < 0, -1, 0)                      # the 60-day-return tercile is not a match key (a missing value still disqualifies the row)
     sector = pool["sector"].to_numpy(dtype=object)
     obs = (pool["sector_provenance"].to_numpy() == "OBSERVED_PIT")
     buckets: Dict[Tuple, List[int]] = {}

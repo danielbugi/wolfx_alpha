@@ -213,6 +213,14 @@ def run_all(df: pd.DataFrame, thr: Dict[str, Any], cfg: Config) -> Dict[str, Any
             for i in ids:
                 results[side][i][seg]["holm"] = h[i]
     results["verdicts"] = {s.id: verdict(results["long"][s.id], results["long"]["H0"], cfg, s) for s in LONG_SPECS}
+    nc: Dict[str, Any] = {}
+    for side in ("long", "short"):
+        nc[side] = {}
+        for seg in (VALIDATION, TEST):
+            lab = _lab(results[side]["H0"][seg], "BW5@120 (primary, R-based)")
+            nc[side][seg] = {"rr": lab and lab.get("rr"), "ci95": lab and lab.get("ci95"), "null": bool(lab and lab.get("ci95") and lab["ci95"][0] <= 1.0 <= lab["ci95"][1])}
+        nc[side]["null_in_both_segments"] = all(nc[side][s]["null"] for s in (VALIDATION, TEST))
+    results["negative_control"] = nc
     return results
 
 
@@ -257,10 +265,13 @@ def verdict(res: Dict[str, Any], h0: Dict[str, Any], cfg: Config, spec: Spec) ->
         r[s] = bool(lab and lab.get("rr") and lab.get("ci95") and lab["rr"] > 1.0 and lab["ci95"][0] > 1.0)
     crit["d_holds_on_return_based_label"] = {**r, "pass": all(r.values())}
     e = {}
+    est = {}
     for s in segs:
         mh = res[s].get("within_date_mh") or {}
+        est[s] = mh.get("rr") is not None
         e[s] = bool(mh.get("rr") and mh.get("ci95") and mh["rr"] > 1.0 and mh["ci95"][0] > 1.0)
-    crit["e_survives_matching_and_within_date_test"] = {**e, "pass": all(e.values())}
+    crit["e_survives_matching_and_within_date_test"] = {**e, "within_date_estimable": est, "pass": all(e.values()),
+                                                        "note": "a hypothesis about a property of the DATE (H2) has no within-date contrast, so the criterion cannot be met; it is reported as not estimable, not as a negative finding" if not all(est.values()) else ""}
     f = {}
     for s in segs:
         lab = _lab(h0[s], prim)

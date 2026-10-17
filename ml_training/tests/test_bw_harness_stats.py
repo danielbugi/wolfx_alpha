@@ -266,3 +266,29 @@ def test_the_sensitivity_report_has_the_full_grid_for_both_directions():
     assert set(r["tipping"]) == {f"pm={p}" for p in CFG.surv_missing_winner_rate_long}
     s = SV.sensitivity(0.15, 0.10, CFG, "short")
     assert set(s["tipping"]) == {f"pm={p}" for p in CFG.surv_missing_winner_rate_short}
+
+
+# ---------------------------------------------------------------- the post-hoc sensitivity is labelled and cannot change a verdict
+def test_matching_on_the_sixty_day_return_makes_a_leadership_comparison_degenerate_and_the_posthoc_variant_shows_it():
+    from bw_harness import posthoc as PH
+    df = syn.planted_dataset(n=24000, seed=71, effect=1.0)
+    df["ret_60d"] = np.where(df["rs60_pct"] >= 0.85, 40.0, 0.0) + np.random.default_rng(0).normal(0, 12, len(df))      # leaders also have the highest 60-day returns
+    df, thr, _ = H.prepare(df, CFG)
+    pool = H._pool(df, 1, ("test",), CFG, False)
+    pre = H.evaluate(pool, H.LONG_SPECS[0], thr["long"], CFG, seed=1, realised=False)
+    cfg2 = replace(CFG, match_on_ret60=False)
+    post = H.evaluate(pool, H.LONG_SPECS[0], thr["long"], cfg2, seed=1, realised=False)
+    assert post["matched_sets"] > 3 * max(1, pre["matched_sets"])
+    assert CFG.match_on_ret60 is True and cfg2.hash() != CFG.hash()
+
+
+def test_the_posthoc_report_is_labelled_not_pre_registered_and_has_no_verdict():
+    from bw_harness import posthoc as PH
+    df, thr, _ = H.prepare(both_sides(effect=1.0, seed=81, n=16000), replace(CFG, n_boot=100, n_perm=100))
+    cfg = replace(CFG, n_boot=100, n_perm=100)
+    base = H.run_all(df, thr, cfg)
+    post = PH.run(df, thr, cfg)
+    assert post["pre_registered"] is False and "NOT PRE-REGISTERED" in post["label"] and "verdicts" not in post and "H5_rank_only" in post["long"]
+    assert "holm_reference_only" in post["long"]["H1"]["test"] and "holm" not in post["long"]["H1"]["test"]
+    again = H.run_all(df, thr, cfg)                                              # running the post-hoc module changed nothing in the pre-registered results
+    assert again["verdicts"] == base["verdicts"]

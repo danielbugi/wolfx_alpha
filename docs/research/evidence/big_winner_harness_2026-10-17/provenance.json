@@ -1,0 +1,378 @@
+{
+ "atr14": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "Wilder ATR14 at the signal bar"
+ },
+ "atr_decile": {
+  "class": "KEY",
+  "source": "identifier or derived flag"
+ },
+ "atr_pct": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "bar_index": {
+  "class": "KEY",
+  "source": "identifier or derived flag"
+ },
+ "bar_range_atr": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "bollinger_pos": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "breadth_50": {
+  "class": "RECONSTRUCTED",
+  "source": "share of liquid surviving symbols above their 50-bar average"
+ },
+ "breakout_dist_atr": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "chan_squeeze_pctile": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "chan_width_pct": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "close_location": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "cohort": {
+  "class": "KEY",
+  "source": "identifier or derived flag"
+ },
+ "date_index": {
+  "class": "KEY",
+  "source": "identifier or derived flag"
+ },
+ "direction": {
+  "class": "KEY",
+  "source": "identifier or derived flag"
+ },
+ "dist_sma200_pct": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "dist_sma50_pct": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "dollar_vol_20": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "20-day mean of close x volume, bars <= signal bar"
+ },
+ "dv_tercile": {
+  "class": "KEY",
+  "source": "identifier or derived flag"
+ },
+ "eligible": {
+  "class": "KEY",
+  "source": "identifier or derived flag"
+ },
+ "entry_date": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "date of the bar after the signal"
+ },
+ "entry_px": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "open of the bar after the signal: not known at the decision"
+ },
+ "episode_id": {
+  "class": "KEY",
+  "source": "identifier or derived flag"
+ },
+ "gap_pct": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "ge10r_120": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "ge10r_20": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "ge10r_60": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "ge3r_120": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "ge3r_20": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "ge3r_60": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "ge5r_120": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "ge5r_20": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "ge5r_60": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "group_breakouts_10": {
+  "class": "RECONSTRUCTED",
+  "source": "other same-sector same-direction breakout signals in the previous 10 sessions"
+ },
+ "history_ok": {
+  "class": "KEY",
+  "source": "identifier or derived flag"
+ },
+ "index_above_200": {
+  "class": "RECONSTRUCTED",
+  "source": "equal-weight survivor index above its 200-bar average"
+ },
+ "is_episode_first": {
+  "class": "KEY",
+  "source": "identifier or derived flag"
+ },
+ "log_dollar_vol_20": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "macd_norm": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "mfe_pct_120": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "mfe_pct_20": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "mfe_pct_60": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "mfe_r_120": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "mfe_r_20": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "mfe_r_60": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "month": {
+  "class": "KEY",
+  "source": "identifier or derived flag"
+ },
+ "pct_from_52w_high": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "pct_from_52w_low": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "persist_120": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "persist_20": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "persist_60": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "realised_a_atr_stop_fixed_2r": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "realised_a_atr_stop_fixed_3r": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "realised_b_donchian_trail_10": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "realised_c_atr_trail_3x": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "realised_d_hybrid_atr_stop_to_donchian_10": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "ret60_tercile": {
+  "class": "KEY",
+  "source": "identifier or derived flag"
+ },
+ "ret_20d": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "ret_5d": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "ret_60d": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "ret_label_120": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "ret_label_20": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "ret_label_60": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "rs120": {
+  "class": "RECONSTRUCTED",
+  "source": "same over 120 bars"
+ },
+ "rs120_pct": {
+  "class": "RECONSTRUCTED",
+  "source": "cross-sectional percentile of rs120 among liquid symbols on the signal date"
+ },
+ "rs60": {
+  "class": "RECONSTRUCTED",
+  "source": "stock 60-bar return minus the equal-weight index return, index built from the surviving universe"
+ },
+ "rs60_pct": {
+  "class": "RECONSTRUCTED",
+  "source": "cross-sectional percentile of rs60 among liquid symbols on the signal date"
+ },
+ "rsi_14": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "sector": {
+  "class": "RECONSTRUCTED",
+  "source": "latest known sector applied backwards (see sector_provenance for rows with a dated snapshot)"
+ },
+ "sector_provenance": {
+  "class": "KEY",
+  "source": "OBSERVED_PIT where a daily_fundamentals snapshot on or before the signal date supplied the sector, else RECONSTRUCTED"
+ },
+ "sector_rs60_rank": {
+  "class": "RECONSTRUCTED",
+  "source": "rank of the sector's mean 60-bar relative strength among 11 sectors; membership as of the nearest dated snapshot (static before 2023-07-11)"
+ },
+ "segment": {
+  "class": "KEY",
+  "source": "identifier or derived flag"
+ },
+ "sigma60": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "std of daily log returns over the 60 bars ending at the signal bar; used only to scale the vol-neutral label"
+ },
+ "signal_date": {
+  "class": "KEY",
+  "source": "identifier or derived flag"
+ },
+ "sma10_vs_20": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "status_120": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "status_20": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "status_60": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "symbol": {
+  "class": "KEY",
+  "source": "identifier or derived flag"
+ },
+ "symbol_first_bar_year": {
+  "class": "KEY",
+  "source": "identifier or derived flag"
+ },
+ "terminal_r_120": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "terminal_r_20": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "terminal_r_60": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "tier_120": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "unit_r": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "1R = 2 x ATR14 of the signal bar (a decision-time number)"
+ },
+ "vn_label_120": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "vn_label_20": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "vn_label_60": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "vn_z_120": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "vn_z_20": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "vn_z_60": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "needs bars after the decision; never a feature"
+ },
+ "vol_ratio_10": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "vol_ratio_50": {
+  "class": "REVISED_PRICE_DERIVED",
+  "source": "stock_prices bars <= signal bar (price_features.build_breakout_features), today's vendor vintage"
+ },
+ "window_end_date": {
+  "class": "LABEL_HINDSIGHT",
+  "source": "date of the last bar of the primary-horizon label window"
+ },
+ "year": {
+  "class": "KEY",
+  "source": "identifier or derived flag"
+ }
+}

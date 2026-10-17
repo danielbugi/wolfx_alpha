@@ -15,6 +15,7 @@ Modules
   inference   cluster bootstrap, permutation test, Mantel-Haenszel within-date estimate, Holm
   hypotheses  the five pre-registered hypotheses, the negative control, the verdict rules
   survivorship  sensitivity of every effect to missing (delisted) companies
+  posthoc     labelled, non-pre-registered sensitivity analyses (no verdict)
   io_read     read-only database access and file output with hashes
   forward     the read-only forward report: labels, coverage and maturity, never an incomplete horizon as a negative
   run         the command line entry point

@@ -14,7 +14,7 @@ import pandas as pd
 
 from .config import Config
 
-TRAIN, VALIDATION, TEST, EMBARGO, OUTSIDE = "train", "validation", "test", "embargo", "outside"
+TRAIN, VALIDATION, TEST, EMBARGO, OUTSIDE, PURGED = "train", "validation", "test", "embargo", "outside", "purged"
 
 
 def assign_segment(dates, cfg: Config) -> np.ndarray:
@@ -29,6 +29,19 @@ def assign_segment(dates, cfg: Config) -> np.ndarray:
     return seg
 
 
+def apply_purge(df: pd.DataFrame, cfg: Config) -> np.ndarray:
+    """Segment labels after the purge: a train signal whose primary-horizon window ends on or after the validation start, and a validation signal whose window ends on or after the test start, become 'purged'.
+    The embargo months make this rare, but a symbol with missing bars stretches 120 bars over more calendar days (found by the first full run: 20 train and 5 validation signals), so the rule is enforced on the
+    actual window end date, not assumed from the signal date."""
+    seg = df["segment"].to_numpy(dtype=object).copy()
+    we = pd.to_datetime(df["window_end_date"]).to_numpy()
+    v0, s0 = np.datetime64(cfg.validation_start), np.datetime64(cfg.test_start)
+    has = ~pd.isna(we)
+    seg[(seg == TRAIN) & has & (we >= v0)] = PURGED
+    seg[(seg == VALIDATION) & has & (we >= s0)] = PURGED
+    return seg
+
+
 def purge_check(df: pd.DataFrame, cfg: Config) -> dict:
     """Every labelled train signal's window ends before validation starts; every labelled validation signal's window ends before test starts."""
     lab = df[df[f"status_{cfg.primary_horizon}"] == "ok"]
@@ -38,4 +51,4 @@ def purge_check(df: pd.DataFrame, cfg: Config) -> dict:
     bad_tr = int((we[tr.index] >= pd.Timestamp(cfg.validation_start)).sum())
     bad_va = int((we[va.index] >= pd.Timestamp(cfg.test_start)).sum())
     return {"labelled_train": int(len(tr)), "labelled_validation": int(len(va)), "train_windows_reaching_validation": bad_tr, "validation_windows_reaching_test": bad_va,
-            "ok": bad_tr == 0 and bad_va == 0}
+            "purged_signals": int((df["segment"] == PURGED).sum()), "ok": bad_tr == 0 and bad_va == 0}
