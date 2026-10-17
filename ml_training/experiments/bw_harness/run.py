@@ -20,6 +20,7 @@ import pandas as pd
 
 from . import features as F
 from . import hypotheses as H
+from . import inference as I
 from . import io_read as IO
 from . import posthoc as PH
 from . import provenance as P
@@ -71,7 +72,7 @@ def run_pipeline(prices: Mapping[str, pd.DataFrame], keys: pd.DataFrame, sector_
             h.update(buf.getvalue().encode("utf-8"))
         ds_info["sha256_uncompressed"] = h.hexdigest()
     body = {"config": cfg.to_dict(), "config_hash": cfg.hash(), "frozen_thresholds_train": thr, "frozen_matching_bins_train": edges, "hypothesis_results": results,
-            "survivorship_sensitivity": surv, "data_quality": quality, "forward_report": forward}
+            "interval_method": I.INTERVAL_METHOD, "survivorship_sensitivity": surv, "data_quality": quality, "forward_report": forward}
     results_hash = IO.write_json(body, os.path.join(out_dir, "results.json"))
     prov_hash = IO.write_json(prov, os.path.join(out_dir, "provenance.json"))
     post_hash = IO.write_json(post, os.path.join(out_dir, "posthoc.json")) if post is not None else None

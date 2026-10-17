@@ -134,7 +134,7 @@ def _mean_diff(months, yt, ym, n_boot, rng) -> Dict[str, Any]:
     w = rng.multinomial(M_, np.full(M_, 1.0 / M_), size=n_boot).astype(float)
     boot = (w @ s) / np.maximum(w @ n, 1)
     return {"sets": int(ok.sum()), "treated_mean": round(float(yt[ok].mean()), 4), "control_mean": round(float(ym[ok].mean()), 4), "mean_diff": round(float(d.mean()), 4),
-            "ci95": [round(float(x), 4) for x in np.percentile(boot, [2.5, 97.5])]}
+            "ci95": I.interval(boot, M_)}
 
 
 def evaluate(pool: pd.DataFrame, spec: Spec, thr: Dict[str, float], cfg: Config, seed: int, permutation: bool = True, realised: bool = True) -> Dict[str, Any]:

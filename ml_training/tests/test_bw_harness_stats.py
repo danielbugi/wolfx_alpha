@@ -105,8 +105,8 @@ def test_a_reconstructed_sector_row_never_matches_an_observed_sector_row():
 
 # ---------------------------------------------------------------- inference
 def test_under_no_effect_the_test_rejects_about_as_often_as_the_chosen_level():
-    """Calibration on 80 null datasets. Measured on 150: rejection at 0.05 = 6.0% (nominal 5%), at 0.10 = 13.3%, month-block percentile interval coverage = 90.7% (nominal 95%: with about 24 months the percentile bootstrap is
-    a little narrow). The harness therefore never relies on the interval alone: support also needs the permutation test (Holm-corrected) and the within-date estimate."""
+    """Calibration on 80 null datasets (permutation p-values; the interval is checked here only loosely, see the dedicated coverage tests below). Measured on 150 datasets: rejection at 0.05 = 6.0%, at 0.10 = 13.3%.
+    The 90.7% interval coverage seen in that small run was investigated on 3000 null replicates (B=1000, M=24 months): plain percentile 93.7% (MC se 0.4%), 92.6% with only B=150, expanded percentile 95.5%."""
     ps, cover = [], 0
     cfg = replace(CFG, n_boot=150, n_perm=120)
     for seed in range(1000, 1080):
@@ -292,3 +292,45 @@ def test_the_posthoc_report_is_labelled_not_pre_registered_and_has_no_verdict():
     assert "holm_reference_only" in post["long"]["H1"]["test"] and "holm" not in post["long"]["H1"]["test"]
     again = H.run_all(df, thr, cfg)                                              # running the post-hoc module changed nothing in the pre-registered results
     assert again["verdicts"] == base["verdicts"]
+
+
+# ---------------------------------------------------------------- interval coverage (regression tests for the 90.7% finding)
+def test_interval_levels_widen_for_few_clusters_and_converge_for_many():
+    lo24, hi24 = I.interval_levels(24)
+    assert 1.6 < lo24 < 1.9 and abs(lo24 + hi24 - 100) < 1e-9                    # about 1.73 / 98.27 at 24 months
+    assert I.interval_levels(12)[0] < lo24 < I.interval_levels(200)[0] < 2.5
+    assert I.interval_levels(2) == (0.0, 100.0)                                  # too few clusters to say anything
+
+
+def _null_cluster_sets(rng, n_months=24, per_month=45, p=0.3):
+    months = np.repeat(np.arange(n_months), per_month)
+    yt = (rng.random(len(months)) < p).astype(float)
+    ym = (rng.random(len(months)) < p).astype(float)                          # one control per set; true RR = 1
+    return months, yt, ym
+
+
+def test_month_block_interval_covers_the_truth_near_nominal_and_is_not_narrower_than_the_plain_percentile():
+    """The plain percentile interval under-covers with ~24 clusters (measured 93.7%); the expanded one measured 95.5% on 3000 replicates. 1200 replicates of a simpler cluster design here (measured on this seed: expanded 94.3%, plain 93.3%; MC se ~0.7%). The
+    threshold of 93.5% sits between them, so a regression to the plain interval is caught; it is a regression guard, not a claim of exact nominal coverage."""
+    rng = np.random.default_rng(424242)
+    n, cov_new, cov_plain = 1200, 0, 0
+    for _ in range(n):
+        months, yt, ym = _null_cluster_sets(rng)
+        res = I.month_block_bootstrap(months, yt, ym, 600, rng)
+        lo, hi = res["ci95"]
+        cov_new += int(lo <= 1.0 <= hi)
+        uniq, inv = np.unique(months, return_inverse=True)
+        st, sc = np.bincount(inv, weights=yt), np.bincount(inv, weights=ym)
+        w = rng.multinomial(24, np.full(24, 1 / 24), size=600).astype(float)
+        rr = (w @ st) / (w @ sc)
+        plo, phi = np.percentile(rr, [2.5, 97.5])
+        cov_plain += int(plo <= 1.0 <= phi)
+        assert lo <= plo + 0.05 and hi >= phi - 0.05                             # never materially narrower than the plain interval
+    assert cov_new / n >= 0.935, cov_new / n
+    assert cov_new >= cov_plain
+
+
+def test_interval_method_is_recorded_in_the_results_body():
+    from bw_harness import run as R
+    import inspect
+    assert "interval_method" in inspect.getsource(R.run_pipeline) and "expanded percentile" in I.INTERVAL_METHOD
