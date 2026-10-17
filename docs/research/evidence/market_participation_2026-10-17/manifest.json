@@ -1,0 +1,60 @@
+{
+ "boundary": "read-only research; descriptive counts; no claim that participation predicts returns",
+ "code_ref": "43bf679559c0",
+ "inputs": {
+  "daily_fundamentals_with_sector": {
+   "max_date": "2026-10-16",
+   "min_date": "2023-07-11",
+   "rows": 562832,
+   "symbols": 3092
+  },
+  "ml_breakout_dataset_v2": {
+   "created_at_max": "2026-10-17 02:07:18.921915",
+   "created_at_min": "2026-10-17 02:04:02.662869",
+   "max_date": "2026-10-16",
+   "min_date": "2018-01-02",
+   "rows": 602962
+  },
+  "stock_prices": {
+   "max_date": "2026-10-16",
+   "min_date": "2016-09-20",
+   "rows": 6489090,
+   "sum_close": 1853482608.36,
+   "symbols": 3114
+  }
+ },
+ "provenance": "REVISED_PRICE_DERIVED",
+ "rows": 2211,
+ "start": "2018-01-01",
+ "summary": {
+  "first": "2018-01-02",
+  "last": "2026-10-16",
+  "long_dropped_by_research_rule": 64,
+  "long_signals": 333808,
+  "pct_long": {
+   "max": 56.1979,
+   "min": 0.0,
+   "p10": 0.9689,
+   "p50": 5.0153,
+   "p90": 14.8522,
+   "p99": 33.3622
+  },
+  "pct_short": {
+   "max": 88.9866,
+   "min": 0.0,
+   "p10": 0.4778,
+   "p50": 2.6235,
+   "p90": 13.6103,
+   "p99": 44.873
+  },
+  "sessions": 2211,
+  "sessions_ok": 2210,
+  "share_long_signals_new_episode": 0.1039,
+  "share_short_signals_new_episode": 0.1231,
+  "short_dropped_by_research_rule": 130,
+  "short_signals": 269348
+ },
+ "table_sha256": "8cc3f1624cfbe5c14d100b31b010d1628d262641129291275a2190bdfd7b9204",
+ "universe": "surviving universe only (delisted symbols are absent)",
+ "version": "breakout_participation_v1"
+}
