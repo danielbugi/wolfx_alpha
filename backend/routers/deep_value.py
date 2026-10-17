@@ -3,6 +3,8 @@
 Deep Value / Earnings-Turnaround Alerts API Router
 """
 
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException, Query, Depends
 
 from auth.dependencies import require_authenticated_user
@@ -29,14 +31,18 @@ def get_deep_value_service():
 def scan_deep_value(
         near_low_pct: float = Query(15.0, ge=0, le=100, description="Max %% above the 12-month low to count as 'near lows'"),
         min_valuation_score: float = Query(12.0, ge=0, le=25, description="Min valuation sub-score (out of 25)"),
-        min_financial_health_score: float = Query(10.0, ge=0, le=25, description="Min financial health sub-score (out of 25), avoids value traps"),
+        min_financial_health_score: Optional[float] = Query(
+            None, ge=0, le=25, deprecated=True,
+            description="DEPRECATED (compatibility with the previous frontend): old market-cap + P/B floor. "
+                        "Not applied when omitted; the balance-sheet checks always apply."),
         deep_value_service: DeepValueService = Depends(get_deep_value_service),
 ):
     """
-    Scan for stocks near their 12-month low at a cheap valuation with an
-    acceptable financial-health floor. The subset that also just flipped from
-    a quarterly net loss to a net profit is returned separately as
-    turnaround_alerts -- the higher-conviction signal.
+    Scan for stocks near their 12-month low at a cheap valuation that do not
+    fail a balance-sheet check (equity, leverage, liquidity, cash flow -- see
+    deep_value_service.assess_balance_sheet). The subset that also just
+    flipped from a quarterly net loss to a net profit is returned separately
+    as turnaround_alerts (a historical field name kept for compatibility: a descriptive list, not a signal).
     """
     try:
         return deep_value_service.scan(
