@@ -1,0 +1,370 @@
+{
+ "n_signals_with_entry": 602485,
+ "n_valid_120": 561483,
+ "n_valid_20_60_120": {
+  "20": 594782,
+  "60": 581472,
+  "120": 561483
+ },
+ "overall_120": {
+  "all": {
+   "n": 561483,
+   "ge3R": 0.424,
+   "ge5R": 0.213,
+   "ge10R": 0.0447
+  },
+  "bull": {
+   "n": 313476,
+   "ge3R": 0.5098,
+   "ge5R": 0.2847,
+   "ge10R": 0.066
+  },
+  "bear": {
+   "n": 248007,
+   "ge3R": 0.3155,
+   "ge5R": 0.1223,
+   "ge10R": 0.0177
+  }
+ },
+ "by_horizon_5R_bull": {
+  "20": {
+   "n": 331495,
+   "ge3R": 0.0934,
+   "ge5R": 0.0199,
+   "ge10R": 0.0022
+  },
+  "60": {
+   "n": 325728,
+   "ge3R": 0.3247,
+   "ge5R": 0.1227,
+   "ge10R": 0.0161
+  },
+  "120": {
+   "n": 313476,
+   "ge3R": 0.5098,
+   "ge5R": 0.2847,
+   "ge10R": 0.066
+  }
+ },
+ "by_horizon_5R_bear": {
+  "20": {
+   "n": 263287,
+   "ge3R": 0.0688,
+   "ge5R": 0.0213,
+   "ge10R": 0.0036
+  },
+  "60": {
+   "n": 255744,
+   "ge3R": 0.1906,
+   "ge5R": 0.0613,
+   "ge10R": 0.011
+  },
+  "120": {
+   "n": 248007,
+   "ge3R": 0.3155,
+   "ge5R": 0.1223,
+   "ge10R": 0.0177
+  }
+ },
+ "pct_label_120": {
+  "bull": {
+   "n": 313476,
+   "ge30pct": 0.2676,
+   "ge50pct": 0.1266,
+   "ge100pct": 0.0369
+  },
+  "bear": {
+   "n": 248007,
+   "ge30pct": 0.2449,
+   "ge50pct": 0.0792,
+   "ge100pct": 0.0
+  }
+ },
+ "by_year_dir_120": {
+  "2018_bear": {
+   "n": 28432,
+   "ge3R": 0.3449,
+   "ge5R": 0.1438,
+   "ge10R": 0.007
+  },
+  "2018_bull": {
+   "n": 26407,
+   "ge3R": 0.4467,
+   "ge5R": 0.2244,
+   "ge10R": 0.0405
+  },
+  "2019_bear": {
+   "n": 17191,
+   "ge3R": 0.3753,
+   "ge5R": 0.2028,
+   "ge10R": 0.0645
+  },
+  "2019_bull": {
+   "n": 38854,
+   "ge3R": 0.5153,
+   "ge5R": 0.27,
+   "ge10R": 0.039
+  },
+  "2020_bear": {
+   "n": 26649,
+   "ge3R": 0.3757,
+   "ge5R": 0.2587,
+   "ge10R": 0.0919
+  },
+  "2020_bull": {
+   "n": 36166,
+   "ge3R": 0.6359,
+   "ge5R": 0.4142,
+   "ge10R": 0.1235
+  },
+  "2021_bear": {
+   "n": 24467,
+   "ge3R": 0.3187,
+   "ge5R": 0.108,
+   "ge10R": 0.0051
+  },
+  "2021_bull": {
+   "n": 39426,
+   "ge3R": 0.466,
+   "ge5R": 0.2408,
+   "ge10R": 0.0429
+  },
+  "2022_bear": {
+   "n": 41515,
+   "ge3R": 0.2864,
+   "ge5R": 0.0716,
+   "ge10R": 0.0026
+  },
+  "2022_bull": {
+   "n": 32277,
+   "ge3R": 0.3245,
+   "ge5R": 0.1221,
+   "ge10R": 0.0172
+  },
+  "2023_bear": {
+   "n": 33317,
+   "ge3R": 0.2703,
+   "ge5R": 0.0777,
+   "ge10R": 0.0036
+  },
+  "2023_bull": {
+   "n": 42669,
+   "ge3R": 0.5115,
+   "ge5R": 0.2753,
+   "ge10R": 0.0569
+  },
+  "2024_bear": {
+   "n": 30771,
+   "ge3R": 0.3428,
+   "ge5R": 0.1232,
+   "ge10R": 0.004
+  },
+  "2024_bull": {
+   "n": 40090,
+   "ge3R": 0.5593,
+   "ge5R": 0.3393,
+   "ge10R": 0.0861
+  },
+  "2025_bear": {
+   "n": 34342,
+   "ge3R": 0.2993,
+   "ge5R": 0.0921,
+   "ge10R": 0.0037
+  },
+  "2025_bull": {
+   "n": 40815,
+   "ge3R": 0.5441,
+   "ge5R": 0.3284,
+   "ge10R": 0.0985
+  },
+  "2026_bear": {
+   "n": 11323,
+   "ge3R": 0.2179,
+   "ge5R": 0.0631,
+   "ge10R": 0.0022
+  },
+  "2026_bull": {
+   "n": 16772,
+   "ge3R": 0.5788,
+   "ge5R": 0.337,
+   "ge10R": 0.0894
+  }
+ },
+ "by_cohort_dir_120": {
+  "listed_by_2016_bear": {
+   "n": 195727,
+   "ge3R": 0.322,
+   "ge5R": 0.1311,
+   "ge10R": 0.0205
+  },
+  "listed_by_2016_bull": {
+   "n": 259593,
+   "ge3R": 0.5103,
+   "ge5R": 0.2794,
+   "ge10R": 0.0592
+  },
+  "listed_later_bear": {
+   "n": 52280,
+   "ge3R": 0.2912,
+   "ge5R": 0.0896,
+   "ge10R": 0.0074
+  },
+  "listed_later_bull": {
+   "n": 53883,
+   "ge3R": 0.5076,
+   "ge5R": 0.31,
+   "ge10R": 0.099
+  }
+ },
+ "denominator_effect_120": {
+  "bull_atr_low": {
+   "n": 104492,
+   "median_atr_pct": 1.86,
+   "ge5R": 0.2876,
+   "ge50pct": 0.0157,
+   "median_mfe_pct": 11.15,
+   "median_mfe_R": 3.2
+  },
+  "bull_atr_mid": {
+   "n": 104492,
+   "median_atr_pct": 2.78,
+   "ge5R": 0.2625,
+   "ge50pct": 0.0755,
+   "median_mfe_pct": 16.42,
+   "median_mfe_R": 2.96
+  },
+  "bull_atr_high": {
+   "n": 104492,
+   "median_atr_pct": 4.54,
+   "ge5R": 0.3039,
+   "ge50pct": 0.2887,
+   "median_mfe_pct": 28.65,
+   "median_mfe_R": 3.06
+  },
+  "bear_atr_low": {
+   "n": 82669,
+   "median_atr_pct": 2.34,
+   "ge5R": 0.2048,
+   "ge50pct": 0.0312,
+   "median_mfe_pct": 10.61,
+   "median_mfe_R": 2.36
+  },
+  "bear_atr_mid": {
+   "n": 82669,
+   "median_atr_pct": 3.68,
+   "ge5R": 0.1216,
+   "ge50pct": 0.0477,
+   "median_mfe_pct": 14.95,
+   "median_mfe_R": 2.02
+  },
+  "bear_atr_high": {
+   "n": 82669,
+   "median_atr_pct": 6.83,
+   "ge5R": 0.0406,
+   "ge50pct": 0.1586,
+   "median_mfe_pct": 24.9,
+   "median_mfe_R": 1.67
+  }
+ },
+ "liquidity_effect_120": {
+  "bull_dollarvol_low": {
+   "n": 104492,
+   "median_dv20_musd": 4.59,
+   "ge5R": 0.281,
+   "ge50pct": 0.1612
+  },
+  "bull_dollarvol_mid": {
+   "n": 104492,
+   "median_dv20_musd": 30.92,
+   "ge5R": 0.2771,
+   "ge50pct": 0.1221
+  },
+  "bull_dollarvol_high": {
+   "n": 104492,
+   "median_dv20_musd": 186.22,
+   "ge5R": 0.2959,
+   "ge50pct": 0.0965
+  }
+ },
+ "bull_5R_winners_terminal_at_120": {
+  "n": 89238,
+  "median_terminal_R": 5.1,
+  "median_mfe_R": 7.3,
+  "share_terminal_below_half_of_mfe": 0.2965,
+  "share_terminal_negative": 0.0794
+ },
+ "overlap": {
+  "share_within_10_bars_of_previous_same_symbol_dir": 0.6699,
+  "share_within_60": 0.9162,
+  "share_within_120": 0.9751
+ },
+ "episodes_120": {
+  "all_signals_valid": 561483,
+  "independent_episodes": 63891,
+  "bull": {
+   "episodes": 33009,
+   "ge5R": 0.2699,
+   "ge10R": 0.0641
+  },
+  "bear": {
+   "episodes": 30882,
+   "ge5R": 0.1495,
+   "ge10R": 0.028
+  },
+  "episodes_per_year": {
+   "2018": 6934,
+   "2019": 6271,
+   "2020": 6928,
+   "2021": 7572,
+   "2022": 7805,
+   "2023": 8208,
+   "2024": 8483,
+   "2025": 8615,
+   "2026": 3075
+  }
+ },
+ "date_clustering": {
+  "dates": 2209,
+  "mean_signals_per_date": 272.7,
+  "max_signals_per_date": 1720,
+  "share_of_signals_on_top_5pct_dates": 0.1543
+ },
+ "month_concentration_bull_5R": {
+  "months": 100,
+  "top10pct_months_share_of_winners": 0.2525,
+  "top10pct_months_share_of_signals": 0.1681,
+  "top5_months": {
+   "2024-07": {
+    "signals": 6734,
+    "winners": 2778,
+    "rate": 0.413
+   },
+   "2020-11": {
+    "signals": 4558,
+    "winners": 2720,
+    "rate": 0.597
+   },
+   "2023-12": {
+    "signals": 8105,
+    "winners": 2646,
+    "rate": 0.326
+   },
+   "2023-11": {
+    "signals": 4854,
+    "winners": 2384,
+    "rate": 0.491
+   },
+   "2020-10": {
+    "signals": 3510,
+    "winners": 2307,
+    "rate": 0.657
+   }
+  },
+  "monthly_rate_min_max_median": [
+   0.07,
+   0.657,
+   0.268
+  ]
+ },
+ "elapsed_s": 96
+}
