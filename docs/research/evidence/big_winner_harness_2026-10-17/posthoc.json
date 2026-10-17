@@ -1,0 +1,2828 @@
+{
+ "config_hash": "ee8b18ff39c1b5e29e660c86e7c79cf15895c860a1db17c0e7ba73c828caaef3",
+ "deviation_from_pre_registration": "matching without the 60-day-return tercile; H5 reported also without its saturated group criterion",
+ "label": "POST-HOC SENSITIVITY: NOT PRE-REGISTERED; no verdict is derived from it; hypothesis-generating at most; two matching designs mean multiplicity.",
+ "long": {
+  "H1": {
+   "test": {
+    "balance_after_matching": {
+     "atr_pct": {
+      "control_mean": 4.797,
+      "smd": -0.0384,
+      "treated_mean": 4.7175
+     },
+     "dist_sma200_pct": {
+      "control_mean": -11.5654,
+      "smd": 2.2756,
+      "treated_mean": 53.2361
+     },
+     "log_dollar_vol_20": {
+      "control_mean": 7.072,
+      "smd": 0.1261,
+      "treated_mean": 7.1675
+     },
+     "ret_20d": {
+      "control_mean": 12.3365,
+      "smd": 0.5487,
+      "treated_mean": 24.2869
+     },
+     "ret_60d": {
+      "control_mean": -9.7966,
+      "smd": 1.904,
+      "treated_mean": 50.8548
+     }
+    },
+    "control_candidates": 4455,
+    "controls_used": 1092,
+    "holm_reference_only": {
+     "p": 0.03798,
+     "p_holm": 0.11394,
+     "reject": false
+    },
+    "labels": {
+     "BW10@120 (R-based)": {
+      "ci95": [
+       1.1474,
+       2.1716
+      ],
+      "column": "ge10r_120",
+      "control_rate": 0.0923,
+      "diff_ci95": [
+       0.01512,
+       0.09373
+      ],
+      "n_months": 28,
+      "rr": 1.5842,
+      "sets": 547,
+      "treated_rate": 0.1463
+     },
+     "BW5@120 (primary, R-based)": {
+      "ci95": [
+       0.9878,
+       1.379
+      ],
+      "column": "ge5r_120",
+      "control_rate": 0.3102,
+      "diff_ci95": [
+       -0.00435,
+       0.11126
+      ],
+      "n_months": 28,
+      "permutation": {
+       "n_perm": 2000,
+       "p_two_sided": 0.03798
+      },
+      "rr": 1.1788,
+      "sets": 547,
+      "treated_rate": 0.3656
+     },
+     "graded tier (0-3)": {
+      "ci95": [
+       1.0713,
+       1.357
+      ],
+      "column": "tier_120",
+      "control_rate": 0.8845,
+      "diff_ci95": [
+       0.0675,
+       0.29739
+      ],
+      "n_months": 28,
+      "rr": 1.2029,
+      "sets": 547,
+      "treated_rate": 1.064
+     },
+     "return-based": {
+      "ci95": [
+       0.964,
+       1.4236
+      ],
+      "column": "ret_label_120",
+      "control_rate": 0.2584,
+      "diff_ci95": [
+       -0.01088,
+       0.09467
+      ],
+      "n_months": 28,
+      "rr": 1.1816,
+      "sets": 547,
+      "treated_rate": 0.3053
+     },
+     "vol-neutral": {
+      "ci95": [
+       0.75,
+       1.9013
+      ],
+      "column": "vn_label_120",
+      "control_rate": 0.06,
+      "diff_ci95": [
+       -0.01847,
+       0.04591
+      ],
+      "n_months": 28,
+      "rr": 1.1878,
+      "sets": 547,
+      "treated_rate": 0.0713
+     }
+    },
+    "matched_sets": 547,
+    "pool_signals": 10039,
+    "realised_net_r_cap60_treated_minus_control": {
+     "realised_a_atr_stop_fixed_2r": {
+      "ci95": [
+       -1.7031,
+       0.0702
+      ],
+      "control_mean": 0.2843,
+      "mean_diff": -0.4694,
+      "sets": 9,
+      "treated_mean": -0.185
+     },
+     "realised_a_atr_stop_fixed_3r": {
+      "ci95": [
+       -1.6663,
+       1.8248
+      ],
+      "control_mean": 0.2282,
+      "mean_diff": -0.089,
+      "sets": 9,
+      "treated_mean": 0.1392
+     },
+     "realised_b_donchian_trail_10": {
+      "ci95": [
+       -1.919,
+       1.6907
+      ],
+      "control_mean": -0.0578,
+      "mean_diff": 0.263,
+      "sets": 9,
+      "treated_mean": 0.2052
+     },
+     "realised_c_atr_trail_3x": {
+      "ci95": [
+       -0.922,
+       2.287
+      ],
+      "control_mean": 0.0424,
+      "mean_diff": 0.8765,
+      "sets": 9,
+      "treated_mean": 0.9189
+     },
+     "realised_d_hybrid_atr_stop_to_donchian_10": {
+      "ci95": [
+       -1.3679,
+       1.744
+      ],
+      "control_mean": -0.086,
+      "mean_diff": 0.5506,
+      "sets": 9,
+      "treated_mean": 0.4646
+     }
+    },
+    "spec": "H1",
+    "status": "ok",
+    "treated_candidates": 1219,
+    "unmatched_treated": 672,
+    "within_date_mh": {
+     "ci95": [
+      1.0831,
+      1.3612
+     ],
+     "n_controls": 3959,
+     "n_dates": 411,
+     "n_treated": 1166,
+     "rr": 1.22
+    },
+    "year_consistency_in_pool": {
+     "2018": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2019": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2020": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2021": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2022": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2023": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2024": {
+      "counts": false,
+      "rr": 1.095,
+      "sets": 207
+     },
+     "2025": {
+      "counts": false,
+      "rr": 1.379,
+      "sets": 258
+     }
+    }
+   },
+   "validation": {
+    "balance_after_matching": {
+     "atr_pct": {
+      "control_mean": 4.2315,
+      "smd": -0.0284,
+      "treated_mean": 4.1812
+     },
+     "dist_sma200_pct": {
+      "control_mean": -14.0484,
+      "smd": 2.079,
+      "treated_mean": 33.1894
+     },
+     "log_dollar_vol_20": {
+      "control_mean": 7.25,
+      "smd": -0.0021,
+      "treated_mean": 7.2482
+     },
+     "ret_20d": {
+      "control_mean": 10.9848,
+      "smd": 0.488,
+      "treated_mean": 21.1488
+     },
+     "ret_60d": {
+      "control_mean": -10.6581,
+      "smd": 1.0338,
+      "treated_mean": 36.6969
+     }
+    },
+    "control_candidates": 2587,
+    "controls_used": 1021,
+    "holm_reference_only": {
+     "p": 0.1929,
+     "p_holm": 0.5787,
+     "reject": false
+    },
+    "labels": {
+     "BW10@120 (R-based)": {
+      "ci95": [
+       0.6346,
+       2.4787
+      ],
+      "column": "ge10r_120",
+      "control_rate": 0.0267,
+      "diff_ci95": [
+       -0.01326,
+       0.02587
+      ],
+      "n_months": 18,
+      "rr": 1.2,
+      "sets": 437,
+      "treated_rate": 0.032
+     },
+     "BW5@120 (primary, R-based)": {
+      "ci95": [
+       0.9175,
+       1.6787
+      ],
+      "column": "ge5r_120",
+      "control_rate": 0.1537,
+      "diff_ci95": [
+       -0.01432,
+       0.08774
+      ],
+      "n_months": 18,
+      "permutation": {
+       "n_perm": 2000,
+       "p_two_sided": 0.1929
+      },
+      "rr": 1.206,
+      "sets": 437,
+      "treated_rate": 0.1854
+     },
+     "graded tier (0-3)": {
+      "ci95": [
+       0.8749,
+       1.3379
+      ],
+      "column": "tier_120",
+      "control_rate": 0.5515,
+      "diff_ci95": [
+       -0.07455,
+       0.15634
+      ],
+      "n_months": 18,
+      "rr": 1.0788,
+      "sets": 437,
+      "treated_rate": 0.595
+     },
+     "return-based": {
+      "ci95": [
+       0.7916,
+       1.5584
+      ],
+      "column": "ret_label_120",
+      "control_rate": 0.1152,
+      "diff_ci95": [
+       -0.02692,
+       0.05572
+      ],
+      "n_months": 18,
+      "rr": 1.0927,
+      "sets": 437,
+      "treated_rate": 0.1259
+     },
+     "vol-neutral": {
+      "ci95": [
+       0.1062,
+       2.5401
+      ],
+      "column": "vn_label_120",
+      "control_rate": 0.0153,
+      "diff_ci95": [
+       -0.01712,
+       0.01882
+      ],
+      "n_months": 18,
+      "rr": 0.9,
+      "sets": 437,
+      "treated_rate": 0.0137
+     }
+    },
+    "matched_sets": 437,
+    "pool_signals": 5714,
+    "realised_net_r_cap60_treated_minus_control": {
+     "realised_a_atr_stop_fixed_2r": {
+      "ci95": [
+       -1.1445,
+       1.0162
+      ],
+      "control_mean": 0.4498,
+      "mean_diff": -0.0494,
+      "sets": 21,
+      "treated_mean": 0.4004
+     },
+     "realised_a_atr_stop_fixed_3r": {
+      "ci95": [
+       -0.9556,
+       1.5301
+      ],
+      "control_mean": 0.2207,
+      "mean_diff": 0.2782,
+      "sets": 21,
+      "treated_mean": 0.4989
+     },
+     "realised_b_donchian_trail_10": {
+      "ci95": [
+       -0.4575,
+       0.8592
+      ],
+      "control_mean": 0.0417,
+      "mean_diff": 0.2008,
+      "sets": 21,
+      "treated_mean": 0.2425
+     },
+     "realised_c_atr_trail_3x": {
+      "ci95": [
+       -0.652,
+       0.8233
+      ],
+      "control_mean": 0.0245,
+      "mean_diff": 0.1293,
+      "sets": 21,
+      "treated_mean": 0.1538
+     },
+     "realised_d_hybrid_atr_stop_to_donchian_10": {
+      "ci95": [
+       -0.4591,
+       0.9621
+      ],
+      "control_mean": 0.0571,
+      "mean_diff": 0.2223,
+      "sets": 21,
+      "treated_mean": 0.2794
+     }
+    },
+    "spec": "H1",
+    "status": "ok",
+    "treated_candidates": 714,
+    "unmatched_treated": 277,
+    "within_date_mh": {
+     "ci95": [
+      0.8687,
+      1.5996
+     ],
+     "n_controls": 2320,
+     "n_dates": 219,
+     "n_treated": 628,
+     "rr": 1.1592
+    },
+    "year_consistency_in_pool": {
+     "2018": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2019": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2020": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2021": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2022": {
+      "counts": false,
+      "rr": 1.418,
+      "sets": 262
+     },
+     "2023": {
+      "counts": false,
+      "rr": 1.032,
+      "sets": 175
+     },
+     "2024": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2025": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     }
+    }
+   }
+  },
+  "H2": {
+   "test": {
+    "balance_after_matching": {
+     "atr_pct": {
+      "control_mean": 3.7236,
+      "smd": -0.056,
+      "treated_mean": 3.6035
+     },
+     "dist_sma200_pct": {
+      "control_mean": 13.0966,
+      "smd": -0.146,
+      "treated_mean": 8.951
+     },
+     "log_dollar_vol_20": {
+      "control_mean": 7.1478,
+      "smd": 0.1476,
+      "treated_mean": 7.2623
+     },
+     "ret_20d": {
+      "control_mean": 14.1415,
+      "smd": -0.1174,
+      "treated_mean": 11.9099
+     },
+     "ret_60d": {
+      "control_mean": 14.0473,
+      "smd": -0.0863,
+      "treated_mean": 11.3004
+     }
+    },
+    "control_candidates": 7194,
+    "controls_used": 1232,
+    "holm_reference_only": {
+     "p": 0.008,
+     "p_holm": 0.04,
+     "reject": true
+    },
+    "labels": {
+     "BW10@120 (R-based)": {
+      "ci95": [
+       0.6044,
+       1.3473
+      ],
+      "column": "ge10r_120",
+      "control_rate": 0.1029,
+      "diff_ci95": [
+       -0.04979,
+       0.0266
+      ],
+      "n_months": 14,
+      "rr": 0.9144,
+      "sets": 606,
+      "treated_rate": 0.0941
+     },
+     "BW5@120 (primary, R-based)": {
+      "ci95": [
+       0.689,
+       1.0047
+      ],
+      "column": "ge5r_120",
+      "control_rate": 0.3589,
+      "diff_ci95": [
+       -0.12241,
+       0.00165
+      ],
+      "n_months": 14,
+      "permutation": {
+       "n_perm": 2000,
+       "p_two_sided": 0.008
+      },
+      "rr": 0.8184,
+      "sets": 606,
+      "treated_rate": 0.2937
+     },
+     "graded tier (0-3)": {
+      "ci95": [
+       0.7527,
+       1.0154
+      ],
+      "column": "tier_120",
+      "control_rate": 1.0355,
+      "diff_ci95": [
+       -0.26492,
+       0.01575
+      ],
+      "n_months": 14,
+      "rr": 0.8653,
+      "sets": 606,
+      "treated_rate": 0.896
+     },
+     "return-based": {
+      "ci95": [
+       0.6679,
+       1.0678
+      ],
+      "column": "ret_label_120",
+      "control_rate": 0.1917,
+      "diff_ci95": [
+       -0.06918,
+       0.01349
+      ],
+      "n_months": 14,
+      "rr": 0.8867,
+      "sets": 606,
+      "treated_rate": 0.17
+     },
+     "vol-neutral": {
+      "ci95": [
+       0.4945,
+       1.3953
+      ],
+      "column": "vn_label_120",
+      "control_rate": 0.058,
+      "diff_ci95": [
+       -0.03978,
+       0.01522
+      ],
+      "n_months": 14,
+      "rr": 0.8246,
+      "sets": 606,
+      "treated_rate": 0.0479
+     }
+    },
+    "matched_sets": 606,
+    "pool_signals": 10039,
+    "realised_net_r_cap60_treated_minus_control": {
+     "realised_a_atr_stop_fixed_2r": {
+      "ci95": [
+       -2.2848,
+       0.6292
+      ],
+      "control_mean": 0.4371,
+      "mean_diff": -0.613,
+      "sets": 17,
+      "treated_mean": -0.1759
+     },
+     "realised_a_atr_stop_fixed_3r": {
+      "ci95": [
+       -2.1715,
+       0.8049
+      ],
+      "control_mean": 0.393,
+      "mean_diff": -0.5483,
+      "sets": 17,
+      "treated_mean": -0.1553
+     },
+     "realised_b_donchian_trail_10": {
+      "ci95": [
+       -0.9998,
+       0.8225
+      ],
+      "control_mean": -0.1479,
+      "mean_diff": -0.136,
+      "sets": 17,
+      "treated_mean": -0.2839
+     },
+     "realised_c_atr_trail_3x": {
+      "ci95": [
+       -1.385,
+       0.4554
+      ],
+      "control_mean": 0.2034,
+      "mean_diff": -0.4522,
+      "sets": 17,
+      "treated_mean": -0.2488
+     },
+     "realised_d_hybrid_atr_stop_to_donchian_10": {
+      "ci95": [
+       -0.9431,
+       0.4783
+      ],
+      "control_mean": -0.1669,
+      "mean_diff": -0.1959,
+      "sets": 17,
+      "treated_mean": -0.3629
+     }
+    },
+    "spec": "H2",
+    "status": "ok",
+    "treated_candidates": 2845,
+    "unmatched_treated": 2239,
+    "within_date_mh": {
+     "ci95": null,
+     "n_controls": 0,
+     "n_dates": 0,
+     "n_treated": 0,
+     "rr": null
+    },
+    "year_consistency_in_pool": {
+     "2018": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2019": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2020": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2021": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2022": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2023": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2024": {
+      "counts": false,
+      "rr": 0.773,
+      "sets": 329
+     },
+     "2025": {
+      "counts": false,
+      "rr": 0.921,
+      "sets": 173
+     }
+    }
+   },
+   "validation": {
+    "balance_after_matching": {
+     "atr_pct": {
+      "control_mean": 3.6089,
+      "smd": -0.0506,
+      "treated_mean": 3.5324
+     },
+     "dist_sma200_pct": {
+      "control_mean": 1.1319,
+      "smd": 0.0558,
+      "treated_mean": 2.2702
+     },
+     "log_dollar_vol_20": {
+      "control_mean": 7.2281,
+      "smd": 0.0888,
+      "treated_mean": 7.2986
+     },
+     "ret_20d": {
+      "control_mean": 12.1013,
+      "smd": -0.0655,
+      "treated_mean": 11.2942
+     },
+     "ret_60d": {
+      "control_mean": 6.4211,
+      "smd": 0.0224,
+      "treated_mean": 6.9033
+     }
+    },
+    "control_candidates": 4506,
+    "controls_used": 690,
+    "holm_reference_only": {
+     "p": 0.03248,
+     "p_holm": 0.12992,
+     "reject": false
+    },
+    "labels": {
+     "BW10@120 (R-based)": {
+      "ci95": [
+       0.0,
+       1.0
+      ],
+      "column": "ge10r_120",
+      "control_rate": 0.0286,
+      "diff_ci95": [
+       -0.02954,
+       0.0
+      ],
+      "n_months": 6,
+      "rr": 0.6,
+      "sets": 291,
+      "treated_rate": 0.0172
+     },
+     "BW5@120 (primary, R-based)": {
+      "ci95": [
+       0.4287,
+       1.8111
+      ],
+      "column": "ge5r_120",
+      "control_rate": 0.1804,
+      "diff_ci95": [
+       -0.10658,
+       0.07347
+      ],
+      "n_months": 6,
+      "permutation": {
+       "n_perm": 2000,
+       "p_two_sided": 0.03248
+      },
+      "rr": 0.7048,
+      "sets": 291,
+      "treated_rate": 0.1271
+     },
+     "graded tier (0-3)": {
+      "ci95": [
+       0.5281,
+       1.1297
+      ],
+      "column": "tier_120",
+      "control_rate": 0.6426,
+      "diff_ci95": [
+       -0.31003,
+       0.05167
+      ],
+      "n_months": 6,
+      "rr": 0.7487,
+      "sets": 291,
+      "treated_rate": 0.4811
+     },
+     "return-based": {
+      "ci95": [
+       0.1722,
+       0.9985
+      ],
+      "column": "ret_label_120",
+      "control_rate": 0.1014,
+      "diff_ci95": [
+       -0.09681,
+       0.00013
+      ],
+      "n_months": 6,
+      "rr": 0.4407,
+      "sets": 291,
+      "treated_rate": 0.0447
+     },
+     "vol-neutral": {
+      "ci95": [
+       0.0,
+       3.0
+      ],
+      "column": "vn_label_120",
+      "control_rate": 0.008,
+      "diff_ci95": [
+       -0.01224,
+       0.00696
+      ],
+      "n_months": 6,
+      "rr": 1.2857,
+      "sets": 291,
+      "treated_rate": 0.0103
+     }
+    },
+    "matched_sets": 291,
+    "pool_signals": 5714,
+    "realised_net_r_cap60_treated_minus_control": {
+     "realised_a_atr_stop_fixed_2r": {
+      "ci95": [
+       0.0965,
+       2.1045
+      ],
+      "control_mean": 0.22,
+      "mean_diff": 1.3349,
+      "sets": 7,
+      "treated_mean": 1.555
+     },
+     "realised_a_atr_stop_fixed_3r": {
+      "ci95": [
+       0.0965,
+       2.0085
+      ],
+      "control_mean": 0.2567,
+      "mean_diff": 1.2622,
+      "sets": 7,
+      "treated_mean": 1.5189
+     },
+     "realised_b_donchian_trail_10": {
+      "ci95": [
+       -0.0897,
+       1.6469
+      ],
+      "control_mean": 0.5118,
+      "mean_diff": 0.8736,
+      "sets": 7,
+      "treated_mean": 1.3855
+     },
+     "realised_c_atr_trail_3x": {
+      "ci95": [
+       -0.0107,
+       1.8895
+      ],
+      "control_mean": 0.5717,
+      "mean_diff": 0.9588,
+      "sets": 7,
+      "treated_mean": 1.5305
+     },
+     "realised_d_hybrid_atr_stop_to_donchian_10": {
+      "ci95": [
+       0.0163,
+       1.6469
+      ],
+      "control_mean": 0.7201,
+      "mean_diff": 0.9191,
+      "sets": 7,
+      "treated_mean": 1.6392
+     }
+    },
+    "spec": "H2",
+    "status": "ok",
+    "treated_candidates": 1208,
+    "unmatched_treated": 917,
+    "within_date_mh": {
+     "ci95": null,
+     "n_controls": 0,
+     "n_dates": 0,
+     "n_treated": 0,
+     "rr": null
+    },
+    "year_consistency_in_pool": {
+     "2018": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2019": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2020": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2021": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2022": {
+      "counts": false,
+      "rr": 0.96,
+      "sets": 87
+     },
+     "2023": {
+      "counts": false,
+      "rr": 0.625,
+      "sets": 204
+     },
+     "2024": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2025": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     }
+    }
+   }
+  },
+  "H3": {
+   "test": {
+    "balance_after_matching": {
+     "atr_pct": {
+      "control_mean": 4.4494,
+      "smd": -0.1893,
+      "treated_mean": 4.115
+     },
+     "dist_sma200_pct": {
+      "control_mean": -4.1705,
+      "smd": 1.5346,
+      "treated_mean": 46.5373
+     },
+     "log_dollar_vol_20": {
+      "control_mean": 7.135,
+      "smd": 0.1164,
+      "treated_mean": 7.223
+     },
+     "ret_20d": {
+      "control_mean": 13.187,
+      "smd": 0.3763,
+      "treated_mean": 20.919
+     },
+     "ret_60d": {
+      "control_mean": 1.8981,
+      "smd": 0.9474,
+      "treated_mean": 42.2958
+     }
+    },
+    "control_candidates": 3572,
+    "controls_used": 1471,
+    "holm_reference_only": {
+     "p": 0.0015,
+     "p_holm": 0.009,
+     "reject": true
+    },
+    "labels": {
+     "BW10@120 (R-based)": {
+      "ci95": [
+       0.9767,
+       1.6338
+      ],
+      "column": "ge10r_120",
+      "control_rate": 0.0865,
+      "diff_ci95": [
+       -0.00221,
+       0.04876
+      ],
+      "n_months": 28,
+      "rr": 1.2902,
+      "sets": 744,
+      "treated_rate": 0.1116
+     },
+     "BW5@120 (primary, R-based)": {
+      "ci95": [
+       1.0448,
+       1.4606
+      ],
+      "column": "ge5r_120",
+      "control_rate": 0.2858,
+      "diff_ci95": [
+       0.01283,
+       0.13245
+      ],
+      "n_months": 28,
+      "permutation": {
+       "n_perm": 2000,
+       "p_two_sided": 0.0015
+      },
+      "rr": 1.2508,
+      "sets": 744,
+      "treated_rate": 0.3575
+     },
+     "graded tier (0-3)": {
+      "ci95": [
+       1.0602,
+       1.3615
+      ],
+      "column": "tier_120",
+      "control_rate": 0.8598,
+      "diff_ci95": [
+       0.05112,
+       0.30774
+      ],
+      "n_months": 28,
+      "rr": 1.21,
+      "sets": 744,
+      "treated_rate": 1.0403
+     },
+     "return-based": {
+      "ci95": [
+       0.9809,
+       1.3057
+      ],
+      "column": "ret_label_120",
+      "control_rate": 0.2229,
+      "diff_ci95": [
+       -0.00458,
+       0.06571
+      ],
+      "n_months": 28,
+      "rr": 1.1337,
+      "sets": 744,
+      "treated_rate": 0.2527
+     },
+     "vol-neutral": {
+      "ci95": [
+       0.836,
+       1.5312
+      ],
+      "column": "vn_label_120",
+      "control_rate": 0.0589,
+      "diff_ci95": [
+       -0.00964,
+       0.02907
+      ],
+      "n_months": 28,
+      "rr": 1.1635,
+      "sets": 744,
+      "treated_rate": 0.0685
+     }
+    },
+    "matched_sets": 744,
+    "pool_signals": 10039,
+    "realised_net_r_cap60_treated_minus_control": {
+     "realised_a_atr_stop_fixed_2r": {
+      "ci95": [
+       0.0219,
+       1.323
+      ],
+      "control_mean": -0.7151,
+      "mean_diff": 0.7887,
+      "sets": 14,
+      "treated_mean": 0.0736
+     },
+     "realised_a_atr_stop_fixed_3r": {
+      "ci95": [
+       -1.2779,
+       1.7836
+      ],
+      "control_mean": -0.6811,
+      "mean_diff": 0.5169,
+      "sets": 14,
+      "treated_mean": -0.1643
+     },
+     "realised_b_donchian_trail_10": {
+      "ci95": [
+       -0.6484,
+       1.1528
+      ],
+      "control_mean": -0.5781,
+      "mean_diff": 0.3799,
+      "sets": 14,
+      "treated_mean": -0.1982
+     },
+     "realised_c_atr_trail_3x": {
+      "ci95": [
+       -0.4048,
+       1.6548
+      ],
+      "control_mean": -0.924,
+      "mean_diff": 0.7904,
+      "sets": 14,
+      "treated_mean": -0.1336
+     },
+     "realised_d_hybrid_atr_stop_to_donchian_10": {
+      "ci95": [
+       -0.177,
+       1.1898
+      ],
+      "control_mean": -0.7424,
+      "mean_diff": 0.536,
+      "sets": 14,
+      "treated_mean": -0.2063
+     }
+    },
+    "spec": "H3",
+    "status": "ok",
+    "treated_candidates": 3123,
+    "unmatched_treated": 2379,
+    "within_date_mh": {
+     "ci95": [
+      0.9465,
+      1.2582
+     ],
+     "n_controls": 3350,
+     "n_dates": 471,
+     "n_treated": 2990,
+     "rr": 1.0988
+    },
+    "year_consistency_in_pool": {
+     "2018": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2019": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2020": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2021": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2022": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2023": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2024": {
+      "counts": false,
+      "rr": 1.142,
+      "sets": 273
+     },
+     "2025": {
+      "counts": false,
+      "rr": 1.35,
+      "sets": 335
+     }
+    }
+   },
+   "validation": {
+    "balance_after_matching": {
+     "atr_pct": {
+      "control_mean": 3.7619,
+      "smd": -0.1202,
+      "treated_mean": 3.5848
+     },
+     "dist_sma200_pct": {
+      "control_mean": -7.8796,
+      "smd": 2.0327,
+      "treated_mean": 31.3363
+     },
+     "log_dollar_vol_20": {
+      "control_mean": 7.255,
+      "smd": 0.0147,
+      "treated_mean": 7.2667
+     },
+     "ret_20d": {
+      "control_mean": 10.4881,
+      "smd": 0.4002,
+      "treated_mean": 15.6164
+     },
+     "ret_60d": {
+      "control_mean": -2.0396,
+      "smd": 1.2396,
+      "treated_mean": 25.7228
+     }
+    },
+    "control_candidates": 2950,
+    "controls_used": 956,
+    "holm_reference_only": {
+     "p": 0.01549,
+     "p_holm": 0.09294,
+     "reject": false
+    },
+    "labels": {
+     "BW10@120 (R-based)": {
+      "ci95": [
+       0.9061,
+       3.8941
+      ],
+      "column": "ge10r_120",
+      "control_rate": 0.0233,
+      "diff_ci95": [
+       -0.00342,
+       0.03953
+      ],
+      "n_months": 18,
+      "rr": 1.8621,
+      "sets": 414,
+      "treated_rate": 0.0435
+     },
+     "BW5@120 (primary, R-based)": {
+      "ci95": [
+       1.0391,
+       1.8672
+      ],
+      "column": "ge5r_120",
+      "control_rate": 0.1534,
+      "diff_ci95": [
+       0.00694,
+       0.11154
+      ],
+      "n_months": 18,
+      "permutation": {
+       "n_perm": 2000,
+       "p_two_sided": 0.01549
+      },
+      "rr": 1.4173,
+      "sets": 414,
+      "treated_rate": 0.2174
+     },
+     "graded tier (0-3)": {
+      "ci95": [
+       0.9838,
+       1.5019
+      ],
+      "column": "tier_120",
+      "control_rate": 0.5713,
+      "diff_ci95": [
+       -0.00907,
+       0.24305
+      ],
+      "n_months": 18,
+      "rr": 1.222,
+      "sets": 414,
+      "treated_rate": 0.6981
+     },
+     "return-based": {
+      "ci95": [
+       0.7686,
+       1.7959
+      ],
+      "column": "ret_label_120",
+      "control_rate": 0.0849,
+      "diff_ci95": [
+       -0.02349,
+       0.05163
+      ],
+      "n_months": 18,
+      "rr": 1.1659,
+      "sets": 414,
+      "treated_rate": 0.099
+     },
+     "vol-neutral": {
+      "ci95": [
+       0.6972,
+       6.0
+      ],
+      "column": "vn_label_120",
+      "control_rate": 0.0105,
+      "diff_ci95": [
+       -0.00486,
+       0.02419
+      ],
+      "n_months": 18,
+      "rr": 1.8462,
+      "sets": 414,
+      "treated_rate": 0.0193
+     }
+    },
+    "matched_sets": 414,
+    "pool_signals": 5714,
+    "realised_net_r_cap60_treated_minus_control": {
+     "realised_a_atr_stop_fixed_2r": {
+      "ci95": [
+       -1.1097,
+       0.8405
+      ],
+      "control_mean": 0.4842,
+      "mean_diff": -0.0275,
+      "sets": 18,
+      "treated_mean": 0.4567
+     },
+     "realised_a_atr_stop_fixed_3r": {
+      "ci95": [
+       -1.6058,
+       1.0031
+      ],
+      "control_mean": 0.4309,
+      "mean_diff": -0.1604,
+      "sets": 18,
+      "treated_mean": 0.2705
+     },
+     "realised_b_donchian_trail_10": {
+      "ci95": [
+       -0.2393,
+       1.139
+      ],
+      "control_mean": -0.058,
+      "mean_diff": 0.4366,
+      "sets": 18,
+      "treated_mean": 0.3786
+     },
+     "realised_c_atr_trail_3x": {
+      "ci95": [
+       -0.4049,
+       0.9147
+      ],
+      "control_mean": 0.0054,
+      "mean_diff": 0.1811,
+      "sets": 18,
+      "treated_mean": 0.1866
+     },
+     "realised_d_hybrid_atr_stop_to_donchian_10": {
+      "ci95": [
+       -0.3283,
+       0.9334
+      ],
+      "control_mean": 0.1031,
+      "mean_diff": 0.3244,
+      "sets": 18,
+      "treated_mean": 0.4275
+     }
+    },
+    "spec": "H3",
+    "status": "ok",
+    "treated_candidates": 949,
+    "unmatched_treated": 535,
+    "within_date_mh": {
+     "ci95": [
+      0.8562,
+      1.2814
+     ],
+     "n_controls": 2597,
+     "n_dates": 244,
+     "n_treated": 894,
+     "rr": 1.0545
+    },
+    "year_consistency_in_pool": {
+     "2018": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2019": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2020": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2021": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2022": {
+      "counts": false,
+      "rr": 1.59,
+      "sets": 231
+     },
+     "2023": {
+      "counts": false,
+      "rr": 1.284,
+      "sets": 183
+     },
+     "2024": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2025": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     }
+    }
+   }
+  },
+  "H4": {
+   "test": {
+    "balance_after_matching": {
+     "atr_pct": {
+      "control_mean": 3.9255,
+      "smd": -0.1042,
+      "treated_mean": 3.7144
+     },
+     "dist_sma200_pct": {
+      "control_mean": 13.1209,
+      "smd": -0.1183,
+      "treated_mean": 9.5241
+     },
+     "log_dollar_vol_20": {
+      "control_mean": 7.1962,
+      "smd": 0.153,
+      "treated_mean": 7.3174
+     },
+     "ret_20d": {
+      "control_mean": 15.9035,
+      "smd": -0.4204,
+      "treated_mean": 9.153
+     },
+     "ret_60d": {
+      "control_mean": 13.5189,
+      "smd": -0.1641,
+      "treated_mean": 8.071
+     }
+    },
+    "control_candidates": 5612,
+    "controls_used": 3372,
+    "holm_reference_only": {
+     "p": 0.02499,
+     "p_holm": 0.09996,
+     "reject": false
+    },
+    "labels": {
+     "BW10@120 (R-based)": {
+      "ci95": [
+       0.9782,
+       1.4949
+      ],
+      "column": "ge10r_120",
+      "control_rate": 0.0773,
+      "diff_ci95": [
+       -0.0018,
+       0.03446
+      ],
+      "n_months": 28,
+      "rr": 1.2107,
+      "sets": 1698,
+      "treated_rate": 0.0936
+     },
+     "BW5@120 (primary, R-based)": {
+      "ci95": [
+       1.025,
+       1.1806
+      ],
+      "column": "ge5r_120",
+      "control_rate": 0.3032,
+      "diff_ci95": [
+       0.00769,
+       0.05568
+      ],
+      "n_months": 28,
+      "permutation": {
+       "n_perm": 2000,
+       "p_two_sided": 0.02499
+      },
+      "rr": 1.1052,
+      "sets": 1698,
+      "treated_rate": 0.3351
+     },
+     "graded tier (0-3)": {
+      "ci95": [
+       1.0369,
+       1.1439
+      ],
+      "column": "tier_120",
+      "control_rate": 0.9017,
+      "diff_ci95": [
+       0.03384,
+       0.12507
+      ],
+      "n_months": 28,
+      "rr": 1.0933,
+      "sets": 1698,
+      "treated_rate": 0.9859
+     },
+     "return-based": {
+      "ci95": [
+       1.0133,
+       1.2361
+      ],
+      "column": "ret_label_120",
+      "control_rate": 0.1751,
+      "diff_ci95": [
+       0.00253,
+       0.0405
+      ],
+      "n_months": 28,
+      "rr": 1.1267,
+      "sets": 1698,
+      "treated_rate": 0.1973
+     },
+     "vol-neutral": {
+      "ci95": [
+       0.9236,
+       1.5241
+      ],
+      "column": "vn_label_120",
+      "control_rate": 0.049,
+      "diff_ci95": [
+       -0.00398,
+       0.02332
+      ],
+      "n_months": 28,
+      "rr": 1.1904,
+      "sets": 1698,
+      "treated_rate": 0.0583
+     }
+    },
+    "matched_sets": 1698,
+    "pool_signals": 10039,
+    "realised_net_r_cap60_treated_minus_control": {
+     "realised_a_atr_stop_fixed_2r": {
+      "ci95": [
+       -0.8334,
+       0.2062
+      ],
+      "control_mean": 0.1884,
+      "mean_diff": -0.2838,
+      "sets": 39,
+      "treated_mean": -0.0954
+     },
+     "realised_a_atr_stop_fixed_3r": {
+      "ci95": [
+       -1.0485,
+       0.3532
+      ],
+      "control_mean": 0.173,
+      "mean_diff": -0.4231,
+      "sets": 39,
+      "treated_mean": -0.25
+     },
+     "realised_b_donchian_trail_10": {
+      "ci95": [
+       -0.9317,
+       0.2361
+      ],
+      "control_mean": -0.1593,
+      "mean_diff": -0.3855,
+      "sets": 39,
+      "treated_mean": -0.5448
+     },
+     "realised_c_atr_trail_3x": {
+      "ci95": [
+       -1.4823,
+       0.0231
+      ],
+      "control_mean": 0.1957,
+      "mean_diff": -0.6817,
+      "sets": 39,
+      "treated_mean": -0.4861
+     },
+     "realised_d_hybrid_atr_stop_to_donchian_10": {
+      "ci95": [
+       -1.1049,
+       0.1461
+      ],
+      "control_mean": -0.0042,
+      "mean_diff": -0.4537,
+      "sets": 39,
+      "treated_mean": -0.4579
+     }
+    },
+    "spec": "H4",
+    "status": "ok",
+    "treated_candidates": 4427,
+    "unmatched_treated": 2729,
+    "within_date_mh": {
+     "ci95": [
+      1.0869,
+      1.2601
+     ],
+     "n_controls": 5459,
+     "n_dates": 522,
+     "n_treated": 4404,
+     "rr": 1.1653
+    },
+    "year_consistency_in_pool": {
+     "2018": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2019": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2020": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2021": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2022": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2023": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2024": {
+      "counts": true,
+      "rr": 1.093,
+      "sets": 629
+     },
+     "2025": {
+      "counts": true,
+      "rr": 1.081,
+      "sets": 797
+     }
+    }
+   },
+   "validation": {
+    "balance_after_matching": {
+     "atr_pct": {
+      "control_mean": 3.9831,
+      "smd": -0.0466,
+      "treated_mean": 3.897
+     },
+     "dist_sma200_pct": {
+      "control_mean": 1.3304,
+      "smd": -0.192,
+      "treated_mean": -2.9309
+     },
+     "log_dollar_vol_20": {
+      "control_mean": 7.283,
+      "smd": 0.0149,
+      "treated_mean": 7.2949
+     },
+     "ret_20d": {
+      "control_mean": 14.7195,
+      "smd": -0.403,
+      "treated_mean": 9.2713
+     },
+     "ret_60d": {
+      "control_mean": 4.5352,
+      "smd": -0.1882,
+      "treated_mean": -0.7087
+     }
+    },
+    "control_candidates": 2971,
+    "controls_used": 2446,
+    "holm_reference_only": {
+     "p": 0.01849,
+     "p_holm": 0.09294,
+     "reject": false
+    },
+    "labels": {
+     "BW10@120 (R-based)": {
+      "ci95": [
+       0.8757,
+       1.8469
+      ],
+      "column": "ge10r_120",
+      "control_rate": 0.0256,
+      "diff_ci95": [
+       -0.00301,
+       0.02201
+      ],
+      "n_months": 18,
+      "rr": 1.3171,
+      "sets": 1066,
+      "treated_rate": 0.0338
+     },
+     "BW5@120 (primary, R-based)": {
+      "ci95": [
+       1.0103,
+       1.5542
+      ],
+      "column": "ge5r_120",
+      "control_rate": 0.1474,
+      "diff_ci95": [
+       0.00178,
+       0.07438
+      ],
+      "n_months": 18,
+      "permutation": {
+       "n_perm": 2000,
+       "p_two_sided": 0.01849
+      },
+      "rr": 1.2407,
+      "sets": 1066,
+      "treated_rate": 0.1829
+     },
+     "graded tier (0-3)": {
+      "ci95": [
+       1.0345,
+       1.3261
+      ],
+      "column": "tier_120",
+      "control_rate": 0.5231,
+      "diff_ci95": [
+       0.01777,
+       0.16036
+      ],
+      "n_months": 18,
+      "rr": 1.162,
+      "sets": 1066,
+      "treated_rate": 0.6079
+     },
+     "return-based": {
+      "ci95": [
+       0.8776,
+       1.3675
+      ],
+      "column": "ret_label_120",
+      "control_rate": 0.103,
+      "diff_ci95": [
+       -0.01215,
+       0.03688
+      ],
+      "n_months": 18,
+      "rr": 1.0835,
+      "sets": 1066,
+      "treated_rate": 0.1116
+     },
+     "vol-neutral": {
+      "ci95": [
+       0.4998,
+       1.9791
+      ],
+      "column": "vn_label_120",
+      "control_rate": 0.0164,
+      "diff_ci95": [
+       -0.01013,
+       0.01109
+      ],
+      "n_months": 18,
+      "rr": 1.0286,
+      "sets": 1066,
+      "treated_rate": 0.0169
+     }
+    },
+    "matched_sets": 1066,
+    "pool_signals": 5714,
+    "realised_net_r_cap60_treated_minus_control": {
+     "realised_a_atr_stop_fixed_2r": {
+      "ci95": [
+       -0.4688,
+       1.0198
+      ],
+      "control_mean": 0.1372,
+      "mean_diff": 0.1824,
+      "sets": 44,
+      "treated_mean": 0.3195
+     },
+     "realised_a_atr_stop_fixed_3r": {
+      "ci95": [
+       -0.3481,
+       1.1361
+      ],
+      "control_mean": -0.0707,
+      "mean_diff": 0.2809,
+      "sets": 44,
+      "treated_mean": 0.2102
+     },
+     "realised_b_donchian_trail_10": {
+      "ci95": [
+       -0.0969,
+       1.0985
+      ],
+      "control_mean": -0.0263,
+      "mean_diff": 0.4411,
+      "sets": 44,
+      "treated_mean": 0.4148
+     },
+     "realised_c_atr_trail_3x": {
+      "ci95": [
+       -0.3426,
+       0.9029
+      ],
+      "control_mean": -0.0016,
+      "mean_diff": 0.2271,
+      "sets": 44,
+      "treated_mean": 0.2254
+     },
+     "realised_d_hybrid_atr_stop_to_donchian_10": {
+      "ci95": [
+       -0.0645,
+       1.1977
+      ],
+      "control_mean": -0.0439,
+      "mean_diff": 0.4511,
+      "sets": 44,
+      "treated_mean": 0.4072
+     }
+    },
+    "spec": "H4",
+    "status": "ok",
+    "treated_candidates": 2743,
+    "unmatched_treated": 1677,
+    "within_date_mh": {
+     "ci95": [
+      1.0072,
+      1.4351
+     ],
+     "n_controls": 2828,
+     "n_dates": 290,
+     "n_treated": 2715,
+     "rr": 1.1863
+    },
+    "year_consistency_in_pool": {
+     "2018": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2019": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2020": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2021": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2022": {
+      "counts": true,
+      "rr": 1.394,
+      "sets": 655
+     },
+     "2023": {
+      "counts": false,
+      "rr": 1.08,
+      "sets": 411
+     },
+     "2024": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2025": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     }
+    }
+   }
+  },
+  "H5": {
+   "test": {
+    "control_candidates": 0,
+    "holm_reference_only": {
+     "p": null,
+     "p_holm": 1.0,
+     "reject": false
+    },
+    "pool_signals": 3837,
+    "spec": "H5",
+    "status": "no_treated_or_no_controls",
+    "treated_candidates": 3837
+   },
+   "test_reconstructed_replication": {
+    "balance_after_matching": {
+     "atr_pct": {
+      "control_mean": 4.2941,
+      "smd": -0.0216,
+      "treated_mean": 4.229
+     },
+     "dist_sma200_pct": {
+      "control_mean": -9.5783,
+      "smd": 0.0477,
+      "treated_mean": -8.2393
+     },
+     "log_dollar_vol_20": {
+      "control_mean": 6.6613,
+      "smd": 0.2517,
+      "treated_mean": 6.7882
+     },
+     "ret_20d": {
+      "control_mean": 4.8655,
+      "smd": 0.465,
+      "treated_mean": 9.98
+     },
+     "ret_60d": {
+      "control_mean": -11.6862,
+      "smd": 0.3712,
+      "treated_mean": -3.3035
+     }
+    },
+    "control_candidates": 4,
+    "controls_used": 4,
+    "labels": {
+     "BW10@120 (R-based)": {
+      "ci95": [
+       0.0,
+       0.0
+      ],
+      "column": "ge10r_120",
+      "control_rate": 0.25,
+      "diff_ci95": [
+       -1.0,
+       0.0
+      ],
+      "n_months": 4,
+      "rr": 0.0,
+      "sets": 4,
+      "treated_rate": 0.0
+     },
+     "BW5@120 (primary, R-based)": {
+      "ci95": [
+       0.0,
+       4.0
+      ],
+      "column": "ge5r_120",
+      "control_rate": 0.5,
+      "diff_ci95": [
+       -1.0,
+       0.97027
+      ],
+      "n_months": 4,
+      "permutation": {
+       "n_perm": 1538,
+       "p_two_sided": 1.0
+      },
+      "rr": 1.0,
+      "sets": 4,
+      "treated_rate": 0.5
+     },
+     "graded tier (0-3)": {
+      "ci95": [
+       0.0,
+       6.0
+      ],
+      "column": "tier_120",
+      "control_rate": 1.5,
+      "diff_ci95": [
+       -3.0,
+       2.0
+      ],
+      "n_months": 4,
+      "rr": 0.6667,
+      "sets": 4,
+      "treated_rate": 1.0
+     },
+     "return-based": {
+      "ci95": [
+       0.0,
+       1.0
+      ],
+      "column": "ret_label_120",
+      "control_rate": 0.5,
+      "diff_ci95": [
+       -1.0,
+       0.0
+      ],
+      "n_months": 4,
+      "rr": 0.5,
+      "sets": 4,
+      "treated_rate": 0.25
+     },
+     "vol-neutral": {
+      "ci95": [
+       0.0,
+       0.0
+      ],
+      "column": "vn_label_120",
+      "control_rate": 0.25,
+      "diff_ci95": [
+       -1.0,
+       0.0
+      ],
+      "n_months": 4,
+      "rr": 0.0,
+      "sets": 4,
+      "treated_rate": 0.0
+     }
+    },
+    "matched_sets": 4,
+    "pool_signals": 6202,
+    "spec": "H5",
+    "status": "ok",
+    "treated_candidates": 6182,
+    "unmatched_treated": 6178,
+    "within_date_mh": {
+     "ci95": [
+      0.3333,
+      1.9407
+     ],
+     "n_controls": 4,
+     "n_dates": 3,
+     "n_treated": 26,
+     "rr": 0.9299
+    },
+    "year_consistency_in_pool": {
+     "2018": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2019": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2020": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2021": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2022": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2023": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2024": {
+      "counts": false,
+      "rr": 0.0,
+      "sets": 1
+     },
+     "2025": {
+      "counts": false,
+      "rr": 1.0,
+      "sets": 2
+     }
+    }
+   },
+   "validation": {
+    "holm_reference_only": {
+     "p": null,
+     "p_holm": 1.0,
+     "reject": false
+    },
+    "pool_signals": 0,
+    "spec": "H5",
+    "status": "empty_pool"
+   },
+   "validation_reconstructed_replication": {
+    "balance_after_matching": {
+     "atr_pct": {
+      "control_mean": 3.5091,
+      "smd": 0.0512,
+      "treated_mean": 3.5741
+     },
+     "dist_sma200_pct": {
+      "control_mean": 5.1482,
+      "smd": -0.4994,
+      "treated_mean": -0.1914
+     },
+     "log_dollar_vol_20": {
+      "control_mean": 7.5342,
+      "smd": -0.2548,
+      "treated_mean": 7.3409
+     },
+     "ret_20d": {
+      "control_mean": 9.2725,
+      "smd": -0.4899,
+      "treated_mean": 7.1379
+     },
+     "ret_60d": {
+      "control_mean": 3.6394,
+      "smd": -0.276,
+      "treated_mean": -0.121
+     }
+    },
+    "control_candidates": 12,
+    "controls_used": 11,
+    "labels": {
+     "BW10@120 (R-based)": {
+      "ci95": null,
+      "column": "ge10r_120",
+      "control_rate": 0.0,
+      "diff_ci95": [
+       0.0,
+       0.0
+      ],
+      "n_months": 4,
+      "rr": null,
+      "sets": 9,
+      "treated_rate": 0.0
+     },
+     "BW5@120 (primary, R-based)": {
+      "ci95": [
+       0.0,
+       6.0
+      ],
+      "column": "ge5r_120",
+      "control_rate": 0.3889,
+      "diff_ci95": [
+       -0.25,
+       1.0
+      ],
+      "n_months": 4,
+      "permutation": {
+       "n_perm": 1639,
+       "p_two_sided": 0.75915
+      },
+      "rr": 1.4286,
+      "sets": 9,
+      "treated_rate": 0.5556
+     },
+     "graded tier (0-3)": {
+      "ci95": [
+       0.0,
+       6.0
+      ],
+      "column": "tier_120",
+      "control_rate": 1.0,
+      "diff_ci95": [
+       -0.5,
+       2.0
+      ],
+      "n_months": 4,
+      "rr": 1.3333,
+      "sets": 9,
+      "treated_rate": 1.3333
+     },
+     "return-based": {
+      "ci95": [
+       0.0,
+       1.0
+      ],
+      "column": "ret_label_120",
+      "control_rate": 0.1667,
+      "diff_ci95": [
+       -0.25,
+       0.0
+      ],
+      "n_months": 4,
+      "rr": 0.6667,
+      "sets": 9,
+      "treated_rate": 0.1111
+     },
+     "vol-neutral": {
+      "ci95": null,
+      "column": "vn_label_120",
+      "control_rate": 0.0,
+      "diff_ci95": [
+       0.0,
+       0.0
+      ],
+      "n_months": 4,
+      "rr": null,
+      "sets": 9,
+      "treated_rate": 0.0
+     }
+    },
+    "matched_sets": 9,
+    "pool_signals": 5714,
+    "spec": "H5",
+    "status": "ok",
+    "treated_candidates": 5696,
+    "unmatched_treated": 5687,
+    "within_date_mh": {
+     "ci95": [
+      0.4629,
+      0.9286
+     ],
+     "n_controls": 12,
+     "n_dates": 6,
+     "n_treated": 241,
+     "rr": 0.5257
+    },
+    "year_consistency_in_pool": {
+     "2018": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2019": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2020": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2021": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2022": {
+      "counts": false,
+      "rr": 1.429,
+      "sets": 9
+     },
+     "2023": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2024": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2025": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     }
+    }
+   }
+  },
+  "H5_rank_only": {
+   "test": {
+    "balance_after_matching": {
+     "atr_pct": {
+      "control_mean": 2.6548,
+      "smd": -0.0458,
+      "treated_mean": 2.6154
+     },
+     "dist_sma200_pct": {
+      "control_mean": 7.8469,
+      "smd": 0.0826,
+      "treated_mean": 9.3223
+     },
+     "log_dollar_vol_20": {
+      "control_mean": 8.2505,
+      "smd": 0.0489,
+      "treated_mean": 8.2745
+     },
+     "ret_20d": {
+      "control_mean": 6.7366,
+      "smd": 0.1155,
+      "treated_mean": 7.3552
+     },
+     "ret_60d": {
+      "control_mean": 4.5568,
+      "smd": 0.1793,
+      "treated_mean": 7.6259
+     }
+    },
+    "control_candidates": 2647,
+    "controls_used": 140,
+    "holm_reference_only": {
+     "p": 0.43278,
+     "p_holm": 0.86556,
+     "reject": false
+    },
+    "labels": {
+     "BW10@120 (R-based)": {
+      "ci95": [
+       0.1579,
+       2.6667
+      ],
+      "column": "ge10r_120",
+      "control_rate": 0.0667,
+      "diff_ci95": [
+       -0.0776,
+       0.05582
+      ],
+      "n_months": 21,
+      "rr": 0.75,
+      "sets": 100,
+      "treated_rate": 0.05
+     },
+     "BW5@120 (primary, R-based)": {
+      "ci95": [
+       0.6566,
+       1.9035
+      ],
+      "column": "ge5r_120",
+      "control_rate": 0.2583,
+      "diff_ci95": [
+       -0.10265,
+       0.16382
+      ],
+      "n_months": 21,
+      "permutation": {
+       "n_perm": 2000,
+       "p_two_sided": 0.43278
+      },
+      "rr": 1.1613,
+      "sets": 100,
+      "treated_rate": 0.3
+     },
+     "graded tier (0-3)": {
+      "ci95": [
+       0.864,
+       1.6515
+      ],
+      "column": "tier_120",
+      "control_rate": 0.7433,
+      "diff_ci95": [
+       -0.11422,
+       0.37678
+      ],
+      "n_months": 21,
+      "rr": 1.1839,
+      "sets": 100,
+      "treated_rate": 0.88
+     },
+     "return-based": {
+      "ci95": [
+       0.3128,
+       3.0
+      ],
+      "column": "ret_label_120",
+      "control_rate": 0.085,
+      "diff_ci95": [
+       -0.08937,
+       0.07896
+      ],
+      "n_months": 21,
+      "rr": 0.9412,
+      "sets": 100,
+      "treated_rate": 0.08
+     },
+     "vol-neutral": {
+      "ci95": [
+       0.0,
+       7.4823
+      ],
+      "column": "vn_label_120",
+      "control_rate": 0.0317,
+      "diff_ci95": [
+       -0.04371,
+       0.04843
+      ],
+      "n_months": 21,
+      "rr": 0.9474,
+      "sets": 100,
+      "treated_rate": 0.03
+     }
+    },
+    "matched_sets": 100,
+    "pool_signals": 3837,
+    "realised_net_r_cap60_treated_minus_control": {
+     "realised_a_atr_stop_fixed_2r": {
+      "ci95": [
+       0.0026,
+       2.9974
+      ],
+      "control_mean": 0.474,
+      "mean_diff": 1.5,
+      "sets": 2,
+      "treated_mean": 1.974
+     },
+     "realised_a_atr_stop_fixed_3r": {
+      "ci95": [
+       0.0026,
+       3.9974
+      ],
+      "control_mean": 0.974,
+      "mean_diff": 2.0,
+      "sets": 2,
+      "treated_mean": 2.974
+     },
+     "realised_b_donchian_trail_10": {
+      "ci95": [
+       0.2463,
+       0.7463
+      ],
+      "control_mean": 1.0824,
+      "mean_diff": 0.4963,
+      "sets": 2,
+      "treated_mean": 1.5787
+     },
+     "realised_c_atr_trail_3x": {
+      "ci95": [
+       0.9561,
+       3.2492
+      ],
+      "control_mean": -0.7768,
+      "mean_diff": 2.1027,
+      "sets": 2,
+      "treated_mean": 1.3259
+     },
+     "realised_d_hybrid_atr_stop_to_donchian_10": {
+      "ci95": [
+       0.7463,
+       2.9275
+      ],
+      "control_mean": -0.2582,
+      "mean_diff": 1.8369,
+      "sets": 2,
+      "treated_mean": 1.5787
+     }
+    },
+    "spec": "H5_rank_only",
+    "status": "ok",
+    "treated_candidates": 1120,
+    "unmatched_treated": 1020,
+    "within_date_mh": {
+     "ci95": [
+      0.8552,
+      1.3771
+     ],
+     "n_controls": 2094,
+     "n_dates": 336,
+     "n_treated": 1071,
+     "rr": 1.1037
+    },
+    "year_consistency_in_pool": {
+     "2018": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2019": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2020": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2021": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2022": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2023": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2024": {
+      "counts": false,
+      "rr": 1.483,
+      "sets": 48
+     },
+     "2025": {
+      "counts": false,
+      "rr": 1.135,
+      "sets": 38
+     }
+    }
+   },
+   "test_reconstructed_replication": {
+    "balance_after_matching": {
+     "atr_pct": {
+      "control_mean": 4.0448,
+      "smd": 0.0186,
+      "treated_mean": 4.0798
+     },
+     "dist_sma200_pct": {
+      "control_mean": 9.9519,
+      "smd": 0.2249,
+      "treated_mean": 17.3953
+     },
+     "log_dollar_vol_20": {
+      "control_mean": 6.947,
+      "smd": 0.0477,
+      "treated_mean": 6.9739
+     },
+     "ret_20d": {
+      "control_mean": 13.1064,
+      "smd": 0.1558,
+      "treated_mean": 15.6495
+     },
+     "ret_60d": {
+      "control_mean": 9.4826,
+      "smd": 0.2733,
+      "treated_mean": 19.5942
+     }
+    },
+    "control_candidates": 4127,
+    "controls_used": 2297,
+    "labels": {
+     "BW10@120 (R-based)": {
+      "ci95": [
+       0.8685,
+       1.3028
+      ],
+      "column": "ge10r_120",
+      "control_rate": 0.0962,
+      "diff_ci95": [
+       -0.01318,
+       0.02997
+      ],
+      "n_months": 28,
+      "rr": 1.0815,
+      "sets": 1000,
+      "treated_rate": 0.104
+     },
+     "BW5@120 (primary, R-based)": {
+      "ci95": [
+       0.8206,
+       1.0722
+      ],
+      "column": "ge5r_120",
+      "control_rate": 0.3205,
+      "diff_ci95": [
+       -0.05699,
+       0.02317
+      ],
+      "n_months": 28,
+      "permutation": {
+       "n_perm": 2000,
+       "p_two_sided": 0.30085
+      },
+      "rr": 0.9454,
+      "sets": 1000,
+      "treated_rate": 0.303
+     },
+     "graded tier (0-3)": {
+      "ci95": [
+       0.8763,
+       1.0572
+      ],
+      "column": "tier_120",
+      "control_rate": 0.937,
+      "diff_ci95": [
+       -0.11347,
+       0.05606
+      ],
+      "n_months": 28,
+      "rr": 0.9669,
+      "sets": 1000,
+      "treated_rate": 0.906
+     },
+     "return-based": {
+      "ci95": [
+       0.9437,
+       1.1994
+      ],
+      "column": "ret_label_120",
+      "control_rate": 0.2148,
+      "diff_ci95": [
+       -0.0126,
+       0.04584
+      ],
+      "n_months": 28,
+      "rr": 1.0706,
+      "sets": 1000,
+      "treated_rate": 0.23
+     },
+     "vol-neutral": {
+      "ci95": [
+       0.8419,
+       1.4006
+      ],
+      "column": "vn_label_120",
+      "control_rate": 0.063,
+      "diff_ci95": [
+       -0.01076,
+       0.02309
+      ],
+      "n_months": 28,
+      "rr": 1.0952,
+      "sets": 1000,
+      "treated_rate": 0.069
+     }
+    },
+    "matched_sets": 1000,
+    "pool_signals": 6202,
+    "spec": "H5_rank_only",
+    "status": "ok",
+    "treated_candidates": 1931,
+    "unmatched_treated": 931,
+    "within_date_mh": {
+     "ci95": [
+      0.8403,
+      1.1263
+     ],
+     "n_controls": 3617,
+     "n_dates": 414,
+     "n_treated": 1872,
+     "rr": 0.9888
+    },
+    "year_consistency_in_pool": {
+     "2018": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2019": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2020": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2021": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2022": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2023": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2024": {
+      "counts": false,
+      "rr": 0.925,
+      "sets": 401
+     },
+     "2025": {
+      "counts": false,
+      "rr": 0.958,
+      "sets": 486
+     }
+    }
+   },
+   "validation": {
+    "holm_reference_only": {
+     "p": null,
+     "p_holm": 1.0,
+     "reject": false
+    },
+    "pool_signals": 0,
+    "spec": "H5_rank_only",
+    "status": "empty_pool"
+   },
+   "validation_reconstructed_replication": {
+    "balance_after_matching": {
+     "atr_pct": {
+      "control_mean": 3.7181,
+      "smd": 0.0131,
+      "treated_mean": 3.7394
+     },
+     "dist_sma200_pct": {
+      "control_mean": -1.1205,
+      "smd": 0.2932,
+      "treated_mean": 5.0876
+     },
+     "log_dollar_vol_20": {
+      "control_mean": 7.3642,
+      "smd": -0.0093,
+      "treated_mean": 7.357
+     },
+     "ret_20d": {
+      "control_mean": 11.1941,
+      "smd": 0.1366,
+      "treated_mean": 12.9628
+     },
+     "ret_60d": {
+      "control_mean": 1.6185,
+      "smd": 0.296,
+      "treated_mean": 8.308
+     }
+    },
+    "control_candidates": 4296,
+    "controls_used": 2404,
+    "labels": {
+     "BW10@120 (R-based)": {
+      "ci95": [
+       0.949,
+       2.5594
+      ],
+      "column": "ge10r_120",
+      "control_rate": 0.0233,
+      "diff_ci95": [
+       -0.00131,
+       0.02556
+      ],
+      "n_months": 18,
+      "rr": 1.4545,
+      "sets": 943,
+      "treated_rate": 0.0339
+     },
+     "BW5@120 (primary, R-based)": {
+      "ci95": [
+       0.9147,
+       1.3228
+      ],
+      "column": "ge5r_120",
+      "control_rate": 0.1637,
+      "diff_ci95": [
+       -0.01531,
+       0.04725
+      ],
+      "n_months": 18,
+      "permutation": {
+       "n_perm": 2000,
+       "p_two_sided": 0.42279
+      },
+      "rr": 1.0756,
+      "sets": 943,
+      "treated_rate": 0.176
+     },
+     "graded tier (0-3)": {
+      "ci95": [
+       0.916,
+       1.2017
+      ],
+      "column": "tier_120",
+      "control_rate": 0.5848,
+      "diff_ci95": [
+       -0.05224,
+       0.10712
+      ],
+      "n_months": 18,
+      "rr": 1.0499,
+      "sets": 943,
+      "treated_rate": 0.614
+     },
+     "return-based": {
+      "ci95": [
+       0.8123,
+       1.3956
+      ],
+      "column": "ret_label_120",
+      "control_rate": 0.0949,
+      "diff_ci95": [
+       -0.02004,
+       0.03225
+      ],
+      "n_months": 18,
+      "rr": 1.0391,
+      "sets": 943,
+      "treated_rate": 0.0986
+     },
+     "vol-neutral": {
+      "ci95": [
+       0.9231,
+       3.3607
+      ],
+      "column": "vn_label_120",
+      "control_rate": 0.0125,
+      "diff_ci95": [
+       -0.00108,
+       0.02079
+      ],
+      "n_months": 18,
+      "rr": 1.7746,
+      "sets": 943,
+      "treated_rate": 0.0223
+     }
+    },
+    "matched_sets": 943,
+    "pool_signals": 5714,
+    "spec": "H5_rank_only",
+    "status": "ok",
+    "treated_candidates": 1412,
+    "unmatched_treated": 469,
+    "within_date_mh": {
+     "ci95": [
+      0.9116,
+      1.2721
+     ],
+     "n_controls": 3895,
+     "n_dates": 259,
+     "n_treated": 1391,
+     "rr": 1.0643
+    },
+    "year_consistency_in_pool": {
+     "2018": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2019": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2020": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2021": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2022": {
+      "counts": true,
+      "rr": 1.088,
+      "sets": 502
+     },
+     "2023": {
+      "counts": false,
+      "rr": 1.066,
+      "sets": 441
+     },
+     "2024": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     },
+     "2025": {
+      "counts": false,
+      "rr": null,
+      "sets": 0
+     }
+    }
+   }
+  }
+ },
+ "pre_registered": false
+}

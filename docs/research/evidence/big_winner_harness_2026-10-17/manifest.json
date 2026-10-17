@@ -1,0 +1,50 @@
+{
+ "boundary": "read-only research; hypothesis-generation or replication evidence on history that was examined before; no untouched historical holdout; no model trained",
+ "code_ref": "7d5339648889",
+ "config_hash": "cf3994d94c2a8d14ad99990a92515dbec46fc5900dfbb9a1c9649a90d1868617",
+ "dataset": {
+  "bytes_gzip": 174145006,
+  "bytes_uncompressed": 439249268,
+  "columns": 94,
+  "file": "dataset.csv.gz",
+  "rows": 602962,
+  "sha256_uncompressed": "c0b0d976ded96f526ba5f715df74b35d6a29a188c7d524f689fedb8aff3e617c"
+ },
+ "harness_version": "bw_harness_v1",
+ "inputs": {
+  "daily_fundamentals_with_sector": {
+   "max_date": "2026-10-16",
+   "min_date": "2023-07-11",
+   "rows": 562832,
+   "symbols": 3092
+  },
+  "ml_breakout_dataset_v2": {
+   "created_at_max": "2026-10-17 02:07:18.921915",
+   "created_at_min": "2026-10-17 02:04:02.662869",
+   "max_date": "2026-10-16",
+   "min_date": "2018-01-02",
+   "rows": 602962
+  },
+  "stock_prices": {
+   "max_date": "2026-10-16",
+   "min_date": "2016-09-20",
+   "rows": 6489090,
+   "sum_close": 1853482608.36,
+   "symbols": 3114
+  }
+ },
+ "posthoc_note": "POST-HOC SENSITIVITY: NOT PRE-REGISTERED; no verdict is derived from it; hypothesis-generating at most; two matching designs mean multiplicity.",
+ "posthoc_sha256": "98789ae151f4373a7dd561ebb4e9b6fd87d8f987c49f04d13a518207681b8274",
+ "provenance_sha256": "6e182a0d288ef868dfe41ecc325fddbccef4403ab04895ba8003f70e429fd3a9",
+ "results_sha256": "b24ddeafc0203736e4eac939494c5c88274ba293b4cf327f5087d7bd65804f43",
+ "sample_counts": {
+  "eligible": 586761,
+  "independent_episodes_labelled": 61583,
+  "signals": 602962
+ },
+ "seeds": {
+  "n_boot": 1000,
+  "n_perm": 2000,
+  "seed": 20261017
+ }
+}
