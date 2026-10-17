@@ -53,7 +53,7 @@ Properties and the tests that pin them (`ml_training/tests/test_market_participa
 
 Two independent runs (separate containers, mechanism image `5c511899505a` used only as a Python runtime) produced the identical table:
 
-- rows 2,211 (2018-01-02 to 2026-10-16); table sha256 `8cc3f1624cfbe5c14d100b31b010d1628d262641129291275a2190bdfd7b9204`; code_ref `43bf679559c0` (the code as merged into this PR's first commit; later commits change only documentation);
+- rows 2,211 (2018-01-02 to 2026-10-16); table sha256 `8cc3f1624cfbe5c14d100b31b010d1628d262641129291275a2190bdfd7b9204`; code_ref `43bf679559c0` (a local pre-squash commit; the `market_participation` source files are byte-identical to PR commit `6c0ff0e`);
 - **reconciliation with the research dataset is exact**: 333,808 long and 269,348 short signals; minus the 64 long and 130 short that the research rule drops equals 333,744 and 269,218, the direction totals of the Big Winner dataset. So the point-in-time rule keeps every research signal and adds 194 (0.03%); the lookahead in the research set is real but negligible;
 - median daily participation: long 5.0% of eligible stocks, short 2.6%; 90th percentile 14.9% / 13.6%; long and short participation are negatively related (correlation -0.37); only about 10% of long and 12% of short signals start a new episode;
 - extremes are market-wide events: most long breakouts 56.2% (2020-06-05), most short 89.0% (2020-03-12); yearly medians are stable (long 2.8% in 2022 to 6.8% in 2019);
