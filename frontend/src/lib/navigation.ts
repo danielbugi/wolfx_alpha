@@ -18,6 +18,7 @@ import {
   HeartIcon,
   PaperAirplaneIcon,
   PresentationChartLineIcon,
+  RectangleGroupIcon,
   ScaleIcon,
   Squares2X2Icon,
   UsersIcon,
@@ -47,6 +48,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Product',
     items: [
       { name: 'Overview', href: '/', icon: Squares2X2Icon, description: 'Market overview: breadth, sectors, movers' },
+      { name: 'Sectors', href: '/sectors', icon: RectangleGroupIcon, description: 'Sector comparison and sector pages' },
       { name: 'Screener', href: '/screener', icon: FunnelIcon, description: 'Search & filter the universe' },
       { name: 'Deep Value', href: '/alerts', icon: ScaleIcon, description: 'Near-low stocks that pass balance-sheet checks (descriptive)' },
       { name: 'Markets', href: '/markets', icon: GlobeAltIcon, description: 'Futures, commodities, currencies, crypto' },

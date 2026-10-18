@@ -4,7 +4,7 @@ Real market-index/macro data API router — distinct from /api/screener's
 "market overview" (which is breadth stats over the internal stock universe).
 """
 
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, Path
 
 from auth.dependencies import require_authenticated_user
 import logging
@@ -12,6 +12,7 @@ import logging
 from services.market_data_service import MarketDataService
 from services.market_calendar_service import get_market_calendar
 from services.instruments import find as find_instrument
+from services.sector_service import SectorService
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,11 @@ market_router = APIRouter(
 def get_market_data_service():
     from main import get_database_connection
     return MarketDataService(get_database_connection)
+
+
+def get_sector_service():
+    from main import get_database_connection
+    return SectorService(get_database_connection)
 
 
 @market_router.get("/indices")
@@ -106,3 +112,34 @@ def get_instrument_history(
         logger.error(f"Error getting instrument history: {e}")
         raise HTTPException(status_code=500, detail="Error getting instrument history")
     return {"symbol": inst.symbol, "name": inst.name, "group": inst.group, "unit": inst.unit, "bars": bars}
+
+
+# /sectors and /sectors/{slug} are declared after /sectors/history, so the history route keeps matching first.
+@market_router.get("/sectors")
+def get_sectors(sector_service: SectorService = Depends(get_sector_service)):
+    """
+    Every sector of the stock universe with its CURRENT members: member count, industries, median change of its stocks
+    over 1d/1w/1m/3m/ytd/1y with the share that rose, % above their 50-day average, and a 3-month equal-weighted index
+    sparkline. Computed from stored prices/fundamentals only. Membership is today's assignment, so past windows are not
+    point-in-time (the response's `membership` block says so).
+    """
+    try:
+        return sector_service.get_sectors()
+    except Exception as e:
+        logger.error(f"Error getting sectors: {e}")
+        raise HTTPException(status_code=500, detail="Error getting sectors")
+
+
+@market_router.get("/sectors/{slug}")
+def get_sector(slug: str = Path(..., pattern=r"^[a-z0-9-]{1,60}$", description="Sector slug, e.g. financial-services"),
+               sector_service: SectorService = Depends(get_sector_service)):
+    """One sector: the summary above plus its industries, its member stocks and a 1-year equal-weighted index of its
+    current members next to the S&P 500. 404 for a slug that matches no sector."""
+    try:
+        data = sector_service.get_sector(slug)
+    except Exception as e:
+        logger.error(f"Error getting sector {slug}: {e}")
+        raise HTTPException(status_code=500, detail="Error getting sector")
+    if data is None:
+        raise HTTPException(status_code=404, detail=f"Unknown sector '{slug}'")
+    return data

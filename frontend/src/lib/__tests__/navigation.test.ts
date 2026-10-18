@@ -29,6 +29,7 @@ describe('navigation groups', () => {
   it('puts the market-intelligence journey in Product, with Deep Value on the existing /alerts URL', () => {
     expect(product.items.map((i) => [i.name, i.href])).toEqual([
       ['Overview', '/'],
+      ['Sectors', '/sectors'],
       ['Screener', '/screener'],
       ['Deep Value', '/alerts'],
       ['Markets', '/markets'],
@@ -51,13 +52,14 @@ describe('navigation groups', () => {
     expect(new Set(listed).size).toBe(listed.length);
     const unlisted = pageRoutes().filter((r) => !listed.includes(r));
     // /stock/[symbol] and /markets/[symbol] are reached from tables; /strategies/[strategyKey] from Strategies; /login has no chrome.
-    expect(unlisted.sort()).toEqual(['/login', '/markets/[symbol]', '/stock/[symbol]', '/strategies/[strategyKey]']);
+    expect(unlisted.sort()).toEqual(['/login', '/markets/[symbol]', '/sectors/[slug]', '/stock/[symbol]', '/strategies/[strategyKey]']);
   });
 
   it('treats stock pages as product pages and the Users page as owner-only', () => {
     expect(PRODUCT_ROUTE_PREFIXES).toContain('/stock');
     expect(isProductRoute('/stock/AAPL')).toBe(true);
     expect(isProductRoute('/markets/GC=F')).toBe(true);
+    expect(isProductRoute('/sectors/technology')).toBe(true);
     expect(isProductRoute('/')).toBe(true);
     expect(isProductRoute('/login')).toBe(false);
     const forCollaborator = navGroupsForRole('collaborator').flatMap((g) => g.items.map((i) => i.href));

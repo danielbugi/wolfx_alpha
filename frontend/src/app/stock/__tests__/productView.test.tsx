@@ -110,4 +110,9 @@ describe('stock page (product view)', () => {
     const pe = screen.getByText('P/E').parentElement!;
     expect(pe.textContent).toContain('—');
   });
+
+  it('links the sector name to its sector page', async () => {
+    render(<StockDetailPage />);
+    expect((await screen.findByRole('link', { name: 'Industrials' })).getAttribute('href')).toBe('/sectors/industrials');
+  });
 });

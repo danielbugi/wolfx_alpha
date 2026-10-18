@@ -28,6 +28,7 @@ import NewsPanel from '@/components/stock/NewsPanel';
 import { reactionPct } from '@/components/stock/EarningsPanel';
 import { useWatchlist } from '@/lib/watchlist';
 import { neutralBreakoutMarkers } from '@/lib/productSafe';
+import { sectorHref } from '@/lib/sectors';
 import { StockNavButtons, StockNavCaption, useStockNav } from '@/components/stock/StockNavArrows';
 import { positionPct } from '@/lib/priceMath';
 import { gradeColor } from '@/lib/uiColors';
@@ -492,7 +493,13 @@ export default function StockDetailPage() {
                 )}
               </div>
               <p className="mt-0.5 truncate text-sm text-slate-500">
-                {snap.sector || 'Unknown sector'}
+                {sectorHref(snap.sector) ? (
+                  <Link href={sectorHref(snap.sector)!} className="hover:text-accent hover:underline">
+                    {snap.sector}
+                  </Link>
+                ) : (
+                  snap.sector || 'Unknown sector'
+                )}
                 {snap.industry ? ` · ${snap.industry}` : ''}
                 {asOfDate ? ` · data as of ${asOfDate}` : ''}
               </p>
