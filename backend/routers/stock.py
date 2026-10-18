@@ -3,7 +3,7 @@
 Stock Detail API Router - Comprehensive per-symbol data
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Path, Request
 
 from auth.dependencies import require_authenticated_user
 from typing import List, Dict, Any, Optional
@@ -11,6 +11,7 @@ from datetime import datetime
 import logging
 
 from services.stock_service import StockService
+from services import discovery_service as discovery
 from services.strategy_calc import compute_strategy_plan
 from services.earnings_service import get_earnings_dates
 from utils import load_ml_enhanced_data_cached
@@ -123,6 +124,30 @@ def get_earnings(symbol: str, limit: int = Query(12, ge=1, le=40)):
         logger.warning(f"Earnings lookup failed for {symbol}: {e}")
         dates = []
     return {"symbol": symbol, "earnings_dates": dates}
+
+
+def get_discovery_service():
+    from main import get_database_connection
+    return discovery.DiscoveryService(get_database_connection)
+
+
+@stock_router.get("/{symbol}/context")
+def get_stock_context(request: Request,
+                      symbol: str = Path(..., pattern=r"^[A-Za-z0-9.\-]{1,10}$"),
+                      service: discovery.DiscoveryService = Depends(get_discovery_service)):
+    """
+    Stock Context: the Smart Screener v2 metrics for exactly this symbol, from the same query (same session resolution,
+    same fundamentals cutoff, same provenance and missing states), plus the stock-only 200-session average.
+    Accepts only ?session=YYYY-MM-DD and ?fundamentals_cutoff=post_session|session_close. A symbol without a bar on the
+    session is answered with in_universe=false (never a substituted value from another session).
+    """
+    try:
+        return discovery.stock_context(service, symbol, list(request.query_params.multi_items()))
+    except discovery.InvalidRequest as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error getting stock context for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail="Error getting stock context")
 
 
 @stock_router.get("/{symbol}")

@@ -25,6 +25,7 @@ const PRODUCT_FILES = [
   'components/dashboard/SectorTrendChart.tsx',
   'components/earnings/EarningsCard.tsx',
   'components/stock/KeyLevels.tsx',
+  'components/stock/StockContextPanel.tsx',
   'components/common/DataStamp.tsx',
   'components/common/ProductDisclaimer.tsx',
   'app/sectors/page.tsx',

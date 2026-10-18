@@ -19,6 +19,9 @@ vi.mock('@/components/charts/StockChart', () => ({
 }));
 vi.mock('@/components/stock/NewsPanel', () => ({ default: () => <div>news panel</div> }));
 vi.mock('@/components/stock/PeersPanel', () => ({ default: () => <div>peers panel</div> }));
+vi.mock('@/components/stock/StockContextPanel', () => ({
+  default: (props: { symbol: string; chartDate: string | null }) => <div data-testid="ctx-panel">{`${props.symbol} ${props.chartDate}`}</div>,
+}));
 
 const detail = {
   symbol: 'ACME',
@@ -109,6 +112,11 @@ describe('stock page (product view)', () => {
     await screen.findByText('ACME');
     const pe = screen.getByText('P/E').parentElement!;
     expect(pe.textContent).toContain('—');
+  });
+
+  it('places the stock context panel on the page for this symbol, with the chart data date passed separately', async () => {
+    render(<StockDetailPage />);
+    expect((await screen.findByTestId('ctx-panel')).textContent).toBe('ACME null');
   });
 
   it('links the sector name to its sector page', async () => {

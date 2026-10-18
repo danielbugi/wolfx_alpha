@@ -21,6 +21,7 @@ import {
 } from '@/services/api';
 import StockChart from '@/components/charts/StockChart';
 import KeyLevels from '@/components/stock/KeyLevels';
+import StockContextPanel from '@/components/stock/StockContextPanel';
 import FinancialGrowth from '@/components/stock/FinancialGrowth';
 import EarningsPanel from '@/components/stock/EarningsPanel';
 import PeersPanel from '@/components/stock/PeersPanel';
@@ -553,6 +554,9 @@ export default function StockDetailPage() {
             </div>
           )}
         </Card>
+
+        {/* Stock context: the Screener's metrics for this stock (same session and provenance), explained */}
+        <StockContextPanel symbol={detail.symbol} chartDate={bars.length ? bars[bars.length - 1].date : null} />
 
         {/* Chart */}
         <Card className="border border-black/[0.05] shadow-sm">

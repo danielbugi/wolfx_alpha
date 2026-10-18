@@ -27,6 +27,19 @@ Session alignment (the integrity rules this service exists to enforce):
   * Dollar volume = mean(close * volume) over exactly the last 20 real sessions ending at S; a stock needs all 20 bars,
     otherwise the value is unavailable and the shortfall is counted.
 
+The 50% market-session rule (operational): a date counts as a market session when stock_prices has bars for at least
+half as many symbols as the busiest date in the scanned window. It needs no external calendar, but it is a property of
+our stored data: a day whose load is more than half missing is not a session here, and a genuine half-day with sparse
+data could be dropped. It is the same rule market intelligence uses.
+
+Stock context (one symbol, /api/stock/{symbol}/context) runs the SAME query with an exact-symbol filter applied inside
+the SQL before pagination, so every shared metric, missing state and provenance is identical to the Screener's for the
+same symbol, session and fundamentals cutoff. It adds one stock-only metric that the Screener does not compute (too
+costly universe-wide): the distance from the 200-session average, defined over the last 200 market sessions (same 50%
+rule) up to and including S, requiring a valid close on every one of them and no recorded price discontinuity inside
+the window; otherwise unavailable with the reason. Closes are the stored split/dividend-adjusted series, the same
+column the chart and the 20/50-day averages use.
+
 Every sort key and filter is checked against allowlists before any SQL is built; values are always bound parameters.
 Pagination is bounded (page_size <= MAX_PAGE_SIZE; export <= MAX_EXPORT_ROWS). Nothing here writes.
 """
@@ -80,6 +93,8 @@ METRICS: Dict[str, Metric] = {m.key: m for m in [
     Metric("rs_60", "RS percentile, 60 sessions", "pctl", OBSERVED, "Percentile (0-100) of the 60-session return among all valid stocks on the session (observed snapshot)."),
     Metric("breakout_20", "20-day breakout", "flag", DERIVED, "Close above the previous session's 20-day high (the high of the 20 sessions ending at the previous session).", numeric=False),
     Metric("new_high_20", "New 20-day high", "flag", DERIVED, "The session's high is the highest high of the 20 sessions ending at the session.", numeric=False),
+    Metric("dist_sma20", "vs 20-day average", "%", DERIVED, "Close vs its 20-session simple average of closes (stored indicator for the session)."),
+    Metric("dist_sma50", "vs 50-day average", "%", DERIVED, "Close vs its 50-session simple average of closes (stored indicator for the session)."),
     Metric("channel_pos", "Channel position", "%", DERIVED, "Where the close sits in the 20-day high-low channel (0 = low, 100 = high)."),
     Metric("channel_width", "Channel width", "%", DERIVED, "20-day high minus 20-day low, as % of the price."),
     Metric("channel_width_pctile", "Channel width percentile", "pctl", DERIVED, "Percentile of the channel width among stocks with a value on the session (low = tight)."),
@@ -120,6 +135,7 @@ class Query:
     page_size: int = 50
     sectors: Sequence[str] = ()
     q: Optional[str] = None
+    symbols: Sequence[str] = ()          # exact symbols, applied inside the SQL before pagination
     ranges: Dict[str, Tuple[Optional[float], Optional[float]]] = field(default_factory=dict)
     flags: Dict[str, bool] = field(default_factory=dict)
     fundamentals_cutoff: str = "post_session"
@@ -201,6 +217,8 @@ def normalise(qr: Query) -> Query:
             raise InvalidRequest(f"unknown flag filter '{k}'")
     if qr.q is not None and (not qr.q or len(qr.q) > 10 or not all(c.isalnum() or c in ".-" for c in qr.q)):
         raise InvalidRequest("q must be 1-10 letters, digits, '.' or '-'")
+    if len(qr.symbols) > 50 or any(not s or len(s) > 10 or not all(c.isalnum() or c in ".-" for c in s) for s in qr.symbols):
+        raise InvalidRequest("symbol must be 1-10 letters, digits, '.' or '-' (at most 50)")
     if len(qr.sectors) > 20 or any(len(s) > 60 for s in qr.sectors):
         raise InvalidRequest("too many or too long sector values")
     if qr.preset:
@@ -240,6 +258,9 @@ def build_where(qr: Query) -> Tuple[str, List[Any]]:
     if qr.q:
         clauses.append("symbol LIKE %s")
         params.append(qr.q.upper() + "%")
+    if qr.symbols:
+        clauses.append("symbol = ANY(%s)")
+        params.append([s.upper() for s in qr.symbols])
     return (" AND ".join(clauses) if clauses else "TRUE"), params
 
 
@@ -279,7 +300,7 @@ rs AS (
 joined AS (
     SELECT px.symbol, px.close, px.high,
            CASE WHEN pxp.close IS NOT NULL THEN (px.close / pxp.close - 1) * 100 END AS change_1d,
-           ti.atr_14, ti.donchian_high_20, ti.price_position, ti.channel_width_pct, ti.volume_ratio,
+           ti.atr_14, ti.donchian_high_20, ti.price_position, ti.channel_width_pct, ti.volume_ratio, ti.sma_20, ti.sma_50,
            tip.donchian_high_20 AS prev_dh20,
            CASE WHEN dv.dv_bars = %(dv_n)s THEN dv.dollar_vol_20 END AS dollar_vol_20, COALESCE(dv.dv_bars, 0) AS dv_bars,
            rs.rs_20, rs.rs_60, rs.ret_5, rs.ret_20, rs.ret_60, rs.vs_spx_20, rs.vs_spx_60, rs.vs_sector_20,
@@ -290,7 +311,8 @@ joined AS (
     LEFT JOIN pxp USING (symbol)
     LEFT JOIN LATERAL (
         SELECT 1 AS found, atr_14::float8 AS atr_14, donchian_high_20::float8 AS donchian_high_20, price_position::float8 AS price_position,
-               channel_width_pct::float8 AS channel_width_pct, volume_ratio::float8 AS volume_ratio
+               channel_width_pct::float8 AS channel_width_pct, volume_ratio::float8 AS volume_ratio,
+               sma_20::float8 AS sma_20, sma_50::float8 AS sma_50
         FROM technical_indicators t WHERE t.symbol = px.symbol AND t.date = %(s)s
     ) ti ON true
     LEFT JOIN LATERAL (
@@ -313,6 +335,8 @@ base AS (
            industry, close, change_1d, ret_5, ret_20, ret_60, vs_spx_20, vs_spx_60, vs_sector_20, rs_20, rs_60,
            CASE WHEN prev_dh20 IS NULL THEN NULL ELSE close > prev_dh20 END AS breakout_20,
            CASE WHEN donchian_high_20 IS NULL OR high IS NULL THEN NULL ELSE high >= donchian_high_20 END AS new_high_20,
+           CASE WHEN sma_20 > 0 THEN (close / sma_20 - 1) * 100 END AS dist_sma20,
+           CASE WHEN sma_50 > 0 THEN (close / sma_50 - 1) * 100 END AS dist_sma50,
            price_position AS channel_pos, channel_width_pct AS channel_width,
            CASE WHEN channel_width_pct IS NOT NULL THEN 100 * PERCENT_RANK() OVER (PARTITION BY channel_width_pct IS NOT NULL ORDER BY channel_width_pct) END AS channel_width_pctile,
            CASE WHEN atr_14 IS NOT NULL THEN atr_14 / close * 100 END AS atr_pct,
@@ -476,7 +500,7 @@ def to_csv(result: Dict[str, Any]) -> str:
 
 
 # ------------------------------------------------------------------------------------------------- query-string parsing
-_BASE_PARAMS = {"session", "preset", "sort", "order", "page", "page_size", "sector", "q", "fundamentals_cutoff", *FLAG_FILTERS}
+_BASE_PARAMS = {"session", "preset", "sort", "order", "page", "page_size", "sector", "q", "symbol", "fundamentals_cutoff", *FLAG_FILTERS}
 
 
 def parse_params(items: Sequence[Tuple[str, str]]) -> Query:
@@ -485,6 +509,7 @@ def parse_params(items: Sequence[Tuple[str, str]]) -> Query:
     qr = Query()
     ranges: Dict[str, List[Optional[float]]] = {}
     sectors: List[str] = []
+    symbols: List[str] = []
     for name, raw in items:
         val = raw.strip()
         try:
@@ -507,6 +532,9 @@ def parse_params(items: Sequence[Tuple[str, str]]) -> Query:
                 qr.q = val or None
             elif name == "fundamentals_cutoff":
                 qr.fundamentals_cutoff = val
+            elif name == "symbol":
+                if val:
+                    symbols.append(val.upper())
             elif name in FLAG_FILTERS:
                 if val.lower() not in ("true", "false"):
                     raise InvalidRequest(f"{name} must be true or false")
@@ -524,5 +552,98 @@ def parse_params(items: Sequence[Tuple[str, str]]) -> Query:
         except (TypeError, ValueError):
             raise InvalidRequest(f"invalid value for '{name}'")
     qr.sectors = tuple(sectors)
+    qr.symbols = tuple(symbols)
     qr.ranges = {k: (v[0], v[1]) for k, v in ranges.items()}
     return qr
+
+
+# --------------------------------------------------------------------------------------- stock context (one symbol)
+MA200_SESSIONS = 200
+MA200_WINDOW_DAYS = 330            # calendar days scanned for 200 market sessions (about 290 needed; margin for holidays)
+SESSION_CACHE_TTL_S = 600
+_session_cache: Dict[Tuple[date, date], Tuple[float, List[date]]] = {}
+
+MA200_DEFINITION = ("Close vs its average close over the last 200 market sessions up to and including the session. Needs a valid "
+                    "close on every one of those 200 sessions and no recorded price discontinuity in the window; otherwise unavailable. "
+                    "Computed for this stock page only (not in the Screener). Uses the stored adjusted closes, like the chart and the "
+                    "20/50-day averages; those averages are stored when each session is processed, so a later split restatement can make "
+                    "them differ slightly from this one for older sessions.")
+
+
+def real_sessions_up_to(cur, session: date, newest_price_date: date) -> List[date]:
+    """Market sessions (50% rule) in the MA200 window ending at `session`, oldest first. Cached for SESSION_CACHE_TTL_S per
+    (session, newest stored price date): a new load changes the identity, so a stale calendar is never reused after it."""
+    import time as _time
+    key = (session, newest_price_date)
+    hit = _session_cache.get(key)
+    if hit and _time.time() - hit[0] < SESSION_CACHE_TTL_S:
+        return hit[1]
+    cur.execute(SESSIONS_SQL, {"lo": session - timedelta(days=MA200_WINDOW_DAYS), "hi": session})
+    counts = [(d, int(n)) for d, n in cur.fetchall()]
+    peak = max((n for _, n in counts), default=0)
+    real = sorted(d for d, n in counts if peak and n >= REAL_SESSION_SHARE * peak)
+    if len(_session_cache) > 64:
+        _session_cache.clear()
+    _session_cache[key] = (_time.time(), real)
+    return real
+
+
+def ma200_for(cur, symbol: str, session: date, close: Optional[float], newest_price_date: date) -> Dict[str, Any]:
+    """The stock-only 200-session average. Never extends the lookback: fewer than 200 sessions in the window, a missing close
+    on any of them, or a recorded discontinuity -> unavailable, with the reason."""
+    base = {"key": "dist_sma200", "label": "vs 200-day average", "unit": "%", "family": DERIVED, "definition": MA200_DEFINITION,
+            "sessions_required": MA200_SESSIONS, "value": None, "sma200": None, "sessions_with_close": None, "window_from": None,
+            "window_to": session.isoformat(), "state": "unavailable", "reason": None}
+    sessions = real_sessions_up_to(cur, session, newest_price_date)
+    window = sessions[-MA200_SESSIONS:]
+    if len(window) < MA200_SESSIONS:
+        return {**base, "reason": f"only {len(window)} market sessions stored in the lookback window"}
+    base["window_from"] = window[0].isoformat()
+    cur.execute("SELECT COUNT(*), AVG(close::float8) FROM stock_prices WHERE symbol = %s AND date = ANY(%s) AND close IS NOT NULL AND close > 0",
+                (symbol, window))
+    n, avg = cur.fetchone()
+    base["sessions_with_close"] = int(n)
+    if int(n) < MA200_SESSIONS:
+        return {**base, "reason": f"{int(n)} of {MA200_SESSIONS} sessions with a valid close"}
+    cur.execute("SELECT COUNT(*) FROM price_discontinuities WHERE symbol = %s AND date BETWEEN %s AND %s", (symbol, window[0], window[-1]))
+    if cur.fetchone()[0]:
+        return {**base, "reason": "a price discontinuity is recorded inside the window"}
+    if close is None or not avg or avg <= 0:
+        return {**base, "reason": "no close on the session"}
+    return {**base, "state": "ok", "sma200": round(float(avg), 6), "value": (close / float(avg) - 1) * 100}
+
+
+def stock_context(service: "DiscoveryService", symbol: str, items: Sequence[Tuple[str, str]]) -> Dict[str, Any]:
+    """The Screener's own search for exactly this symbol (same SQL, same session resolution, same fundamentals cutoff),
+    plus the stock-only MA200. Only `session` and `fundamentals_cutoff` are accepted from the caller."""
+    sym = symbol.upper()
+    allowed = [(k, v) for k, v in items if k in ("session", "fundamentals_cutoff")]
+    if len(allowed) != len(list(items)):
+        raise InvalidRequest("only session and fundamentals_cutoff are accepted here")
+    qr = parse_params(allowed + [("symbol", sym), ("sort", "symbol"), ("order", "asc"), ("page_size", "1")])
+    result = service.search(qr)
+    row = result["rows"][0] if result["rows"] else None
+    session = date.fromisoformat(result["session"])
+
+    def work(cur):
+        cur.execute("SELECT MAX(date) FROM stock_prices")
+        newest = cur.fetchone()[0]
+        return newest, (ma200_for(cur, sym, session, row["close"] if row else None, newest) if row else None)
+
+    newest, ma200 = service._run(work)
+    return {
+        "symbol": sym,
+        "in_universe": row is not None,
+        "unavailable_reason": None if row else f"no bar for {sym} on the {result['session']} session",
+        "session": result["session"],
+        "previous_session": result["previous_session"],
+        "newest_price_date": newest.isoformat() if newest else None,
+        "dollar_volume_window": result["dollar_volume_window"],
+        "fundamentals_basis": result["fundamentals_basis"],
+        "fundamentals_cutoff_utc": result["fundamentals_cutoff_utc"],
+        "universe": result["universe"],
+        "coverage": result["coverage"],
+        "recent_sessions": result["recent_sessions"],
+        "row": row,
+        "stock_only": {"dist_sma200": ma200},
+    }
