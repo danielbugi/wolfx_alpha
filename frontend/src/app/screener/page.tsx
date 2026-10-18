@@ -241,11 +241,11 @@ function Screener() {
               <input type="checkbox" checked={draft.newHigh20} onChange={(e) => setDraft({ ...draft, newHigh20: e.target.checked })} />
               New 20-day high on the session
             </label>
-            <label className="flex items-center gap-2 text-[13px] text-slate-700">
+            <label className="flex min-w-0 max-w-full flex-wrap items-center gap-2 text-[13px] text-slate-700">
               Fundamentals cutoff
               <select
                 aria-label="Fundamentals cutoff"
-                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[13px]"
+                className="min-w-0 max-w-full rounded-lg border border-slate-300 bg-white px-2 py-1 text-[13px]"
                 value={draft.fundamentalsCutoff}
                 onChange={(e) => setDraft({ ...draft, fundamentalsCutoff: e.target.value === 'session_close' ? 'session_close' : 'post_session' })}
               >
@@ -300,6 +300,14 @@ function Screener() {
             <p className="text-sm text-slate-600" aria-live="polite">
               {loading ? 'Loading…' : result ? `${result.total.toLocaleString('en-US')} matching stocks` : ''}
             </p>
+            {watchlist.notice && (
+              <p role="status" className="text-[13px] text-amber-700" data-testid="watchlist-notice">
+                {watchlist.notice}{' '}
+                <Link href="/watchlist" className="font-medium text-accent hover:underline">
+                  Open watchlist
+                </Link>
+              </p>
+            )}
             <button
               type="button"
               onClick={exportCsv}

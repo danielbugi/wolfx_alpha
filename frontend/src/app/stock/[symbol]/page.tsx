@@ -468,6 +468,14 @@ export default function StockDetailPage() {
                     <StarOutline className="h-5 w-5 text-slate-400" />
                   )}
                 </button>
+                {watchlist.notice && (
+                  <span role="status" className="basis-full text-xs text-amber-700" data-testid="watchlist-notice">
+                    {watchlist.notice}{' '}
+                    <Link href="/watchlist" className="font-medium text-accent hover:underline">
+                      Open watchlist
+                    </Link>
+                  </span>
+                )}
                 {snap.quality_grade && (
                   <Chip
                     size="sm"

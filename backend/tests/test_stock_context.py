@@ -173,3 +173,26 @@ def test_context_route_validates_symbol_and_parameters_and_keeps_auth():
     assert c.get("/api/stock/ZZZZ/context").json()["in_universe"] is False
     assert c.post("/api/stock/AAA/context").status_code == 405
     assert _client(False).get("/api/stock/AAA/context").status_code == 401
+
+
+# ------------------------------------------------------------------- watchlist: many exact symbols in one search request
+def test_screener_search_accepts_a_bounded_list_of_exact_symbols_in_one_request():
+    from routers.screener import get_discovery_service as screener_service, screener_router
+    seen = []
+
+    class Svc:
+        def search(self, qr, export=False):
+            seen.append(D.normalise(qr))           # the real search validates here too
+            return {"rows": [], "symbols": list(qr.symbols)}
+
+    app = FastAPI()
+    app.include_router(screener_router)
+    app.dependency_overrides[get_auth_store] = lambda: object()
+    app.dependency_overrides[require_authenticated_user] = lambda: CurrentUser(1, "t@example.com", "collaborator")
+    app.dependency_overrides[screener_service] = lambda: Svc()
+    c = TestClient(app)
+    syms = [f"S{i}" for i in range(30)]
+    r = c.get("/api/screener/v2/search", params=[("symbol", s.lower()) for s in syms] + [("page_size", "30")])
+    assert r.status_code == 200 and seen[-1].symbols == tuple(syms) and seen[-1].page_size == 30
+    assert c.get("/api/screener/v2/search", params=[("symbol", f"S{i}") for i in range(51)]).status_code == 422
+    assert c.get("/api/screener/v2/search", params=[("symbol", "BAD;SYM")]).status_code == 422
