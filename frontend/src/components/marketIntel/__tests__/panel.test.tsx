@@ -70,7 +70,13 @@ describe('MarketIntelligencePanel', () => {
     expect(rows[2]).not.toMatch(/44\.4%/);
     expect(rows[2]).toMatch(/too few evaluable stocks/);
     expect(card.textContent).toMatch(/60 \/ 45/);
-    expect(card.textContent).toMatch(/of 1,850 with a full year/);
+    expect(card.textContent).toMatch(/of 1,850 stocks with 200\+ sessions/);
+    expect(card.textContent).toMatch(/Advancing \/ declining \(1 session\)\s*1,200 \/ 850/);
+    expect(card.textContent).toMatch(/close vs the previous close, of 2,100 stocks/);
+    // every percentage row states its window
+    expect(rows[0]).toMatch(/close above its 50-session simple average/);
+    expect(rows[1]).toMatch(/close above its 200-session simple average/);
+    expect(rows[2]).toMatch(/close above its close 20 sessions earlier/);
   });
 
   it('returns: index vs median stock with sample sizes; a missing return stays missing', async () => {

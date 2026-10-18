@@ -283,7 +283,7 @@ export default function DashboardPage() {
           {marketOverview && (
             <Card className="h-full border border-black/[0.05] shadow-sm">
               <CardHeader className="px-5 pt-5 pb-3 flex items-center justify-between flex-wrap gap-2">
-                <h3 className="text-[17px] font-semibold text-slate-900">Market Overview <span className="font-normal text-slate-400">Today</span></h3>
+                <h3 className="text-[17px] font-semibold text-slate-900">Today&apos;s activity <span className="font-normal text-slate-400">latest session</span></h3>
                 <div className="flex items-center gap-2">
                   {marketOverviewError && (
                     <Chip size="sm" className="bg-amber-100 text-amber-800 text-[10px]">
@@ -302,34 +302,30 @@ export default function DashboardPage() {
                 </div>
               </CardHeader>
               <CardBody className="px-5 pb-5 pt-1">
-                <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
                   <div className="bg-slate-50 rounded-xl p-4">
-                    <p className="text-xs font-medium text-slate-500 mb-1">Advance/Decline</p>
+                    <p className="text-xs font-medium text-slate-500 mb-1">Unusual volume</p>
                     <p className="text-xl font-semibold tracking-[-0.01em] tabular-nums text-slate-900">
-                      {marketOverview.market_breadth.gainers} / {marketOverview.market_breadth.losers}
+                      {marketOverview.market_breadth.unusual_volume_count} <span className="text-sm font-normal text-slate-500">of {marketOverview.market_breadth.total_stocks}</span>
                     </p>
-                    <p className="text-xs text-slate-500">ratio {marketOverview.market_breadth.advance_decline_ratio.toFixed(2)}</p>
+                    <p className="text-xs text-slate-500">volume at least 2× its 10-day average</p>
                   </div>
                   <div className="bg-slate-50 rounded-xl p-4">
-                    <p className="text-xs font-medium text-slate-500 mb-1">Unusual Volume</p>
-                    <p className="text-xl font-semibold tracking-[-0.01em] tabular-nums text-slate-900">{marketOverview.market_breadth.unusual_volume_count}</p>
-                    <p className="text-xs text-slate-500">stocks</p>
-                  </div>
-                  <div className="bg-slate-50 rounded-xl p-4">
-                    <p className="text-xs font-medium text-slate-500 mb-1">Overbought / Oversold</p>
+                    <p className="text-xs font-medium text-slate-500 mb-1">RSI above 70 / below 30</p>
                     <p className="text-xl font-semibold tracking-[-0.01em] tabular-nums text-slate-900">
-                      <span className="text-red-600">{marketOverview.market_breadth.overbought_count}</span>
+                      {marketOverview.market_breadth.overbought_count}
                       {' / '}
-                      <span className="text-emerald-600">{marketOverview.market_breadth.oversold_count}</span>
+                      {marketOverview.market_breadth.oversold_count}{' '}
+                      <span className="text-sm font-normal text-slate-500">of {marketOverview.market_breadth.total_stocks}</span>
                     </p>
-                    <p className="text-xs text-slate-500">RSI &gt;70 / &lt;30</p>
+                    <p className="text-xs text-slate-500">14-session RSI</p>
                   </div>
                   <div className="bg-slate-50 rounded-xl p-4">
-                    <p className="text-xs font-medium text-slate-500 mb-1">Avg RSI / Vol Ratio</p>
+                    <p className="text-xs font-medium text-slate-500 mb-1">Average RSI / volume ratio</p>
                     <p className="text-xl font-semibold tracking-[-0.01em] tabular-nums text-slate-900">
                       {marketOverview.market_indicators.avg_rsi.toFixed(0)} / {marketOverview.market_indicators.avg_volume_ratio.toFixed(2)}x
                     </p>
-                    <p className="text-xs text-slate-500">across {marketOverview.market_breadth.total_stocks} stocks</p>
+                    <p className="text-xs text-slate-500">mean across {marketOverview.market_breadth.total_stocks} stocks priced $1+</p>
                   </div>
                 </div>
 

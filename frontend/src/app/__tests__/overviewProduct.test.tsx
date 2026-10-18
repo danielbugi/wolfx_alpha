@@ -63,6 +63,11 @@ describe('Overview (product)', () => {
     expect(calls.leaders).toBe(0);
     expect(screen.getByTestId('data-stamp').textContent).toMatch(/Data as of\s*2026-10-16/);
     expect(screen.getByTestId('mi-panel')).toBeTruthy();
+    // breadth appears once (in the market-intelligence panel); the legacy "N% up" tile and A/D box are gone
+    expect(text).not.toMatch(/% up/);
+    expect(text).not.toMatch(/Advance\/Decline/);
+    expect(text).toMatch(/volume at least 2× its 10-day average/);
+    expect(text).toMatch(/14-session RSI/);
   });
 
   it('says the data date is unavailable instead of inventing one', async () => {

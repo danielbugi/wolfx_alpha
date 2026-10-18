@@ -13,10 +13,12 @@ export const REGIME_LABEL: Record<RegimeState, string> = {
 
 export const HORIZONS: readonly Horizon[] = ['5', '20', '60'];
 
-export const BREADTH_ROWS: { label: string; key: 'above_sma50' | 'above_sma200' | 'positive_ret_20' }[] = [
-  { label: 'Above 50-day average', key: 'above_sma50' },
-  { label: 'Above 200-day average', key: 'above_sma200' },
-  { label: 'Up over 20 sessions', key: 'positive_ret_20' },
+/** Each breadth row with its measurement window, shown under the bar: what is counted and over how long. The base
+ * (denominator) is always the stocks for which the measure is computable on the session. */
+export const BREADTH_ROWS: { label: string; key: 'above_sma50' | 'above_sma200' | 'positive_ret_20'; window: string }[] = [
+  { label: 'Above 50-day average', key: 'above_sma50', window: 'close above its 50-session simple average' },
+  { label: 'Above 200-day average', key: 'above_sma200', window: 'close above its 200-session simple average' },
+  { label: 'Up over 20 sessions', key: 'positive_ret_20', window: 'close above its close 20 sessions earlier' },
 ];
 
 export const fmtSigned = (v: number | null | undefined, digits = 1, unit = '%'): string =>
