@@ -4,7 +4,9 @@
 import React from 'react';
 import { clsx } from 'clsx';
 import type { MarketSnapshotAvailable } from '@/services/marketIntelligenceApi';
+import Link from 'next/link';
 import { describeCount, fmtInt, fmtSigned, sectorLeaders, strengthWord } from '@/lib/marketIntel';
+import { sectorHref } from '@/lib/sectors';
 
 const STATE_TONE: Record<string, string> = {
   leading: 'bg-emerald-50 text-emerald-700',
@@ -49,7 +51,13 @@ export default function SectorLeadershipCard({ snap }: { snap: MarketSnapshotAva
                   <tr key={r.sector} className="border-t border-black/[0.05]" data-testid="sector-row">
                     <td className="py-1.5 pr-2 tabular-nums text-slate-400">{r.rank ?? '—'}</td>
                     <td className="py-1.5 pr-3 text-slate-800">
-                      {r.sector}
+                      {sectorHref(r.sector) ? (
+                        <Link href={sectorHref(r.sector)!} className="font-medium text-slate-900 hover:text-accent hover:underline">
+                          {r.sector}
+                        </Link>
+                      ) : (
+                        r.sector
+                      )}
                       <span className="ml-1.5 text-[11px] text-slate-400">{fmtInt(r.members)}</span>
                     </td>
                     <td className="w-56 py-1.5 pr-3">
