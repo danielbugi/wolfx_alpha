@@ -135,7 +135,7 @@ function EarningsCalendar() {
         <div className="mb-6 px-1 pt-2">
           <h1 className="large-title">Earnings</h1>
           <p className="mt-1.5 max-w-3xl text-[15px] leading-relaxed text-slate-500">
-            Who reports, day by day · New York dates · Momentum Board names and your watchlist
+            Who reports, day by day · New York dates · stocks on today&apos;s momentum screens and your watchlist
           </p>
         </div>
 
@@ -201,7 +201,7 @@ function EarningsCalendar() {
             <LoadingSpinner size="large" />
           </div>
         ) : boardState === 'error' && weekRows.length === 0 ? (
-          <ErrorAlert title="Earnings unavailable" message="Couldn't load the Momentum Board names." onRetry={reload} />
+          <ErrorAlert title="Earnings unavailable" message="Couldn't load the list of covered stocks." onRetry={reload} />
         ) : (
           <>
             {/* Day strip: Mon-Fri with counts; scrolls sideways on a phone */}
@@ -258,7 +258,7 @@ function EarningsCalendar() {
                   <p className="px-5 py-12 text-center text-sm text-slate-400">
                     {weekRows.length && filtered.length !== weekRows.length
                       ? 'No reports match these filters on this day.'
-                      : `No reports on this day among Momentum Board names${watchlist.length ? ' or your watchlist' : ''}.`}
+                      : `No reports on this day among the covered stocks${watchlist.length ? ' or your watchlist' : ''}.`}
                   </p>
                 ) : (
                   <EarningsTable
@@ -273,7 +273,7 @@ function EarningsCalendar() {
 
             <div className="mt-4 space-y-1 px-1 text-[12px] leading-relaxed text-slate-400">
               <p>
-                Covers names on today&apos;s Momentum Board (their next report date) and your watchlist (past and upcoming
+                Covers stocks on today&apos;s momentum screens (their next report date) and your watchlist (past and upcoming
                 reports). Past results for other stocks aren&apos;t listed here yet — open a stock to see its full earnings history.
               </p>
               <p>

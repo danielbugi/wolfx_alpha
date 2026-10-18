@@ -5,9 +5,10 @@ import React, { useCallback, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ArrowLeftStartOnRectangleIcon, Bars3Icon, MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftStartOnRectangleIcon, Bars3Icon, ChevronRightIcon, MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { clsx } from 'clsx';
-import { navGroupsForRole, isActiveRoute } from '@/lib/navigation';
+import { navGroupsForRole, isActiveRoute, type NavGroup } from '@/lib/navigation';
+import { useNavGroupOpen } from '@/lib/navGroupState';
 import Dialog from '@/components/common/Dialog';
 import SearchBox from '@/components/layout/SearchBox';
 import Logo from '@/components/brand/Logo';
@@ -72,36 +73,7 @@ export default function MobileNav() {
         </div>
         <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-2">
           {navGroups.map((group) => (
-            <div key={group.label}>
-              <p className="px-2.5 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400">{group.label}</p>
-              <div className="space-y-0.5">
-                {group.items.map((item) => {
-                  const active = isActiveRoute(pathname, item.href);
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setDrawerOpen(false)}
-                      aria-current={active ? 'page' : undefined}
-                      className={clsx(
-                        'press relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-medium',
-                        active ? 'text-slate-900' : 'text-slate-600 hover:bg-black/[0.04] hover:text-slate-900',
-                      )}
-                    >
-                      {active && (
-                        <motion.span
-                          layoutId="mobile-nav-active"
-                          aria-hidden
-                          className="absolute inset-0 rounded-xl bg-accent-soft"
-                        />
-                      )}
-                      <item.icon className={clsx('relative h-5 w-5 shrink-0', active ? 'text-accent' : 'text-slate-400')} />
-                      <span className="relative truncate">{item.name}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
+            <MobileNavGroup key={group.label} group={group} pathname={pathname} onNavigate={() => setDrawerOpen(false)} />
           ))}
         </nav>
         <div className="shrink-0 space-y-3 px-4 pb-3">
@@ -132,6 +104,52 @@ export default function MobileNav() {
           </div>
         )}
       </Dialog>
+    </div>
+  );
+}
+
+function MobileNavGroup({ group, pathname, onNavigate }: { group: NavGroup; pathname: string; onNavigate: () => void }) {
+  const { open, toggle, collapsible } = useNavGroupOpen(group, pathname);
+  const listId = `mobile-nav-group-${group.label.toLowerCase()}`;
+  return (
+    <div>
+      {collapsible ? (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          aria-controls={listId}
+          className="press flex w-full items-center gap-1 px-2.5 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400"
+        >
+          <ChevronRightIcon className={clsx('h-3 w-3 transition-transform', open && 'rotate-90')} aria-hidden />
+          {group.label}
+        </button>
+      ) : (
+        <p className="px-2.5 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400">{group.label}</p>
+      )}
+      {open && (
+        <div id={listId} className="space-y-0.5">
+          {group.items.map((item) => {
+            const active = isActiveRoute(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onNavigate}
+                aria-current={active ? 'page' : undefined}
+                className={clsx(
+                  'press relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-medium',
+                  active ? 'text-slate-900' : 'text-slate-600 hover:bg-black/[0.04] hover:text-slate-900',
+                )}
+              >
+                {active && <motion.span layoutId="mobile-nav-active" aria-hidden className="absolute inset-0 rounded-xl bg-accent-soft" />}
+                <item.icon className={clsx('relative h-5 w-5 shrink-0', active ? 'text-accent' : 'text-slate-400')} />
+                <span className="relative truncate">{item.name}</span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

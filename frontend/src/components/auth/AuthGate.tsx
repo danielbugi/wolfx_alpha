@@ -7,6 +7,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import Sidebar from '@/components/layout/Sidebar';
 import MobileNav from '@/components/layout/MobileNav';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import ProductDisclaimer from '@/components/common/ProductDisclaimer';
+import { isProductRoute } from '@/lib/navigation';
 import { useStockNavCapture } from '@/lib/stockNav';
 
 const PUBLIC_PATHS = new Set(['/login']);
@@ -52,6 +54,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <MobileNav />
         <main className="min-w-0 flex-1">{children}</main>
+        {isProductRoute(pathname) && <ProductDisclaimer />}
       </div>
     </div>
   );

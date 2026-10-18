@@ -40,7 +40,7 @@ const COLUMNS: { key: Col; label: string; align: 'start' | 'end' }[] = [
 
 /**
  * Whole-market movers: the three "any stock" lists (gainers, losers, unusual volume) in one card behind a segmented
- * control, instead of three stacked tables. Unlike the Momentum Board these are not breakout-confirmed.
+ * control, instead of three stacked tables. Every liquid stock is eligible, whatever its channel position.
  */
 export default function MarketMovers({ gainers, losers, unusualVolume }: { gainers: StockItem[]; losers: StockItem[]; unusualVolume: StockItem[] }) {
   const router = useRouter();
@@ -54,7 +54,7 @@ export default function MarketMovers({ gainers, losers, unusualVolume }: { gaine
       <CardHeader className="flex flex-wrap items-end justify-between gap-3 px-5 pt-5 pb-3">
         <div>
           <h2 className="text-[17px] font-semibold text-slate-900">Whole-Market Movers</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Any stock, not just breakout-confirmed names · {meta.blurb.toLowerCase()}</p>
+          <p className="mt-0.5 text-xs text-slate-500">Every liquid stock · {meta.blurb.toLowerCase()}</p>
         </div>
         <div className="flex items-center gap-3">
           <SegmentedControl

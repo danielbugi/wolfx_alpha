@@ -16,8 +16,8 @@ const MAX_ROWS = 8;
 
 /**
  * Dashboard card: who reports yesterday / today / tomorrow / this week, as New York trading sessions (Monday's
- * "yesterday" is Friday, Friday's "tomorrow" is Monday, holidays skipped). Your watchlist names first, then names on
- * today's Momentum Board.
+ * "yesterday" is Friday, Friday's "tomorrow" is Monday, holidays skipped). Your watchlist names first, then stocks on
+ * today's momentum screens (the internal board's lists, used here only as a coverage list).
  */
 export default function EarningsCard() {
   const { anchors, board, boardState, calendarFailed, watchlist, histories, reload } = useEarningsCalendar();
@@ -75,7 +75,7 @@ export default function EarningsCard() {
     if (active === 'yesterday' && watchlist.length === 0)
       return 'Reported results show for your watchlist names — star a stock on its page to follow its reports here.';
     const where = active === 'week' ? (weekIsNext ? 'next week' : 'this week') : `on ${formatDay(dayOf[active] as string)}`;
-    return `No reports ${where} among Momentum Board names${watchlist.length ? ' or your watchlist' : ''}.`;
+    return `No reports ${where} among the covered stocks${watchlist.length ? ' or your watchlist' : ''}.`;
   };
 
   return (
@@ -84,7 +84,7 @@ export default function EarningsCard() {
         <div>
           <h3 className="text-[17px] font-semibold text-slate-900">Earnings</h3>
           <p className="mt-0.5 text-xs text-slate-500">
-            Momentum Board names and your watchlist · New York sessions
+            Stocks on today&apos;s momentum screens and your watchlist · New York sessions
             {anchors?.yesterday && active === 'yesterday' && ` · ${formatDay(anchors.yesterday)}`}
             {anchors?.tomorrow && active === 'tomorrow' && ` · ${formatDay(anchors.tomorrow)}`}
             {anchors && active === 'week' && ` · ${formatDay(anchors.weekDays[0])} – ${formatDay(anchors.weekDays[4])}`}
@@ -113,7 +113,7 @@ export default function EarningsCard() {
             <LoadingSpinner size="medium" />
           </div>
         ) : boardState === 'error' && groups[active].length === 0 ? (
-          <ErrorAlert title="Earnings unavailable" message="Couldn't load the Momentum Board names." onRetry={reload} className="m-4" />
+          <ErrorAlert title="Earnings unavailable" message="Couldn't load the list of covered stocks." onRetry={reload} className="m-4" />
         ) : shown.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-slate-400">{emptyText()}</p>
         ) : (

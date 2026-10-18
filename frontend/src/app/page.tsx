@@ -9,21 +9,20 @@ import {
   Chip,
 } from '@nextui-org/react';
 import { ResponsiveContainer, Treemap } from 'recharts';
-import { apiClient, screenerApi, momentumBoardApi, momentumLeadersApi, marketApi, MainPageData, MarketOverview, MomentumBoardResult, MomentumLeadersBoard, MarketIndexEntry, SectorHistoryEntry } from '@/services/api';
+import { apiClient, screenerApi, marketApi, MainPageData, MarketOverview, MarketIndexEntry, SectorHistoryEntry } from '@/services/api';
 import { usePagePerf } from '@/hooks/usePagePerf';
 import { useTopProgress } from '@/lib/topProgress';
 import { DashboardSkeleton } from '@/components/ui/Skeleton';
 import ErrorAlert from '@/components/common/ErrorAlert';
 import MarketIndicesStrip from '@/components/dashboard/MarketIndicesStrip';
 import SectorTrendChart from '@/components/dashboard/SectorTrendChart';
-import MomentumBoard, { BoardCategory } from '@/components/dashboard/MomentumBoard';
-import MomentumLeaders from '@/components/dashboard/MomentumLeaders';
 import MarketMovers from '@/components/dashboard/MarketMovers';
 import WatchlistCard from '@/components/dashboard/WatchlistCard';
 import EarningsCard from '@/components/earnings/EarningsCard';
 import SummaryTiles from '@/components/dashboard/SummaryTiles';
 import CommoditiesCard, { COMMODITY_SYMBOLS } from '@/components/dashboard/CommoditiesCard';
 import SegmentedControl from '@/components/ui/SegmentedControl';
+import DataStamp from '@/components/common/DataStamp';
 import { ResolvedTheme, useResolvedTheme } from '@/lib/theme';
 
 function timeAgo(date: Date | null): string {
@@ -102,26 +101,7 @@ export default function DashboardPage() {
 
   const [selectedSector, setSelectedSector] = useState<string | null>(null);
 
-  // Momentum Board -- see CLAUDE.md's 2026-09-22 dashboard reframe. Defaults to
-  // Breakout only (long side, confirmed moves), per the same instinct that used to
-  // set Alpha Finder's filter chips: a "find winners" panel should not open on noise.
-  const [boardCategory, setBoardCategory] = useState<BoardCategory>('breakout');
-  const [boardMinQualityGrade, setBoardMinQualityGrade] = useState<string | undefined>(undefined);
-  const [boardResults, setBoardResults] = useState<MomentumBoardResult[]>([]);
-  const [boardSessionDate, setBoardSessionDate] = useState<string | null>(null);
-  const [boardUniverseN, setBoardUniverseN] = useState(0);
-  const [boardCounts, setBoardCounts] = useState<Record<string, number>>({});
-  const [boardStarredTotal, setBoardStarredTotal] = useState(0);
-  const [boardLoading, setBoardLoading] = useState(true);
-  const [boardError, setBoardError] = useState(false);
-
-  // Momentum Leaders -- "who's still moving after making an earlier list" (see
-  // CLAUDE.md's 2026-09-23 dashboard audit; distinct from Momentum Board above,
-  // which ranks today's own lists).
-  const [leadersBoard, setLeadersBoard] = useState<MomentumLeadersBoard | null>(null);
-  const [leadersSessionDate, setLeadersSessionDate] = useState<string | null>(null);
-  const [leadersLoading, setLeadersLoading] = useState(true);
-  const [leadersError, setLeadersError] = useState(false);
+  // The Momentum Board and Momentum Leaders moved to the internal /momentum page (signal output, not product content).
 
   const fetchData = useCallback(async () => {
     const isFirstLoad = !hasLoadedOnceRef.current;
@@ -187,56 +167,16 @@ export default function DashboardPage() {
     }
   }, []);
 
-  const fetchBoard = useCallback(async () => {
-    try {
-      setBoardLoading(true);
-      const resp = await momentumBoardApi.getBoard({
-        category: boardCategory,
-        min_quality_grade: boardMinQualityGrade,
-        sector: selectedSector || undefined,
-        limit: 50,
-      });
-      setBoardResults(resp.results);
-      setBoardSessionDate(resp.session_date);
-      setBoardUniverseN(resp.universe_n);
-      setBoardCounts(resp.counts);
-      setBoardStarredTotal(resp.starred_total);
-      setBoardError(false);
-    } catch {
-      setBoardResults([]);
-      setBoardError(true);
-    } finally {
-      setBoardLoading(false);
-    }
-  }, [boardCategory, boardMinQualityGrade, selectedSector]);
-
-  const fetchLeaders = useCallback(async () => {
-    try {
-      setLeadersLoading(true);
-      const resp = await momentumLeadersApi.getLeaders();
-      setLeadersBoard(resp.board);
-      setLeadersSessionDate(resp.session_date);
-      setLeadersError(false);
-    } catch {
-      setLeadersBoard(null);
-      setLeadersError(true);
-    } finally {
-      setLeadersLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     fetchData();
     fetchMarketOverview();
     fetchMarketIndices();
     fetchSectorHistory();
-    fetchLeaders();
     const interval = setInterval(() => {
       fetchData();
       fetchMarketOverview();
       fetchMarketIndices();
       fetchSectorHistory();
-      fetchLeaders();
     }, 5 * 60 * 1000);
     // Tick once a minute just to re-render the "updated Xm ago" label.
     const clock = setInterval(() => forceTick((t) => t + 1), 60 * 1000);
@@ -244,11 +184,7 @@ export default function DashboardPage() {
       clearInterval(interval);
       clearInterval(clock);
     };
-  }, [fetchData, fetchMarketOverview, fetchMarketIndices, fetchSectorHistory, fetchLeaders]);
-
-  useEffect(() => {
-    fetchBoard();
-  }, [fetchBoard]);
+  }, [fetchData, fetchMarketOverview, fetchMarketIndices, fetchSectorHistory]);
 
   if (initialLoading) {
     return <DashboardSkeleton />;
@@ -264,9 +200,7 @@ export default function DashboardPage() {
               message={error}
               onRetry={fetchData}
             />
-            <p className="text-xs text-slate-500 mt-3 text-center">
-              Ensure backend is running on http://localhost:8000
-            </p>
+            <p className="text-xs text-slate-500 mt-3 text-center">The market data service did not respond. Please try again shortly.</p>
           </CardBody>
         </Card>
       </div>
@@ -291,13 +225,11 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="px-1 pt-2 pb-1 flex flex-wrap justify-between items-end gap-x-6 gap-y-3 mb-6">
           <div>
-            <h1 className="large-title">Dashboard</h1>
+            <h1 className="large-title">Market overview</h1>
             <p className="mt-1.5 max-w-3xl text-[15px] leading-relaxed text-slate-500">
-              Professional market analysis and confirmed momentum signals
-              {data.market_summary?.last_updated && (
-                <span className="text-slate-400"> · data as of {data.market_summary.last_updated}</span>
-              )}
+              Breadth, sectors and the day&apos;s movers across the US equity universe.
             </p>
+            <DataStamp className="mt-1" asOf={data.market_summary?.last_updated ?? null} source="end-of-day prices" />
           </div>
           <div className="flex items-center gap-3">
             <div className="text-right">
@@ -323,12 +255,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* First read: breadth, confirmed names, market mood, sector leaders */}
-        <SummaryTiles
-          overview={marketOverview}
-          starredTotal={boardLoading && boardStarredTotal === 0 ? null : boardStarredTotal}
-          indices={marketIndices}
-        />
+        {/* First read: breadth, market mood, sector leaders */}
+        <SummaryTiles overview={marketOverview} indices={marketIndices} />
 
         {/* Watchlist -- stocks starred on their stock page (this browser); renders nothing when empty */}
         <WatchlistCard />
@@ -403,8 +331,8 @@ export default function DashboardPage() {
                 <div className="flex justify-between items-center mb-2">
                   <p className="text-xs text-slate-500">
                     {sectorView === 'heatmap'
-                      ? 'Sector Performance — box size = # stocks, color = avg change. Click a sector to filter the Momentum Board below.'
-                      : 'Sector Performance — 90-day cumulative return. Click a sector below to isolate it and filter the Momentum Board.'}
+                      ? 'Sector performance today: box size = number of stocks, colour = average change. Click a sector to highlight it.'
+                      : 'Sector performance: 90-day cumulative return. Click a sector to isolate it.'}
                   </p>
                   {selectedSector && (
                     <Chip
@@ -504,44 +432,14 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Momentum Board -- replaces the old ML/alignment-based Alpha Finder. See
-            CLAUDE.md's 2026-09-22 dashboard reframe entry for why. */}
-        <MomentumBoard
-          results={boardResults}
-          loading={boardLoading}
-          error={boardError}
-          sessionDate={boardSessionDate}
-          universeN={boardUniverseN}
-          counts={boardCounts}
-          category={boardCategory}
-          onCategoryChange={setBoardCategory}
-          minQualityGrade={boardMinQualityGrade}
-          onMinQualityGradeChange={setBoardMinQualityGrade}
-          onRetry={fetchBoard}
-        />
-
-        <MomentumLeaders
-          board={leadersBoard}
-          sessionDate={leadersSessionDate}
-          loading={leadersLoading}
-          error={leadersError}
-          onRetry={fetchLeaders}
-        />
-
-        {/* Whole-Market Movers -- unlike Momentum Board above (breakout/near-breakout only,
-            confirmed by 2+ lists), these rank every liquid stock regardless of Donchian category. */}
+        {/* Whole-market movers: every liquid stock ranked by today's change and volume. */}
         <MarketMovers
           gainers={data.top_gainers ?? []}
           losers={data.top_losers ?? []}
           unusualVolume={data.unusual_volume ?? []}
         />
 
-        {/* Footer */}
-        <div className="text-center pt-8 pb-2">
-          <p className="text-xs text-slate-400">
-            Data refreshes automatically every 5 minutes | Donchian Breakout Screening Platform
-          </p>
-        </div>
+        <p className="pt-8 pb-2 text-center text-xs text-slate-400">This page refreshes automatically every 5 minutes.</p>
       </div>
     </div>
   );

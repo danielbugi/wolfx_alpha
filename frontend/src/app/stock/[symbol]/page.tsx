@@ -3,11 +3,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Card, CardBody, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip } from '@nextui-org/react';
-import { ExclamationTriangleIcon, StarIcon as StarSolid } from '@heroicons/react/20/solid';
+import { Card, CardBody, Chip } from '@nextui-org/react';
+import { StarIcon as StarSolid } from '@heroicons/react/20/solid';
 import { StarIcon as StarOutline } from '@heroicons/react/24/outline';
 import { clsx } from 'clsx';
-import { HoverTip, ProgressBar } from '@/components/ui/Field';
+import { ProgressBar } from '@/components/ui/Field';
 import {
   stockApi,
   marketApi,
@@ -19,7 +19,6 @@ import {
   EarningsDateEntry,
   SectorHistoryEntry,
 } from '@/services/api';
-import PlanBar from '@/components/strategy/PlanBar';
 import StockChart from '@/components/charts/StockChart';
 import KeyLevels from '@/components/stock/KeyLevels';
 import FinancialGrowth from '@/components/stock/FinancialGrowth';
@@ -28,6 +27,7 @@ import PeersPanel from '@/components/stock/PeersPanel';
 import NewsPanel from '@/components/stock/NewsPanel';
 import { reactionPct } from '@/components/stock/EarningsPanel';
 import { useWatchlist } from '@/lib/watchlist';
+import { neutralBreakoutMarkers } from '@/lib/productSafe';
 import { StockNavButtons, StockNavCaption, useStockNav } from '@/components/stock/StockNavArrows';
 import { positionPct } from '@/lib/priceMath';
 import { gradeColor } from '@/lib/uiColors';
@@ -40,10 +40,13 @@ import SegmentedControl from '@/components/ui/SegmentedControl';
 const HISTORY_DAYS = 730;
 const EARNINGS_LIMIT = 16;
 
-type DetailTab = 'news' | 'strategy' | 'financials' | 'earnings' | 'peers';
+// Product page: no Strategy tab. Trade plans (entry/stop/targets), position sizing, the experimental ML score and the
+// breakout history with its outcomes are internal research output and are not shown here; they remain on the
+// internal pages (Position Plans, Track Record, Strategies). A remembered 'strategy' tab falls back to News.
+type DetailTab = 'news' | 'technicals' | 'financials' | 'earnings' | 'peers';
 const DETAIL_TABS: { value: DetailTab; label: string }[] = [
   { value: 'news', label: 'News' },
-  { value: 'strategy', label: 'Strategy' },
+  { value: 'technicals', label: 'Technicals' },
   { value: 'financials', label: 'Financials' },
   { value: 'earnings', label: 'Earnings' },
   { value: 'peers', label: 'Peers' },
@@ -398,10 +401,9 @@ export default function StockDetailPage() {
   }
 
   const snap = detail.snapshot;
-  const rating = detail.ai_rating;
   const timeframes = extractTimeframes(detail);
-  const hasSignal = detail.data_source === 'active_signal';
-  const track = detail.breakout_track_record;
+  // Dates of past channel breakouts only (outcomes stripped; see lib/productSafe.ts).
+  const neutralBreakouts = neutralBreakoutMarkers(detail.breakout_track_record.entries);
   const asOfDate = detail.data_source === 'no_signal' ? detail.snapshot.as_of_date : null;
 
   const priceChangePct = snap.price_change_pct;
@@ -464,23 +466,18 @@ export default function StockDetailPage() {
                     <StarOutline className="h-5 w-5 text-slate-400" />
                   )}
                 </button>
-                {hasSignal ? (
-                  <Chip size="sm" className="bg-accent-soft text-accent text-xs font-medium">
-                    Active breakout signal
-                  </Chip>
-                ) : (
-                  <Chip size="sm" className="bg-slate-100 text-slate-500 text-xs">
-                    No active signal
-                  </Chip>
-                )}
                 {snap.quality_grade && (
-                  <Chip size="sm" className={`${gradeColor(snap.quality_grade)} text-xs`}>
-                    Grade {snap.quality_grade}
+                  <Chip
+                    size="sm"
+                    title="Heuristic quality grade computed from reported fundamentals. Descriptive only, not a recommendation."
+                    className={`${gradeColor(snap.quality_grade)} text-xs`}
+                  >
+                    Quality {snap.quality_grade}
                   </Chip>
                 )}
                 {isTurnaround && (
-                  <Chip size="sm" className="bg-emerald-100 text-emerald-800 text-xs">
-                    Turnaround
+                  <Chip size="sm" title="Latest quarter net income positive, the quarter before negative" className="bg-slate-100 text-slate-700 text-xs">
+                    Loss to profit
                   </Chip>
                 )}
                 {daysToEarnings != null && daysToEarnings <= 21 && (
@@ -555,7 +552,8 @@ export default function StockDetailPage() {
           <div className="px-5 pb-3 pt-4">
             <h3 className="text-[15px] font-semibold text-slate-900">Chart</h3>
           </div>
-          <StockChart bars={bars} earnings={earnings} breakouts={track.entries} plan={hasSignal ? rating.plan : null} height={420} />
+          {/* Past 20-day channel breakouts are drawn as neutral markers (dates only, outcome removed); no trade-plan lines. */}
+          <StockChart bars={bars} earnings={earnings} breakouts={neutralBreakouts} plan={null} height={420} />
           <div className="mt-2 grid grid-cols-1 gap-5 border-t border-black/[0.06] px-5 py-4 md:grid-cols-3">
             <ChannelColumn
               title="Daily · 20-day channel"
@@ -600,192 +598,10 @@ export default function StockDetailPage() {
           </>
         )}
 
-        {tab === 'strategy' && (
+        {tab === 'technicals' && (
           <>
-            {/* Signal & plan next to key levels */}
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-              <Section className="lg:col-span-3">
-                {hasSignal ? (
-                  <div className="space-y-5">
-                    {rating.plan ? (
-                      <div>
-                        <SectionTitle
-                          aside={
-                            <HoverTip
-                              content={
-                                <div className="space-y-0.5">
-                                  <p>Momentum: {rating.plan.momentum_score == null ? UNKNOWN : rating.plan.momentum_score.toFixed(0)} × 0.40</p>
-                                  <p>Fundamentals: {rating.plan.fundamentals_score == null ? UNKNOWN : rating.plan.fundamentals_score.toFixed(0)} × 0.25</p>
-                                  <p>Alignment: {rating.plan.alignment_score == null ? UNKNOWN : rating.plan.alignment_score.toFixed(0)} × 0.20</p>
-                                  <p>Risk bonus: {rating.plan.risk_bonus.toFixed(0)} × 0.15</p>
-                                </div>
-                              }
-                            >
-                              <span className="cursor-help border-b border-dotted border-slate-400 text-xs font-semibold text-slate-700">
-                                Strategy score {rating.plan.strategy_score.toFixed(0)}
-                              </span>
-                            </HoverTip>
-                          }
-                        >
-                          <span className="inline-flex items-center gap-2">
-                            Trade plan
-                            <Chip
-                              size="sm"
-                              className={`text-xs ${rating.plan.direction === 'long' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}`}
-                            >
-                              {rating.plan.direction === 'long' ? 'Long' : 'Short'}
-                            </Chip>
-                          </span>
-                        </SectionTitle>
-
-                        <PlanBar
-                          plan={{
-                            stop_loss_price: rating.plan.stop_loss_price,
-                            entry_price: rating.plan.entry_price,
-                            tp1: rating.plan.tp1,
-                            tp2: rating.plan.tp2,
-                            tp3: rating.plan.tp3,
-                          }}
-                        />
-
-                        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-                          {[
-                            { label: 'Entry', price: rating.plan.entry_price, pct: null, tone: 'text-slate-900' },
-                            { label: 'Stop', price: rating.plan.stop_loss_price, pct: -rating.plan.risk_pct, tone: 'text-red-600' },
-                            { label: 'TP1', price: rating.plan.tp1, pct: rating.plan.reward_pct_tp1, tone: 'text-emerald-600' },
-                            { label: 'TP2', price: rating.plan.tp2, pct: rating.plan.reward_pct_tp2, tone: 'text-emerald-600' },
-                            { label: 'TP3', price: rating.plan.tp3, pct: rating.plan.reward_pct_tp3, tone: 'text-emerald-600' },
-                          ].map((level) => (
-                            <div key={level.label} className="rounded-xl bg-slate-50 px-3 py-2.5">
-                              <p className="text-[11px] font-medium text-slate-500">{level.label}</p>
-                              <p className={`text-[15px] font-semibold tabular-nums ${level.tone}`}>${fmtNum(level.price)}</p>
-                              <p className="text-[11px] tabular-nums text-slate-400">{level.pct != null ? fmtPct(level.pct) : 'current price'}</p>
-                            </div>
-                          ))}
-                        </div>
-                        <p className="mt-3 text-xs text-slate-500">
-                          Suggested position size at 1% account risk:{' '}
-                          <span className="font-semibold text-slate-700">{Math.min(10, (1 / rating.plan.risk_pct) * 100).toFixed(1)}%</span> of
-                          portfolio (capped at 10%) —{' '}
-                          <Link href="/strategy" className="text-accent hover:underline">
-                            adjust on Position Plans
-                          </Link>
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-slate-400">Strategy plan unavailable for this signal.</p>
-                    )}
-
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div>
-                        <p className="mb-2 text-xs font-semibold text-slate-700">Signal</p>
-                        <div className="flex flex-wrap gap-2">
-                          {rating.signal_type && (
-                            <Chip size="sm" className="bg-slate-100 text-slate-700 text-xs capitalize">
-                              {rating.signal_type.replace(/_/g, ' ')}
-                            </Chip>
-                          )}
-                          {rating.alignment_grade && (
-                            <Chip size="sm" className="bg-slate-100 text-slate-700 text-xs">
-                              Timeframe alignment {rating.alignment_score}% ({rating.alignment_grade})
-                            </Chip>
-                          )}
-                        </div>
-                        {rating.reasoning && <p className="mt-2 text-sm leading-relaxed text-slate-600">{rating.reasoning}</p>}
-                      </div>
-
-                      {/* The ML score is shown for reference only: it has not shown a reliable edge in validation, so it is
-                          labelled as experimental and kept out of the header. */}
-                      {(rating.ml_momentum_probability != null || rating.ml_confidence) && (
-                        <div className="rounded-xl border border-amber-200/70 bg-amber-50/60 p-3.5">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-xs font-semibold text-slate-700">Model score · experimental</p>
-                            <p className="text-[15px] font-semibold tabular-nums text-slate-900">
-                              {rating.ml_momentum_probability != null ? `${rating.ml_momentum_probability.toFixed(0)}%` : UNKNOWN}
-                              {rating.ml_confidence && (
-                                <span className="ml-1.5 text-xs font-medium capitalize text-slate-500">({rating.ml_confidence.replace('_', ' ')})</span>
-                              )}
-                            </p>
-                          </div>
-                          <p className="mt-1.5 flex gap-1.5 text-[11px] leading-relaxed text-slate-600">
-                            <ExclamationTriangleIcon className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
-                            Not yet a proven predictor — in testing it hasn&apos;t shown a reliable edge. Shown for reference only.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <SectionTitle>Signal</SectionTitle>
-                    <p className="text-sm text-slate-600">{rating.reasoning || 'No active breakout signal for this symbol right now.'}</p>
-                    <p className="mt-2 text-xs text-slate-400">The chart and the sections below show the latest available data.</p>
-                  </div>
-                )}
-              </Section>
-
-              <Section className="lg:col-span-2">
-                <KeyLevels bars={bars} price={snap.current_price} atr={timeframes.daily.atr} sector={snap.sector} sectorHistory={sectorHistory} />
-              </Section>
-            </div>
-
-            {/* Breakout track record */}
             <Section>
-              <SectionTitle>Breakout track record</SectionTitle>
-              {track.entries.length === 0 ? (
-                <p className="py-4 text-center text-sm text-slate-400">No historical breakout events recorded for this symbol.</p>
-              ) : (
-                <>
-                  <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {[
-                      ['Breakout events', String(track.total_breakouts)],
-                      ['Win rate', track.win_rate != null ? `${track.win_rate}%` : UNKNOWN],
-                      ['Avg max gain (10d)', fmtPct(track.avg_gain_10d)],
-                      ['Avg max loss (10d)', fmtPct(track.avg_loss_10d)],
-                    ].map(([label, value]) => (
-                      <div key={label} className="rounded-xl bg-slate-50 px-3 py-2.5">
-                        <p className="text-[11px] font-medium text-slate-500">{label}</p>
-                        <p className="text-[15px] font-semibold tabular-nums text-slate-900">{value}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <Table
-                    removeWrapper
-                    aria-label="Breakout history"
-                    classNames={{ th: 'bg-slate-50/70 text-slate-500 font-medium text-[11px] h-8', td: 'text-[13px] py-2 tabular-nums' }}
-                  >
-                    <TableHeader>
-                      <TableColumn>DATE</TableColumn>
-                      <TableColumn>TYPE</TableColumn>
-                      <TableColumn align="end">ENTRY</TableColumn>
-                      <TableColumn>OUTCOME</TableColumn>
-                      <TableColumn align="end">MAX GAIN 10D</TableColumn>
-                      <TableColumn align="end">MAX LOSS 10D</TableColumn>
-                    </TableHeader>
-                    <TableBody>
-                      {track.entries.slice(0, 25).map((e, i) => (
-                        <TableRow key={i}>
-                          <TableCell className="text-slate-600">{e.date}</TableCell>
-                          <TableCell className="text-slate-600">{e.breakout_type ?? UNKNOWN}</TableCell>
-                          <TableCell className="text-right">{e.entry_price != null ? `$${fmtNum(e.entry_price)}` : UNKNOWN}</TableCell>
-                          <TableCell>
-                            {e.success === null ? (
-                              <Chip size="sm" className="bg-slate-100 text-slate-500 text-xs">pending</Chip>
-                            ) : e.success ? (
-                              <Chip size="sm" className="bg-emerald-100 text-emerald-800 text-xs">success</Chip>
-                            ) : (
-                              <Chip size="sm" className="bg-red-100 text-red-700 text-xs">failed</Chip>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right text-emerald-600">{fmtPct(e.max_gain_10d)}</TableCell>
-                          <TableCell className="text-right text-red-600">{fmtPct(e.max_loss_10d)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  {track.entries.length > 25 && <p className="mt-3 text-xs text-slate-400">Showing the latest 25 of {track.entries.length} events.</p>}
-                </>
-              )}
+              <KeyLevels bars={bars} price={snap.current_price} atr={timeframes.daily.atr} sector={snap.sector} sectorHistory={sectorHistory} />
             </Section>
           </>
         )}
