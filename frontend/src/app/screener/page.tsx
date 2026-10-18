@@ -241,6 +241,18 @@ function Screener() {
               <input type="checkbox" checked={draft.newHigh20} onChange={(e) => setDraft({ ...draft, newHigh20: e.target.checked })} />
               New 20-day high on the session
             </label>
+            <label className="flex items-center gap-2 text-[13px] text-slate-700">
+              Fundamentals cutoff
+              <select
+                aria-label="Fundamentals cutoff"
+                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[13px]"
+                value={draft.fundamentalsCutoff}
+                onChange={(e) => setDraft({ ...draft, fundamentalsCutoff: e.target.value === 'session_close' ? 'session_close' : 'post_session' })}
+              >
+                <option value="post_session">Post-session reporting (ingested by noon New York next day)</option>
+                <option value="session_close">Ingested before the session close</option>
+              </select>
+            </label>
             <div className="ml-auto flex gap-2">
               <button
                 type="button"
@@ -268,7 +280,10 @@ function Screener() {
               Dollar volume: {ofTotal(cov.dollar_vol_20, result.universe)}
               {cov.dollar_vol_insufficient ? ` (${cov.dollar_vol_insufficient} with fewer than 20 sessions)` : ''}
             </span>
-            <span>Fundamentals (known by the session): {ofTotal(cov.fundamentals, result.universe)}</span>
+            <span title={result.fundamentals_basis?.note}>
+              Fundamentals (ingestion-time reference, publication time unknown): {ofTotal(cov.fundamentals, result.universe)}
+              {cov.fundamentals_after_close ? ` · ${cov.fundamentals_after_close.toLocaleString('en-US')} ingested after the close` : ''}
+            </span>
             {cov.rs === 0 && (
               <span className="font-medium text-amber-700" data-testid="no-rs">
                 No observed relative-strength snapshot for this session: RS and return columns are unavailable.
@@ -359,7 +374,13 @@ function Screener() {
                             'whitespace-nowrap px-3 py-1.5 text-right tabular-nums',
                             text === '—' ? 'text-slate-400' : SIGNED.has(c as string) && typeof v === 'number' ? (v >= 0 ? 'text-emerald-600' : 'text-red-600') : 'text-slate-700',
                           )}
-                          title={c === 'dollar_vol_20' && v == null ? `${r.dv_bars} of 20 sessions with bars` : undefined}
+                          title={
+                            c === 'dollar_vol_20' && v == null
+                              ? `${r.dv_bars} of 20 sessions with bars`
+                              : c === 'market_cap' && r.fundamentals_ingested_at
+                                ? `Fundamentals row ${r.fundamentals_date} ingested ${r.fundamentals_ingested_at}${r.fundamentals_after_close ? ' (after the close: post-session convention)' : ''}; publication time unknown`
+                                : undefined
+                          }
                         >
                           {text}
                         </td>

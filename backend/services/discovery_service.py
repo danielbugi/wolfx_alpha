@@ -12,10 +12,18 @@ Session alignment (the integrity rules this service exists to enforce):
     (captured by the daily market-intelligence run for that session): family "observed".
   * Channel, breakout, ATR, volume-ratio and dollar-volume figures are computed from stored daily bars and indicators for S
     (and P): family "derived". They use bars up to and including S only.
-  * Market cap, sector (fallback) and industry come from daily_fundamentals rows known by the session: date <= S, written
-    (greatest(created_at, updated_at), UTC) before the knowledge cutoff = noon New York on the calendar day after S, and
-    not older than FUNDAMENTALS_MAX_AGE_DAYS: family "reference". The table has no publication/filing timestamps; the
-    write time is the only availability evidence, and rows rewritten after the cutoff are skipped, not used.
+  * Market cap, sector (fallback) and industry come from daily_fundamentals: family "reference" = INGESTION-TIME REFERENCE
+    DATA. The table has no original publication or filing timestamps, only the time our pipeline wrote the row
+    (greatest(created_at, updated_at), UTC), so these values are NOT verified point-in-time information. A row is used
+    when date <= S, it is at most FUNDAMENTALS_MAX_AGE_DAYS old, and it was ingested by the chosen cutoff:
+      post_session  (default) noon New York on the calendar day after S: a POST-SESSION REPORTING CONVENTION that lets the
+                    screen use the rows the nightly run writes after the close. It is not an intraday or historical
+                    decision-time guarantee.
+      session_close the close of S (16:00 New York): only rows ingested before the session ended; stricter, for looking at
+                    a past session as of its close. Rows ingested later are never used for that view (an older row is
+                    used instead, or the value is unavailable).
+    Rows rewritten after the cutoff are skipped. Each row carries its ingestion time and whether it was ingested after the
+    close, and the coverage counts how many values depend on the post-session convention.
   * Dollar volume = mean(close * volume) over exactly the last 20 real sessions ending at S; a stock needs all 20 bars,
     otherwise the value is unavailable and the shortfall is counted.
 
@@ -45,6 +53,7 @@ MAX_EXPORT_ROWS = 5000
 RS_MODEL = "rs_v1"
 
 OBSERVED, DERIVED, REFERENCE, KEY = "observed", "derived", "reference", "key"
+FUND_CUTOFFS = ("post_session", "session_close")
 
 
 @dataclass(frozen=True)
@@ -78,7 +87,7 @@ METRICS: Dict[str, Metric] = {m.key: m for m in [
     Metric("atr_pct_pctile", "ATR % percentile", "pctl", DERIVED, "Percentile of ATR % among stocks with a value on the session."),
     Metric("volume_ratio", "Volume ratio", "x", DERIVED, "Session volume vs its 10-day average volume."),
     Metric("dollar_vol_20", "Dollar volume (20)", "$", DERIVED, "Mean of close x volume over the last 20 sessions ending at the session; needs all 20 bars."),
-    Metric("market_cap", "Market cap", "$", REFERENCE, "From the latest fundamentals snapshot known by the session (written before noon New York the next day, at most 30 days old)."),
+    Metric("market_cap", "Market cap", "$", REFERENCE, "Ingestion-time reference data: the latest fundamentals row our pipeline ingested by the cutoff (at most 30 days old). The original publication time is unknown, so it is not verified point-in-time information."),
 ]}
 SORT_KEYS = ("symbol", "sector", *METRICS.keys())
 FLAG_FILTERS = ("breakout_20", "new_high_20")
@@ -113,12 +122,39 @@ class Query:
     q: Optional[str] = None
     ranges: Dict[str, Tuple[Optional[float], Optional[float]]] = field(default_factory=dict)
     flags: Dict[str, bool] = field(default_factory=dict)
+    fundamentals_cutoff: str = "post_session"
 
 
 # ---------------------------------------------------------------------------------------------------------- pure helpers
 def knowledge_cutoff_utc(session: date) -> datetime:
-    """Noon New York on the calendar day after the session, as a naive UTC datetime (the stored write times are naive UTC)."""
+    """Noon New York on the calendar day after the session, as a naive UTC datetime (the stored write times are naive UTC).
+    The post-session reporting convention: NOT a decision-time guarantee."""
     return datetime.combine(session + timedelta(days=1), time(12, 0), NY).astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def session_close_utc(session: date) -> datetime:
+    """16:00 New York on the session (regular close), as a naive UTC datetime."""
+    return datetime.combine(session, time(16, 0), NY).astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def fundamentals_cutoff_utc(session: date, mode: str) -> datetime:
+    if mode not in FUND_CUTOFFS:
+        raise InvalidRequest(f"fundamentals_cutoff must be one of {', '.join(FUND_CUTOFFS)}")
+    return knowledge_cutoff_utc(session) if mode == "post_session" else session_close_utc(session)
+
+
+def fundamentals_basis(session: date, mode: str) -> Dict[str, Any]:
+    return {
+        "type": "ingestion_time_reference",
+        "publication_time": "unknown",
+        "point_in_time_verified": False,
+        "cutoff_mode": mode,
+        "cutoff_utc": fundamentals_cutoff_utc(session, mode).isoformat(timespec="minutes"),
+        "session_close_utc": session_close_utc(session).isoformat(timespec="minutes"),
+        "note": ("Post-session reporting convention: rows our pipeline ingested up to noon New York on the next calendar day. "
+                 "Not an intraday or historical decision-time guarantee." if mode == "post_session" else
+                 "Only rows ingested before the session's close. Original publication times are unknown."),
+    }
 
 
 def resolve_sessions(counts: Sequence[Tuple[date, int]], requested: Optional[date]) -> Dict[str, Any]:
@@ -146,6 +182,8 @@ def normalise(qr: Query) -> Query:
         raise InvalidRequest(f"unknown preset '{qr.preset}'")
     if qr.sort not in SORT_KEYS:
         raise InvalidRequest(f"unknown sort key '{qr.sort}'")
+    if qr.fundamentals_cutoff not in FUND_CUTOFFS:
+        raise InvalidRequest(f"fundamentals_cutoff must be one of {', '.join(FUND_CUTOFFS)}")
     if qr.order not in ("asc", "desc"):
         raise InvalidRequest("order must be asc or desc")
     if not (1 <= qr.page <= 10_000):
@@ -246,7 +284,8 @@ joined AS (
            CASE WHEN dv.dv_bars = %(dv_n)s THEN dv.dollar_vol_20 END AS dollar_vol_20, COALESCE(dv.dv_bars, 0) AS dv_bars,
            rs.rs_20, rs.rs_60, rs.ret_5, rs.ret_20, rs.ret_60, rs.vs_spx_20, rs.vs_spx_60, rs.vs_sector_20,
            rs.rs_sector, rs.rs_sector_pit_safe, rs.symbol IS NOT NULL AS has_rs, ti.found IS NOT NULL AS has_tech,
-           df.market_cap::float8 AS market_cap, df.sector AS fund_sector, df.industry, df.date AS fundamentals_date
+           df.market_cap::float8 AS market_cap, df.sector AS fund_sector, df.industry, df.date AS fundamentals_date,
+           df.ingested_at AS fundamentals_ingested_at
     FROM px
     LEFT JOIN pxp USING (symbol)
     LEFT JOIN LATERAL (
@@ -260,7 +299,8 @@ joined AS (
     LEFT JOIN dv USING (symbol)
     LEFT JOIN rs USING (symbol)
     LEFT JOIN LATERAL (
-        SELECT market_cap, sector, industry, date FROM daily_fundamentals d
+        SELECT market_cap, sector, industry, date, greatest(d.created_at, coalesce(d.updated_at, d.created_at)) AS ingested_at
+        FROM daily_fundamentals d
         WHERE d.symbol = px.symbol AND d.date <= %(s)s AND d.date > %(s)s::date - %(fund_age)s
           AND greatest(d.created_at, coalesce(d.updated_at, d.created_at)) <= %(cutoff)s
         ORDER BY d.date DESC LIMIT 1
@@ -277,12 +317,16 @@ base AS (
            CASE WHEN channel_width_pct IS NOT NULL THEN 100 * PERCENT_RANK() OVER (PARTITION BY channel_width_pct IS NOT NULL ORDER BY channel_width_pct) END AS channel_width_pctile,
            CASE WHEN atr_14 IS NOT NULL THEN atr_14 / close * 100 END AS atr_pct,
            CASE WHEN atr_14 IS NOT NULL THEN 100 * PERCENT_RANK() OVER (PARTITION BY atr_14 IS NOT NULL ORDER BY atr_14 / close) END AS atr_pct_pctile,
-           volume_ratio, dollar_vol_20, dv_bars, market_cap, fundamentals_date, has_rs, has_tech
+           volume_ratio, dollar_vol_20, dv_bars, market_cap, fundamentals_date,
+           to_char(fundamentals_ingested_at, 'YYYY-MM-DD"T"HH24:MI"Z"') AS fundamentals_ingested_at,
+           CASE WHEN fundamentals_ingested_at IS NULL THEN NULL ELSE fundamentals_ingested_at > %(close_utc)s END AS fundamentals_after_close,
+           has_rs, has_tech
     FROM joined
 )
 """
 
-ROW_COLUMNS = ["symbol", "sector", "sector_source", "industry", *[k for k in METRICS.keys()], "dv_bars", "fundamentals_date"]
+ROW_COLUMNS = ["symbol", "sector", "sector_source", "industry", *[k for k in METRICS.keys()], "dv_bars", "fundamentals_date",
+               "fundamentals_ingested_at", "fundamentals_after_close"]
 
 
 def page_sql(where: str, order: str) -> str:
@@ -298,6 +342,7 @@ SELECT json_build_object(
         'dollar_vol_20', COUNT(dollar_vol_20), 'dollar_vol_insufficient', COUNT(*) FILTER (WHERE dollar_vol_20 IS NULL AND dv_bars > 0),
         'dollar_vol_no_bars', COUNT(*) FILTER (WHERE dv_bars = 0),
         'fundamentals', COUNT(fundamentals_date), 'market_cap', COUNT(market_cap),
+        'fundamentals_after_close', COUNT(*) FILTER (WHERE fundamentals_after_close),
         'sector', COUNT(sector), 'sector_observed', COUNT(*) FILTER (WHERE sector_source = 'observed'),
         'change_1d', COUNT(change_1d)) FROM base),
     'total', (SELECT COUNT(*) FROM filtered),
@@ -320,7 +365,8 @@ def definitions() -> Dict[str, Any]:
         "families": {
             OBSERVED: "Captured by the daily market-intelligence run for that session (observed relative-strength snapshot).",
             DERIVED: "Computed from stored daily bars and indicators up to and including the session.",
-            REFERENCE: "Latest fundamentals snapshot written before noon New York on the day after the session (at most 30 days old).",
+            REFERENCE: ("Ingestion-time reference data: the latest fundamentals row our pipeline ingested by the cutoff (at most 30 days old). "
+                        "Original publication times are unknown, so these are not verified point-in-time values."),
         },
         "presets": [{"key": k, "label": p["label"], "description": p["description"], "sort": list(p["sort"])} for k, p in PRESETS.items()],
         "sort_keys": list(SORT_KEYS),
@@ -367,7 +413,8 @@ class DiscoveryService:
             cur.execute(SESSIONS_SQL, {"lo": hi - timedelta(days=SESSION_WINDOW_DAYS), "hi": hi})
             sess = resolve_sessions([(d, int(n)) for d, n in cur.fetchall()], qr.session)
             named = {"s": sess["session"], "p": sess["previous_session"], "dv_start": sess["dv_start"], "dv_n": DV_SESSIONS,
-                     "rs_model": RS_MODEL, "fund_age": FUNDAMENTALS_MAX_AGE_DAYS, "cutoff": knowledge_cutoff_utc(sess["session"]),
+                     "rs_model": RS_MODEL, "fund_age": FUNDAMENTALS_MAX_AGE_DAYS,
+                     "cutoff": fundamentals_cutoff_utc(sess["session"], qr.fundamentals_cutoff), "close_utc": session_close_utc(sess["session"]),
                      "limit": MAX_EXPORT_ROWS if export else qr.page_size, "offset": 0 if export else (qr.page - 1) * qr.page_size}
             sql, params = _bind(page_sql(where, order_clause(sort, order)), named, wparams)
             cur.execute(sql, params)
@@ -381,7 +428,8 @@ class DiscoveryService:
             "session": sess["session"].isoformat(),
             "previous_session": sess["previous_session"].isoformat() if sess["previous_session"] else None,
             "dollar_volume_window": {"from": sess["dv_start"].isoformat() if sess["dv_start"] else None, "to": sess["session"].isoformat(), "sessions": DV_SESSIONS},
-            "fundamentals_cutoff_utc": knowledge_cutoff_utc(sess["session"]).isoformat(timespec="minutes"),
+            "fundamentals_cutoff_utc": fundamentals_cutoff_utc(sess["session"], qr.fundamentals_cutoff).isoformat(timespec="minutes"),
+            "fundamentals_basis": fundamentals_basis(sess["session"], qr.fundamentals_cutoff),
             "recent_sessions": sess["recent_sessions"],
             "universe": payload["universe"],
             "sectors": payload.get("sectors") or [],
@@ -390,7 +438,8 @@ class DiscoveryService:
             "page": 1 if export else qr.page,
             "page_size": len(payload["rows"]) if export else qr.page_size,
             "sort": sort, "order": order, "preset": qr.preset,
-            "applied_filters": {"ranges": {k: list(v) for k, v in qr.ranges.items()}, "flags": qr.flags, "sectors": list(qr.sectors), "q": qr.q},
+            "applied_filters": {"ranges": {k: list(v) for k, v in qr.ranges.items()}, "flags": qr.flags, "sectors": list(qr.sectors), "q": qr.q,
+                                "fundamentals_cutoff": qr.fundamentals_cutoff},
             "rows": payload["rows"],
             "truncated": export and payload["total"] > MAX_EXPORT_ROWS,
         }
@@ -416,7 +465,10 @@ def to_csv(result: Dict[str, Any]) -> str:
     w = csv.writer(buf, lineterminator="\n")
     w.writerow([f"# First Light screener export · session {result['session']} · {result['total']} matching stocks"
                 + (f" (first {len(result['rows'])})" if result.get("truncated") else "")])
-    w.writerow(["# Information only. Not investment advice. Observed = captured for the session; derived = from stored daily bars; reference = fundamentals snapshot known by the session."])
+    basis = result.get("fundamentals_basis") or {}
+    w.writerow(["# Information only. Not investment advice. Observed = captured for the session; derived = from stored daily bars; "
+                "reference = ingestion-time fundamentals (publication time unknown, not verified point-in-time)"
+                + (f"; fundamentals cutoff {basis.get('cutoff_mode')} {basis.get('cutoff_utc')} UTC" if basis else "") + "."])
     w.writerow(ROW_COLUMNS)
     for r in result["rows"]:
         w.writerow(["" if r.get(c) is None else r.get(c) for c in ROW_COLUMNS])
@@ -424,7 +476,7 @@ def to_csv(result: Dict[str, Any]) -> str:
 
 
 # ------------------------------------------------------------------------------------------------- query-string parsing
-_BASE_PARAMS = {"session", "preset", "sort", "order", "page", "page_size", "sector", "q", *FLAG_FILTERS}
+_BASE_PARAMS = {"session", "preset", "sort", "order", "page", "page_size", "sector", "q", "fundamentals_cutoff", *FLAG_FILTERS}
 
 
 def parse_params(items: Sequence[Tuple[str, str]]) -> Query:
@@ -453,6 +505,8 @@ def parse_params(items: Sequence[Tuple[str, str]]) -> Query:
                     sectors.append(val)
             elif name == "q":
                 qr.q = val or None
+            elif name == "fundamentals_cutoff":
+                qr.fundamentals_cutoff = val
             elif name in FLAG_FILTERS:
                 if val.lower() not in ("true", "false"):
                     raise InvalidRequest(f"{name} must be true or false")

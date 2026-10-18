@@ -1,7 +1,7 @@
 // File: frontend/src/lib/screenerV2.ts
 // Pure helpers for the Smart Screener v2 page: the screen's state <-> URL query, value formatting by unit, and the
 // table's column set. Nothing here fills a gap: a null value formats as "—".
-import type { MetricFamily, QueryPairs, ScreenerRow } from '@/services/screenerV2Api';
+import type { FundamentalsCutoff, MetricFamily, QueryPairs, ScreenerRow } from '@/services/screenerV2Api';
 
 export const PAGE_SIZES = [25, 50, 100, 200] as const;
 
@@ -29,10 +29,11 @@ export interface ScreenState {
   ranges: Record<string, { min: string; max: string }>;
   breakout20: boolean;
   newHigh20: boolean;
+  fundamentalsCutoff: FundamentalsCutoff;
 }
 
 export const DEFAULT_STATE: ScreenState = {
-  session: null, preset: null, sort: 'rs_20', order: 'desc', page: 1, pageSize: 50, sectors: [], q: '', ranges: {}, breakout20: false, newHigh20: false,
+  session: null, preset: null, sort: 'rs_20', order: 'desc', page: 1, pageSize: 50, sectors: [], q: '', ranges: {}, breakout20: false, newHigh20: false, fundamentalsCutoff: 'post_session',
 };
 
 const num = (s: string): number | null => {
@@ -59,6 +60,7 @@ export function toQueryPairs(s: ScreenState): QueryPairs {
   }
   if (s.breakout20) out.push(['breakout_20', 'true']);
   if (s.newHigh20) out.push(['new_high_20', 'true']);
+  if (s.fundamentalsCutoff !== 'post_session') out.push(['fundamentals_cutoff', s.fundamentalsCutoff]);
   return out;
 }
 
@@ -83,6 +85,7 @@ export function fromSearchParams(p: URLSearchParams): ScreenState {
   }
   s.breakout20 = p.get('breakout_20') === 'true';
   s.newHigh20 = p.get('new_high_20') === 'true';
+  s.fundamentalsCutoff = p.get('fundamentals_cutoff') === 'session_close' ? 'session_close' : 'post_session';
   return s;
 }
 
@@ -118,7 +121,7 @@ export function formatCell(row: ScreenerRow, key: keyof ScreenerRow, unit: strin
   return formatValue(v, unit);
 }
 
-export const FAMILY_LABEL: Record<MetricFamily, string> = { observed: 'Observed', derived: 'Derived', reference: 'Reference' };
+export const FAMILY_LABEL: Record<MetricFamily, string> = { observed: 'Observed', derived: 'Derived', reference: 'Reference (ingestion-time)' };
 
 /** The table's metric columns, in order. */
 export const COLUMNS: (keyof ScreenerRow)[] = [

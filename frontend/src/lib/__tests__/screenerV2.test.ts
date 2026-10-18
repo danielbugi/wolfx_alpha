@@ -26,7 +26,11 @@ describe('screen state <-> query', () => {
     const back = fromSearchParams(new URLSearchParams(toQueryPairs(s)));
     expect(back).toMatchObject({ sort: 'atr_pct', order: 'asc', page: 3, pageSize: 100, newHigh20: true });
     expect(back.ranges.dollar_vol_20).toEqual({ min: '20', max: '' });
-    const bad = fromSearchParams(new URLSearchParams('page=-4&page_size=999&order=sideways'));
+    const strict = fromSearchParams(new URLSearchParams(toQueryPairs({ ...DEFAULT_STATE, fundamentalsCutoff: 'session_close' })));
+    expect(strict.fundamentalsCutoff).toBe('session_close');
+    expect(toQueryPairs(DEFAULT_STATE).some(([k]) => k === 'fundamentals_cutoff')).toBe(false);   // default not sent
+    const bad = fromSearchParams(new URLSearchParams('page=-4&page_size=999&order=sideways&fundamentals_cutoff=whenever'));
+    expect(bad.fundamentalsCutoff).toBe('post_session');
     expect([bad.page, bad.pageSize, bad.order]).toEqual([1, 50, 'desc']);
   });
 });

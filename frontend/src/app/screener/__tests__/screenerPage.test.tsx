@@ -36,16 +36,19 @@ const row = (symbol: string, over: Partial<ScreenerRow> = {}): ScreenerRow => ({
   symbol, sector: 'Technology', sector_source: 'observed', industry: 'Software', close: 50, change_1d: 1.2, ret_5: 2, ret_20: 5.5, ret_60: 9,
   vs_spx_20: 3.1, vs_sector_20: 1.4, rs_20: 91, rs_60: 88, breakout_20: true, new_high_20: true, channel_pos: 96, channel_width: 12,
   channel_width_pctile: 40, atr_pct: 2.8, atr_pct_pctile: 55, volume_ratio: 1.6, dollar_vol_20: 2.5e8, market_cap: 3e11, dv_bars: 20,
-  fundamentals_date: '2026-10-16', vs_spx_60: 4, ...over,
+  fundamentals_date: '2026-10-16', fundamentals_ingested_at: '2026-10-16T22:50Z', fundamentals_after_close: true, vs_spx_60: 4, ...over,
 });
 
 function result(over: Partial<ScreenerResult> = {}): ScreenerResult {
   return {
     session: '2026-10-16', previous_session: '2026-10-15', dollar_volume_window: { from: '2026-09-21', to: '2026-10-16', sessions: 20 },
-    fundamentals_cutoff_utc: '2026-10-17T16:00', recent_sessions: ['2026-10-16', '2026-10-15', '2026-10-14'], universe: 3063,
+    fundamentals_cutoff_utc: '2026-10-17T16:00',
+    fundamentals_basis: { type: 'ingestion_time_reference', publication_time: 'unknown', point_in_time_verified: false, cutoff_mode: 'post_session',
+      cutoff_utc: '2026-10-17T16:00', session_close_utc: '2026-10-16T20:00', note: 'Post-session reporting convention: rows our pipeline ingested up to noon New York on the next calendar day. Not an intraday or historical decision-time guarantee.' },
+    recent_sessions: ['2026-10-16', '2026-10-15', '2026-10-14'], universe: 3063,
     sectors: ['Energy', 'Technology'],
     coverage: { rs: 3063, rs_20: 3061, rs_60: 3038, technical: 3053, breakout_20: 3053, atr_pct: 3053, dollar_vol_20: 3060, dollar_vol_insufficient: 3,
-      dollar_vol_no_bars: 0, fundamentals: 3063, market_cap: 3042, sector: 3041, sector_observed: 3041, change_1d: 3063 },
+      dollar_vol_no_bars: 0, fundamentals: 3063, fundamentals_after_close: 3063, market_cap: 3042, sector: 3041, sector_observed: 3041, change_1d: 3063 },
     total: 120, page: 1, page_size: 50, sort: 'rs_20', order: 'desc', preset: null, truncated: false,
     rows: [row('AAA'), row('BBB', { rs_20: null, rs_60: null, ret_20: null, dollar_vol_20: null, dv_bars: 12, market_cap: null, sector: null, sector_source: null })],
     ...over,
@@ -146,7 +149,7 @@ describe('Screener v2 page', () => {
     render(<ScreenerPage />);
     const d = await screen.findByTestId('definitions');
     expect(d.textContent).toMatch(/ObservedRS percentile, 20 sessions: Percentile of the 20-session return\./);
-    expect(d.textContent).toMatch(/ReferenceMarket cap: Fundamentals known by the session\./);
+    expect(d.textContent).toMatch(/Reference \(ingestion-time\)Market cap: Fundamentals known by the session\./);
     const th = screen.getByRole('button', { name: /^RS 20/ }).closest('th')!;
     expect(th.getAttribute('title')).toMatch(/RS percentile, 20 sessions \(observed\)/);
   });
@@ -158,6 +161,18 @@ describe('Screener v2 page', () => {
     // overflow container and widens the whole page (measured: 1,023 px at a 390 px viewport before the fix).
     expect(table.parentElement!.className.split(' ')).toContain('relative');
     expect(table.parentElement!.className.split(' ')).toContain('overflow-x-auto');
+  });
+
+  it('labels fundamentals as ingestion-time reference data and lets the cutoff be tightened to the close', async () => {
+    render(<ScreenerPage />);
+    const cov = (await screen.findByTestId('coverage')).querySelector('span[title]')!;
+    expect(cov.textContent).toMatch(/Fundamentals \(ingestion-time reference, publication time unknown\): 3,063 of 3,063 · 3,063 ingested after the close/);
+    expect(cov.getAttribute('title')).toMatch(/Post-session reporting convention.*Not an intraday or historical decision-time guarantee/);
+    const mcap = screen.getAllByTestId('screener-row')[0].querySelectorAll('td');
+    expect([...mcap].some((td) => /ingested 2026-10-16T22:50Z \(after the close: post-session convention\); publication time unknown/.test(td.getAttribute('title') ?? ''))).toBe(true);
+    fireEvent.change(screen.getByLabelText('Fundamentals cutoff'), { target: { value: 'session_close' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
+    expect(nav.replace).toHaveBeenLastCalledWith(expect.stringContaining('fundamentals_cutoff=session_close'), { scroll: false });
   });
 
   it('carries no advice or prediction wording', async () => {

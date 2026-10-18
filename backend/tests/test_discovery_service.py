@@ -191,3 +191,39 @@ def test_v2_routes_keep_authentication_and_are_get_only():
     assert anon.get("/api/screener/v2/export.csv").status_code == 401
     c, _ = _client()
     assert c.post("/api/screener/v2/search").status_code == 405
+
+
+# ------------------------------------------------------------------------- fundamentals provenance (ingestion-time data)
+def test_fundamentals_are_labelled_ingestion_time_reference_not_point_in_time():
+    b = D.fundamentals_basis(date(2026, 10, 16), "post_session")
+    assert b["type"] == "ingestion_time_reference" and b["publication_time"] == "unknown" and b["point_in_time_verified"] is False
+    assert b["cutoff_utc"] == "2026-10-17T16:00" and "Post-session reporting convention" in b["note"] and "Not an intraday" in b["note"]
+    strict = D.fundamentals_basis(date(2026, 10, 16), "session_close")
+    assert strict["cutoff_utc"] == "2026-10-16T20:00" == strict["session_close_utc"]           # 16:00 New York (EDT)
+    assert D.session_close_utc(date(2026, 12, 4)) == datetime(2026, 12, 4, 21, 0)              # EST
+    defs = D.definitions()
+    assert "not verified point-in-time" in defs["families"][D.REFERENCE]
+    assert "not verified point-in-time" in next(m["definition"] for m in defs["metrics"] if m["key"] == "market_cap")
+
+
+def test_fundamentals_cutoff_is_allowlisted_and_reaches_the_query():
+    assert D.parse_params([("fundamentals_cutoff", "session_close")]).fundamentals_cutoff == "session_close"
+    with pytest.raises(D.InvalidRequest):
+        D.normalise(D.parse_params([("fundamentals_cutoff", "whenever")]))
+    sql = D.page_sql("TRUE", D.order_clause("rs_20", "desc"))
+    assert "<= %(cutoff)s" in sql and "> %(close_utc)s" in sql and "AS ingested_at" in sql
+    assert "fundamentals_after_close" in D.ROW_COLUMNS and "fundamentals_ingested_at" in D.ROW_COLUMNS
+
+
+def test_csv_header_states_the_fundamentals_basis():
+    result = {"session": "2026-10-16", "total": 0, "truncated": False, "rows": [],
+              "fundamentals_basis": D.fundamentals_basis(date(2026, 10, 16), "session_close")}
+    head = D.to_csv(result).splitlines()[1]
+    assert "ingestion-time fundamentals (publication time unknown, not verified point-in-time)" in head
+    assert "session_close 2026-10-16T20:00 UTC" in head
+
+
+def test_v2_route_refuses_an_unknown_fundamentals_cutoff():
+    c, _ = _client()
+    assert c.get("/api/screener/v2/search?fundamentals_cutoff=session_close").status_code == 200
+    assert c.get("/api/screener/v2/search?fundamentals_cutoff=tomorrow").status_code == 422

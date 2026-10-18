@@ -4,6 +4,7 @@
 import { apiClient } from '@/services/api';
 
 export type MetricFamily = 'observed' | 'derived' | 'reference';
+export type FundamentalsCutoff = 'post_session' | 'session_close';
 
 export interface MetricDefinition {
   key: string;
@@ -56,6 +57,10 @@ export interface ScreenerRow {
   market_cap: number | null;
   dv_bars: number;
   fundamentals_date: string | null;
+  /** when our pipeline ingested the fundamentals row (UTC); the original publication time is unknown */
+  fundamentals_ingested_at: string | null;
+  /** true when that row was ingested after the session's close (it relies on the post-session reporting convention) */
+  fundamentals_after_close: boolean | null;
 }
 
 export interface ScreenerCoverage {
@@ -69,6 +74,7 @@ export interface ScreenerCoverage {
   dollar_vol_insufficient: number;
   dollar_vol_no_bars: number;
   fundamentals: number;
+  fundamentals_after_close: number;
   market_cap: number;
   sector: number;
   sector_observed: number;
@@ -80,6 +86,15 @@ export interface ScreenerResult {
   previous_session: string | null;
   dollar_volume_window: { from: string | null; to: string; sessions: number };
   fundamentals_cutoff_utc: string;
+  fundamentals_basis: {
+    type: 'ingestion_time_reference';
+    publication_time: 'unknown';
+    point_in_time_verified: false;
+    cutoff_mode: FundamentalsCutoff;
+    cutoff_utc: string;
+    session_close_utc: string;
+    note: string;
+  };
   recent_sessions: string[];
   universe: number;
   sectors: string[];
