@@ -27,6 +27,11 @@ const PRODUCT_FILES = [
   'components/stock/KeyLevels.tsx',
   'components/common/DataStamp.tsx',
   'components/common/ProductDisclaimer.tsx',
+  'components/marketIntel/MarketIntelligencePanel.tsx',
+  'components/marketIntel/RegimeCard.tsx',
+  'components/marketIntel/BreadthCard.tsx',
+  'components/marketIntel/ReturnsCard.tsx',
+  'components/marketIntel/SectorLeadershipCard.tsx',
 ];
 
 // Each entry: what it catches, and the pattern (case-insensitive).

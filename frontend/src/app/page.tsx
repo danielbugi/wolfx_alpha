@@ -24,6 +24,7 @@ import SummaryTiles from '@/components/dashboard/SummaryTiles';
 import CommoditiesCard, { COMMODITY_SYMBOLS } from '@/components/dashboard/CommoditiesCard';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import DataStamp from '@/components/common/DataStamp';
+import MarketIntelligencePanel from '@/components/marketIntel/MarketIntelligencePanel';
 import { ResolvedTheme, useResolvedTheme } from '@/lib/theme';
 
 function timeAgo(date: Date | null): string {
@@ -255,6 +256,9 @@ export default function DashboardPage() {
             </Button>
           </div>
         </div>
+
+        {/* Market Overview v2: regime, breadth, returns and sector leadership from the observed daily snapshot */}
+        <MarketIntelligencePanel priceDate={data.market_summary?.last_updated ?? null} />
 
         {/* First read: breadth, market mood, sector leaders */}
         <SummaryTiles overview={marketOverview} indices={marketIndices} />
