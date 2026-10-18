@@ -47,6 +47,8 @@ export interface ScreenerRow {
   rs_60: number | null;
   breakout_20: boolean | null;
   new_high_20: boolean | null;
+  dist_sma20: number | null;
+  dist_sma50: number | null;
   channel_pos: number | null;
   channel_width: number | null;
   channel_width_pctile: number | null;

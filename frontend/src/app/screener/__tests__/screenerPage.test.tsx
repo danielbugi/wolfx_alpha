@@ -36,7 +36,7 @@ const row = (symbol: string, over: Partial<ScreenerRow> = {}): ScreenerRow => ({
   symbol, sector: 'Technology', sector_source: 'observed', industry: 'Software', close: 50, change_1d: 1.2, ret_5: 2, ret_20: 5.5, ret_60: 9,
   vs_spx_20: 3.1, vs_sector_20: 1.4, rs_20: 91, rs_60: 88, breakout_20: true, new_high_20: true, channel_pos: 96, channel_width: 12,
   channel_width_pctile: 40, atr_pct: 2.8, atr_pct_pctile: 55, volume_ratio: 1.6, dollar_vol_20: 2.5e8, market_cap: 3e11, dv_bars: 20,
-  fundamentals_date: '2026-10-16', fundamentals_ingested_at: '2026-10-16T22:50Z', fundamentals_after_close: true, vs_spx_60: 4, ...over,
+  fundamentals_date: '2026-10-16', fundamentals_ingested_at: '2026-10-16T22:50Z', fundamentals_after_close: true, vs_spx_60: 4, dist_sma20: 1.5, dist_sma50: 4.2, ...over,
 });
 
 function result(over: Partial<ScreenerResult> = {}): ScreenerResult {
