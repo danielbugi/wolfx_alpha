@@ -3,7 +3,8 @@
 Screener API Router - Advanced stock screening endpoints
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi.responses import Response
 
 from auth.dependencies import require_authenticated_user
 from typing import List, Dict, Any
@@ -18,6 +19,7 @@ from models.screener_models import (
     QualityGrade, TechnicalStrength, SortBy, SortOrder
 )
 from services.market_service import MarketService, MarketFilter
+from services import discovery_service as discovery
 
 logger = logging.getLogger(__name__)
 
@@ -326,3 +328,51 @@ def _generate_facets(stocks: List[Dict[str, Any]]) -> Dict[str, Any]:
                 facets['market_cap_ranges']['mega'] += 1
 
     return facets
+
+
+# ============================================================================
+# SMART SCREENER V2 (one explicit session, read-only; see services/discovery_service.py)
+# ============================================================================
+
+def get_discovery_service():
+    from main import get_database_connection
+    return discovery.DiscoveryService(get_database_connection)
+
+
+@screener_router.get("/v2/definitions")
+def discovery_definitions():
+    """Metric definitions (label, unit, family: observed / derived / reference), presets, sort keys and limits."""
+    return discovery.definitions()
+
+
+@screener_router.get("/v2/search")
+def discovery_search(request: Request, service: discovery.DiscoveryService = Depends(get_discovery_service)):
+    """
+    Screen the universe for ONE explicit session (?session=YYYY-MM-DD, default the newest real session).
+    Filters: min_<metric> / max_<metric> for numeric metrics, breakout_20 / new_high_20 (true|false), sector (repeatable),
+    q (symbol prefix), preset. Sorting: sort (allowlisted) and order (asc|desc). Pagination: page, page_size (<= 200).
+    Unknown parameters, sort keys, presets or non-session dates are refused with 422.
+    """
+    try:
+        return service.search(discovery.parse_params(list(request.query_params.multi_items())))
+    except discovery.InvalidRequest as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error in screener v2 search: {e}")
+        raise HTTPException(status_code=500, detail="Error running the screener")
+
+
+@screener_router.get("/v2/export.csv")
+def discovery_export(request: Request, service: discovery.DiscoveryService = Depends(get_discovery_service)):
+    """The same screen as /v2/search, all matching rows (at most 5,000) as CSV with a session header."""
+    items = [(k, v) for k, v in request.query_params.multi_items() if k not in ("page", "page_size")]
+    try:
+        result = service.search(discovery.parse_params(items), export=True)
+    except discovery.InvalidRequest as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error in screener v2 export: {e}")
+        raise HTTPException(status_code=500, detail="Error exporting the screener")
+    filename = f"first-light-screener-{result['session']}.csv"
+    return Response(content=discovery.to_csv(result), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
