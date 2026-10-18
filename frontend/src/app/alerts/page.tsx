@@ -21,6 +21,7 @@ import { deepValueApi, DeepValueEntry, BalanceSheetAssessment, BalanceSheetCheck
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import ErrorAlert from '@/components/common/ErrorAlert';
 import DataStamp from '@/components/common/DataStamp';
+import { TURNAROUND_PAGE, WATCH_PAGE } from '@/lib/deepValueView';
 import SymbolHoverLink from '@/components/dashboard/SymbolHoverLink';
 
 function gradeColor(grade: string | null) {
@@ -95,10 +96,6 @@ function fmtMoney(v: number | undefined): string {
   if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(1)}K`;
   return `${sign}$${abs.toFixed(0)}`;
 }
-
-/** Rows rendered before "Show more": the full scan can hold hundreds of matches, too many for one page on a phone. */
-export const TURNAROUND_PAGE = 24;
-export const WATCH_PAGE = 50;
 
 function ShowMore({ shown, total, step, onMore, label }: { shown: number; total: number; step: number; onMore: () => void; label: string }) {
   if (shown >= total) return null;

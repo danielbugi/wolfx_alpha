@@ -28,6 +28,7 @@ const PRODUCT_FILES = [
   'components/stock/KeyLevels.tsx',
   'components/stock/StockContextPanel.tsx',
   'app/watchlist/page.tsx',
+  'lib/deepValueView.ts',
   'lib/watchlistView.ts',
   'components/common/DataStamp.tsx',
   'components/common/ProductDisclaimer.tsx',

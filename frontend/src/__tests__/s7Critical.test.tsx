@@ -23,7 +23,8 @@ vi.mock('@/services/api', async (importOriginal) => {
 vi.mock('@/services/screenerV2Api', () => ({ screenerV2Api: { search: api.search, definitions: vi.fn() } }));
 vi.mock('@/components/dashboard/SymbolHoverLink', () => ({ default: ({ symbol }: { symbol: string }) => <span>{symbol}</span> }));
 
-import AlertsPage, { TURNAROUND_PAGE, WATCH_PAGE } from '@/app/alerts/page';
+import AlertsPage from '@/app/alerts/page';
+import { TURNAROUND_PAGE, WATCH_PAGE } from '@/lib/deepValueView';
 import EarningsTable from '@/components/earnings/EarningsTable';
 import WatchlistCard from '@/components/dashboard/WatchlistCard';
 import MarketsPage from '@/app/markets/page';
