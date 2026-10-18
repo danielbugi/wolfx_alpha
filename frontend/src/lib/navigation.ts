@@ -1,17 +1,24 @@
 // File: frontend/src/lib/navigation.ts
 // The single list of dashboard routes, shared by Sidebar and MobileNav so they can never drift apart.
+//
+// Two groups: PRODUCT (the market-intelligence journey: overview -> screener -> stock -> deep value, plus markets and
+// earnings) and INTERNAL (research, trading operations and ops tools). The split is a USER-EXPERIENCE separation only:
+// hiding a link protects nothing, and every internal page is still reachable by URL and served by its API to any
+// signed-in user. Access control lives on the backend (backend/auth/dependencies.py), not here.
 import {
   BeakerIcon,
-  BellAlertIcon,
   BoltIcon,
   CalendarDaysIcon,
   ChartBarIcon,
+  ClipboardDocumentListIcon,
   CpuChipIcon,
+  FireIcon,
   FunnelIcon,
   GlobeAltIcon,
   HeartIcon,
   PaperAirplaneIcon,
   PresentationChartLineIcon,
+  ScaleIcon,
   Squares2X2Icon,
   UsersIcon,
 } from '@heroicons/react/24/outline';
@@ -31,33 +38,50 @@ export interface NavItem {
 export interface NavGroup {
   label: string;
   items: NavItem[];
+  /** Internal tools: shown under a collapsible header that starts closed (it opens by itself on one of its pages). */
+  internal?: boolean;
 }
 
 export const NAV_GROUPS: NavGroup[] = [
   {
-    label: 'Markets',
+    label: 'Product',
     items: [
-      { name: 'Dashboard', href: '/', icon: Squares2X2Icon, description: 'Overview & breakouts' },
+      { name: 'Overview', href: '/', icon: Squares2X2Icon, description: 'Market overview: breadth, sectors, movers' },
+      { name: 'Screener', href: '/screener', icon: FunnelIcon, description: 'Search & filter the universe' },
+      { name: 'Deep Value', href: '/alerts', icon: ScaleIcon, description: 'Near-low stocks that pass balance-sheet checks (descriptive)' },
       { name: 'Markets', href: '/markets', icon: GlobeAltIcon, description: 'Futures, commodities, currencies, crypto' },
       { name: 'Earnings', href: '/earnings', icon: CalendarDaysIcon, description: 'Earnings calendar: who reports, day by day' },
-      { name: 'Screener', href: '/screener', icon: FunnelIcon, description: 'Search & filter the universe' },
-      { name: 'Position Plans', href: '/strategy', icon: ChartBarIcon, description: 'Ranked position plans' },
-      { name: 'Strategies', href: '/strategies', icon: PresentationChartLineIcon, description: 'Strategy intelligence: outcomes, signals, data health' },
-      { name: 'Quant Lab', href: '/lab', icon: BeakerIcon, description: 'Historical research evidence: strategies, exits, ML, catalysts' },
-      { name: 'Alerts', href: '/alerts', icon: BellAlertIcon, description: 'Deep-value / turnaround watch' },
-      { name: 'Telegram', href: '/telegram', icon: PaperAirplaneIcon, description: 'Channel post control center' },
     ],
   },
   {
-    label: 'Ops',
+    label: 'Internal',
+    internal: true,
     items: [
-      { name: 'System Health', href: '/system-health', icon: HeartIcon, description: 'Pipeline, data quality, ML' },
-      { name: 'ML Stats', href: '/ml-stats', icon: CpuChipIcon, description: 'Model accuracy & training data' },
-      { name: 'Performance', href: '/performance', icon: BoltIcon, description: 'API & route latency' },
+      { name: 'Momentum Board', href: '/momentum', icon: FireIcon, description: 'Internal: momentum lists and leaders' },
+      { name: 'Position Plans', href: '/strategy', icon: ChartBarIcon, description: 'Internal: ranked position plans' },
+      { name: 'Strategies', href: '/strategies', icon: PresentationChartLineIcon, description: 'Internal: strategy outcomes, signals, data health' },
+      { name: 'Track Record', href: '/track-record', icon: ClipboardDocumentListIcon, description: 'Internal: breakout signal track record' },
+      { name: 'Quant Lab', href: '/lab', icon: BeakerIcon, description: 'Internal: historical research evidence' },
+      { name: 'Telegram', href: '/telegram', icon: PaperAirplaneIcon, description: 'Internal: channel post control center' },
+      { name: 'System Health', href: '/system-health', icon: HeartIcon, description: 'Internal: pipeline, data quality, ML' },
+      { name: 'ML Stats', href: '/ml-stats', icon: CpuChipIcon, description: 'Internal: model accuracy & training data' },
+      { name: 'Performance', href: '/performance', icon: BoltIcon, description: 'Internal: API & route latency' },
       { name: 'Users', href: '/users', icon: UsersIcon, description: 'Accounts & sessions (Owner only)', roles: ['owner'] },
     ],
   },
 ];
+
+/** Product routes: the pages that carry the product disclaimer and must stay free of trade plans, sizing,
+ * experimental model output and signal-performance claims (pinned by tests). `/stock/[symbol]` is a product page
+ * reached from every table, so it is listed here although it has no menu entry. */
+export const PRODUCT_ROUTE_PREFIXES: readonly string[] = [
+  ...NAV_GROUPS.filter((g) => !g.internal).flatMap((g) => g.items.map((i) => i.href)),
+  '/stock',
+];
+
+export function isProductRoute(pathname: string): boolean {
+  return PRODUCT_ROUTE_PREFIXES.some((href) => isActiveRoute(pathname, href));
+}
 
 /** True when `href` is the current route or a page inside its section (`/markets/GC=F` keeps Markets highlighted).
  * `/stock/[symbol]` is deliberately unlisted, so a stock page highlights nothing. */

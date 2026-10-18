@@ -137,7 +137,7 @@ export default function AlertsPage() {
             check. <span className="font-semibold text-slate-700">Turnaround flips</span> are the subset that
             also just flipped from a quarterly net loss to a net profit in two consecutive quarters. These are
             screening rules that describe the current data, not a prediction or a recommendation, and there is no
-            track record for this screen. In one historical test (about 15 months; see the research notes in the repository)
+            track record for this screen. In one historical test (about 15 months, a single market period)
             stocks matching these rules did not outperform the market.
           </p>
         </div>
@@ -198,11 +198,11 @@ export default function AlertsPage() {
         ) : (
           <>
             {/* Turnaround flips */}
-            <Card className="shadow-sm border-2 border-emerald-300">
-              <CardHeader className="bg-emerald-600 text-white p-4">
+            <Card className="border border-black/[0.05] shadow-sm">
+              <CardHeader className="p-4">
                 <div>
                   <h3 className="text-base font-semibold">Turnaround flips</h3>
-                  <p className="text-emerald-100 text-xs mt-1">Near lows + cheap + just flipped loss → profit</p>
+                  <p className="text-slate-500 text-xs mt-1">Near lows + cheap valuation + latest quarter flipped from a loss to a profit</p>
                 </div>
               </CardHeader>
               <CardBody className="p-0">
@@ -217,7 +217,7 @@ export default function AlertsPage() {
                       <Link
                         key={e.symbol}
                         href={`/stock/${e.symbol}`}
-                        className="block border border-emerald-200 rounded-lg p-3 hover:shadow-md transition-shadow"
+                        className="block border border-black/[0.06] rounded-lg p-3 hover:shadow-md transition-shadow"
                       >
                         <div className="flex justify-between items-center mb-1">
                           <SymbolHoverLink symbol={e.symbol} asText className="font-bold text-slate-800" />

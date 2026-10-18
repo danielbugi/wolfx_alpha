@@ -29,16 +29,15 @@ function Tile({ label, children, foot }: { label: string; children: React.ReactN
 const big = 'text-[28px] font-semibold leading-tight tracking-[-0.02em] tabular-nums text-slate-900';
 
 /**
- * The dashboard's first read: how broad the move is, how many names are confirmed, the market's mood (VIX), and which
- * sectors lead and lag today. Each tile shows "—" until its data arrives; nothing is defaulted.
+ * The overview's first read: how broad the move is, the market's mood (VIX), and which sectors lead and lag today.
+ * Each tile shows "—" until its data arrives; nothing is defaulted. The former "Confirmed today" tile (a count of
+ * names on 2+ Momentum Board lists) is signal output and now lives with the board on the internal /momentum page.
  */
 export default function SummaryTiles({
   overview,
-  starredTotal,
   indices,
 }: {
   overview: MarketOverview | null;
-  starredTotal: number | null;
   indices: MarketIndexEntry[];
 }) {
   const breadth = overview?.market_breadth;
@@ -55,7 +54,7 @@ export default function SummaryTiles({
   const pct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
 
   return (
-    <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+    <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
       <Tile
         label="Market breadth"
         foot={breadth ? `A/D ratio ${breadth.advance_decline_ratio.toFixed(2)} · ${breadth.total_stocks.toLocaleString()} stocks` : undefined}
@@ -72,10 +71,6 @@ export default function SummaryTiles({
             </p>
           </>
         )}
-      </Tile>
-
-      <Tile label="Confirmed today" foot="★ on 2+ Momentum Board lists">
-        <p className={big}>{starredTotal ?? UNKNOWN}</p>
       </Tile>
 
       <Tile label="Market mood (VIX)" foot={regime ? regime.blurb : undefined}>

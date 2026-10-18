@@ -5,9 +5,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ArrowLeftStartOnRectangleIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftStartOnRectangleIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon, ChevronRightIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { clsx } from 'clsx';
-import { navGroupsForRole, isActiveRoute } from '@/lib/navigation';
+import { navGroupsForRole, isActiveRoute, type NavGroup } from '@/lib/navigation';
+import { useNavGroupOpen } from '@/lib/navGroupState';
 import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
 import SearchBox from '@/components/layout/SearchBox';
 import Logo from '@/components/brand/Logo';
@@ -83,41 +84,7 @@ export default function Sidebar() {
 
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-3">
         {navGroups.map((group) => (
-          <div key={group.label}>
-            {!collapsed ? (
-              <p className="px-2.5 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400">{group.label}</p>
-            ) : (
-              <div className="mx-auto mb-2 h-px w-6 bg-black/[0.08]" />
-            )}
-            <div className="space-y-0.5">
-              {group.items.map((item) => {
-                const active = isActiveRoute(pathname, item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    title={collapsed ? `${item.name} — ${item.description}` : undefined}
-                    aria-current={active ? 'page' : undefined}
-                    className={clsx(
-                      'press relative flex items-center gap-3 rounded-lg px-2.5 py-[7px] text-[13.5px] font-medium',
-                      collapsed && 'justify-center px-0',
-                      active ? 'text-slate-900' : 'text-slate-600 hover:bg-black/[0.04] hover:text-slate-900',
-                    )}
-                  >
-                    {active && (
-                      <motion.span
-                        layoutId="sidebar-active"
-                        aria-hidden
-                        className="absolute inset-0 rounded-lg bg-white shadow-[0_1px_2px_rgb(0_0_0/0.06),0_0_0_0.5px_rgb(0_0_0/0.05)]"
-                      />
-                    )}
-                    <item.icon className={clsx('relative h-[18px] w-[18px] shrink-0', active ? 'text-accent' : 'text-slate-400')} />
-                    {!collapsed && <span className="relative truncate">{item.name}</span>}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
+          <SidebarGroup key={group.label} group={group} pathname={pathname} collapsed={collapsed} />
         ))}
       </nav>
 
@@ -169,5 +136,64 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
+  );
+}
+
+/** One nav group. The Internal group gets a collapsible header (closed by default, open while one of its pages is
+ * current); on the icon rail a closed Internal group shows only its divider. */
+function SidebarGroup({ group, pathname, collapsed }: { group: NavGroup; pathname: string; collapsed: boolean }) {
+  const { open, toggle, collapsible } = useNavGroupOpen(group, pathname);
+  const listId = `nav-group-${group.label.toLowerCase()}`;
+  return (
+    <div>
+      {!collapsed ? (
+        collapsible ? (
+          <button
+            type="button"
+            onClick={toggle}
+            aria-expanded={open}
+            aria-controls={listId}
+            className="press flex w-full items-center gap-1 px-2.5 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400 hover:text-slate-600"
+          >
+            <ChevronRightIcon className={clsx('h-3 w-3 transition-transform', open && 'rotate-90')} aria-hidden />
+            {group.label}
+          </button>
+        ) : (
+          <p className="px-2.5 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400">{group.label}</p>
+        )
+      ) : (
+        <div className="mx-auto mb-2 h-px w-6 bg-black/[0.08]" title={collapsible ? group.label : undefined} />
+      )}
+      {open && (
+        <div id={listId} className="space-y-0.5">
+          {group.items.map((item) => {
+            const active = isActiveRoute(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                title={collapsed ? `${item.name} — ${item.description}` : undefined}
+                aria-current={active ? 'page' : undefined}
+                className={clsx(
+                  'press relative flex items-center gap-3 rounded-lg px-2.5 py-[7px] text-[13.5px] font-medium',
+                  collapsed && 'justify-center px-0',
+                  active ? 'text-slate-900' : 'text-slate-600 hover:bg-black/[0.04] hover:text-slate-900',
+                )}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="sidebar-active"
+                    aria-hidden
+                    className="absolute inset-0 rounded-lg bg-white shadow-[0_1px_2px_rgb(0_0_0/0.06),0_0_0_0.5px_rgb(0_0_0/0.05)]"
+                  />
+                )}
+                <item.icon className={clsx('relative h-[18px] w-[18px] shrink-0', active ? 'text-accent' : 'text-slate-400')} />
+                {!collapsed && <span className="relative truncate">{item.name}</span>}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
