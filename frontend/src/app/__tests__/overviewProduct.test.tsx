@@ -14,6 +14,7 @@ const calls = vi.hoisted(() => ({ board: 0, leaders: 0 }));
 vi.mock('@/hooks/usePagePerf', () => ({ usePagePerf: () => ({ markLoaded: () => {} }) }));
 vi.mock('@/components/earnings/EarningsCard', () => ({ default: () => null }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }), usePathname: () => '/' }));
+vi.mock('@/components/marketIntel/MarketIntelligencePanel', () => ({ default: () => <div data-testid="mi-panel" /> }));
 vi.mock('@/lib/topProgress', () => ({ useTopProgress: () => ({ start: () => {}, done: () => {} }) }));
 
 const mainPage = (lastUpdated: string | null) => ({
@@ -61,6 +62,12 @@ describe('Overview (product)', () => {
     expect(calls.board).toBe(0);
     expect(calls.leaders).toBe(0);
     expect(screen.getByTestId('data-stamp').textContent).toMatch(/Data as of\s*2026-10-16/);
+    expect(screen.getByTestId('mi-panel')).toBeTruthy();
+    // breadth appears once (in the market-intelligence panel); the legacy "N% up" tile and A/D box are gone
+    expect(text).not.toMatch(/% up/);
+    expect(text).not.toMatch(/Advance\/Decline/);
+    expect(text).toMatch(/volume at least 2× its 10-day average/);
+    expect(text).toMatch(/14-session RSI/);
   });
 
   it('says the data date is unavailable instead of inventing one', async () => {
