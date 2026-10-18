@@ -12,7 +12,7 @@ import DataStamp from '@/components/common/DataStamp';
 import ErrorAlert from '@/components/common/ErrorAlert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import SortHeader from '@/components/ui/SortHeader';
-import { HoverTip, MultiSelect, TextField } from '@/components/ui/Field';
+import { MultiSelect, TextField } from '@/components/ui/Field';
 import { useWatchlist } from '@/lib/watchlist';
 import { sectorHref } from '@/lib/sectors';
 import {
@@ -195,7 +195,7 @@ function Screener() {
           }}
           aria-label="Filters"
         >
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <TextField label="Symbol starts with" value={draft.q} maxLength={10} onChange={(e) => setDraft({ ...draft, q: e.target.value })} />
             <MultiSelect
               className="col-span-2 sm:col-span-1"
@@ -206,22 +206,30 @@ function Screener() {
               placeholder="All sectors"
             />
             {RANGE_FILTERS.map((f) => (
-              <div key={f.key} className="grid grid-cols-2 gap-1">
-                <TextField
-                  label={`${f.label} min`}
-                  inputMode="decimal"
-                  suffix={f.suffix || undefined}
-                  value={draft.ranges[f.key]?.min ?? ''}
-                  onChange={(e) => setDraft({ ...draft, ranges: { ...draft.ranges, [f.key]: { min: e.target.value, max: draft.ranges[f.key]?.max ?? '' } } })}
-                />
-                <TextField
-                  label="max"
-                  inputMode="decimal"
-                  suffix={f.suffix || undefined}
-                  value={draft.ranges[f.key]?.max ?? ''}
-                  onChange={(e) => setDraft({ ...draft, ranges: { ...draft.ranges, [f.key]: { min: draft.ranges[f.key]?.min ?? '', max: e.target.value } } })}
-                />
-              </div>
+              <fieldset key={f.key} className="min-w-0">
+                <legend className="mb-1 block text-xs font-medium text-slate-600">
+                  {f.label}
+                  {f.suffix ? <span className="font-normal text-slate-400"> ({f.suffix})</span> : null}
+                </legend>
+                <div className="grid grid-cols-2 gap-1">
+                  <input
+                    aria-label={`${f.label} minimum`}
+                    inputMode="decimal"
+                    placeholder="min"
+                    value={draft.ranges[f.key]?.min ?? ''}
+                    onChange={(e) => setDraft({ ...draft, ranges: { ...draft.ranges, [f.key]: { min: e.target.value, max: draft.ranges[f.key]?.max ?? '' } } })}
+                    className="w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 py-[7px] text-[13px] tabular-nums placeholder:text-slate-400 focus:border-accent focus:outline-none"
+                  />
+                  <input
+                    aria-label={`${f.label} maximum`}
+                    inputMode="decimal"
+                    placeholder="max"
+                    value={draft.ranges[f.key]?.max ?? ''}
+                    onChange={(e) => setDraft({ ...draft, ranges: { ...draft.ranges, [f.key]: { min: draft.ranges[f.key]?.min ?? '', max: e.target.value } } })}
+                    className="w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 py-[7px] text-[13px] tabular-nums placeholder:text-slate-400 focus:border-accent focus:outline-none"
+                  />
+                </div>
+              </fieldset>
             ))}
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-4">
@@ -286,7 +294,7 @@ function Screener() {
               <ArrowDownTrayIcon className="h-4 w-4" /> {exporting ? 'Exporting…' : `CSV${result && result.total > maxExport ? ` (first ${maxExport.toLocaleString('en-US')})` : ''}`}
             </button>
           </div>
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-[1280px] text-[13px]">
               <thead className="bg-slate-50/70 text-[11px] text-slate-500">
                 <tr>
@@ -302,22 +310,8 @@ function Screener() {
                   {COLUMNS.map((c) => {
                     const m = metric(c as string);
                     return (
-                      <th key={c} className="whitespace-nowrap px-3 py-2 text-right font-medium">
-                        <HoverTip
-                          content={
-                            m ? (
-                              <span className="block max-w-xs text-left">
-                                <span className={clsx('mb-1 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold', FAMILY_TONE[m.family])}>{FAMILY_LABEL[m.family]}</span>
-                                <span className="block font-semibold">{m.label}</span>
-                                <span className="block">{m.definition}</span>
-                              </span>
-                            ) : (
-                              String(c)
-                            )
-                          }
-                        >
-                          <SortHeader label={SHORT[c] ?? String(c)} active={state.sort === c} dir={state.sort === c ? state.order : null} onClick={() => sortBy(c as string)} align="end" />
-                        </HoverTip>
+                      <th key={c} className="whitespace-nowrap px-3 py-2 text-right font-medium" title={m ? `${m.label} (${FAMILY_LABEL[m.family].toLowerCase()}): ${m.definition}` : undefined}>
+                        <SortHeader label={SHORT[c] ?? String(c)} active={state.sort === c} dir={state.sort === c ? state.order : null} onClick={() => sortBy(c as string)} align="end" />
                       </th>
                     );
                   })}
@@ -428,12 +422,21 @@ function Screener() {
         </div>
 
         {defs && (
-          <p className="px-1 text-xs leading-relaxed text-slate-400">
-            <span className="font-medium text-slate-500">Observed</span>: {defs.families.observed}{' '}
-            <span className="font-medium text-slate-500">Derived</span>: {defs.families.derived}{' '}
-            <span className="font-medium text-slate-500">Reference</span>: {defs.families.reference} Hover a column for its definition. A dash means the
-            value is unavailable for this session.
-          </p>
+          <details className="rounded-2xl border border-black/[0.05] bg-white p-4 shadow-sm" data-testid="definitions">
+            <summary className="cursor-pointer text-[13px] font-medium text-slate-700">Metric definitions and data families</summary>
+            <ul className="mt-3 grid grid-cols-1 gap-x-8 gap-y-2 text-xs text-slate-600 md:grid-cols-2">
+              {defs.metrics.map((m) => (
+                <li key={m.key}>
+                  <span className={clsx('mr-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold', FAMILY_TONE[m.family])}>{FAMILY_LABEL[m.family]}</span>
+                  <span className="font-medium text-slate-800">{m.label}</span>: {m.definition}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-xs leading-relaxed text-slate-500">
+              <span className="font-medium">Observed</span>: {defs.families.observed} <span className="font-medium">Derived</span>: {defs.families.derived}{' '}
+              <span className="font-medium">Reference</span>: {defs.families.reference} A dash means the value is unavailable for this session.
+            </p>
+          </details>
         )}
       </div>
     </div>

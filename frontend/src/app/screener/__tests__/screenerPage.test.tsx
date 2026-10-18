@@ -142,6 +142,24 @@ describe('Screener v2 page', () => {
     expect(create).toHaveBeenCalled();
   });
 
+  it('lists every metric definition with its data family, and titles each column with it', async () => {
+    render(<ScreenerPage />);
+    const d = await screen.findByTestId('definitions');
+    expect(d.textContent).toMatch(/ObservedRS percentile, 20 sessions: Percentile of the 20-session return\./);
+    expect(d.textContent).toMatch(/ReferenceMarket cap: Fundamentals known by the session\./);
+    const th = screen.getByRole('button', { name: /^RS 20/ }).closest('th')!;
+    expect(th.getAttribute('title')).toMatch(/RS percentile, 20 sessions \(observed\)/);
+  });
+
+  it('keeps the wide table inside its own positioned scroller (no page-wide horizontal scroll on phones)', async () => {
+    render(<ScreenerPage />);
+    const table = (await screen.findAllByTestId('screener-row'))[0].closest('table')!;
+    // screen-reader-only text in the headers is absolutely positioned: without a positioned scroller it escapes the
+    // overflow container and widens the whole page (measured: 1,023 px at a 390 px viewport before the fix).
+    expect(table.parentElement!.className.split(' ')).toContain('relative');
+    expect(table.parentElement!.className.split(' ')).toContain('overflow-x-auto');
+  });
+
   it('carries no advice or prediction wording', async () => {
     const { container } = render(<ScreenerPage />);
     await screen.findAllByTestId('screener-row');
