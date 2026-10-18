@@ -8,6 +8,7 @@ import {
   Button,
   Chip,
 } from '@nextui-org/react';
+import Link from 'next/link';
 import { ResponsiveContainer, Treemap } from 'recharts';
 import { apiClient, screenerApi, marketApi, MainPageData, MarketOverview, MarketIndexEntry, SectorHistoryEntry } from '@/services/api';
 import { usePagePerf } from '@/hooks/usePagePerf';
@@ -335,13 +336,23 @@ export default function DashboardPage() {
                       : 'Sector performance: 90-day cumulative return. Click a sector to isolate it.'}
                   </p>
                   {selectedSector && (
-                    <Chip
-                      size="sm"
-                      className="bg-accent text-white text-xs cursor-pointer"
-                      onClose={() => setSelectedSector(null)}
-                    >
-                      {selectedSector}
-                    </Chip>
+                    <div className="flex items-center gap-2">
+                      <Chip
+                        size="sm"
+                        className="bg-accent text-white text-xs cursor-pointer"
+                        onClose={() => setSelectedSector(null)}
+                      >
+                        {selectedSector}
+                      </Chip>
+                      {/* Internal tool: the selected sector filters the internal momentum lists on /momentum. */}
+                      <Link
+                        href={`/momentum?sector=${encodeURIComponent(selectedSector)}`}
+                        title="Open the internal momentum view filtered to this sector"
+                        className="text-xs font-medium text-accent hover:underline"
+                      >
+                        Internal view →
+                      </Link>
+                    </div>
                   )}
                 </div>
                 {sectorView === 'trend' ? (
