@@ -10,7 +10,7 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
 }
 
-const state = vi.hoisted(() => ({ sectors: null as unknown, detail: null as unknown, detailStatus: 200, snap: null as unknown, snapFail: false, slug: 'alpha' }));
+const state = vi.hoisted(() => ({ sectors: null as unknown, sectorsStatus: 200, detail: null as unknown, detailStatus: 200, detailBody: { detail: "Unknown sector 'zz'" } as unknown, snap: null as unknown, snapFail: false, slug: 'alpha' }));
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ slug: state.slug }),
@@ -33,9 +33,12 @@ vi.mock('@/services/api', async (importOriginal) => {
     ...actual,
     apiClient: {
       get: vi.fn(async (url: string) => {
-        if (url === '/api/market/sectors') return { data: state.sectors };
+        if (url === '/api/market/sectors') {
+          if (state.sectorsStatus !== 200) throw Object.assign(new Error('x'), { response: { status: state.sectorsStatus, data: { detail: 'Not Found' } } });
+          return { data: state.sectors };
+        }
         if (url.startsWith('/api/market/sectors/')) {
-          if (state.detailStatus !== 200) throw Object.assign(new Error('x'), { response: { status: state.detailStatus } });
+          if (state.detailStatus !== 200) throw Object.assign(new Error('x'), { response: { status: state.detailStatus, data: state.detailBody } });
           return { data: state.detail };
         }
         throw new Error(`unexpected ${url}`);
@@ -81,6 +84,8 @@ beforeEach(() => {
   state.sectors = sectorsResponse();
   state.detail = detail();
   state.detailStatus = 200;
+  state.sectorsStatus = 200;
+  state.detailBody = { detail: "Unknown sector 'zz'" };
   state.snap = snapshot();
   state.snapFail = false;
   state.slug = 'alpha';
@@ -169,5 +174,22 @@ describe('Sector detail page', () => {
     state.detailStatus = 404;
     render(<SectorPage />);
     expect(await screen.findByText('No such sector.')).toBeTruthy();
+  });
+
+  it('says the sector pages are not on this server yet when the route itself is missing (older backend)', async () => {
+    state.detailStatus = 404;
+    state.detailBody = { detail: 'Not Found' };
+    render(<SectorPage />);
+    expect(await screen.findByText('Sector pages are not available on this server yet.')).toBeTruthy();
+    expect(screen.queryByText('No such sector.')).toBeNull();
+  });
+});
+
+describe('Sectors page against an older backend', () => {
+  it('explains that the sector routes are not deployed, while observed leadership still renders', async () => {
+    state.sectorsStatus = 404;
+    render(<SectorsPage />);
+    expect(await screen.findByText('Sector pages are not available on this server yet.')).toBeTruthy();
+    expect(await screen.findByText('Sector leadership')).toBeTruthy();
   });
 });

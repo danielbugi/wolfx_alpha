@@ -4,7 +4,7 @@ Real market-index/macro data API router — distinct from /api/screener's
 "market overview" (which is breadth stats over the internal stock universe).
 """
 
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, Path
 
 from auth.dependencies import require_authenticated_user
 import logging
@@ -131,7 +131,8 @@ def get_sectors(sector_service: SectorService = Depends(get_sector_service)):
 
 
 @market_router.get("/sectors/{slug}")
-def get_sector(slug: str, sector_service: SectorService = Depends(get_sector_service)):
+def get_sector(slug: str = Path(..., pattern=r"^[a-z0-9-]{1,60}$", description="Sector slug, e.g. financial-services"),
+               sector_service: SectorService = Depends(get_sector_service)):
     """One sector: the summary above plus its industries, its member stocks and a 1-year equal-weighted index of its
     current members next to the S&P 500. 404 for a slug that matches no sector."""
     try:

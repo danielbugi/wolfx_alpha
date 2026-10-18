@@ -25,6 +25,7 @@ import CommoditiesCard, { COMMODITY_SYMBOLS } from '@/components/dashboard/Commo
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import DataStamp from '@/components/common/DataStamp';
 import MarketIntelligencePanel from '@/components/marketIntel/MarketIntelligencePanel';
+import { sectorHref } from '@/lib/sectors';
 import { ResolvedTheme, useResolvedTheme } from '@/lib/theme';
 
 function timeAgo(date: Date | null): string {
@@ -344,6 +345,11 @@ export default function DashboardPage() {
                       >
                         {selectedSector}
                       </Chip>
+                      {sectorHref(selectedSector) && (
+                        <Link href={sectorHref(selectedSector)!} className="text-xs font-medium text-accent hover:underline">
+                          {selectedSector} page →
+                        </Link>
+                      )}
                       {/* Internal tool: the selected sector filters the internal momentum lists on /momentum. */}
                       <Link
                         href={`/momentum?sector=${encodeURIComponent(selectedSector)}`}

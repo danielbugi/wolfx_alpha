@@ -61,7 +61,10 @@ export default function SectorsPage() {
     apiClient
       .get<SectorsResponse>('/api/market/sectors')
       .then((r) => !cancelled && setData(r.data))
-      .catch(() => !cancelled && setError('Sector data is unavailable right now.'));
+      .catch((e) => {
+        if (cancelled) return;
+        setError(e?.response?.status === 404 ? 'Sector pages are not available on this server yet.' : 'Sector data is unavailable right now.');
+      });
     return () => {
       cancelled = true;
     };

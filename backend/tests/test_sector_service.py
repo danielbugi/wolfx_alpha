@@ -103,3 +103,33 @@ def test_every_response_states_membership_is_current_not_point_in_time():
 def test_sector_dates_are_anchored_to_the_newest_price_session_not_the_wall_clock():
     src = open(SS.__file__, encoding="utf-8").read()
     assert "CURRENT_DATE" not in src and "NOW()" not in src and "date.today" not in src and "datetime.now" not in src
+
+
+def test_sector_routes_are_read_only_validate_the_slug_and_keep_auth():
+    c = _client()
+    assert c.get("/api/market/sectors/Technology").status_code == 422          # slugs are lower-case
+    assert c.get("/api/market/sectors/tech;drop").status_code == 422
+    assert c.get("/api/market/sectors/" + "a" * 61).status_code == 422
+    assert c.get("/api/market/sectors/zz-unknown").status_code == 404
+    for method in ("post", "put", "patch", "delete"):
+        assert getattr(c, method)("/api/market/sectors").status_code == 405
+        assert getattr(c, method)("/api/market/sectors/technology").status_code == 405
+    anon = _client(False)
+    assert anon.get("/api/market/sectors/technology").status_code == 401
+
+
+def test_sector_service_only_reads():
+    import re
+    src = open(SS.__file__, encoding="utf-8").read()
+    sql = " ".join(re.findall(r'"""([\s\S]*?)"""|"([^"]*)"', src) and [a or b for a, b in re.findall(r'"""([\s\S]*?)"""|"([^"]*)"', src)])
+    assert not re.search(r"(INSERT|UPDATE|DELETE|TRUNCATE|CREATE|DROP|ALTER|GRANT)", sql)
+    assert "commit()" not in src
+
+
+def test_no_price_data_gives_an_empty_answer_not_an_error():
+    svc = SS.SectorService(lambda: None)
+    svc._load = lambda: {"as_of": None, "stocks": []}
+    svc._equal_weight_indices = lambda days, sector=None: {"sectors": {}, "spx": []}
+    out = svc.get_sectors()
+    assert out["as_of"] is None and out["sectors"] == [] and out["membership"]["point_in_time"] is False
+    assert svc.get_sector("technology") is None

@@ -281,7 +281,15 @@ export default function SectorPage() {
     apiClient
       .get<SectorDetail>(`/api/market/sectors/${encodeURIComponent(slug)}`)
       .then((r) => !cancelled && setDetail(r.data))
-      .catch((e) => !cancelled && setError(e?.response?.status === 404 ? 'No such sector.' : 'Sector data is unavailable right now.'));
+      .catch((e) => {
+        if (cancelled) return;
+        // A 404 from the sector route says "Unknown sector ..."; any other 404 means the route itself is not on this
+        // backend yet (an older deployment), which must not read as "no such sector".
+        const detail = String(e?.response?.data?.detail ?? '');
+        if (e?.response?.status === 404 && detail.startsWith('Unknown sector')) setError('No such sector.');
+        else if (e?.response?.status === 404) setError('Sector pages are not available on this server yet.');
+        else setError('Sector data is unavailable right now.');
+      });
     return () => {
       cancelled = true;
     };
