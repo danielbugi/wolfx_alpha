@@ -138,7 +138,7 @@ export default function WatchlistPage() {
             maxLength={10}
             placeholder="Add a symbol, e.g. MSFT"
             aria-label="Symbol to add"
-            className="w-48 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[13px] uppercase placeholder:normal-case placeholder:text-slate-400 focus:border-accent focus:outline-none"
+            className="w-48 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[13px] uppercase placeholder:normal-case placeholder:text-slate-400 focus:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           />
           <button type="submit" disabled={!draft.trim()} className="press rounded-lg bg-slate-900 px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-40">
             Add
@@ -223,9 +223,10 @@ export default function WatchlistPage() {
                     const note = missingNote(s);
                     return (
                       <tr key={s} className="border-t border-black/[0.05] hover:bg-black/[0.015]" data-testid="watchlist-row">
-                        <td className="px-2 py-1.5 text-center">
+                        <td className="px-2 py-1 text-center">
                           <input
                             type="checkbox"
+                            className="h-5 w-5 cursor-pointer accent-slate-900"
                             aria-label={`Compare ${s}`}
                             checked={compare.includes(s)}
                             disabled={!compare.includes(s) && compare.length >= COMPARE_MAX}

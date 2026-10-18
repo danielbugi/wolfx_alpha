@@ -20,6 +20,7 @@ import { TextField } from '@/components/ui/Field';
 import { deepValueApi, DeepValueEntry, BalanceSheetAssessment, BalanceSheetCheckStatus } from '@/services/api';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import ErrorAlert from '@/components/common/ErrorAlert';
+import DataStamp from '@/components/common/DataStamp';
 import SymbolHoverLink from '@/components/dashboard/SymbolHoverLink';
 
 function gradeColor(grade: string | null) {
@@ -95,6 +96,28 @@ function fmtMoney(v: number | undefined): string {
   return `${sign}$${abs.toFixed(0)}`;
 }
 
+/** Rows rendered before "Show more": the full scan can hold hundreds of matches, too many for one page on a phone. */
+export const TURNAROUND_PAGE = 24;
+export const WATCH_PAGE = 50;
+
+function ShowMore({ shown, total, step, onMore, label }: { shown: number; total: number; step: number; onMore: () => void; label: string }) {
+  if (shown >= total) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-3 border-t border-black/[0.05] px-4 py-3 text-[13px] text-slate-500">
+      <span>
+        Showing {shown} of {total} {label}
+      </span>
+      <button
+        type="button"
+        onClick={onMore}
+        className="press rounded-full bg-slate-900 px-4 py-1.5 font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+      >
+        Show {Math.min(step, total - shown)} more
+      </button>
+    </div>
+  );
+}
+
 export default function AlertsPage() {
   const [nearLowPct, setNearLowPct] = useState(15);
   const [minValuationScore, setMinValuationScore] = useState(12);
@@ -104,6 +127,8 @@ export default function AlertsPage() {
   const [excludedBalanceSheet, setExcludedBalanceSheet] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [turnShown, setTurnShown] = useState(TURNAROUND_PAGE);
+  const [watchShown, setWatchShown] = useState(WATCH_PAGE);
 
   const fetchScan = useCallback(async () => {
     try {
@@ -116,6 +141,8 @@ export default function AlertsPage() {
       setTurnaroundAlerts(resp.turnaround_alerts);
       setDeepValueWatch(resp.deep_value_watch);
       setExcludedBalanceSheet(resp.excluded_balance_sheet ?? null);
+      setTurnShown(TURNAROUND_PAGE);
+      setWatchShown(WATCH_PAGE);
     } catch {
       setError('Failed to load deep value scan');
     } finally {
@@ -127,11 +154,14 @@ export default function AlertsPage() {
     fetchScan();
   }, [fetchScan]);
 
+  const pricesAsOf = [...turnaroundAlerts, ...deepValueWatch].reduce<string | null>((m, e) => (e.price_date && (!m || e.price_date > m) ? e.price_date : m), null);
+
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="container mx-auto px-4 pb-12 pt-6 sm:px-6 lg:px-8 max-w-7xl space-y-4">
         <div className="px-1 pt-2 pb-1">
           <h1 className="large-title">Deep Value & Turnaround Screen</h1>
+          {!loading && !error && pricesAsOf && <DataStamp className="mt-1" label="Closes as of" asOf={pricesAsOf} source="latest quarterly fundamentals" />}
           <p className="mt-1.5 max-w-3xl text-[15px] leading-relaxed text-slate-500">
             Stocks trading near their 12-month low at a cheap valuation that don&apos;t fail a balance-sheet
             check. <span className="font-semibold text-slate-700">Turnaround flips</span> are the subset that
@@ -213,7 +243,7 @@ export default function AlertsPage() {
                   </p>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4">
-                    {turnaroundAlerts.map((e) => (
+                    {turnaroundAlerts.slice(0, turnShown).map((e) => (
                       <Link
                         key={e.symbol}
                         href={`/stock/${e.symbol}`}
@@ -262,6 +292,7 @@ export default function AlertsPage() {
                     ))}
                   </div>
                 )}
+                <ShowMore shown={Math.min(turnShown, turnaroundAlerts.length)} total={turnaroundAlerts.length} step={TURNAROUND_PAGE} onMore={() => setTurnShown((n) => n + TURNAROUND_PAGE)} label="turnaround flips" />
               </CardBody>
             </Card>
 
@@ -277,10 +308,11 @@ export default function AlertsPage() {
                 {deepValueWatch.length === 0 ? (
                   <p className="text-center text-slate-400 text-sm py-8">No matches for these thresholds.</p>
                 ) : (
+                  <div className="relative overflow-x-auto">
                   <Table
                     aria-label="Deep value watch"
                     removeWrapper
-                    className="text-xs"
+                    className="min-w-[760px] text-xs"
                     classNames={{ th: 'bg-slate-50/70 text-slate-500 font-medium text-[11px] h-8', td: 'text-xs py-2' }}
                   >
                     <TableHeader>
@@ -294,7 +326,7 @@ export default function AlertsPage() {
                       <TableColumn align="end">P/E</TableColumn>
                     </TableHeader>
                     <TableBody>
-                      {deepValueWatch.map((e) => (
+                      {deepValueWatch.slice(0, watchShown).map((e) => (
                         <TableRow key={e.symbol} className="hover:bg-slate-50">
                           <TableCell>
                             <SymbolHoverLink symbol={e.symbol} />
@@ -324,7 +356,9 @@ export default function AlertsPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
                 )}
+                <ShowMore shown={Math.min(watchShown, deepValueWatch.length)} total={deepValueWatch.length} step={WATCH_PAGE} onMore={() => setWatchShown((n) => n + WATCH_PAGE)} label="stocks" />
               </CardBody>
             </Card>
           </>

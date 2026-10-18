@@ -73,7 +73,6 @@ function EarningsCalendar() {
   const weekParam = params.get('week');
   const sector = params.get('sector');
   const watchlistOnly = params.get('watchlist') === '1';
-  const signalOnly = params.get('board') === '1';
 
   const setParams = useCallback(
     (patch: Record<string, string | null>) => {
@@ -99,8 +98,8 @@ function EarningsCalendar() {
   }, [weekStart, board, watchlist, histories]);
 
   const filtered = useMemo(
-    () => filterRows(weekRows, { query, sector, watchlistOnly, signalOnly }),
-    [weekRows, query, sector, watchlistOnly, signalOnly],
+    () => filterRows(weekRows, { query, sector, watchlistOnly, signalOnly: false }),
+    [weekRows, query, sector, watchlistOnly],
   );
   const counts = useMemo(() => countByDate(filtered), [filtered]);
   const sectors = useMemo(
@@ -135,7 +134,7 @@ function EarningsCalendar() {
         <div className="mb-6 px-1 pt-2">
           <h1 className="large-title">Earnings</h1>
           <p className="mt-1.5 max-w-3xl text-[15px] leading-relaxed text-slate-500">
-            Who reports, day by day · New York dates · stocks on today&apos;s momentum screens and your watchlist
+            Who reports, day by day · New York dates · a daily list of US stocks with notable recent price moves and your watchlist
           </p>
         </div>
 
@@ -189,9 +188,6 @@ function EarningsCalendar() {
             />
             <Toggle pressed={watchlistOnly} onClick={() => setParams({ watchlist: watchlistOnly ? null : '1' })}>
               My watchlist
-            </Toggle>
-            <Toggle pressed={signalOnly} onClick={() => setParams({ board: signalOnly ? null : '1' })}>
-              Breakout names
             </Toggle>
           </div>
         </div>
@@ -273,7 +269,7 @@ function EarningsCalendar() {
 
             <div className="mt-4 space-y-1 px-1 text-[12px] leading-relaxed text-slate-400">
               <p>
-                Covers stocks on today&apos;s momentum screens (their next report date) and your watchlist (past and upcoming
+                Covers a daily list of US stocks with notable recent price moves (their next report date) and your watchlist (past and upcoming
                 reports). Past results for other stocks aren&apos;t listed here yet — open a stock to see its full earnings history.
               </p>
               <p>

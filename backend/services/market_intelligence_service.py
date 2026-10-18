@@ -20,6 +20,9 @@ if _MECHANISM not in sys.path:
 
 from market_intelligence import payload as mi_payload  # noqa: E402
 from market_intelligence import store as mi_store  # noqa: E402
+# Serve exactly the feature set the collector writes (one source of truth). store.py's default is the older "mi_v1", so
+# reading with it returned "no snapshot" while observed mi_v2 snapshots were in the table.
+from market_intelligence.runner import FEATURE_SET_VERSION as SERVED_FEATURE_SET_VERSION  # noqa: E402
 
 NOT_PROVISIONED = "not_provisioned"
 
@@ -49,9 +52,9 @@ class MarketIntelligenceService:
     def snapshot(self, session: Optional[date], include_reconstructed: bool) -> Dict[str, Any]:
         try:
             with self._cursor() as cur:
-                market = mi_store.get_market_snapshot(cur, session, None, include_reconstructed)
+                market = mi_store.get_market_snapshot(cur, session, None, include_reconstructed, SERVED_FEATURE_SET_VERSION)
                 sectors = mi_store.get_sector_snapshots(cur, date.fromisoformat(str(market["session_date"])), None,
-                                                        include_reconstructed) if market else []
+                                                        include_reconstructed, SERVED_FEATURE_SET_VERSION) if market else []
                 return mi_payload.build(market, sectors)
         except (psycopg2.errors.UndefinedTable, psycopg2.errors.InsufficientPrivilege):
             return self._unprovisioned()
@@ -60,6 +63,6 @@ class MarketIntelligenceService:
         try:
             with self._cursor() as cur:
                 return {"schema": mi_payload.SCHEMA, "available": True, "include_reconstructed": include_reconstructed,
-                        "sessions": mi_store.list_market_snapshots(cur, limit, None, include_reconstructed)}
+                        "sessions": mi_store.list_market_snapshots(cur, limit, None, include_reconstructed, SERVED_FEATURE_SET_VERSION)}
         except (psycopg2.errors.UndefinedTable, psycopg2.errors.InsufficientPrivilege):
             return self._unprovisioned()

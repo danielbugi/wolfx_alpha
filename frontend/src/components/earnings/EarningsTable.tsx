@@ -24,20 +24,6 @@ type Col = keyof typeof ACCESSORS;
 
 const money = (v: number) => `${v < 0 ? '-' : ''}$${Math.abs(v).toFixed(2)}`;
 
-export function SignalChip({ row }: { row: Pick<EarningsRow, 'signal'> }) {
-  if (!row.signal) return <span className="text-slate-400">{UNKNOWN}</span>;
-  return (
-    <span
-      className={clsx(
-        'whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold',
-        row.signal === 'breakout' ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800',
-      )}
-    >
-      {row.signal === 'breakout' ? 'Breakout' : 'Near breakout'}
-    </span>
-  );
-}
-
 function ResultCell({ row }: { row: EarningsRow }) {
   const result = reportResult(row);
   if (!result) return <span className="text-slate-400">{UNKNOWN}</span>;
@@ -60,6 +46,7 @@ function ResultCell({ row }: { row: EarningsRow }) {
 /**
  * Earnings rows for one day or a range. EPS figures and the beat record come from each symbol's history, which loads
  * after the row itself: "…" while it is loading, "—" when the source has no value. Nothing is defaulted.
+ * Product view: no screen/board signals are shown. On a phone the sector moves under the symbol so the table fits.
  */
 export default function EarningsTable({
   rows,
@@ -84,16 +71,15 @@ export default function EarningsTable({
   const columns = [
     <TableColumn key="symbol">{head('symbol', 'Symbol')}</TableColumn>,
     ...(showDate ? [<TableColumn key="date">{head('date', 'Date')}</TableColumn>] : []),
-    <TableColumn key="sector">{head('sector', 'Sector')}</TableColumn>,
+    <TableColumn key="sector" className="hidden sm:table-cell">{head('sector', 'Sector')}</TableColumn>,
     <TableColumn key="close" align="end">{head('close', 'Last close', 'end')}</TableColumn>,
     <TableColumn key="est" align="end">{head('est', 'EPS est.', 'end')}</TableColumn>,
     ...(showResult ? [<TableColumn key="result" align="end">{head('surprise', 'Reported', 'end')}</TableColumn>] : []),
     <TableColumn key="record" align="end">{head('record', 'Beat record', 'end')}</TableColumn>,
-    <TableColumn key="board">BOARD</TableColumn>,
   ];
 
   return (
-    <div className="overflow-x-auto">
+    <div className="relative overflow-x-auto">
       <Table
         removeWrapper
         aria-label={ariaLabel}
@@ -111,11 +97,6 @@ export default function EarningsTable({
             const cells = [
               <TableCell key="symbol">
                 <div className="flex items-center gap-1.5">
-                  {r.starred && (
-                    <span title="Confirmed by 2+ Momentum Board lists" className="text-amber-500">
-                      ★
-                    </span>
-                  )}
                   <SymbolHoverLink symbol={r.symbol} />
                   {r.onWatchlist && (
                     <span className="rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-accent" title="On your watchlist">
@@ -123,9 +104,10 @@ export default function EarningsTable({
                     </span>
                   )}
                 </div>
+                <div className="text-[11px] text-slate-400 sm:hidden">{r.sector ?? UNKNOWN}</div>
               </TableCell>,
               ...(showDate ? [<TableCell key="date" className="whitespace-nowrap text-slate-600">{formatDay(r.date)}</TableCell>] : []),
-              <TableCell key="sector" className="whitespace-nowrap text-slate-500">{r.sector ?? UNKNOWN}</TableCell>,
+              <TableCell key="sector" className="hidden whitespace-nowrap text-slate-500 sm:table-cell">{r.sector ?? UNKNOWN}</TableCell>,
               <TableCell key="close" className="text-right text-slate-800">{r.close != null ? money(r.close) : UNKNOWN}</TableCell>,
               <TableCell key="est" className="text-right text-slate-800">
                 {r.epsEstimate != null ? money(r.epsEstimate) : wait ? '…' : UNKNOWN}
@@ -139,9 +121,6 @@ export default function EarningsTable({
                 : []),
               <TableCell key="record" className="text-right text-slate-600">
                 {r.judged ? `${r.beats} of ${r.judged}` : wait ? '…' : UNKNOWN}
-              </TableCell>,
-              <TableCell key="board">
-                <SignalChip row={r} />
               </TableCell>,
             ];
             return <TableRow key={`${r.symbol}|${r.date}`}>{cells}</TableRow>;

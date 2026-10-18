@@ -24,6 +24,7 @@ const PRODUCT_FILES = [
   'components/dashboard/WatchlistCard.tsx',
   'components/dashboard/SectorTrendChart.tsx',
   'components/earnings/EarningsCard.tsx',
+  'components/earnings/EarningsTable.tsx',
   'components/stock/KeyLevels.tsx',
   'components/stock/StockContextPanel.tsx',
   'app/watchlist/page.tsx',

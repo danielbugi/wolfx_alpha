@@ -87,10 +87,14 @@ export default function MarketsPage() {
     };
   }, []);
 
-  const asOf = useMemo(
-    () => data?.instruments.reduce<string | null>((m, i) => (i.latest_date && (!m || i.latest_date > m) ? i.latest_date : m), null) ?? null,
-    [data],
-  );
+  // Crypto trades every day, exchanges don't: each kind has its own newest close, so a weekend crypto bar never makes
+  // exchange-traded rows look stale.
+  const newest = (crypto: boolean) =>
+    data?.instruments
+      .filter((i) => (i.group === 'crypto') === crypto)
+      .reduce<string | null>((m, i) => (i.latest_date && (!m || i.latest_date > m) ? i.latest_date : m), null) ?? null;
+  const asOf = useMemo(() => newest(false), [data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cryptoAsOf = useMemo(() => newest(true), [data]); // eslint-disable-line react-hooks/exhaustive-deps
   const groups = (data?.groups ?? []).filter((g) => group === 'all' || g.key === group);
 
   return (
@@ -100,7 +104,8 @@ export default function MarketsPage() {
           <h1 className="large-title">Markets</h1>
           <p className="mt-1.5 text-[15px] text-slate-500">
             Indices, futures, commodities, currencies and crypto · daily closes
-            {asOf && <span className="text-slate-400"> · as of {asOf}</span>}
+            {asOf && <span className="text-slate-400"> · exchanges as of {asOf}</span>}
+            {cryptoAsOf && cryptoAsOf !== asOf && <span className="text-slate-400"> · crypto as of {cryptoAsOf}</span>}
           </p>
         </div>
 
@@ -146,12 +151,12 @@ export default function MarketsPage() {
                   </div>
                   <div className="divide-y divide-black/[0.05]">
                     {live.map((inst) => (
-                      <Row key={inst.symbol} inst={inst} asOf={asOf} />
+                      <Row key={inst.symbol} inst={inst} asOf={inst.group === 'crypto' ? cryptoAsOf : asOf} />
                     ))}
                   </div>
                   {pending.length > 0 && (
                     <p className={clsx('px-5 py-3 text-[12px] text-slate-400', live.length > 0 && 'border-t border-black/[0.05]')}>
-                      {pending.map((i) => i.name).join(', ')} {pending.length === 1 ? 'appears' : 'appear'} after the next data update.
+                      Not covered yet: {pending.map((i) => i.name).join(', ')}.
                     </p>
                   )}
                 </Card>

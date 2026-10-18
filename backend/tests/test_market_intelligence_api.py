@@ -147,3 +147,35 @@ def test_unprovisioned_database_answers_unavailable_not_a_500():
         for route in ("/api/market-intelligence/snapshot", "/api/market-intelligence/history"):
             r = c.get(route)
             assert r.status_code == 200 and r.json()["available"] is False and r.json()["reason"] == "not_provisioned"
+
+
+def test_the_api_reads_the_feature_set_the_collector_writes(monkeypatch):
+    """Regression: the collector writes mi_v2 rows while store.py's read default is mi_v1, which made the API answer
+    "no snapshot" with observed snapshots in the table. Every read must ask for the collector's version."""
+    from market_intelligence import runner, store
+    from services import market_intelligence_service as svc_mod
+
+    assert svc_mod.SERVED_FEATURE_SET_VERSION == runner.FEATURE_SET_VERSION
+    seen = []
+    monkeypatch.setattr(store, "get_market_snapshot", lambda cur, s, p, inc, fsv: seen.append(("m", fsv)) or {"session_date": "2026-10-16"})
+    monkeypatch.setattr(store, "get_sector_snapshots", lambda cur, s, p, inc, fsv: seen.append(("s", fsv)) or [])
+    monkeypatch.setattr(store, "list_market_snapshots", lambda cur, limit, p, inc, fsv: seen.append(("l", fsv)) or [])
+    monkeypatch.setattr(svc_mod.mi_payload, "build", lambda market, sectors: {"available": True})
+
+    class _Conn:
+        def cursor(self):
+            return self
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def close(self):
+            pass
+
+    service = MarketIntelligenceService(lambda: _Conn())
+    service.snapshot(None, False)
+    service.history(10, False)
+    assert seen == [("m", runner.FEATURE_SET_VERSION), ("s", runner.FEATURE_SET_VERSION), ("l", runner.FEATURE_SET_VERSION)]
