@@ -31,6 +31,7 @@ describe('navigation groups', () => {
       ['Overview', '/'],
       ['Sectors', '/sectors'],
       ['Screener', '/screener'],
+      ['Watchlist', '/watchlist'],
       ['Deep Value', '/alerts'],
       ['Markets', '/markets'],
       ['Earnings', '/earnings'],

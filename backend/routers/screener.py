@@ -350,7 +350,7 @@ def discovery_search(request: Request, service: discovery.DiscoveryService = Dep
     """
     Screen the universe for ONE explicit session (?session=YYYY-MM-DD, default the newest real session).
     Filters: min_<metric> / max_<metric> for numeric metrics, breakout_20 / new_high_20 (true|false), sector (repeatable),
-    q (symbol prefix), preset. Sorting: sort (allowlisted) and order (asc|desc). Pagination: page, page_size (<= 200).
+    q (symbol prefix), symbol (repeatable exact symbols, at most 50; used by the watchlist and stock context), preset. Sorting: sort (allowlisted) and order (asc|desc). Pagination: page, page_size (<= 200).
     Unknown parameters, sort keys, presets or non-session dates are refused with 422.
     """
     try:

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, CardBody, CardHeader, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow } from '@nextui-org/react';
 import { XMarkIcon } from '@heroicons/react/20/solid';
@@ -53,7 +54,12 @@ export default function WatchlistCard() {
       <CardHeader className="px-5 pt-5 pb-2">
         <div>
           <h3 className="text-[17px] font-semibold text-slate-900">Watchlist</h3>
-          <p className="mt-0.5 text-xs text-slate-500">Stocks you starred · saved in this browser</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Stocks you starred · saved in this browser ·{' '}
+            <Link href="/watchlist" className="font-medium text-accent hover:underline">
+              Open watchlist
+            </Link>
+          </p>
         </div>
       </CardHeader>
       <CardBody className="p-0">

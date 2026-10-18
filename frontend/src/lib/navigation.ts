@@ -21,6 +21,7 @@ import {
   RectangleGroupIcon,
   ScaleIcon,
   Squares2X2Icon,
+  StarIcon,
   UsersIcon,
 } from '@heroicons/react/24/outline';
 import type { ComponentType, SVGProps } from 'react';
@@ -50,6 +51,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { name: 'Overview', href: '/', icon: Squares2X2Icon, description: 'Market overview: breadth, sectors, movers' },
       { name: 'Sectors', href: '/sectors', icon: RectangleGroupIcon, description: 'Sector comparison and sector pages' },
       { name: 'Screener', href: '/screener', icon: FunnelIcon, description: 'Search & filter the universe' },
+      { name: 'Watchlist', href: '/watchlist', icon: StarIcon, description: 'Your saved stocks, side by side (this browser)' },
       { name: 'Deep Value', href: '/alerts', icon: ScaleIcon, description: 'Near-low stocks that pass balance-sheet checks (descriptive)' },
       { name: 'Markets', href: '/markets', icon: GlobeAltIcon, description: 'Futures, commodities, currencies, crypto' },
       { name: 'Earnings', href: '/earnings', icon: CalendarDaysIcon, description: 'Earnings calendar: who reports, day by day' },
