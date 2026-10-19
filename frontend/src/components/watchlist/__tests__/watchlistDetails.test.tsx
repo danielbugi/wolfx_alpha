@@ -1,6 +1,6 @@
-// Watchlist page: empty state, one Screener request for the saved symbols, values identical to the Screener's,
-// missing data and missing rows unavailable, the backend being down never touches the list, sorting, the comparison
-// panel, the 30-symbol limit, stale sessions, and the Screener star kept in sync in the same browser.
+// Watchlist Details tab (the Screener metrics table): one Screener request for the active list, values identical to the
+// Screener's, missing data and missing rows unavailable, the backend being down never touches the list, sorting, the
+// side-by-side comparison, malformed storage, and stale sessions.
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -13,11 +13,8 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/watchlist',
 }));
 vi.mock('@/services/screenerV2Api', () => ({ screenerV2Api: api }));
-// The Performance tab (default) has its own tests; here it is a stub so these tests cover the Details tab.
-vi.mock('@/components/watchlist/WatchlistPerformance', () => ({ default: ({ saved }: { saved: string[] }) => <div data-testid="perf-stub">{saved.join(',')}</div> }));
 
-import WatchlistPage from '@/app/watchlist/page';
-import ScreenerPage from '@/app/screener/page';
+import WatchlistDetails from '@/components/watchlist/WatchlistDetails';
 import { formatCell } from '@/lib/screenerV2';
 
 const KEY = 'watchlist_symbols';
@@ -58,12 +55,7 @@ function result(rows: ScreenerRow[], over: Partial<ScreenerResult> = {}): Screen
   } as ScreenerResult;
 }
 
-/** Render the page and open the Details tab (the table and the comparison). */
-function renderDetails() {
-  const r = render(<WatchlistPage />);
-  fireEvent.click(screen.getByRole('radio', { name: 'Details' }));
-  return r;
-}
+const renderDetails = () => render(<WatchlistDetails />);
 const symbolsOf = (pairs: QueryPairs) => pairs.filter(([k]) => k === 'symbol').map(([, v]) => v);
 const rowsOnPage = () => screen.queryAllByTestId('watchlist-row').map((tr) => within(tr).getAllByRole('link')[0].textContent);
 
@@ -75,13 +67,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-10-18T12:00:00Z'));
 });
 
-describe('Watchlist page', () => {
-  it('explains how to add stocks when empty, and makes no analytics request', async () => {
-    render(<WatchlistPage />);
-    expect((await screen.findByTestId('watchlist-empty')).textContent).toContain('Up to 30 stocks, saved in this browser only');
-    expect(api.search).not.toHaveBeenCalled();
-  });
-
+describe('Watchlist Details tab', () => {
   it('loads every saved symbol in ONE Screener request and shows the Screener values unchanged', async () => {
     save(['NVDA', 'AAPL', 'ZZZZ']);
     const nvda = row('NVDA');
@@ -160,18 +146,6 @@ describe('Watchlist page', () => {
     expect(panel.querySelector('.overflow-x-auto')).toBeTruthy();
   });
 
-  it('refuses a 31st symbol from the add box with a clear message and keeps all 30', async () => {
-    const thirty = Array.from({ length: 30 }, (_, i) => `S${i}`);
-    save(thirty);
-    api.search.mockResolvedValue(result([]));
-    renderDetails();
-    await waitFor(() => expect(screen.getAllByTestId('watchlist-row')).toHaveLength(30));
-    fireEvent.change(screen.getByLabelText('Symbol to add'), { target: { value: 'msft' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
-    expect(screen.getByTestId('watchlist-notice').textContent).toBe('Your watchlist is full (30 stocks). Remove one to add MSFT.');
-    expect(stored()).toEqual(thirty);
-  });
-
   it('ignores malformed and duplicate saved entries without erasing valid ones', async () => {
     window.localStorage.setItem(KEY, JSON.stringify(['nvda', 'NVDA', 7, 'bad sym', 'AAPL']));
     api.search.mockResolvedValue(result([row('NVDA'), row('AAPL')]));
@@ -189,38 +163,6 @@ describe('Watchlist page', () => {
     fireEvent.change(screen.getByLabelText('Market session'), { target: { value: '2026-10-08' } });
     expect((await screen.findByTestId('older-session')).textContent).toContain('viewing the 2026-10-08 session; the newest is 2026-10-09');
     expect(api.search.mock.calls[1][0]).toContainEqual(['session', '2026-10-08']);
-  });
-
-  it('stays in sync with the Screener star in the same browser', async () => {
-    api.search.mockImplementation(async (pairs: QueryPairs) => {
-      const syms = symbolsOf(pairs);
-      return syms.length ? result([row('NVDA')].filter((r) => syms.includes(r.symbol))) : result([row('NVDA'), row('AAPL')]);
-    });
-    render(
-      <>
-        <ScreenerPage />
-        <WatchlistPage />
-      </>,
-    );
-    expect(await screen.findByTestId('watchlist-empty')).toBeTruthy();
-    fireEvent.click(await screen.findByRole('button', { name: 'Add NVDA to watchlist' }));
-    await waitFor(() => expect(screen.getByTestId('perf-stub').textContent).toBe('NVDA')); // the Performance tab follows the star
-    fireEvent.click(screen.getByRole('radio', { name: 'Details' }));
-    await waitFor(() => expect(rowsOnPage()).toEqual(['NVDA']));
-    expect(stored()).toEqual(['NVDA']);
-    fireEvent.click(screen.getByRole('button', { name: 'Remove NVDA from watchlist', pressed: true }));
-    expect(await screen.findByTestId('watchlist-empty')).toBeTruthy();
-  });
-
-  it('opens on the Performance tab and makes no Screener request until Details is opened', async () => {
-    save(['NVDA', 'AAPL']);
-    api.search.mockResolvedValue(result([row('NVDA'), row('AAPL')]));
-    render(<WatchlistPage />);
-    expect((await screen.findByTestId('perf-stub')).textContent).toBe('NVDA,AAPL');
-    expect(screen.getByRole('radio', { name: 'Performance' }).getAttribute('aria-checked')).toBe('true');
-    expect(api.search).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('radio', { name: 'Details' }));
-    await waitFor(() => expect(api.search).toHaveBeenCalledTimes(1));
   });
 
   it('lays out the table and comparison in horizontal scrollers so a phone never scrolls the page sideways', async () => {
