@@ -101,22 +101,22 @@ export default function WatchlistPage() {
             <h1 className="large-title">Watchlist</h1>
             <p className="mt-1.5 text-[15px] text-slate-500">Your lists, saved in this browser. Pick a stock to chart it, or compare several.</p>
           </div>
-          {symbols.length > 0 && (
-            <SegmentedControl
-              aria-label="Watchlist view"
-              value={view}
-              onChange={setView}
-              options={[
-                { value: 'chart', label: 'Chart' },
-                { value: 'compare', label: 'Compare' },
-                { value: 'details', label: 'Details' },
-              ]}
-            />
-          )}
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
-          <div className="min-w-0">
+          <div className="min-w-0 space-y-3">
+            {symbols.length > 0 && (
+              <SegmentedControl
+                aria-label="Watchlist view"
+                value={view}
+                onChange={setView}
+                options={[
+                  { value: 'chart', label: 'Chart' },
+                  { value: 'compare', label: 'Compare' },
+                  { value: 'details', label: 'Details' },
+                ]}
+              />
+            )}
             {symbols.length === 0 ? (
               <div className="rounded-2xl border border-black/[0.05] bg-white p-8 text-center shadow-sm" data-testid="watchlist-empty">
                 <p className="text-[15px] font-medium text-slate-800">&quot;{wl.activeName}&quot; is empty</p>

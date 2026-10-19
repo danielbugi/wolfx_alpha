@@ -22,6 +22,9 @@ import { aggregateBars, bollinger, Interval, macd, rsi, sma, withDonchian } from
 import { nearestBarDate } from '@/lib/priceMath';
 import { useResolvedTheme } from '@/lib/theme';
 import SegmentedControl from '@/components/ui/SegmentedControl';
+import { AdjustmentsHorizontalIcon } from '@heroicons/react/20/solid';
+import IndicatorsDialog from '@/components/charts/IndicatorsDialog';
+import { useIndicatorPrefs } from '@/lib/chartIndicators';
 
 /**
  * The stock page's main chart: daily / weekly / monthly candles built from the daily bars, overlays (SMA 20/50/200,
@@ -161,8 +164,14 @@ export default function StockChart({
   const theme = useResolvedTheme();
   const [interval, setCandleInterval] = useState<Interval>('daily');
   const [range, setRange] = useState(DEFAULT_RANGE.daily);
-  const [overlays, setOverlays] = useState<Set<Overlay>>(() => new Set<Overlay>(['sma20', 'sma50', 'donchian', 'volume']));
-  const [panels, setPanels] = useState<Set<PanelKey>>(() => new Set<PanelKey>(['rsi']));
+  // Indicators come from the saved choice (lib/chartIndicators, shared by every chart); breakout markers and a trade plan
+  // belong to one stock and are toggled for this view only.
+  const { prefs, save } = useIndicatorPrefs();
+  const [local, setLocal] = useState<Set<Overlay>>(() => new Set<Overlay>());
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [notSaved, setNotSaved] = useState(false);
+  const overlays = useMemo(() => new Set<Overlay>([...prefs.overlays, ...local]), [prefs.overlays, local]);
+  const panels = useMemo(() => new Set<PanelKey>(prefs.panels), [prefs.panels]);
   const [hover, setHover] = useState<number | null>(null);
 
   const candles = useMemo(() => {
@@ -510,12 +519,22 @@ export default function StockChart({
   const change = c && prev ? ((c.close - prev.close) / prev.close) * 100 : null;
   const t = THEME[theme];
 
-  const toggle = <T,>(set: Set<T>, key: T, setter: (s: Set<T>) => void) => {
-    const next = new Set(set);
+  const toggleLocal = (key: Overlay) => {
+    const next = new Set(local);
     if (next.has(key)) next.delete(key);
     else next.add(key);
-    setter(next);
+    setLocal(next);
   };
+  const extras = [
+    ...(breakouts.length > 0
+      ? [{ key: 'breakouts', label: 'Past breakout markers', description: 'Dates this stock closed above its 20-day channel.', on: local.has('breakouts'), onToggle: () => toggleLocal('breakouts') }]
+      : []),
+    ...(plan ? [{ key: 'plan', label: 'Trade plan', description: 'Entry, stop and targets of the active plan.', on: local.has('plan'), onToggle: () => toggleLocal('plan') }] : []),
+  ];
+  const activeLabels = [
+    ...OVERLAYS.filter((o) => overlays.has(o.key) && (o.key !== 'plan' || plan) && (o.key !== 'breakouts' || breakouts.length > 0)).map((o) => ({ key: o.key, label: o.label, color: o.key === 'donchian' ? t.donchian : o.color })),
+    ...PANELS.filter((p) => panels.has(p.key)).map((p) => ({ key: p.key, label: p.label, color: null as string | null })),
+  ];
 
   return (
     <div>
@@ -537,44 +556,33 @@ export default function StockChart({
           <SegmentedControl aria-label="Chart range" options={RANGES[interval].map(({ value, label }) => ({ value, label }))} value={range} onChange={setRange} />
         )}
         <div className="mx-1 hidden h-6 w-px bg-slate-200 sm:block" />
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Indicators">
-          {OVERLAYS.filter((o) => (o.key !== 'plan' || plan) && (o.key !== 'breakouts' || breakouts.length > 0)).map((o) => {
-            const active = overlays.has(o.key);
-            return (
-              <button
-                key={o.key}
-                type="button"
-                aria-pressed={active}
-                onClick={() => toggle(overlays, o.key, setOverlays)}
-                className={clsx(
-                  'press inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium',
-                  active ? 'border-transparent bg-slate-900 text-white' : 'border-slate-300 text-slate-600 hover:bg-black/[0.04]',
-                )}
-              >
-                <span className="h-2 w-2 rounded-full" style={{ background: o.key === 'donchian' ? t.donchian : o.color }} />
-                {o.label}
-              </button>
-            );
-          })}
-          {PANELS.map((p) => {
-            const active = panels.has(p.key);
-            return (
-              <button
-                key={p.key}
-                type="button"
-                aria-pressed={active}
-                onClick={() => toggle(panels, p.key, setPanels)}
-                className={clsx(
-                  'press rounded-full border px-2.5 py-1 text-xs font-medium',
-                  active ? 'border-transparent bg-accent text-white' : 'border-slate-300 text-slate-600 hover:bg-black/[0.04]',
-                )}
-              >
-                {p.label}
-              </button>
-            );
-          })}
+        <button
+          type="button"
+          onClick={() => setDialogOpen(true)}
+          aria-haspopup="dialog"
+          className="press inline-flex items-center gap-1.5 rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-black/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <AdjustmentsHorizontalIcon className="h-4 w-4" />
+          Indicators <span className="tabular-nums text-slate-400">{activeLabels.length}</span>
+        </button>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-slate-500" aria-label="Active indicators" data-testid="active-indicators">
+          {activeLabels.map((a) => (
+            <span key={a.key} className="inline-flex items-center gap-1">
+              {a.color && <span className="h-1.5 w-1.5 rounded-full" style={{ background: a.color }} aria-hidden="true" />}
+              {a.label}
+            </span>
+          ))}
         </div>
       </div>
+      {dialogOpen && (
+        <IndicatorsDialog
+          prefs={prefs}
+          onChange={(p) => setNotSaved(!save(p))}
+          onClose={() => setDialogOpen(false)}
+          extras={extras}
+          notSaved={notSaved}
+        />
+      )}
 
       {/* Live readout for the candle under the cursor (or the latest one). */}
       <div className="flex min-h-[20px] flex-wrap items-center gap-x-3 gap-y-0.5 px-5 pb-2 text-[11px] tabular-nums text-slate-500">

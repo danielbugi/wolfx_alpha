@@ -34,6 +34,8 @@ const PRODUCT_FILES = [
   'components/watchlist/WatchlistPerformance.tsx',
   'components/watchlist/WatchlistPanel.tsx',
   'components/watchlist/SymbolChart.tsx',
+  'components/charts/IndicatorsDialog.tsx',
+  'lib/chartIndicators.ts',
   'components/watchlist/WatchlistDetails.tsx',
   'components/common/DataStamp.tsx',
   'components/common/ProductDisclaimer.tsx',
