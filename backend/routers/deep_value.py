@@ -1,13 +1,16 @@
 # File: backend/routers/deep_value.py
 """
 Deep Value / Earnings-Turnaround Alerts API Router
+
+Internal research only (owner decision 2026-10-19: removed from the product). Owner-only on the server; the research
+code and data are kept.
 """
 
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends
 
-from auth.dependencies import require_authenticated_user
+from auth.dependencies import require_owner
 import logging
 
 from services.deep_value_service import DeepValueService
@@ -18,7 +21,7 @@ deep_value_router = APIRouter(
     prefix="/api/deep-value",
     tags=["deep-value"],
     responses={404: {"description": "Not found"}},
-    dependencies=[Depends(require_authenticated_user)],
+    dependencies=[Depends(require_owner)],
 )
 
 

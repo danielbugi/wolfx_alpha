@@ -26,17 +26,21 @@ describe('navigation groups', () => {
     expect(internal.internal).toBe(true);
   });
 
-  it('puts the market-intelligence journey in Product, with Deep Value on the existing /alerts URL', () => {
+  it('puts the market-intelligence journey in Product; Deep Value is owner-only internal research', () => {
     expect(product.items.map((i) => [i.name, i.href])).toEqual([
       ['Overview', '/'],
       ['Sectors', '/sectors'],
       ['Screener', '/screener'],
       ['Watchlist', '/watchlist'],
-      ['Deep Value', '/alerts'],
       ['Markets', '/markets'],
       ['Earnings', '/earnings'],
     ]);
     expect(product.items.some((i) => /alert/i.test(i.name))).toBe(false);
+    const dv = internal.items.find((i) => i.href === '/alerts');
+    expect(dv?.roles).toEqual(['owner']);
+    expect(isProductRoute('/alerts')).toBe(false);
+    expect(navGroupsForRole('collaborator').flatMap((g) => g.items.map((i) => i.href))).not.toContain('/alerts');
+    expect(navGroupsForRole('owner').flatMap((g) => g.items.map((i) => i.href))).toContain('/alerts');
   });
 
   it('keeps every research, trading-operations and ops page in Internal, none in Product', () => {

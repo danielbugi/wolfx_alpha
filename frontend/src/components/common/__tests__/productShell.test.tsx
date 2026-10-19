@@ -20,13 +20,13 @@ vi.mock('@/lib/stockNav', () => ({ useStockNavCapture: () => {} }));
 import AuthGate from '@/components/auth/AuthGate';
 
 describe('ProductDisclaimer via AuthGate', () => {
-  it.each(['/', '/screener', '/alerts', '/markets', '/markets/GC=F', '/earnings', '/stock/AAPL'])('is shown on product route %s', (p) => {
+  it.each(['/', '/screener', '/watchlist', '/markets', '/markets/GC=F', '/earnings', '/stock/AAPL'])('is shown on product route %s', (p) => {
     nav.pathname = p;
     render(<AuthGate>page</AuthGate>);
     expect(screen.getByTestId('product-disclaimer').textContent).toBe(PRODUCT_DISCLAIMER);
   });
 
-  it.each(['/lab', '/strategy', '/strategies', '/momentum', '/track-record', '/telegram', '/system-health', '/ml-stats', '/performance', '/users'])(
+  it.each(['/lab', '/strategy', '/strategies', '/momentum', '/track-record', '/telegram', '/system-health', '/ml-stats', '/performance', '/users', '/alerts'])(
     'is not shown on internal route %s',
     (p) => {
       nav.pathname = p;
