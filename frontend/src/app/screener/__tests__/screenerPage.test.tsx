@@ -17,6 +17,13 @@ vi.mock('@/services/screenerV2Api', () => ({ screenerV2Api: api }));
 
 import ScreenerPage from '@/app/screener/page';
 
+// jsdom has no ResizeObserver (the Strength Map's chart container sizes itself with it)
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as unknown as typeof ResizeObserver;
+
 const defs: ScreenerDefinitions = {
   metrics: [
     { key: 'rs_20', label: 'RS percentile, 20 sessions', unit: 'pctl', family: 'observed', definition: 'Percentile of the 20-session return.', numeric: true },
@@ -181,4 +188,55 @@ describe('Screener v2 page', () => {
     const t = container.textContent ?? '';
     for (const re of [/\bbuy\b/i, /\bsell\b/i, /signal/i, /predict/i, /recommend/i, /outperform/i, /opportunit/i]) expect(t).not.toMatch(re);
   });
+
+  // ---------------------------------------------------------------------------------------------- strength views
+  it('shows the Strength Map corner and strength meters in the table, unavailable stays a dash', async () => {
+    render(<ScreenerPage />);
+    const [a, b] = await screen.findAllByTestId('screener-row');
+    expect(within(a).getByTestId('quadrant-chip').textContent).toBe('Leading'); // AAA: RS 20 = 91, RS 60 = 88
+    expect(within(a).getByRole('img', { name: 'RS 20: 91 of 100 (very strong)' })).toBeTruthy();
+    expect(within(b).queryByTestId('quadrant-chip')).toBeNull();
+    expect(within(b).getByRole('img', { name: 'RS 20: unavailable' })).toBeTruthy();
+  });
+
+  it('switches the result view through the URL and keeps the screen', async () => {
+    nav.search = 'preset=leaders&sort=rs_60&order=desc';
+    render(<ScreenerPage />);
+    await screen.findAllByTestId('screener-row');
+    fireEvent.click(screen.getByRole('radio', { name: 'Strength Map' }));
+    expect(nav.replace).toHaveBeenLastCalledWith('/screener?preset=leaders&sort=rs_60&order=desc&view=map', { scroll: false });
+    fireEvent.click(screen.getByRole('radio', { name: 'Table' }));
+    expect(nav.replace).toHaveBeenLastCalledWith('/screener?preset=leaders&sort=rs_60&order=desc', { scroll: false });
+  });
+
+  it('the Strength Map asks for the first 200 of the same screen in one request (never sending "view" to the API)', async () => {
+    nav.search = 'sort=atr_pct&order=desc&page=3&page_size=50&view=map';
+    render(<ScreenerPage />);
+    await screen.findByTestId('strength-map');
+    const pairs = api.search.mock.calls[api.search.mock.calls.length - 1][0] as [string, string][];
+    expect(pairs).toContainEqual(['page', '1']);
+    expect(pairs).toContainEqual(['page_size', '200']);
+    expect(pairs).toContainEqual(['sort', 'atr_pct']);
+    expect(pairs.some(([k]) => k === 'view')).toBe(false);
+    expect(screen.getByTestId('corner-leading').textContent).toBe('Leading 1');
+    expect(screen.getByTestId('map-note').textContent).toContain('1 without relative strength for 2026-10-16 not plotted');
+    expect(screen.queryByRole('button', { name: 'Next page' })).toBeNull();
+    // sorting from the map keeps the map
+    fireEvent.change(screen.getByLabelText('Market session'), { target: { value: '2026-10-15' } });
+    expect(nav.replace).toHaveBeenLastCalledWith(expect.stringContaining('view=map'), { scroll: false });
+  });
+
+  it('the card view shows each stock with its corner, meters, relative returns, channel and the star', async () => {
+    nav.search = 'view=cards';
+    render(<ScreenerPage />);
+    const cards = await screen.findAllByTestId('strength-card');
+    expect(cards).toHaveLength(2);
+    expect(cards[0].textContent).toContain('Leading');
+    expect(cards[0].textContent).toContain('96% of the way up');
+    expect(cards[0].textContent).toContain('Above its 20- and 50-day averages');
+    expect(cards[1].textContent).toContain('—');
+    fireEvent.click(within(cards[0]).getByRole('button', { name: 'Add AAA to watchlist' }));
+    expect(within(cards[0]).getByRole('button', { name: 'Remove AAA from watchlist' })).toBeTruthy();
+  });
+
 });

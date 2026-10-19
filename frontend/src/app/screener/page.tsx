@@ -14,6 +14,11 @@ import LoadingSpinner from '@/components/common/LoadingSpinner';
 import SortHeader from '@/components/ui/SortHeader';
 import { MultiSelect, TextField } from '@/components/ui/Field';
 import { useWatchlist } from '@/lib/watchlist';
+import SegmentedControl from '@/components/ui/SegmentedControl';
+import StrengthMap from '@/components/screener/StrengthMap';
+import StrengthCards from '@/components/screener/StrengthCards';
+import { QuadrantChip, StrengthMeter } from '@/components/screener/StrengthMeter';
+import { quadrant } from '@/lib/strength';
 import { sectorHref } from '@/lib/sectors';
 import {
   COLUMNS, DEFAULT_STATE, FAMILY_LABEL, PAGE_SIZES, RANGE_FILTERS, ScreenState, formatCell, fromSearchParams, ofTotal, toQueryPairs,
@@ -26,6 +31,11 @@ const SHORT: Partial<Record<keyof ScreenerRow, string>> = {
   atr_pct: 'ATR %', volume_ratio: 'Vol ratio', dollar_vol_20: '$ vol 20', market_cap: 'Mkt cap',
 };
 const SIGNED = new Set(['change_1d', 'ret_5', 'ret_20', 'ret_60', 'vs_spx_20', 'vs_sector_20']);
+
+type ResultView = 'table' | 'cards' | 'map';
+/** The Strength Map plots up to this many stocks of the screen (one request, the current filters and sort). */
+const MAP_ROWS = 200;
+const METER_COLS = new Set(['rs_20', 'rs_60']);
 
 /** `useSearchParams()` opts the route out of static prerendering, so Next requires it under a Suspense boundary. */
 export default function ScreenerPage() {
@@ -48,6 +58,9 @@ function Screener() {
   const pathname = usePathname();
   const query = params.toString();
   const state = useMemo(() => fromSearchParams(new URLSearchParams(query)), [query]);
+  // the result view lives in the URL next to the screen (it is not an API parameter)
+  const viewParam = params.get('view');
+  const view: ResultView = viewParam === 'cards' || viewParam === 'map' ? viewParam : 'table';
   const [draft, setDraft] = useState<ScreenState>(state);
   const [defs, setDefs] = useState<ScreenerDefinitions | null>(null);
   const [result, setResult] = useState<ScreenerResult | null>(null);
@@ -62,7 +75,11 @@ function Screener() {
     screenerV2Api.definitions().then(setDefs).catch(() => setDefs(null));
   }, []);
 
-  const pairs = useMemo(() => toQueryPairs(state), [state]);
+  const pairs = useMemo(() => {
+    const base = toQueryPairs(state);
+    // the map shows the first MAP_ROWS of the same screen (same filters and sort), not one table page
+    return view === 'map' ? base.map(([k, v]) => (k === 'page' ? [k, '1'] : k === 'page_size' ? [k, String(MAP_ROWS)] : [k, v]) as [string, string]) : base;
+  }, [state, view]);
   const pairsKey = JSON.stringify(pairs);
   useEffect(() => {
     let cancelled = false;
@@ -97,14 +114,22 @@ function Screener() {
     (next: ScreenState) => {
       const p = new URLSearchParams();
       for (const [k, v] of toQueryPairs(next)) p.append(k, v);
+      if (view !== 'table') p.set('view', view);
       router.replace(`${pathname}?${p.toString()}`, { scroll: false });
     },
-    [router, pathname],
+    [router, pathname, view],
   );
 
   const metric = useCallback((key: string) => defs?.metrics.find((m) => m.key === key), [defs]);
   const sortBy = (key: string) => apply({ ...state, sort: key, order: state.sort === key && state.order === 'desc' ? 'asc' : 'desc', page: 1 });
   const totalPages = result ? Math.max(1, Math.ceil(result.total / result.page_size)) : 1;
+
+  const setView = (v: ResultView) => {
+    const p = new URLSearchParams(query);
+    if (v === 'table') p.delete('view');
+    else p.set('view', v);
+    router.replace(`${pathname}?${p.toString()}`, { scroll: false });
+  };
 
   const exportCsv = async () => {
     setExporting(true);
@@ -297,9 +322,21 @@ function Screener() {
         {/* Results */}
         <div className="rounded-2xl border border-black/[0.05] bg-white shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-            <p className="text-sm text-slate-600" aria-live="polite">
-              {loading ? 'Loading…' : result ? `${result.total.toLocaleString('en-US')} matching stocks` : ''}
-            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-sm text-slate-600" aria-live="polite">
+                {loading ? 'Loading…' : result ? `${result.total.toLocaleString('en-US')} matching stocks` : ''}
+              </p>
+              <SegmentedControl
+                aria-label="Result view"
+                value={view}
+                onChange={setView}
+                options={[
+                  { value: 'table', label: 'Table' },
+                  { value: 'cards', label: 'Cards' },
+                  { value: 'map', label: 'Strength Map' },
+                ]}
+              />
+            </div>
             {watchlist.notice && (
               <p role="status" className="text-[13px] text-amber-700" data-testid="watchlist-notice">
                 {watchlist.notice}{' '}
@@ -317,8 +354,11 @@ function Screener() {
               <ArrowDownTrayIcon className="h-4 w-4" /> {exporting ? 'Exporting…' : `CSV${result && result.total > maxExport ? ` (first ${maxExport.toLocaleString('en-US')})` : ''}`}
             </button>
           </div>
+          {view === 'map' && result && result.rows.length > 0 && <StrengthMap rows={result.rows} total={result.total} session={result.session} />}
+          {view === 'cards' && result && <StrengthCards rows={result.rows} isStarred={watchlist.has} onStar={(s) => void watchlist.toggle(s)} />}
+          {view === 'table' && (
           <div className="relative overflow-x-auto">
-            <table className="w-full min-w-[1280px] text-[13px]">
+            <table className="w-full min-w-[1360px] text-[13px]">
               <thead className="bg-slate-50/70 text-[11px] text-slate-500">
                 <tr>
                   <th className="w-8 px-2 py-2">
@@ -329,6 +369,9 @@ function Screener() {
                   </th>
                   <th className="px-3 py-2 text-left">
                     <SortHeader label="Sector" active={state.sort === 'sector'} dir={state.sort === 'sector' ? state.order : null} onClick={() => sortBy('sector')} />
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium" title="Where the stock sits on the Strength Map (relative strength over 20 and 60 sessions)">
+                    Strength
                   </th>
                   {COLUMNS.map((c) => {
                     const m = metric(c as string);
@@ -371,8 +414,18 @@ function Screener() {
                         r.sector ?? '—'
                       )}
                     </td>
+                    <td className="px-3 py-1.5">
+                      <QuadrantChip q={quadrant(r.rs_20, r.rs_60)} />
+                    </td>
                     {COLUMNS.map((c) => {
                       const m = metric(c as string);
+                      if (METER_COLS.has(c as string)) {
+                        return (
+                          <td key={c} className="whitespace-nowrap px-3 py-1.5 text-right text-[12px]">
+                            <StrengthMeter value={r[c] as number | null} label={c === 'rs_20' ? 'RS 20' : 'RS 60'} />
+                          </td>
+                        );
+                      }
                       const text = formatCell(r, c, m?.unit ?? '');
                       const v = r[c];
                       return (
@@ -398,7 +451,7 @@ function Screener() {
                 ))}
                 {result && result.rows.length === 0 && (
                   <tr>
-                    <td colSpan={COLUMNS.length + 3} className="py-10 text-center text-sm text-slate-400">
+                    <td colSpan={COLUMNS.length + 4} className="py-10 text-center text-sm text-slate-400">
                       No stocks match these filters for {result.session}.
                     </td>
                   </tr>
@@ -406,7 +459,11 @@ function Screener() {
               </tbody>
             </table>
           </div>
-          {result && result.total > 0 && (
+          )}
+          {view !== 'table' && result && result.rows.length === 0 && (
+            <p className="py-10 text-center text-sm text-slate-400">No stocks match these filters for {result.session}.</p>
+          )}
+          {view !== 'map' && result && result.total > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/[0.06] px-4 py-2.5 text-[13px] text-slate-600">
               <label className="flex items-center gap-2">
                 Rows per page
