@@ -21,6 +21,7 @@ import { deepValueApi, DeepValueEntry, BalanceSheetAssessment, BalanceSheetCheck
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import ErrorAlert from '@/components/common/ErrorAlert';
 import DataStamp from '@/components/common/DataStamp';
+import { useAuth } from '@/contexts/AuthContext';
 import { TURNAROUND_PAGE, WATCH_PAGE } from '@/lib/deepValueView';
 import SymbolHoverLink from '@/components/dashboard/SymbolHoverLink';
 
@@ -115,7 +116,25 @@ function ShowMore({ shown, total, step, onMore, label }: { shown: number; total:
   );
 }
 
+/** Internal research (owner decision 2026-10-19): removed from the product; the server answers only the owner. */
 export default function AlertsPage() {
+  const { user } = useAuth();
+  if (!user || user.role !== 'owner') {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <div className="container mx-auto max-w-7xl px-4 pb-12 pt-6 sm:px-6 lg:px-8">
+          <h1 className="large-title px-1 pt-2">Not available</h1>
+          <p className="mt-2 px-1 text-[15px] text-slate-500" data-testid="deep-value-unavailable">
+            This page is not part of First Light.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return <DeepValueResearch />;
+}
+
+function DeepValueResearch() {
   const [nearLowPct, setNearLowPct] = useState(15);
   const [minValuationScore, setMinValuationScore] = useState(12);
 

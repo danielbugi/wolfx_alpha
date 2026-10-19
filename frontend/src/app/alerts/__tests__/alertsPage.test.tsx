@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 const api = vi.hoisted(() => ({ scan: vi.fn() }));
+const auth = vi.hoisted(() => ({ role: 'owner' as string | null }));
+vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: auth.role ? { id: 1, email: 'o@x.test', role: auth.role } : null }) }));
 vi.mock('@/services/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/api')>();
   return { ...actual, deepValueApi: api };
@@ -65,5 +67,20 @@ describe('Alerts page', () => {
     render(<AlertsPage />);
     await screen.findByText(/No turnaround matches/);
     expect(api.scan).toHaveBeenCalledWith({ near_low_pct: 15, min_valuation_score: 12 });
+  });
+});
+
+
+describe('Deep Value is internal research (owner only)', () => {
+  it('shows a not-available page to any other role and never calls the API', async () => {
+    for (const role of ['collaborator', null]) {
+      auth.role = role;
+      api.scan.mockClear();
+      const { unmount } = render(<AlertsPage />);
+      expect(screen.getByTestId('deep-value-unavailable').textContent).toBe('This page is not part of First Light.');
+      expect(api.scan).not.toHaveBeenCalled();
+      unmount();
+    }
+    auth.role = 'owner';
   });
 });

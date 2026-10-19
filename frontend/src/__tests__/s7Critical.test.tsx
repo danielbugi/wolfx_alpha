@@ -21,6 +21,7 @@ vi.mock('@/services/api', async (importOriginal) => {
   };
 });
 vi.mock('@/services/screenerV2Api', () => ({ screenerV2Api: { search: api.search, definitions: vi.fn() } }));
+vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 1, email: 'o@x.test', role: 'owner' } }) }));
 vi.mock('@/components/dashboard/SymbolHoverLink', () => ({ default: ({ symbol }: { symbol: string }) => <span>{symbol}</span> }));
 
 import AlertsPage from '@/app/alerts/page';

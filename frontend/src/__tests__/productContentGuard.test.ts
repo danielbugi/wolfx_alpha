@@ -12,7 +12,6 @@ const SRC = path.resolve(__dirname, '..');
 const PRODUCT_FILES = [
   'app/page.tsx',
   'app/screener/page.tsx',
-  'app/alerts/page.tsx',
   'app/markets/page.tsx',
   'app/markets/[symbol]/page.tsx',
   'app/earnings/page.tsx',
@@ -28,7 +27,6 @@ const PRODUCT_FILES = [
   'components/stock/KeyLevels.tsx',
   'components/stock/StockContextPanel.tsx',
   'app/watchlist/page.tsx',
-  'lib/deepValueView.ts',
   'lib/watchlistView.ts',
   'components/common/DataStamp.tsx',
   'components/common/ProductDisclaimer.tsx',
