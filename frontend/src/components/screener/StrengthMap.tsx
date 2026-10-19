@@ -1,7 +1,7 @@
 // File: frontend/src/components/screener/StrengthMap.tsx
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { clsx } from 'clsx';
 import { CartesianGrid, ReferenceArea, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
@@ -51,6 +51,16 @@ export default function StrengthMap({ rows, total, session }: { rows: ScreenerRo
   const router = useRouter();
   const theme = useResolvedTheme();
   const [focus, setFocus] = useState<Quadrant | null>(null);
+  // smaller dots on a phone so 200 stocks stay readable
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    const mq = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(max-width: 640px)') : null;
+    if (!mq) return;
+    const on = () => setCompact(mq.matches);
+    on();
+    mq.addEventListener?.('change', on);
+    return () => mq.removeEventListener?.('change', on);
+  }, []);
   const c = theme === 'dark'
     ? { grid: '#2f2f33', tick: '#98989f', mid: '#636366', tint: 0.06 }
     : { grid: '#e3e3e8', tick: '#737378', mid: '#aeaeb2', tint: 0.05 };
@@ -123,7 +133,7 @@ export default function StrengthMap({ rows, total, session }: { rows: ScreenerRo
               tick={{ fill: c.tick, fontSize: 11 }}
               label={{ value: 'Last 20 sessions ↑', angle: -90, position: 'insideLeft', offset: 10, fill: c.tick, fontSize: 11 }}
             />
-            <ZAxis type="number" dataKey="z" range={[18, 260]} domain={[5, 11]} />
+            <ZAxis type="number" dataKey="z" range={compact ? [8, 90] : [18, 260]} domain={[5, 11]} />
             <Tooltip content={<TipCard />} cursor={{ strokeDasharray: '3 3' }} />
             {bySector.map((g) => (
               <Scatter
