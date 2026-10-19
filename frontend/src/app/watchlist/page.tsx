@@ -8,6 +8,8 @@ import { XMarkIcon } from '@heroicons/react/20/solid';
 import { screenerV2Api, ScreenerDefinitions, ScreenerResult, ScreenerRow } from '@/services/screenerV2Api';
 import DataStamp from '@/components/common/DataStamp';
 import SortHeader from '@/components/ui/SortHeader';
+import SegmentedControl from '@/components/ui/SegmentedControl';
+import WatchlistPerformance from '@/components/watchlist/WatchlistPerformance';
 import { useWatchlist } from '@/lib/watchlist';
 import { sectorHref } from '@/lib/sectors';
 import { FAMILY_LABEL, formatCell } from '@/lib/screenerV2';
@@ -18,7 +20,8 @@ import {
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
 /**
- * Watchlist: the stocks saved in this browser, with the Screener's own metrics for one market session (one request,
+ * Watchlist: the stocks saved in this browser. Performance (default): the selected stocks vs the S&P 500 on one common
+ * session baseline (components/watchlist/WatchlistPerformance). Details: the Screener's own metrics for one market session (one request,
  * exact-symbol filter on the Screener query, so every value, missing state and provenance matches the Screener and the
  * stock page). Saved symbols stay visible and removable when the analytics are unavailable; a failed request never
  * changes the list.
@@ -34,12 +37,14 @@ export default function WatchlistPage() {
   const [sort, setSort] = useState<WatchSort>({ key: 'added', order: 'desc' });
   const [compare, setCompare] = useState<string[]>([]);
   const [draft, setDraft] = useState('');
+  const [view, setView] = useState<'performance' | 'details'>('performance');
 
   useEffect(() => {
     screenerV2Api.definitions().then(setDefs).catch(() => setDefs(null));
   }, []);
 
-  const key = JSON.stringify([symbols, session]);
+  // the Screener request is only made for the Details tab
+  const key = JSON.stringify([view === 'details' ? symbols : [], session]);
   useEffect(() => {
     const [syms, sess] = JSON.parse(key) as [string[], string | null];
     if (syms.length === 0) {
@@ -100,11 +105,11 @@ export default function WatchlistPage() {
           <div className="min-w-0">
             <h1 className="large-title">Watchlist</h1>
             <p className="mt-1.5 text-[15px] text-slate-500">
-              Stocks you saved in this browser ({symbols.length} of {watchlist.max}), with the Screener&apos;s numbers for one market session.
+              Stocks you saved in this browser ({symbols.length} of {watchlist.max}): how they moved, side by side.
             </p>
-            {result && <DataStamp className="mt-1" label="Session" asOf={result.session} source="same data as the Screener" stale={!!stale?.notUpdatedDays} />}
+            {view === 'details' && result && <DataStamp className="mt-1" label="Session" asOf={result.session} source="same data as the Screener" stale={!!stale?.notUpdatedDays} />}
           </div>
-          {result && result.recent_sessions.length > 0 && (
+          {view === 'details' && result && result.recent_sessions.length > 0 && (
             <label className="text-xs text-slate-500">
               Session{' '}
               <select
@@ -150,22 +155,36 @@ export default function WatchlistPage() {
           )}
         </form>
 
-        {stale?.olderSession && (
+        {symbols.length > 0 && (
+          <div className="px-1">
+            <SegmentedControl
+              aria-label="Watchlist view"
+              value={view}
+              onChange={setView}
+              options={[
+                { value: 'performance', label: 'Performance' },
+                { value: 'details', label: 'Details' },
+              ]}
+            />
+          </div>
+        )}
+
+        {view === 'details' && stale?.olderSession && (
           <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="older-session">
             You are viewing the {result!.session} session; the newest is {result!.recent_sessions[0]}.
           </p>
         )}
-        {stale?.notUpdatedDays != null && (
+        {view === 'details' && stale?.notUpdatedDays != null && (
           <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="not-updated">
             The newest session with metrics is {result!.recent_sessions[0]} ({stale.notUpdatedDays} days ago); the data has not been updated since.
           </p>
         )}
-        {result && result.coverage.rs === 0 && (
+        {view === 'details' && result && result.coverage.rs === 0 && (
           <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="no-rs">
             No observed relative-strength snapshot exists for this session, so relative strength and returns are unavailable.
           </p>
         )}
-        {error && (
+        {view === 'details' && error && (
           <p className="rounded-xl bg-slate-100 px-3 py-2 text-[13px] text-slate-600" role="alert" data-testid="analytics-error">
             {error} Your saved symbols are kept and can still be opened or removed.
           </p>
@@ -178,6 +197,8 @@ export default function WatchlistPage() {
               Use the star on the <Link href="/screener" className="text-accent hover:underline">Screener</Link> or on a stock page, or add a symbol above. Up to {watchlist.max} stocks, saved in this browser only.
             </p>
           </div>
+        ) : view === 'performance' ? (
+          <WatchlistPerformance saved={symbols} />
         ) : (
           <div className="rounded-2xl border border-black/[0.05] bg-white shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm text-slate-600">
@@ -281,7 +302,7 @@ export default function WatchlistPage() {
           </div>
         )}
 
-        {compare.length > 0 && (
+        {view === 'details' && compare.length > 0 && (
           <section className="rounded-2xl border border-black/[0.05] bg-white shadow-sm" aria-labelledby="compare-title" data-testid="compare">
             <div className="flex items-center justify-between px-4 py-3">
               <h2 id="compare-title" className="text-[15px] font-semibold text-slate-900">

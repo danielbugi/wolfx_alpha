@@ -30,6 +30,8 @@ const PRODUCT_FILES = [
   'app/watchlist/page.tsx',
   'lib/deepValueView.ts',
   'lib/watchlistView.ts',
+  'lib/performance.ts',
+  'components/watchlist/WatchlistPerformance.tsx',
   'components/common/DataStamp.tsx',
   'components/common/ProductDisclaimer.tsx',
   'app/sectors/page.tsx',

@@ -5,6 +5,7 @@ quarterly financials, breakout history) for the stock detail API
 """
 
 import psycopg2
+import psycopg2.errors
 from psycopg2.extras import RealDictCursor
 from typing import List, Dict, Any, Optional
 import logging
@@ -63,6 +64,29 @@ class StockService:
                     "donchian_low_20": float(row["donchian_low_20"]) if row["donchian_low_20"] is not None else None,
                 }
                 for row in reversed(rows)
+            ]
+        finally:
+            conn.close()
+
+    def get_price_discontinuities(self, symbol: str, from_date: str) -> List[Dict[str, Any]]:
+        """Recorded price discontinuities (unadjusted splits and similar jumps) on or after `from_date`, oldest first, so a
+        chart can refuse to read a return across one. Empty when the table is absent on this database."""
+        conn = self.get_db_connection()
+        if not conn:
+            raise Exception("Database connection failed")
+        try:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            try:
+                cursor.execute(
+                    "SELECT date, kind, ratio FROM price_discontinuities WHERE symbol = %s AND date >= %s ORDER BY date",
+                    (symbol, from_date),
+                )
+            except psycopg2.errors.UndefinedTable:
+                conn.rollback()
+                return []
+            return [
+                {"date": r["date"].strftime("%Y-%m-%d"), "kind": r["kind"], "ratio": float(r["ratio"]) if r["ratio"] is not None else None}
+                for r in cursor.fetchall()
             ]
         finally:
             conn.close()

@@ -83,7 +83,9 @@ def get_price_history(
         history = stock_service.get_price_history(symbol, days)
         if not history:
             raise HTTPException(status_code=404, detail=f"No price history found for '{symbol}'")
-        return {"symbol": symbol, "days": days, "bars": history}
+        # recorded discontinuities inside the returned window: a return read across one is not a real move
+        discontinuities = stock_service.get_price_discontinuities(symbol, history[0]["date"])
+        return {"symbol": symbol, "days": days, "bars": history, "discontinuities": discontinuities}
     except HTTPException:
         raise
     except Exception as e:

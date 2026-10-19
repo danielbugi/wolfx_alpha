@@ -13,6 +13,8 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/watchlist',
 }));
 vi.mock('@/services/screenerV2Api', () => ({ screenerV2Api: api }));
+// The Performance tab (default) has its own tests; here it is a stub so these tests cover the Details tab.
+vi.mock('@/components/watchlist/WatchlistPerformance', () => ({ default: ({ saved }: { saved: string[] }) => <div data-testid="perf-stub">{saved.join(',')}</div> }));
 
 import WatchlistPage from '@/app/watchlist/page';
 import ScreenerPage from '@/app/screener/page';
@@ -56,6 +58,12 @@ function result(rows: ScreenerRow[], over: Partial<ScreenerResult> = {}): Screen
   } as ScreenerResult;
 }
 
+/** Render the page and open the Details tab (the table and the comparison). */
+function renderDetails() {
+  const r = render(<WatchlistPage />);
+  fireEvent.click(screen.getByRole('radio', { name: 'Details' }));
+  return r;
+}
 const symbolsOf = (pairs: QueryPairs) => pairs.filter(([k]) => k === 'symbol').map(([, v]) => v);
 const rowsOnPage = () => screen.queryAllByTestId('watchlist-row').map((tr) => within(tr).getAllByRole('link')[0].textContent);
 
@@ -78,7 +86,7 @@ describe('Watchlist page', () => {
     save(['NVDA', 'AAPL', 'ZZZZ']);
     const nvda = row('NVDA');
     api.search.mockResolvedValue(result([row('AAPL', { rs_20: 80 }), nvda]));
-    render(<WatchlistPage />);
+    renderDetails();
     await screen.findAllByText('Semiconductors', { exact: false });
     expect(api.search).toHaveBeenCalledTimes(1);
     expect(symbolsOf(api.search.mock.calls[0][0])).toEqual(['NVDA', 'AAPL', 'ZZZZ']);
@@ -96,7 +104,7 @@ describe('Watchlist page', () => {
   it('shows missing values as unavailable, never as zero', async () => {
     save(['NVDA']);
     api.search.mockResolvedValue(result([row('NVDA', { rs_20: null, ret_20: null, dist_sma50: null, dollar_vol_20: null, dv_bars: 12, sector: null, industry: null })]));
-    render(<WatchlistPage />);
+    renderDetails();
     await waitFor(() => expect(screen.getByTestId('watchlist-row').textContent).toContain('—'));
     const tr = screen.getByTestId('watchlist-row');
     expect(tr.querySelector('[title="12 of 20 sessions with bars"]')?.textContent).toBe('—');
@@ -106,7 +114,7 @@ describe('Watchlist page', () => {
   it('keeps saved symbols visible and removable when the analytics backend fails, and never rewrites the list', async () => {
     save(['NVDA', 'AAPL']);
     api.search.mockRejectedValue(new Error('network'));
-    render(<WatchlistPage />);
+    renderDetails();
     expect((await screen.findByTestId('analytics-error')).textContent).toContain('Your saved symbols are kept');
     expect(rowsOnPage()).toEqual(['NVDA', 'AAPL']);
     expect(screen.getAllByTestId('watchlist-row')[0].textContent).toContain('analytics unavailable');
@@ -119,7 +127,7 @@ describe('Watchlist page', () => {
   it('says an older server does not have watchlist analytics yet (404 or refused symbol filter)', async () => {
     save(['NVDA']);
     api.search.mockRejectedValue({ response: { status: 422 } });
-    render(<WatchlistPage />);
+    renderDetails();
     expect((await screen.findByTestId('analytics-error')).textContent).toContain('not available on this server yet');
     expect(rowsOnPage()).toEqual(['NVDA']);
   });
@@ -127,7 +135,7 @@ describe('Watchlist page', () => {
   it('sorts by a metric with missing values last, and returns to the saved order', async () => {
     save(['A', 'B', 'C']);
     api.search.mockResolvedValue(result([row('A', { rs_20: 50 }), row('B', { rs_20: null }), row('C', { rs_20: 90 })]));
-    render(<WatchlistPage />);
+    renderDetails();
     await waitFor(() => expect(screen.getAllByTestId('watchlist-row')).toHaveLength(3));
     fireEvent.click(screen.getByRole('button', { name: /RS 20/ }));
     expect(rowsOnPage()).toEqual(['C', 'A', 'B']);
@@ -140,7 +148,7 @@ describe('Watchlist page', () => {
   it('compares up to four stocks side by side with the same values', async () => {
     save(['A', 'B', 'C', 'D', 'E']);
     api.search.mockResolvedValue(result(['A', 'B', 'C', 'D', 'E'].map((s, i) => row(s, { ret_20: i - 2 }))));
-    render(<WatchlistPage />);
+    renderDetails();
     await waitFor(() => expect(screen.getAllByTestId('watchlist-row')).toHaveLength(5));
     for (const s of ['A', 'B', 'C', 'D']) fireEvent.click(screen.getByRole('checkbox', { name: `Compare ${s}` }));
     expect((screen.getByRole('checkbox', { name: 'Compare E' }) as HTMLInputElement).disabled).toBe(true);
@@ -156,7 +164,7 @@ describe('Watchlist page', () => {
     const thirty = Array.from({ length: 30 }, (_, i) => `S${i}`);
     save(thirty);
     api.search.mockResolvedValue(result([]));
-    render(<WatchlistPage />);
+    renderDetails();
     await waitFor(() => expect(screen.getAllByTestId('watchlist-row')).toHaveLength(30));
     fireEvent.change(screen.getByLabelText('Symbol to add'), { target: { value: 'msft' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
@@ -167,7 +175,7 @@ describe('Watchlist page', () => {
   it('ignores malformed and duplicate saved entries without erasing valid ones', async () => {
     window.localStorage.setItem(KEY, JSON.stringify(['nvda', 'NVDA', 7, 'bad sym', 'AAPL']));
     api.search.mockResolvedValue(result([row('NVDA'), row('AAPL')]));
-    render(<WatchlistPage />);
+    renderDetails();
     await waitFor(() => expect(rowsOnPage()).toEqual(['NVDA', 'AAPL']));
     expect(symbolsOf(api.search.mock.calls[0][0])).toEqual(['NVDA', 'AAPL']);
   });
@@ -175,7 +183,7 @@ describe('Watchlist page', () => {
   it('flags a viewed older session and data that has not been updated', async () => {
     save(['NVDA']);
     api.search.mockResolvedValueOnce(result([row('NVDA')], { session: '2026-10-09', recent_sessions: ['2026-10-09', '2026-10-08'] }));
-    render(<WatchlistPage />);
+    renderDetails();
     expect((await screen.findByTestId('not-updated')).textContent).toContain('2026-10-09 (9 days ago)');
     api.search.mockResolvedValueOnce(result([row('NVDA')], { session: '2026-10-08', recent_sessions: ['2026-10-09', '2026-10-08'] }));
     fireEvent.change(screen.getByLabelText('Market session'), { target: { value: '2026-10-08' } });
@@ -196,16 +204,29 @@ describe('Watchlist page', () => {
     );
     expect(await screen.findByTestId('watchlist-empty')).toBeTruthy();
     fireEvent.click(await screen.findByRole('button', { name: 'Add NVDA to watchlist' }));
+    await waitFor(() => expect(screen.getByTestId('perf-stub').textContent).toBe('NVDA')); // the Performance tab follows the star
+    fireEvent.click(screen.getByRole('radio', { name: 'Details' }));
     await waitFor(() => expect(rowsOnPage()).toEqual(['NVDA']));
     expect(stored()).toEqual(['NVDA']);
     fireEvent.click(screen.getByRole('button', { name: 'Remove NVDA from watchlist', pressed: true }));
     expect(await screen.findByTestId('watchlist-empty')).toBeTruthy();
   });
 
+  it('opens on the Performance tab and makes no Screener request until Details is opened', async () => {
+    save(['NVDA', 'AAPL']);
+    api.search.mockResolvedValue(result([row('NVDA'), row('AAPL')]));
+    render(<WatchlistPage />);
+    expect((await screen.findByTestId('perf-stub')).textContent).toBe('NVDA,AAPL');
+    expect(screen.getByRole('radio', { name: 'Performance' }).getAttribute('aria-checked')).toBe('true');
+    expect(api.search).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('radio', { name: 'Details' }));
+    await waitFor(() => expect(api.search).toHaveBeenCalledTimes(1));
+  });
+
   it('lays out the table and comparison in horizontal scrollers so a phone never scrolls the page sideways', async () => {
     save(['NVDA']);
     api.search.mockResolvedValue(result([row('NVDA')]));
-    const { container } = render(<WatchlistPage />);
+    const { container } = renderDetails();
     await screen.findAllByText('Semiconductors', { exact: false });
     const scroller = container.querySelector('table')!.parentElement!;
     expect(scroller.className).toContain('overflow-x-auto');
