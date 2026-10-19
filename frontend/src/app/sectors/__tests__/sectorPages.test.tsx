@@ -105,7 +105,8 @@ describe('Sectors comparison page', () => {
   it('links observed leadership rows and cards to sector pages', async () => {
     render(<SectorsPage />);
     const observed = await screen.findByRole('region', { name: 'Observed sector leadership' });
-    expect(within(observed).getByRole('link', { name: 'Alpha' }).getAttribute('href')).toBe('/sectors/alpha');
+    // the rows arrive from a second request after the region renders: wait for them (was a CI race)
+    expect((await within(observed).findByRole('link', { name: 'Alpha' })).getAttribute('href')).toBe('/sectors/alpha');
     const cardLinks = (await screen.findAllByRole('link')).map((a) => a.getAttribute('href'));
     expect(cardLinks).toContain('/sectors/e11');
   });
