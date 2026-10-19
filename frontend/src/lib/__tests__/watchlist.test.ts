@@ -125,3 +125,25 @@ describe('useWatchlist', () => {
     expect(b.result.current.symbols).toEqual(['TSLA']);
   });
 });
+
+describe('multiple lists (storage rules)', () => {
+  it('validates list names', async () => {
+    const { normalizeListName } = await import('@/lib/watchlist');
+    expect(normalizeListName('  Semis   watch ')).toBe('Semis watch');
+    for (const bad of ['', '   ', 'x'.repeat(31), 5, null]) expect(normalizeListName(bad)).toBeNull();
+  });
+
+  it('keeps valid additional lists only: unique ids, never "main", cleaned symbols, at most 9 extra', async () => {
+    const { parseLists, MAX_LISTS } = await import('@/lib/watchlist');
+    const many = Array.from({ length: 15 }, (_, i) => ({ id: `l-${i}`, name: `L${i}`, symbols: [] }));
+    expect(parseLists(JSON.stringify(many))).toHaveLength(MAX_LISTS - 1);
+    expect(parseLists(JSON.stringify([
+      { id: 'l-a', name: 'A', symbols: [' amd', 'AMD', 'bad sym', 3] },
+      { id: 'l-a', name: 'dup id', symbols: [] },
+      { id: 'main', name: 'spoof', symbols: ['X'] },
+      { id: 'BAD ID', name: 'x', symbols: [] },
+      { id: 'l-b', name: '', symbols: [] },
+    ]))).toEqual([{ id: 'l-a', name: 'A', symbols: ['AMD'] }]);
+    for (const raw of [null, '', '{', '"x"', '{}']) expect(parseLists(raw)).toEqual([]);
+  });
+});
