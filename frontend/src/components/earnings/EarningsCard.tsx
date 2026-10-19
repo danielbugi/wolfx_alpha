@@ -16,8 +16,8 @@ const MAX_ROWS = 8;
 
 /**
  * Dashboard card: who reports yesterday / today / tomorrow / this week, as New York trading sessions (Monday's
- * "yesterday" is Friday, Friday's "tomorrow" is Monday, holidays skipped). Your watchlist names first, then stocks on
- * today's momentum screens (the internal board's lists, used here only as a coverage list).
+ * "yesterday" is Friday, Friday's "tomorrow" is Monday, holidays skipped). Your watchlist names first, then a daily
+ * coverage list (the internal board's lists, used here only to choose which stocks to cover; no signals are shown).
  */
 export default function EarningsCard() {
   const { anchors, board, boardState, calendarFailed, watchlist, histories, reload } = useEarningsCalendar();
@@ -84,7 +84,7 @@ export default function EarningsCard() {
         <div>
           <h3 className="text-[17px] font-semibold text-slate-900">Earnings</h3>
           <p className="mt-0.5 text-xs text-slate-500">
-            Stocks on today&apos;s momentum screens and your watchlist · New York sessions
+            US stocks with notable recent price moves and your watchlist · New York sessions
             {anchors?.yesterday && active === 'yesterday' && ` · ${formatDay(anchors.yesterday)}`}
             {anchors?.tomorrow && active === 'tomorrow' && ` · ${formatDay(anchors.tomorrow)}`}
             {anchors && active === 'week' && ` · ${formatDay(anchors.weekDays[0])} – ${formatDay(anchors.weekDays[4])}`}

@@ -2,123 +2,116 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Card, CardBody, CardHeader, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow } from '@nextui-org/react';
 import { XMarkIcon } from '@heroicons/react/20/solid';
 import { clsx } from 'clsx';
-import { stockApi, PriceBar } from '@/services/api';
-import SymbolHoverLink from '@/components/dashboard/SymbolHoverLink';
+import { screenerV2Api, ScreenerResult, ScreenerRow } from '@/services/screenerV2Api';
 import { useWatchlist } from '@/lib/watchlist';
+import { watchlistPairs } from '@/lib/watchlistView';
+import { formatValue } from '@/lib/screenerV2';
 
 const UNKNOWN = '—';
+const MAX_ROWS = 10;
 
-interface Quote {
-  close: number | null;
-  change: number | null;
-  date: string | null;
-}
-
-function quoteFrom(bars: PriceBar[]): Quote {
-  const last = bars[bars.length - 1];
-  const prev = bars[bars.length - 2];
-  if (!last) return { close: null, change: null, date: null };
-  return { close: last.close, change: prev ? (last.close / prev.close - 1) * 100 : null, date: last.date };
-}
-
-/** The stocks starred on their stock page (this browser), with last close and day change. Hidden when empty. */
+/**
+ * The stocks starred on the Screener or a stock page (this browser), with last close and day change for the newest
+ * market session. ONE Screener request for the whole list (the same exact-symbol query the Watchlist page uses), so the
+ * numbers match the Screener and the stock page. Saved symbols stay listed when the request fails. Hidden when empty.
+ */
 export default function WatchlistCard() {
-  const router = useRouter();
   const { symbols, remove } = useWatchlist();
-  const [quotes, setQuotes] = useState<Record<string, Quote | 'error'>>({});
+  const [result, setResult] = useState<ScreenerResult | null>(null);
+  const [failed, setFailed] = useState(false);
 
+  const key = symbols.join(',');
   useEffect(() => {
+    if (!key) return;
     let cancelled = false;
-    const missing = symbols.filter((s) => !(s in quotes));
-    missing.forEach((s) => {
-      stockApi
-        .getPriceHistory(s, 10)
-        .then((r) => !cancelled && setQuotes((q) => ({ ...q, [s]: quoteFrom(r.bars) })))
-        .catch(() => !cancelled && setQuotes((q) => ({ ...q, [s]: 'error' })));
-    });
+    screenerV2Api
+      .search(watchlistPairs(key.split(','), null))
+      .then((r) => {
+        if (cancelled) return;
+        setResult(r);
+        setFailed(false);
+      })
+      .catch(() => !cancelled && setFailed(true));
     return () => {
       cancelled = true;
     };
-    // quotes is read only to skip symbols already loaded
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbols]);
+  }, [key]);
 
   if (symbols.length === 0) return null;
 
+  const rows: Record<string, ScreenerRow> = Object.fromEntries((result?.rows ?? []).map((r) => [r.symbol, r]));
+  const shown = symbols.slice(0, MAX_ROWS);
+
   return (
-    <Card className="mb-6 border border-black/[0.05] shadow-sm" data-stock-list="Watchlist">
-      <CardHeader className="px-5 pt-5 pb-2">
-        <div>
-          <h3 className="text-[17px] font-semibold text-slate-900">Watchlist</h3>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Stocks you starred · saved in this browser ·{' '}
-            <Link href="/watchlist" className="font-medium text-accent hover:underline">
-              Open watchlist
-            </Link>
-          </p>
-        </div>
-      </CardHeader>
-      <CardBody className="p-0">
-        <Table
-          removeWrapper
-          aria-label="Watchlist"
-          onRowAction={(key) => router.push(`/stock/${key}`)}
-          classNames={{
-            th: 'bg-slate-50/70 text-slate-500 font-medium text-[11px] h-8 first:pl-5 last:pr-5',
-            td: 'text-[13px] py-2 tabular-nums first:pl-5 last:pr-5',
-            tr: 'cursor-pointer',
-          }}
-        >
-          <TableHeader>
-            <TableColumn>SYMBOL</TableColumn>
-            <TableColumn align="end">LAST CLOSE</TableColumn>
-            <TableColumn align="end">CHANGE</TableColumn>
-            <TableColumn align="end">AS OF</TableColumn>
-            <TableColumn align="end"> </TableColumn>
-          </TableHeader>
-          <TableBody>
-            {symbols.map((s) => {
-              const q = quotes[s];
-              const quote = q && q !== 'error' ? q : null;
+    <section className="mb-6 rounded-2xl border border-black/[0.05] bg-white shadow-sm" data-stock-list="Watchlist">
+      <div className="px-5 pb-2 pt-5">
+        <h3 className="text-[17px] font-semibold text-slate-900">Watchlist</h3>
+        <p className="mt-0.5 text-xs text-slate-500">
+          Stocks you starred · saved in this browser
+          {result ? ` · session ${result.session}` : ''} ·{' '}
+          <Link href="/watchlist" className="font-medium text-accent hover:underline">
+            Open watchlist
+          </Link>
+        </p>
+        {failed && <p className="mt-1 text-xs text-slate-500">Prices are unavailable right now; your saved stocks are kept.</p>}
+      </div>
+      <div className="relative overflow-x-auto">
+        <table className="w-full text-[13px] tabular-nums">
+          <thead className="bg-slate-50/70 text-[11px] text-slate-500">
+            <tr>
+              <th className="py-2 pl-5 pr-3 text-left font-medium">Symbol</th>
+              <th className="px-3 py-2 text-right font-medium">Last close</th>
+              <th className="px-3 py-2 text-right font-medium">Change</th>
+              <th className="py-2 pl-3 pr-5 text-right font-medium">
+                <span className="sr-only">Remove</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((s) => {
+              const r = rows[s];
+              const waiting = !result && !failed;
+              const missing = result && !r;
               return (
-                <TableRow key={s}>
-                  <TableCell>
-                    <SymbolHoverLink symbol={s} />
-                  </TableCell>
-                  <TableCell className="text-right text-slate-800">{quote?.close != null ? `$${quote.close.toFixed(2)}` : q === undefined ? '…' : UNKNOWN}</TableCell>
-                  <TableCell
+                <tr key={s} className="border-t border-black/[0.05]" data-testid="watchlist-card-row">
+                  <td className="py-2 pl-5 pr-3 font-semibold">
+                    <Link href={`/stock/${s}`} className="text-slate-900 hover:text-accent hover:underline">
+                      {s}
+                    </Link>
+                    {missing && <span className="ml-2 text-[11px] font-normal text-slate-400">no bar on {result.session}</span>}
+                  </td>
+                  <td className="px-3 py-2 text-right text-slate-800">{r?.close != null ? formatValue(r.close, '$') : waiting ? '…' : UNKNOWN}</td>
+                  <td
                     className={clsx(
-                      'text-right font-semibold',
-                      quote?.change == null ? 'text-slate-400' : quote.change >= 0 ? 'text-emerald-600' : 'text-red-600',
+                      'px-3 py-2 text-right font-semibold',
+                      r?.change_1d == null ? 'text-slate-400' : r.change_1d >= 0 ? 'text-emerald-600' : 'text-red-600',
                     )}
                   >
-                    {quote?.change != null ? `${quote.change >= 0 ? '+' : ''}${quote.change.toFixed(2)}%` : q === undefined ? '' : UNKNOWN}
-                  </TableCell>
-                  <TableCell className="text-right text-slate-400">{quote?.date ?? ''}</TableCell>
-                  <TableCell className="text-right">
+                    {r?.change_1d != null ? formatValue(r.change_1d, '%') : waiting ? '' : UNKNOWN}
+                  </td>
+                  <td className="py-2 pl-3 pr-5 text-right">
                     <button
                       type="button"
                       aria-label={`Remove ${s} from watchlist`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        remove(s);
-                      }}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      className="press inline-flex h-6 w-6 items-center justify-center rounded-full text-slate-400 hover:bg-black/[0.06] hover:text-slate-700"
+                      onClick={() => remove(s)}
+                      className="press inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-black/[0.06] hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     >
                       <XMarkIcon className="h-4 w-4" />
                     </button>
-                  </TableCell>
-                </TableRow>
+                  </td>
+                </tr>
               );
             })}
-          </TableBody>
-        </Table>
-      </CardBody>
-    </Card>
+          </tbody>
+        </table>
+      </div>
+      {symbols.length > MAX_ROWS && (
+        <Link href="/watchlist" className="block border-t border-slate-100 px-5 py-2.5 text-center text-[13px] font-medium text-accent hover:underline">
+          {symbols.length - MAX_ROWS} more in your watchlist →
+        </Link>
+      )}
+    </section>
   );
 }

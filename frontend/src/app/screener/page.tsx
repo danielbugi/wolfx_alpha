@@ -218,7 +218,7 @@ function Screener() {
                     placeholder="min"
                     value={draft.ranges[f.key]?.min ?? ''}
                     onChange={(e) => setDraft({ ...draft, ranges: { ...draft.ranges, [f.key]: { min: e.target.value, max: draft.ranges[f.key]?.max ?? '' } } })}
-                    className="w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 py-[7px] text-[13px] tabular-nums placeholder:text-slate-400 focus:border-accent focus:outline-none"
+                    className="w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 py-[7px] text-[13px] tabular-nums placeholder:text-slate-400 focus:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                   />
                   <input
                     aria-label={`${f.label} maximum`}
@@ -226,7 +226,7 @@ function Screener() {
                     placeholder="max"
                     value={draft.ranges[f.key]?.max ?? ''}
                     onChange={(e) => setDraft({ ...draft, ranges: { ...draft.ranges, [f.key]: { min: draft.ranges[f.key]?.min ?? '', max: e.target.value } } })}
-                    className="w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 py-[7px] text-[13px] tabular-nums placeholder:text-slate-400 focus:border-accent focus:outline-none"
+                    className="w-full min-w-0 rounded-lg border border-slate-300 bg-white px-2 py-[7px] text-[13px] tabular-nums placeholder:text-slate-400 focus:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                   />
                 </div>
               </fieldset>

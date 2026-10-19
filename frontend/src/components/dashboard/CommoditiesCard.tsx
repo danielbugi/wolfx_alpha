@@ -109,7 +109,7 @@ export default function CommoditiesCard({ indices, loading }: { indices: MarketI
         )}
         {pending.length > 0 && rows.length > 0 && (
           <p className="mt-2 text-[11px] text-slate-400">
-            {pending.map((s) => NAMES[s]).join(', ')} will appear after the next data update.
+            Not covered yet: {pending.map((s) => NAMES[s]).join(', ')}.
           </p>
         )}
       </CardBody>

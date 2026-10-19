@@ -147,3 +147,45 @@ def test_unprovisioned_database_answers_unavailable_not_a_500():
         for route in ("/api/market-intelligence/snapshot", "/api/market-intelligence/history"):
             r = c.get(route)
             assert r.status_code == 200 and r.json()["available"] is False and r.json()["reason"] == "not_provisioned"
+
+
+
+def test_the_api_serves_the_collectors_feature_set_and_the_newest_session_wins(monkeypatch):
+    """Regression: the collector writes mi_v2 rows while store.py's read default is mi_v1, which made the API answer
+    "no snapshot" with observed snapshots in the table. The API reads every served feature set; the newest session wins,
+    an observed row beats a reconstructed one on the same session, then the newer feature set."""
+    from market_intelligence import store
+    from services import market_intelligence_service as svc_mod
+
+    assert svc_mod.SERVED_FEATURE_SETS[0] == "mi_v2" and "mi_v1" in svc_mod.SERVED_FEATURE_SETS
+    rows = {"mi_v2": {"session_date": "2026-10-16", "provenance": "observed", "feature_set_version": "mi_v2"},
+            "mi_v1": {"session_date": "2026-10-09", "provenance": "observed", "feature_set_version": "mi_v1"}}
+    sector_calls, built = [], []
+    monkeypatch.setattr(store, "get_market_snapshot", lambda cur, s, p, inc, fsv: rows.get(fsv))
+    monkeypatch.setattr(store, "get_sector_snapshots", lambda cur, s, p, inc, fsv: sector_calls.append(fsv) or [])
+    monkeypatch.setattr(store, "list_market_snapshots", lambda cur, limit, p, inc, fsv: [
+        {"session_date": rows[fsv]["session_date"], "provenance": "observed", "fsv": fsv},
+        {"session_date": "2026-10-09", "provenance": "observed", "fsv": fsv}])
+    monkeypatch.setattr(svc_mod.mi_payload, "build", lambda market, sectors: built.append(market) or {"available": True})
+
+    class _Conn:
+        def cursor(self):
+            return self
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def close(self):
+            pass
+
+    service = MarketIntelligenceService(lambda: _Conn())
+    service.snapshot(None, False)
+    assert built[-1]["feature_set_version"] == "mi_v2" and sector_calls == ["mi_v2"]
+    rows["mi_v1"]["session_date"] = "2026-10-17"                                 # a newer session under the older set still wins on date
+    service.snapshot(None, False)
+    assert built[-1]["feature_set_version"] == "mi_v1" and sector_calls[-1] == "mi_v1"
+    hist = service.history(10, False)["sessions"]
+    assert [(h["session_date"], h["fsv"]) for h in hist] == [("2026-10-17", "mi_v1"), ("2026-10-16", "mi_v2"), ("2026-10-09", "mi_v2")]

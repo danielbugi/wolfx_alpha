@@ -148,3 +148,10 @@ def test_the_live_post_market_package_cannot_reach_it():
     from alerts import publish_post_market as ppm
     assert set(ppm.POST_MARKET_KINDS) == {"daily_digest", "momentum_board", "top_gainers", "market_health"}
     assert "market_environment" not in cx.ROTATION.get(0, ()) + cx.ROTATION.get(1, ()) + cx.ROTATION.get(2, ()) + cx.ROTATION.get(3, ()) + cx.ROTATION.get(4, ())
+
+
+def test_the_backend_serves_the_feature_set_the_runner_writes():
+    """The backend may not import the runner, so it names the feature sets it serves; the first must be the runner's."""
+    m = re.search(r'SERVED_FEATURE_SETS = \("([^"]+)"', _read(os.path.join(ROOT, "backend/services/market_intelligence_service.py")))
+    v = re.search(r'^FEATURE_SET_VERSION = "([^"]+)"', _read(os.path.join(ROOT, RUNNER)), re.M)
+    assert m and v and m.group(1) == v.group(1)
