@@ -126,6 +126,8 @@ describe('WatchlistPerformance', () => {
     const notes = screen.getAllByTestId('coverage-note').map((n) => n.textContent);
     expect(notes[0]).toBe('AAA: history starts 2026-08-03, after the period start 2026-04-16 (not directly comparable over the full period)');
     expect(notes[1]).toBe('BBB: a price discontinuity is recorded on 2026-07-01; no return shown');
+    expect(screen.getByText('(not drawn)').parentElement?.textContent).toContain('BBB');
+    expect(screen.getByTestId('perf-window').textContent).toBe('% change from the close of 2026-04-16 to 2026-10-16 · S&P 500 dashed');
     await waitFor(() => expect(chart.lines.map((l) => l.dataKey)).toEqual(['SPX', 'AAA', 'CCC'])); // BBB not drawn
     const rows = screen.getAllByTestId('rank-row');
     expect(rows[rows.length - 1].textContent).toContain('BBB');

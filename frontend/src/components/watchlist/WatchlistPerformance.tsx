@@ -157,7 +157,7 @@ export default function WatchlistPerformance({ saved }: { saved: string[] }) {
             </h2>
             <p className="mt-0.5 text-xs text-slate-500" data-testid="perf-window">
               {result.baseline && result.end
-                ? `% change from the close of ${shortDate(result.baseline)} to ${shortDate(result.end)} (${result.end}) · S&P 500 dashed`
+                ? `% change from the close of ${result.baseline} to ${result.end} · S&P 500 dashed`
                 : bench === 'error'
                   ? 'S&P 500 unavailable'
                   : 'Loading…'}
@@ -237,6 +237,7 @@ export default function WatchlistPerformance({ saved }: { saved: string[] }) {
             {selected.map((s) => (
               <span key={s} className="inline-flex items-center gap-1.5">
                 <span className="inline-block h-0.5 w-4" style={{ background: colorOf(s) }} aria-hidden="true" /> {s}
+                {bySymbol.get(s)?.flags.includes('discontinuity') || histories[s] === 'error' ? <span className="text-slate-400">(not drawn)</span> : null}
               </span>
             ))}
           </p>
