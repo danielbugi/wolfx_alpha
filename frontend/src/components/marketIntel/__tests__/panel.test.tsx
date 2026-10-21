@@ -11,6 +11,13 @@ const api = vi.hoisted(() => ({
   fail: false,
   history: { available: true, sessions: [] } as unknown,
 }));
+// the sector rotation map opens a sector with the router; jsdom has no ResizeObserver for its chart
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }), usePathname: () => '/' }));
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as unknown as typeof ResizeObserver;
 vi.mock('@/services/marketIntelligenceApi', () => ({
   marketIntelligenceApi: {
     getSnapshot: vi.fn(async () => {

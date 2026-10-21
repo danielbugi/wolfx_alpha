@@ -13,6 +13,13 @@ const api = vi.hoisted(() => ({
   history: { available: true, sessions: [] } as unknown,
   calls: [] as (string | undefined)[],
 }));
+// the sector rotation map opens a sector with the router; jsdom has no ResizeObserver for its chart
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }), usePathname: () => '/' }));
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as unknown as typeof ResizeObserver;
 vi.mock('@/services/marketIntelligenceApi', () => ({
   marketIntelligenceApi: {
     getSnapshot: vi.fn(async (session?: string) => {
@@ -91,5 +98,56 @@ describe('breadth gauges and trend', () => {
     expect(api.calls.filter(Boolean)).toEqual(['2026-02-26', '2026-02-27', '2026-03-02']);
     expect(within(card).getAllByTestId('breadth-trend-range')[0].textContent).toBe('35.0% → 41.5% over the last 3 recorded sessions');
     expect(card.textContent).toContain('2026-02-26 to 2026-03-02');
+  });
+});
+
+describe('sector rotation', () => {
+  it('names a corner from the 20- and 60-session differences vs the median stock (0 = in line, unavailable never guessed)', async () => {
+    const { sectorQuadrant } = await import('@/components/marketIntel/SectorRotation');
+    expect(sectorQuadrant(1, 2)).toBe('leading');
+    expect(sectorQuadrant(0, 0)).toBe('leading');
+    expect(sectorQuadrant(1, -2)).toBe('improving');
+    expect(sectorQuadrant(-1, 2)).toBe('fading');
+    expect(sectorQuadrant(-1, -2)).toBe('lagging');
+    expect(sectorQuadrant(null, 2)).toBeNull();
+  });
+
+  it('builds each sector trail oldest first, ending at the current snapshot, skipping sessions without values', async () => {
+    const { rotationTrails } = await import('@/components/marketIntel/SectorRotation');
+    const cur = snapshot();
+    const older = snapshot({ session_date: '2026-02-27' });
+    older.sectors = older.sectors.map((s) => (s.sector === 'Alpha' ? { ...s, horizons: { ...s.horizons, '20': { ...s.horizons['20'], vs_univ: -1 } } } : s));
+    const trails = rotationTrails(cur, [{ session: '2026-02-27', sectors: older.sectors }, { session: '2026-03-02', sectors: cur.sectors }]);
+    const alpha = trails.get('Alpha')!;
+    expect(alpha.map((p) => [p.session, p.y, p.head])).toEqual([['2026-02-27', -1, false], ['2026-03-02', 5, true]]);
+    expect(alpha[1].label).toBe('Alpha');
+    expect(trails.get('Delta')!.map((p) => p.session)).toEqual([]); // Delta has no 20-session value
+  });
+
+  it('shows the rotation card with corner counts for the current session', async () => {
+    render(<MarketIntelligencePanel priceDate="2026-03-02" />);
+    const card = await screen.findByTestId('sector-rotation');
+    // fixture vs median stock (20, 60): Gamma (3, 2) Alpha (5, 4) Beta (-2, -1); Delta unavailable
+    expect(within(card).getByTestId('rot-leading').textContent).toBe('Leading 2');
+    expect(within(card).getByTestId('rot-lagging').textContent).toBe('Lagging 1');
+    expect(within(card).getByTestId('rotation-note').textContent).toContain('not point-in-time');
+  });
+});
+
+describe('regime gauge', () => {
+  it('draws the dial, a pull bar per input, and the score over the recorded sessions with the thresholds', async () => {
+    api.history = {
+      available: true,
+      sessions: [
+        { session_date: '2026-03-02', provenance: 'observed', regime_state: 'NEUTRAL', regime_score: 0.04 },
+        { session_date: '2026-02-27', provenance: 'observed', regime_state: 'NEUTRAL', regime_score: -0.12 },
+      ],
+    };
+    api.bySession = { '2026-02-27': snapshot({ session_date: '2026-02-27' }), '2026-03-02': snapshot() };
+    render(<MarketIntelligencePanel priceDate="2026-03-02" />);
+    const card = (await screen.findByText('Market regime')).closest('section')!;
+    expect(within(card).getByTestId('regime-dial')).toBeTruthy();
+    expect(within(card).getAllByTestId('regime-pull').length).toBe(snapshot().regime.components.length);
+    await waitFor(() => expect(within(card).getByTestId('regime-trend-range').textContent).toContain('score -0.12 → 0.04 over the last 2 recorded sessions'));
   });
 });
