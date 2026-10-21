@@ -44,9 +44,9 @@ describe('Momentum Today', () => {
     expect(head).toContain('of 3,060 stocks on 2026-10-20');
   });
 
-  it('lists each board as a table shaded on one green scale (deeper = stronger), with the strength icon and the reason when withheld', async () => {
+  it('shows one table with tabs, strongest first, shaded on one green scale with the strength icon and the reason when withheld', async () => {
     render(<MomentumTodayPage />);
-    const board = await screen.findByTestId('board-breakouts');
+    const board = await screen.findByTestId('momentum-board');
     await waitFor(() => expect(within(board).getAllByTestId('momentum-row')).toHaveLength(3));
     const [a, b, c] = within(board).getAllByTestId('momentum-row');
     const shade = (el: HTMLElement) => Number(/rgba\(5, 150, 105, ([\d.]+)\)/.exec((el.firstElementChild as HTMLElement).style.background)?.[1]);
@@ -54,19 +54,39 @@ describe('Momentum Today', () => {
     expect(shade(a)).toBeGreaterThan(shade(b)); // 91.3 is a deeper green than 35.2
     expect(within(a).getByTestId('strength-icon').getAttribute('data-filled')).toBe('5');
     expect(within(b).getByTestId('strength-icon').getAttribute('data-filled')).toBe('2');
-    expect(within(c).getByTestId('momentum-score').textContent).toBe('—');
+    expect(within(c).getByTestId('momentum-score').textContent).toBe('—'); // no score sinks to the bottom
     expect(within(c).getByTestId('momentum-score').getAttribute('title')).toBe('No Strength Score: illiquid (under $1M a day)');
-    expect(within(c).getByTestId('strength-icon').getAttribute('data-filled')).toBe('0');
-    expect(within(a).getByTestId('part-strength_rs').textContent).toBe('95');
+    expect(within(a).getByTestId('momentum-group').textContent).toBe('Breakout');
     expect(within(board).getByRole('link', { name: 'Open in Screener →' }).getAttribute('href')).toBe('/screener?breakout_20=true&sort=strength_score&order=desc&view=cards');
+    expect(within(board).getByRole('radio', { name: 'Broke out 142' })).toBeTruthy();
     expect(within(board).getByTestId('momentum-table').parentElement!.className).toContain('overflow-x-auto');
+  });
+
+  it('sorts by any column like the Momentum Board (blanks always last) and switches lists with the tabs or the headline cards', async () => {
+    render(<MomentumTodayPage />);
+    const board = await screen.findByTestId('momentum-board');
+    await waitFor(() => expect(within(board).getAllByTestId('momentum-row')).toHaveLength(3));
+    const symbols = () => within(board).getAllByTestId('momentum-symbol').map((x) => x.textContent);
+    expect(symbols()).toEqual(['AAA', 'BBB', 'CCC']);
+    fireEvent.click(within(board).getByRole('button', { name: /^Strength/ }));
+    expect(symbols()).toEqual(['BBB', 'AAA', 'CCC']); // ascending, the withheld score still last
+    fireEvent.click(within(board).getByRole('button', { name: /^Symbol/ }));
+    expect(symbols()).toEqual(['AAA', 'BBB', 'CCC']);
+    fireEvent.click(within(board).getByRole('radio', { name: /^New highs/ }));
+    await waitFor(() => expect(symbols()).toEqual(['DDD']));
+    expect(within(board).getByTestId('momentum-group').textContent).toBe('New high');
+    fireEvent.click(within(board).getByRole('radio', { name: /^All/ }));
+    await waitFor(() => expect(symbols().sort()).toEqual(['AAA', 'BBB', 'CCC', 'DDD', 'EEE']));
+    expect(within(board).getByRole('radio', { name: 'All 5' })).toBeTruthy();
+    fireEvent.click(within(screen.getByTestId('momentum-headline')).getAllByRole('button')[2]); // "Strongest today" card
+    await waitFor(() => expect(symbols()).toEqual(['EEE']));
   });
 
   it('shows 50 rows first, then more on request', async () => {
     api.search.mockImplementation(async (pairs: QueryPairs) =>
       has(pairs, 'breakout_20', 'true') ? result(Array.from({ length: 120 }, (_, i) => row(`S${i}`, { strength_score: 99 - i * 0.5 })), 120) : result([], 0));
     render(<MomentumTodayPage />);
-    const board = await screen.findByTestId('board-breakouts');
+    const board = await screen.findByTestId('momentum-board');
     await waitFor(() => expect(within(board).getAllByTestId('momentum-row')).toHaveLength(50));
     fireEvent.click(within(board).getByRole('button', { name: 'Show 50 more' }));
     expect(within(board).getAllByTestId('momentum-row')).toHaveLength(100);

@@ -1,6 +1,6 @@
 // File: frontend/src/lib/momentumToday.ts
 // Momentum Today's boards: each is ONE Screener v2 request (the shared engine), plus the matching Screener link.
-import type { QueryPairs } from '@/services/screenerV2Api';
+import type { QueryPairs, ScreenerRow } from '@/services/screenerV2Api';
 
 /** The three boards, each ONE request to the Screener's shared engine (same session, same values as everywhere else). */
 export const BOARDS: { key: 'breakouts' | 'new_highs' | 'strongest'; title: string; blurb: string; pairs: QueryPairs; screener: string }[] = [
@@ -26,3 +26,21 @@ export const BOARDS: { key: 'breakouts' | 'new_highs' | 'strongest'; title: stri
     screener: '/screener?preset=strongest&view=cards',
   },
 ];
+
+export type BoardKey = (typeof BOARDS)[number]['key'];
+export type MomentumRow = ScreenerRow & { group: BoardKey };
+
+/** One row per symbol across the lists, tagged with the first list it appears in (breakouts, then new highs, then strongest). */
+export function unionRows(lists: Partial<Record<BoardKey, ScreenerRow[]>>): MomentumRow[] {
+  const seen = new Set<string>();
+  const out: MomentumRow[] = [];
+  for (const k of ['breakouts', 'new_highs', 'strongest'] as BoardKey[]) {
+    for (const r of lists[k] ?? []) {
+      if (seen.has(r.symbol)) continue;
+      seen.add(r.symbol);
+      out.push({ ...r, group: k });
+    }
+  }
+  return out;
+}
+
