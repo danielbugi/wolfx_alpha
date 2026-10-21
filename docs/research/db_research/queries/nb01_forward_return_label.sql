@@ -1,0 +1,1 @@
+select observation_id,horizon_sessions,label_status,symbol,direction,t0_session,horizon_session,raw_return,directional_return,benchmark_return,excess_return,directional_excess_return,path_state,mfe,mae,bars_expected,bars_observed,data_quality from forward_return_label

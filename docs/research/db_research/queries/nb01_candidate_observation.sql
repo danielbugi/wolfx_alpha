@@ -1,0 +1,1 @@
+select id,symbol,session_date,direction,signal_type,triggered,entry_close,breakout_dist_atr,distance_to_channel_pct,passed_guard,guard_reasons,alignment_score,quality_grade,combined_score,session_rank,ml_status,ml_score,tracked_intent,strategy_context from candidate_observation

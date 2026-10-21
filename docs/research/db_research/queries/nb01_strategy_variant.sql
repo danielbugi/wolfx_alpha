@@ -1,0 +1,1 @@
+select id,variant_key,variant_version,variant_kind,definition,description from strategy_variant

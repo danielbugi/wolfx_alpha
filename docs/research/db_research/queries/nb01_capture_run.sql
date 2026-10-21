@@ -1,0 +1,1 @@
+select id,session_date,status,universe_size,candidates,captured,guard_rejected,stale_skipped,invalid_skipped,defaulted_flagged from candidate_capture_run

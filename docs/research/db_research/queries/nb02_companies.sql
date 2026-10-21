@@ -1,0 +1,1 @@
+select symbol,sector,industry,market_cap_category,is_active,first_trading_date,last_trading_date from companies
