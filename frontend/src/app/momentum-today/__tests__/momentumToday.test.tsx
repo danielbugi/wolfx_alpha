@@ -58,7 +58,7 @@ describe('Momentum Today', () => {
     const ranks = within(board()).getAllByTestId('momentum-rank').map((x) => x.firstElementChild as HTMLElement);
     expect(ranks.map((x) => x.textContent)).toEqual(['1', '2', '3', '4', '5']);
     expect(ranks.map((x) => x.getAttribute('data-top-two'))).toEqual(['true', 'true', null, null, null]);
-    expect(cells('momentum-lists')).toEqual(['Gainers #1Range #1', 'Gainers #2Volume #4', 'Range #9', '—', '—']);
+    expect(cells('momentum-lists')).toEqual(['Gain #1Range #1', 'Gain #2Vol #4', 'Range #9', '—', '—']);
     expect(cells('momentum-group')).toEqual(['On the lists', 'Breakout', 'Breakout', 'Breakout', 'New high']);
     expect(screen.queryByTestId('momentum-lists-note')).toBeNull();
   });

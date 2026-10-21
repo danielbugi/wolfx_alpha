@@ -62,9 +62,9 @@ export const VIEWS: { key: View; label: string; title: string; blurb: string }[]
 
 /** The session's lists, in display order, with the names used in list_ranks. */
 export const DAY_LISTS: { key: string; label: string }[] = [
-  { key: 'gainers', label: 'Gainers' },
+  { key: 'gainers', label: 'Gain' },
   { key: 'atr', label: 'Range' },
-  { key: 'volume', label: 'Volume' },
+  { key: 'volume', label: 'Vol' },
 ];
 
 /** One row per symbol across the lists, tagged with the first list it appears in. */

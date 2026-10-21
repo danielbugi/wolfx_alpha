@@ -83,7 +83,8 @@ const ACCESSORS = {
   group: (r: Row) => GROUP_LABEL[r.group],
 };
 type Col = keyof typeof ACCESSORS;
-const PART_COLS = SCORE_PARTS.map((p) => ({ key: p.key as Col, label: p.label.replace('Relative strength', 'RS'), weight: p.weight, hint: p.hint }));
+const PART_SHORT: Record<string, string> = { strength_rs: 'RS', strength_trend: 'Trend', strength_momentum: 'Mom', strength_volume: 'Vol', strength_liquidity: 'Liq' };
+const PART_COLS = SCORE_PARTS.map((p) => ({ key: p.key as Col, label: p.label, short: PART_SHORT[p.key] ?? p.label, weight: p.weight, hint: p.hint }));
 
 function readView(): View {
   if (typeof window === 'undefined') return 'movers';
@@ -377,7 +378,7 @@ function Board({
             </p>
           )}
           <div className="relative mt-2 overflow-x-auto">
-            <table className="w-full min-w-[1180px] border-separate border-spacing-y-1 text-[13px]" data-testid="momentum-table">
+            <table className="w-full min-w-[1040px] border-separate border-spacing-y-1 text-[13px]" data-testid="momentum-table">
               <thead className="text-[11px] text-slate-500">
                 <tr>
                   <th className="sticky left-0 z-10 bg-white px-2 py-1 text-left font-medium">{head('rank', '#')}</th>
@@ -385,16 +386,21 @@ function Board({
                   <th className="px-2 py-1 text-left font-medium">{head('symbol', 'Symbol')}</th>
                   {view === 'strength' &&
                     PART_COLS.map((c) => (
-                      <th key={c.key} className="px-1 py-1 text-center font-medium" title={`${c.label} (${c.weight}% of the score): ${c.hint}`}>
-                        {head(c.key, `${c.label} ${c.weight}%`, 'end')}
+                      <th key={c.key} className="w-14 px-0.5 py-1 text-center font-medium" title={`${c.label} (${c.weight}% of the score): ${c.hint}`}>
+                        {head(c.key, `${c.short} ${c.weight}%`, 'end')}
                       </th>
                     ))}
                   <th className="px-2 py-1 text-right font-medium">{head('ret1', '1D %', 'end')}</th>
-                  <th className="px-2 py-1 text-right font-medium" title="Volume vs its 10-day average">
-                    {head('rvol', 'Vol ×', 'end')}
-                  </th>
                   {view === 'movers' && (
-                    <th className="px-2 py-1 text-left font-medium" title="Rank in the session's lists: biggest gainers, biggest range vs ATR, biggest volume surge">
+                    <th className="px-2 py-1 text-right font-medium" title="Volume vs its 10-day average">
+                      {head('rvol', 'Vol ×', 'end')}
+                    </th>
+                  )}
+                  {view === 'movers' && (
+                    <th
+                      className="px-2 py-1 text-left font-medium"
+                      title="Rank in the session's lists: Gain = biggest 1-day gainers, Range = biggest range vs ATR, Vol = biggest volume surge"
+                    >
                       {head('lists', 'Lists')}
                     </th>
                   )}
@@ -408,8 +414,6 @@ function Board({
                     {head('quality', 'Quality')}
                   </th>
                   {view === 'movers' && <th className="px-2 py-1 text-left font-medium">{head('strength', 'Strength')}</th>}
-                  <th className="px-2 py-1 text-left font-medium">{head('sector', 'Sector')}</th>
-                  {view === 'movers' && <th className="px-2 py-1 text-left font-medium">{head('group', 'Group')}</th>}
                   <th className="px-1 py-1">
                     <span className="sr-only">Watchlist</span>
                   </th>
@@ -431,10 +435,17 @@ function Board({
                         </span>
                       </td>
                       {view === 'strength' && strengthCell(r)}
-                      <td className={clsx(cell, 'max-w-[220px]')}>
-                        <Link href={`/stock/${r.symbol}`} className="font-semibold text-slate-900 hover:text-accent hover:underline" data-testid="momentum-symbol">
-                          {r.symbol}
-                        </Link>
+                      <td className={clsx(cell, 'max-w-[230px]')} title={r.sector ?? undefined}>
+                        <span className="flex items-center gap-1.5">
+                          <Link href={`/stock/${r.symbol}`} className="font-semibold text-slate-900 hover:text-accent hover:underline" data-testid="momentum-symbol">
+                            {r.symbol}
+                          </Link>
+                          {view === 'movers' && (
+                            <span className={clsx('whitespace-nowrap rounded-full px-1.5 text-[10px] font-semibold', GROUP_TONE[r.group])} data-testid="momentum-group">
+                              {GROUP_LABEL[r.group]}
+                            </span>
+                          )}
+                        </span>
                         <span className="block truncate text-[11px] text-slate-500" data-testid="momentum-name">
                           {r.company_name ?? r.industry ?? '—'}
                         </span>
@@ -453,11 +464,11 @@ function Board({
                       <td className={clsx(cell, 'text-right font-semibold tabular-nums', r.change_1d == null ? 'text-slate-400' : r.change_1d >= 0 ? 'text-emerald-700' : 'text-red-600')}>
                         {formatValue(r.change_1d, '%')}
                       </td>
-                      <td className={clsx(cell, 'text-right tabular-nums text-slate-700')}>{formatValue(r.volume_ratio, 'x')}</td>
+                      {view === 'movers' && <td className={clsx(cell, 'text-right tabular-nums text-slate-700')}>{formatValue(r.volume_ratio, 'x')}</td>}
                       {view === 'movers' && (
                         <td className={cell} data-testid="momentum-lists">
                           {r.list_ranks && Object.keys(r.list_ranks).length > 0 ? (
-                            <span className="flex flex-wrap gap-1">
+                            <span className="flex w-[150px] flex-wrap gap-1">
                               {DAY_LISTS.filter((l) => r.list_ranks![l.key] != null).map((l) => (
                                 <span
                                   key={l.key}
@@ -482,7 +493,7 @@ function Board({
                       </td>
                       <td className={clsx(cell, 'text-right tabular-nums')} data-testid="momentum-size">
                         <span className="text-slate-800">{formatValue(r.market_cap, '$')}</span>
-                        <span className="block text-[11px] text-slate-400">{r.float_shares != null ? `float ${formatValue(r.float_shares, 'shares')}` : ''}</span>
+                        <span className="block whitespace-nowrap text-[11px] text-slate-400">{r.float_shares != null ? `float ${formatValue(r.float_shares, 'shares')}` : ''}</span>
                       </td>
                       <td className={cell} data-testid="momentum-quality">
                         <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
@@ -497,14 +508,6 @@ function Board({
                         </span>
                       </td>
                       {view === 'movers' && strengthCell(r)}
-                      <td className={clsx(cell, 'max-w-[150px] truncate text-slate-600')}>{r.sector ?? '—'}</td>
-                      {view === 'movers' && (
-                        <td className={cell}>
-                          <span className={clsx('whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold', GROUP_TONE[r.group])} data-testid="momentum-group">
-                            {GROUP_LABEL[r.group]}
-                          </span>
-                        </td>
-                      )}
                       <td className="rounded-r-lg bg-slate-50/60 px-1 py-1 text-center">
                         <button
                           type="button"
