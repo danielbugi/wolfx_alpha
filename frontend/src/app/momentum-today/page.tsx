@@ -6,8 +6,9 @@ import Link from 'next/link';
 import { clsx } from 'clsx';
 import { StarIcon as StarOutline } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolid } from '@heroicons/react/20/solid';
-import { screenerV2Api, ScreenerResult, ScreenerRow } from '@/services/screenerV2Api';
-import { BOARDS, BoardKey, MomentumRow as Row, unionRows } from '@/lib/momentumToday';
+import { QueryPairs, screenerV2Api, ScreenerResult, ScreenerRow } from '@/services/screenerV2Api';
+import { DayLists, getDayLists } from '@/services/dayListsApi';
+import { BOARDS, BoardKey, DAY_LISTS, MomentumRow as Row, rankRows, unionRows } from '@/lib/momentumToday';
 import DataStamp from '@/components/common/DataStamp';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import SortHeader from '@/components/ui/SortHeader';
@@ -27,9 +28,29 @@ const GROUP_TONE: Record<BoardKey, string> = {
   strongest: 'bg-slate-100 text-slate-700',
 };
 const PAGE_ROWS = 50;
+const MAX_PAGES = 5;
+
+/** One board from the shared engine, paged until complete (the engine serves at most 200 rows a page). */
+async function searchAll(pairs: QueryPairs): Promise<ScreenerResult> {
+  const first = await screenerV2Api.search(pairs);
+  const seen = new Set(first.rows.map((r) => r.symbol));
+  const rows = [...first.rows];
+  for (let page = 2; rows.length < first.total && page <= MAX_PAGES; page++) {
+    const next = await screenerV2Api.search(pairs.map(([k, v]) => [k, k === 'page' ? String(page) : v]) as QueryPairs);
+    if (next.session !== first.session || next.rows.length === 0) break;
+    for (const r of next.rows) {
+      if (seen.has(r.symbol)) continue;
+      seen.add(r.symbol);
+      rows.push(r);
+    }
+  }
+  return { ...first, rows };
+}
 
 /** Sort keys: click a header to sort; blanks always sink to the bottom. */
 const ACCESSORS = {
+  rank: (r: Row) => r.rank,
+  lists: (r: Row) => (r.list_ranks ? Object.keys(r.list_ranks).length : null),
   strength: (r: Row) => r.strength_score,
   symbol: (r: Row) => r.symbol,
   ret1: (r: Row) => r.change_1d,
@@ -46,8 +67,9 @@ type Col = keyof typeof ACCESSORS;
 const PART_COLS = SCORE_PARTS.map((p) => ({ key: p.key as Col, label: p.label.replace('Relative strength', 'RS'), weight: p.weight, hint: p.hint }));
 
 /**
- * Momentum Today: the session's momentum from the Screener's shared engine, laid out as one table
- * with tabs (broke out / new 20-day highs / strongest / all) and sortable column headers, strongest first. Strength is
+ * Momentum Today: the session's momentum from the Screener's shared engine, laid out as one table with tabs (broke out /
+ * new 20-day highs / strongest / all) and sortable column headers. Ranked by the same rule as the Telegram digest: top 5 in
+ * two or more of the session's lists (gainers, range vs ATR, volume surge) first, then the biggest 1-day gain. Strength is
  * shaded on one green scale (pale = weak, deep = strong) with a five-bar icon. Counts and descriptions of the session only;
  * not a forecast or a recommendation.
  */
@@ -56,12 +78,15 @@ export default function MomentumTodayPage() {
   const [results, setResults] = useState<Partial<Record<BoardKey, ScreenerResult | 'error'>>>({});
   const [tab, setTab] = useState<Tab>('breakouts');
   const [shown, setShown] = useState(PAGE_ROWS);
+  const [lists, setLists] = useState<DayLists | 'error' | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    getDayLists()
+      .then((l) => !cancelled && setLists(l))
+      .catch(() => !cancelled && setLists('error'));
     for (const b of BOARDS) {
-      screenerV2Api
-        .search(b.pairs)
+      searchAll(b.pairs)
         .then((r) => !cancelled && setResults((m) => ({ ...m, [b.key]: r })))
         .catch(() => !cancelled && setResults((m) => ({ ...m, [b.key]: 'error' })));
     }
@@ -80,8 +105,25 @@ export default function MomentumTodayPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [results],
   );
-  const rows: Row[] = useMemo(() => (tab === 'all' ? union : (ok(tab)?.rows ?? []).map((r) => ({ ...r, group: tab }))), [tab, union, results]); // eslint-disable-line react-hooks/exhaustive-deps
-  const { sorted, sortKey, sortDir, toggle } = useTableSort<Row, Col>(rows, ACCESSORS, { key: 'strength', dir: 'desc' });
+  // List ranks are used only when they belong to the same session as the table; never mixed across sessions.
+  const listsOk = lists && lists !== 'error' && any && lists.session === any.session ? lists : null;
+  const rows: Row[] = useMemo(() => {
+    const base: Row[] = tab === 'all' ? union : (ok(tab)?.rows ?? []).map((r) => ({ ...r, group: tab }));
+    const withLists = base.map((r) => {
+      const e = listsOk?.bySymbol.get(r.symbol);
+      return e ? { ...r, list_ranks: e.list_ranks, top_two: e.top_two } : r;
+    });
+    return rankRows(withLists);
+  }, [tab, union, results, listsOk]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { sorted, sortKey, sortDir, toggle } = useTableSort<Row, Col>(rows, ACCESSORS, { key: 'rank', dir: 'asc' });
+  const listsNote =
+    lists === null || !any
+      ? null
+      : lists === 'error'
+        ? "The session's list ranks are unavailable right now, so the order uses the 1-day gain only."
+        : lists.session !== any.session
+          ? `The list ranks on hand are for ${lists.session ?? 'an earlier session'}, not ${any.session}, so the order uses the 1-day gain only.`
+          : null;
   const head = (key: Col, label: string, align: 'start' | 'end' = 'start') => (
     <SortHeader label={label} align={align} active={sortKey === key} dir={sortKey === key ? sortDir : null} onClick={() => toggle(key)} />
   );
@@ -176,7 +218,8 @@ export default function MomentumTodayPage() {
                 Today&apos;s momentum
               </h2>
               <p className="text-[12px] text-slate-500" data-testid="momentum-board-blurb">
-                {active ? active.blurb : 'All three lists together; a stock appears once, under its first list.'} Click a column to sort; strongest first by default.
+                {active ? active.blurb : 'All three lists together; a stock appears once, under its first list.'} Ranked by the session&apos;s lists:
+                top 5 in two or more of gainers, range and volume first, then the biggest 1-day gain. Click a column to sort.
               </p>
             </div>
             {active && (
@@ -207,15 +250,24 @@ export default function MomentumTodayPage() {
             <p className="m-4 text-sm text-slate-500">{any ? `None on ${any.session}.` : 'No data.'}</p>
           ) : (
             <div className="px-2 pb-3 sm:px-3">
+              {listsNote && (
+                <p className="mx-1 mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-[12px] text-amber-800" role="status" data-testid="momentum-lists-note">
+                  {listsNote}
+                </p>
+              )}
               <div className="relative mt-2 overflow-x-auto">
-                <table className="w-full min-w-[980px] border-separate border-spacing-y-1 text-[13px]" data-testid="momentum-table">
+                <table className="w-full min-w-[1120px] border-separate border-spacing-y-1 text-[13px]" data-testid="momentum-table">
                   <thead className="text-[11px] text-slate-500">
                     <tr>
-                      <th className="sticky left-0 z-10 bg-white px-2 py-1 text-left font-medium">{head('strength', 'Strength')}</th>
+                      <th className="sticky left-0 z-10 bg-white px-2 py-1 text-left font-medium">{head('rank', '#')}</th>
+                      <th className="px-2 py-1 text-left font-medium">{head('strength', 'Strength')}</th>
                       <th className="px-2 py-1 text-left font-medium">{head('symbol', 'Symbol')}</th>
                       <th className="px-2 py-1 text-right font-medium">{head('ret1', '1D %', 'end')}</th>
                       <th className="px-2 py-1 text-right font-medium" title="Volume vs its 10-day average">
                         {head('rvol', 'Vol ×', 'end')}
+                      </th>
+                      <th className="px-2 py-1 text-left font-medium" title="Rank in the session's lists: biggest gainers, biggest range vs ATR, biggest volume surge">
+                        {head('lists', 'Lists')}
                       </th>
                       {PART_COLS.map((c) => (
                         <th key={c.key} className="px-1 py-1 text-center font-medium" title={`${c.label} (${c.weight}% of the score): ${c.hint}`}>
@@ -232,7 +284,16 @@ export default function MomentumTodayPage() {
                   <tbody>
                     {sorted.slice(0, shown).map((r) => (
                       <tr key={r.symbol} data-testid="momentum-row">
-                        <td className="sticky left-0 z-10 rounded-l-lg px-2 py-1.5" style={strengthCellStyle(r.strength_score)}>
+                        <td className="sticky left-0 z-10 rounded-l-lg bg-slate-50 px-2 py-1.5 text-center tabular-nums" data-testid="momentum-rank">
+                          <span
+                            className={clsx('inline-flex min-w-[26px] justify-center rounded-full px-1.5 py-0.5 text-[12px] font-bold', r.top_two ? 'bg-emerald-700 text-white' : 'text-slate-500')}
+                            title={r.top_two ? "Top 5 in two or more of the session's lists" : undefined}
+                            data-top-two={r.top_two ? 'true' : undefined}
+                          >
+                            {r.rank}
+                          </span>
+                        </td>
+                        <td className="px-2 py-1.5" style={strengthCellStyle(r.strength_score)}>
                           <span
                             className="inline-flex items-center gap-1.5 font-bold tabular-nums"
                             title={r.strength_score == null ? `No Strength Score: ${r.strength_reason ?? 'not available'}` : `Strength Score ${Math.round(r.strength_score)} of 100`}
@@ -254,6 +315,25 @@ export default function MomentumTodayPage() {
                           {formatValue(r.change_1d, '%')}
                         </td>
                         <td className="bg-slate-50/60 px-2 py-1.5 text-right tabular-nums text-slate-700">{formatValue(r.volume_ratio, 'x')}</td>
+                        <td className="bg-slate-50/60 px-2 py-1.5" data-testid="momentum-lists">
+                          {r.list_ranks && Object.keys(r.list_ranks).length > 0 ? (
+                            <span className="flex flex-wrap gap-1">
+                              {DAY_LISTS.filter((l) => r.list_ranks![l.key] != null).map((l) => (
+                                <span
+                                  key={l.key}
+                                  className={clsx(
+                                    'whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums',
+                                    r.list_ranks![l.key] <= 5 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600',
+                                  )}
+                                >
+                                  {l.label} #{r.list_ranks![l.key]}
+                                </span>
+                              ))}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
                         {PART_COLS.map((c) => {
                           const v = r[c.key as keyof ScreenerRow] as number | null | undefined;
                           return (
@@ -289,7 +369,7 @@ export default function MomentumTodayPage() {
               <div className="mt-2 flex flex-wrap items-center gap-3 px-1 text-[12px] text-slate-500">
                 <span data-testid="momentum-showing">
                   Showing {Math.min(shown, sorted.length)} of {sorted.length}
-                  {active && (ok(active.key)?.total ?? 0) > sorted.length ? ` (the ${sorted.length} strongest of ${ok(active.key)!.total.toLocaleString('en-US')})` : ''}
+                  {active && (ok(active.key)?.total ?? 0) > sorted.length ? ` (the first ${sorted.length} of ${ok(active.key)!.total.toLocaleString('en-US')})` : ''}
                 </span>
                 {sorted.length > shown && (
                   <button type="button" onClick={() => setShown((n) => n + PAGE_ROWS)} className="press rounded-full bg-slate-900 px-3 py-1 font-medium text-white">
@@ -308,7 +388,8 @@ export default function MomentumTodayPage() {
         )}
 
         <p className="px-1 text-[11px] text-slate-400" data-testid="momentum-legend">
-          Shading = strength on one green scale, pale (weak) to deep (strong); the bar icon fills one bar per step:{' '}
+          # = order by the session&apos;s lists (biggest gainers, biggest range vs ATR, biggest volume surge): a filled number is top 5 in
+          two or more lists, then the biggest 1-day gain. Shading = strength on one green scale, pale (weak) to deep (strong); the bar icon fills one bar per step:{' '}
           {BAND_LABEL.map((l, i) => `${l.toLowerCase()} ${i * 20}–${i === 4 ? 100 : i * 20 + 19}`).join(' · ')}; grey = no score (data-health gate).
           Strength Score = relative strength 35%, trend 25%, momentum 20%, volume 10%, liquidity 10%, from the session&apos;s data. It describes the
           session; it is not a forecast or a recommendation.

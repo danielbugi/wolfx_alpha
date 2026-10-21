@@ -1,4 +1,5 @@
-// Momentum Today: three boards from the Screener's shared engine (one request each), headline counts, tiles coloured by the
+// Momentum Today: three boards from the Screener's shared engine (paged until complete), ranked by the session's lists like
+// the digest (top 5 in 2+ lists first, then the 1-day gain; never with another session's ranks), cells coloured by the
 // Strength Score (grey "—" with the reason when withheld), where the breakouts come from, the star, and unavailable states.
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,6 +8,8 @@ import type { QueryPairs, ScreenerResult, ScreenerRow } from '@/services/screene
 
 const api = vi.hoisted(() => ({ search: vi.fn(), definitions: vi.fn(), exportCsv: vi.fn() }));
 vi.mock('@/services/screenerV2Api', () => ({ screenerV2Api: api }));
+const lists = vi.hoisted(() => ({ getDayLists: vi.fn() }));
+vi.mock('@/services/dayListsApi', () => lists);
 
 import MomentumTodayPage from '@/app/momentum-today/page';
 import { ScoreBadge, ScoreBreakdown } from '@/components/screener/StrengthScore';
@@ -18,12 +21,20 @@ const row = (symbol: string, over: Partial<ScreenerRow> = {}) =>
   }) as ScreenerRow;
 const result = (rows: ScreenerRow[], total = rows.length) => ({ session: '2026-10-20', universe: 3060, total, rows }) as unknown as ScreenerResult;
 const has = (pairs: QueryPairs, k: string, v: string) => pairs.some(([a, b]) => a === k && b === v);
+const dayLists = (session: string, entries: Record<string, [Record<string, number>, boolean]>) => ({
+  session,
+  bySymbol: new Map(Object.entries(entries).map(([s, [list_ranks, top_two]]) => [s, { list_ranks, top_two }])),
+});
 
 beforeEach(() => {
   window.localStorage.clear();
   api.search.mockReset();
+  lists.getDayLists.mockReset();
+  lists.getDayLists.mockResolvedValue(dayLists('2026-10-20', { BBB: [{ gainers: 2, volume: 4 }, true], CCC: [{ atr: 9 }, false] }));
   api.search.mockImplementation(async (pairs: QueryPairs) => {
-    if (has(pairs, 'breakout_20', 'true')) return result([row('AAA'), row('BBB', { sector: 'Energy', strength_score: 35.2 }), row('CCC', { strength_score: null, strength_reason: 'illiquid (under $1M a day)' })], 142);
+    if (!has(pairs, 'page', '1')) return result([], 0); // later pages: nothing more in these fixtures
+    if (has(pairs, 'breakout_20', 'true'))
+      return result([row('AAA'), row('BBB', { sector: 'Energy', strength_score: 35.2, change_1d: 1.0 }), row('CCC', { strength_score: null, strength_reason: 'illiquid (under $1M a day)', change_1d: 5.0 })], 142);
     if (has(pairs, 'new_high_20', 'true')) return result([row('DDD', { strength_score: 64 })], 57);
     return result([row('EEE', { strength_score: 96.5 })], 155);
   });
@@ -33,8 +44,8 @@ describe('Momentum Today', () => {
   it('asks the shared engine once per board and shows the session counts', async () => {
     render(<MomentumTodayPage />);
     await waitFor(() => expect(screen.getByTestId('momentum-headline').textContent).toContain('142'));
-    expect(api.search).toHaveBeenCalledTimes(3);
-    const calls = api.search.mock.calls.map((c) => c[0] as QueryPairs);
+    const calls = api.search.mock.calls.map((c) => c[0] as QueryPairs).filter((p) => has(p, 'page', '1'));
+    expect(calls).toHaveLength(3);
     expect(calls.some((p) => has(p, 'breakout_20', 'true') && has(p, 'sort', 'strength_score'))).toBe(true);
     expect(calls.some((p) => has(p, 'new_high_20', 'true') && has(p, 'breakout_20', 'false'))).toBe(true);
     expect(calls.some((p) => has(p, 'min_strength_score', '80'))).toBe(true);
@@ -44,17 +55,56 @@ describe('Momentum Today', () => {
     expect(head).toContain('of 3,060 stocks on 2026-10-20');
   });
 
-  it('shows one table with tabs, strongest first, shaded on one green scale with the strength icon and the reason when withheld', async () => {
+  it('ranks like the digest: top 5 in 2+ lists first, then the biggest 1-day gain, with each list rank shown', async () => {
+    render(<MomentumTodayPage />);
+    const board = await screen.findByTestId('momentum-board');
+    await waitFor(() => expect(within(board).getAllByTestId('momentum-lists')[0].textContent).toBe('Gainers #2Volume #4'));
+    const symbols = within(board).getAllByTestId('momentum-symbol').map((x) => x.textContent);
+    expect(symbols).toEqual(['BBB', 'CCC', 'AAA']); // BBB is top 5 in two lists; then CCC +5.0% before AAA +2.1%
+    const ranks = within(board).getAllByTestId('momentum-rank').map((x) => x.firstElementChild as HTMLElement);
+    expect(ranks.map((x) => x.textContent)).toEqual(['1', '2', '3']);
+    expect(ranks[0].getAttribute('data-top-two')).toBe('true');
+    expect(ranks[1].getAttribute('data-top-two')).toBeNull();
+    const cells = within(board).getAllByTestId('momentum-lists').map((x) => x.textContent);
+    expect(cells).toEqual(['Gainers #2Volume #4', 'Range #9', '—']);
+    expect(screen.queryByTestId('momentum-lists-note')).toBeNull();
+  });
+
+  it('never mixes list ranks from another session, and says why the order falls back to the 1-day gain', async () => {
+    lists.getDayLists.mockResolvedValue(dayLists('2026-10-17', { BBB: [{ gainers: 1, volume: 1 }, true] }));
+    render(<MomentumTodayPage />);
+    const note = await screen.findByTestId('momentum-lists-note');
+    expect(note.textContent).toBe('The list ranks on hand are for 2026-10-17, not 2026-10-20, so the order uses the 1-day gain only.');
+    const board = screen.getByTestId('momentum-board');
+    expect(within(board).getAllByTestId('momentum-symbol').map((x) => x.textContent)).toEqual(['CCC', 'AAA', 'BBB']);
+    expect(within(board).getAllByTestId('momentum-lists').map((x) => x.textContent)).toEqual(['—', '—', '—']);
+  });
+
+  it('pages through the shared engine until a board is complete', async () => {
+    api.search.mockImplementation(async (pairs: QueryPairs) => {
+      if (!has(pairs, 'breakout_20', 'true')) return result([], 0);
+      if (has(pairs, 'page', '1')) return result(Array.from({ length: 200 }, (_, i) => row(`P${i}`)), 230);
+      if (has(pairs, 'page', '2')) return result(Array.from({ length: 30 }, (_, i) => row(`Q${i}`)), 230);
+      return result([], 230);
+    });
+    render(<MomentumTodayPage />);
+    const board = await screen.findByTestId('momentum-board');
+    await waitFor(() => expect(within(board).getByTestId('momentum-showing').textContent).toBe('Showing 50 of 230'));
+  });
+
+  it('shows one table with tabs, shaded on one green scale with the strength icon and the reason when withheld', async () => {
     render(<MomentumTodayPage />);
     const board = await screen.findByTestId('momentum-board');
     await waitFor(() => expect(within(board).getAllByTestId('momentum-row')).toHaveLength(3));
-    const [a, b, c] = within(board).getAllByTestId('momentum-row');
-    const shade = (el: HTMLElement) => Number(/rgba\(5, 150, 105, ([\d.]+)\)/.exec((el.firstElementChild as HTMLElement).style.background)?.[1]);
+    const byRow = (s: string) => within(board).getAllByTestId('momentum-row').find((r) => within(r).getByTestId('momentum-symbol').textContent === s)!;
+    const [a, b, c] = [byRow('AAA'), byRow('BBB'), byRow('CCC')];
+    const shade = (el: HTMLElement) =>
+      Number(/rgba\(5, 150, 105, ([\d.]+)\)/.exec((within(el).getByTestId('momentum-score').closest('td') as HTMLElement).style.background)?.[1]);
     expect(within(a).getByTestId('momentum-score').textContent).toBe('91');
     expect(shade(a)).toBeGreaterThan(shade(b)); // 91.3 is a deeper green than 35.2
     expect(within(a).getByTestId('strength-icon').getAttribute('data-filled')).toBe('5');
     expect(within(b).getByTestId('strength-icon').getAttribute('data-filled')).toBe('2');
-    expect(within(c).getByTestId('momentum-score').textContent).toBe('—'); // no score sinks to the bottom
+    expect(within(c).getByTestId('momentum-score').textContent).toBe('—');
     expect(within(c).getByTestId('momentum-score').getAttribute('title')).toBe('No Strength Score: illiquid (under $1M a day)');
     expect(within(a).getByTestId('momentum-group').textContent).toBe('Breakout');
     expect(within(board).getByRole('link', { name: 'Open in Screener →' }).getAttribute('href')).toBe('/screener?breakout_20=true&sort=strength_score&order=desc&view=cards');
@@ -67,7 +117,9 @@ describe('Momentum Today', () => {
     const board = await screen.findByTestId('momentum-board');
     await waitFor(() => expect(within(board).getAllByTestId('momentum-row')).toHaveLength(3));
     const symbols = () => within(board).getAllByTestId('momentum-symbol').map((x) => x.textContent);
-    expect(symbols()).toEqual(['AAA', 'BBB', 'CCC']);
+    await waitFor(() => expect(symbols()).toEqual(['BBB', 'CCC', 'AAA'])); // default: ranked by the session's lists
+    fireEvent.click(within(board).getByRole('button', { name: /^Strength/ }));
+    expect(symbols()).toEqual(['AAA', 'BBB', 'CCC']); // strongest first, the withheld score last
     fireEvent.click(within(board).getByRole('button', { name: /^Strength/ }));
     expect(symbols()).toEqual(['BBB', 'AAA', 'CCC']); // ascending, the withheld score still last
     fireEvent.click(within(board).getByRole('button', { name: /^Symbol/ }));
@@ -92,6 +144,13 @@ describe('Momentum Today', () => {
     expect(within(board).getAllByTestId('momentum-row')).toHaveLength(100);
     fireEvent.click(within(board).getByRole('button', { name: 'Show 20 more' }));
     expect(within(board).getAllByTestId('momentum-row')).toHaveLength(120);
+  });
+
+  it('still shows the table, ordered by the 1-day gain, when the list ranks are unavailable', async () => {
+    lists.getDayLists.mockRejectedValue(new Error('down'));
+    render(<MomentumTodayPage />);
+    expect((await screen.findByTestId('momentum-lists-note')).textContent).toBe("The session's list ranks are unavailable right now, so the order uses the 1-day gain only.");
+    expect(within(screen.getByTestId('momentum-board')).getAllByTestId('momentum-symbol').map((x) => x.textContent)).toEqual(['CCC', 'AAA', 'BBB']);
   });
 
   it('shows which sectors the breakouts come from, and the star adds to the active watchlist', async () => {

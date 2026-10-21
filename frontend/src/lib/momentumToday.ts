@@ -1,8 +1,8 @@
 // File: frontend/src/lib/momentumToday.ts
-// Momentum Today's boards: each is ONE Screener v2 request (the shared engine), plus the matching Screener link.
+// Momentum Today's boards: each is the Screener v2 shared engine (paged until complete), plus the matching Screener link.
 import type { QueryPairs, ScreenerRow } from '@/services/screenerV2Api';
 
-/** The three boards, each ONE request to the Screener's shared engine (same session, same values as everywhere else). */
+/** The three boards, each from the Screener's shared engine (same session, same values as everywhere else). */
 export const BOARDS: { key: 'breakouts' | 'new_highs' | 'strongest'; title: string; blurb: string; pairs: QueryPairs; screener: string }[] = [
   {
     key: 'breakouts',
@@ -28,7 +28,39 @@ export const BOARDS: { key: 'breakouts' | 'new_highs' | 'strongest'; title: stri
 ];
 
 export type BoardKey = (typeof BOARDS)[number]['key'];
-export type MomentumRow = ScreenerRow & { group: BoardKey };
+export type MomentumRow = ScreenerRow & {
+  group: BoardKey;
+  /** Rank in each of the session's lists the stock made (gainers / atr / volume); empty when it made none. */
+  list_ranks?: Record<string, number>;
+  /** In the top 5 of two or more of those lists (the shared rule, as sent by the backend). */
+  top_two?: boolean;
+  /** 1-based position in the default ranking below. */
+  rank?: number;
+};
+
+/** The session's lists, in display order, with the names used in list_ranks. */
+export const DAY_LISTS: { key: string; label: string }[] = [
+  { key: 'gainers', label: 'Gainers' },
+  { key: 'atr', label: 'Range' },
+  { key: 'volume', label: 'Volume' },
+];
+
+/**
+ * The default ranking, the same rule the Telegram digest and the internal board use: stocks in the top 5 of two or more of
+ * the session's lists first, then the biggest 1-day gain (no change last); ties keep their incoming order. Returns new rows
+ * with `rank` set.
+ */
+export function rankRows(rows: MomentumRow[]): MomentumRow[] {
+  const keyed = rows.map((r, i) => ({ r, i }));
+  keyed.sort((a, b) => {
+    const t = Number(!!b.r.top_two) - Number(!!a.r.top_two);
+    if (t) return t;
+    const x = a.r.change_1d ?? Number.NEGATIVE_INFINITY;
+    const y = b.r.change_1d ?? Number.NEGATIVE_INFINITY;
+    return y !== x ? (y > x ? 1 : -1) : a.i - b.i;
+  });
+  return keyed.map(({ r }, i) => ({ ...r, rank: i + 1 }));
+}
 
 /** One row per symbol across the lists, tagged with the first list it appears in (breakouts, then new highs, then strongest). */
 export function unionRows(lists: Partial<Record<BoardKey, ScreenerRow[]>>): MomentumRow[] {
