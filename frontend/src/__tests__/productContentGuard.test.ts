@@ -21,6 +21,7 @@ const PRODUCT_FILES = [
   'components/dashboard/MarketMovers.tsx',
   'components/dashboard/CommoditiesCard.tsx',
   'components/dashboard/WatchlistCard.tsx',
+  'components/dashboard/MarketChartCard.tsx',
   'components/dashboard/SectorTrendChart.tsx',
   'components/earnings/EarningsCard.tsx',
   'components/earnings/EarningsTable.tsx',
