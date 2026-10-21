@@ -33,20 +33,31 @@ function Gauge({ pct }: { pct: number | null }) {
   );
 }
 
-/** The recorded sessions as a small line on a fixed 0-100 scale with the 50% line; nothing with fewer than 2 points. */
+/** The recorded sessions as a small line scaled to their own range (padded), with the first and last values stated so
+ * the scaling never exaggerates silently; nothing with fewer than 2 points. */
 function Trend({ points }: { points: BreadthPoint[] | undefined }) {
   const valid = (points ?? []).filter((p): p is { session: string; pct: number } => p.pct != null);
   if (valid.length < 2) return null;
+  const vals = valid.map((p) => p.pct);
+  const lo = Math.max(0, Math.min(...vals) - 2);
+  const hi = Math.min(100, Math.max(...vals) + 2);
+  const span = hi - lo || 1;
   const step = 100 / (valid.length - 1);
-  const d = valid.map((p, i) => `${i === 0 ? 'M' : 'L'}${(i * step).toFixed(2)},${(28 - (p.pct / 100) * 26 - 1).toFixed(2)}`).join(' ');
+  const y = (v: number) => (28 - ((v - lo) / span) * 26 - 1).toFixed(2);
+  const d = valid.map((p, i) => `${i === 0 ? 'M' : 'L'}${(i * step).toFixed(2)},${y(p.pct)}`).join(' ');
+  const first = valid[0];
+  const last = valid[valid.length - 1];
+  const up = last.pct >= first.pct;
   return (
     <div className="mt-1" title={valid.map((p) => `${p.session}: ${p.pct.toFixed(1)}%`).join(', ')}>
-      <svg viewBox="0 0 100 30" preserveAspectRatio="none" className="h-6 w-full text-slate-400" aria-hidden="true" data-testid="breadth-trend">
-        <line x1="0" x2="100" y1="15" y2="15" stroke="currentColor" strokeOpacity={0.25} strokeDasharray="2 2" vectorEffect="non-scaling-stroke" />
-        <path d={d} fill="none" stroke="#0a84ff" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+      <svg viewBox="0 0 100 30" preserveAspectRatio="none" className="h-7 w-full text-slate-400" aria-hidden="true" data-testid="breadth-trend">
+        <path d={d} fill="none" stroke={up ? '#059669' : '#dc2626'} strokeWidth={1.75} vectorEffect="non-scaling-stroke" />
       </svg>
+      <p className="text-[10px] tabular-nums text-slate-500" data-testid="breadth-trend-range">
+        {first.pct.toFixed(1)}% → {last.pct.toFixed(1)}% over the last {valid.length} recorded sessions
+      </p>
       <p className="text-[10px] text-slate-400">
-        last {valid.length} recorded sessions · {valid[0].session} to {valid[valid.length - 1].session}
+        {first.session} to {last.session}
       </p>
     </div>
   );

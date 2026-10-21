@@ -89,6 +89,7 @@ describe('breadth gauges and trend', () => {
     const card = (await screen.findByText('Market breadth')).closest('section')!;
     await waitFor(() => expect(within(card).getAllByTestId('breadth-trend').length).toBeGreaterThan(0));
     expect(api.calls.filter(Boolean)).toEqual(['2026-02-26', '2026-02-27', '2026-03-02']);
-    expect(card.textContent).toContain('last 3 recorded sessions · 2026-02-26 to 2026-03-02');
+    expect(within(card).getAllByTestId('breadth-trend-range')[0].textContent).toBe('35.0% → 41.5% over the last 3 recorded sessions');
+    expect(card.textContent).toContain('2026-02-26 to 2026-03-02');
   });
 });
