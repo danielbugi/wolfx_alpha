@@ -7,7 +7,8 @@ import DataStamp from '@/components/common/DataStamp';
 import ErrorAlert from '@/components/common/ErrorAlert';
 import { capturedLabel, isOlderThan } from '@/lib/marketIntel';
 import RegimeCard from './RegimeCard';
-import BreadthCard from './BreadthCard';
+import BreadthCard, { BreadthTrend } from './BreadthCard';
+import SectorHeatmap from './SectorHeatmap';
 import ReturnsCard from './ReturnsCard';
 import SectorLeadershipCard from './SectorLeadershipCard';
 
@@ -17,12 +18,16 @@ import SectorLeadershipCard from './SectorLeadershipCard';
  * capture time and coverage; when the snapshot is missing, unavailable or older than the newest price session it says
  * so instead of showing anything else.
  */
+/** Observed sessions shown in the breadth trend lines. */
+const TREND_SESSIONS = 20;
+
 export default function MarketIntelligencePanel({ priceDate }: { priceDate?: string | null }) {
   const [snap, setSnap] = useState<MarketSnapshot | null>(null);
   const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sessions, setSessions] = useState<number | null>(null);
   const [firstSession, setFirstSession] = useState<string | null>(null);
+  const [trend, setTrend] = useState<BreadthTrend>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -39,6 +44,21 @@ export default function MarketIntelligencePanel({ priceDate }: { priceDate?: str
       const obs = (h.sessions ?? []).filter((s) => s.provenance === 'observed');
       setSessions(h.available ? obs.length : null);
       setFirstSession(obs.length ? obs[obs.length - 1].session_date : null);
+      // breadth over the recorded sessions (up to TREND_SESSIONS, one small request each, after the cards render)
+      const dates = obs.slice(0, TREND_SESSIONS).map((s) => s.session_date).reverse();
+      if (dates.length >= 2) {
+        const snaps = await Promise.allSettled(dates.map((d) => marketIntelligenceApi.getSnapshot(d)));
+        const next: BreadthTrend = {};
+        for (const key of ['above_sma50', 'above_sma200', 'positive_ret_20'] as const) {
+          next[key] = dates.map((d, i) => {
+            const r = snaps[i];
+            const s = r.status === 'fulfilled' && r.value.available && r.value.session_date === d ? r.value : null;
+            const rec = s?.coverage.measurements?.breadth?.market?.[key];
+            return { session: d, pct: rec?.state === 'ok' ? rec.pct ?? null : null };
+          });
+        }
+        setTrend(next);
+      }
     } catch {
       setSessions(null);
     }
@@ -97,8 +117,11 @@ export default function MarketIntelligencePanel({ priceDate }: { priceDate?: str
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <RegimeCard snap={snap} />
         <div className="flex flex-col gap-4">
-          <BreadthCard snap={snap} />
+          <BreadthCard snap={snap} trend={trend} />
           <ReturnsCard snap={snap} />
+        </div>
+        <div className="lg:col-span-2">
+          <SectorHeatmap snap={snap} />
         </div>
         <div className="lg:col-span-2">
           <SectorLeadershipCard snap={snap} />
