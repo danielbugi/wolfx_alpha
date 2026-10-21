@@ -15,6 +15,13 @@ export interface SessionSectors {
   sectors: SectorRow[];
 }
 
+/** Short, unique labels for the map (the full name is in the legend and the tooltip). */
+export const SHORT_NAME: Record<string, string> = {
+  'Basic Materials': 'Materials', 'Communication Services': 'Comm.', 'Consumer Cyclical': 'Cyclical', 'Consumer Defensive': 'Defensive',
+  Energy: 'Energy', 'Financial Services': 'Financials', Healthcare: 'Health', Industrials: 'Industrials', 'Real Estate': 'Real Estate',
+  Technology: 'Tech', Utilities: 'Utilities',
+};
+
 const COLORS = ['#0a84ff', '#ff9f0a', '#30b158', '#bf5af2', '#ff375f', '#00a0b4', '#a2845e', '#5e5ce6', '#d4a500', '#8e8e93', '#ff6b22'];
 
 /** A sector's corner from its two differences vs the median stock: 0 is the line ("in line"); unavailable never guessed. */
@@ -48,7 +55,7 @@ export function rotationTrails(current: MarketSnapshotAvailable, history: Sessio
   for (const [name, pts] of out) {
     if (pts.length) {
       const last = pts[pts.length - 1];
-      if (last.session === current.session_date) Object.assign(last, { head: true, label: name.split(' ')[0] });
+      if (last.session === current.session_date) Object.assign(last, { head: true, label: SHORT_NAME[name] ?? name });
     }
   }
   return out;
