@@ -12,7 +12,9 @@ Session alignment (the integrity rules this service exists to enforce):
     (captured by the daily market-intelligence run for that session): family "observed".
   * Channel, breakout, ATR, volume-ratio and dollar-volume figures are computed from stored daily bars and indicators for S
     (and P): family "derived". They use bars up to and including S only.
-  * Market cap, sector (fallback) and industry come from daily_fundamentals: family "reference" = INGESTION-TIME REFERENCE
+  * Market cap, P/E, P/S, float, the quality score/grade, sector (fallback) and industry come from daily_fundamentals,
+    the next/last earnings dates (and the last EPS surprise) from earnings_calendar as stored, and the company name from
+    companies: family "reference". For daily_fundamentals that means INGESTION-TIME REFERENCE
     DATA. The table has no original publication or filing timestamps, only the time our pipeline wrote the row
     (greatest(created_at, updated_at), UTC), so these values are NOT verified point-in-time information. A row is used
     when date <= S, it is at most FUNDAMENTALS_MAX_AGE_DAYS old, and it was ingested by the chosen cutoff:
@@ -114,6 +116,13 @@ METRICS: Dict[str, Metric] = {m.key: m for m in [
     Metric("strength_volume", "Strength: volume", "pctl", DERIVED, "Volume ratio scaled 0.5x = 0 to 2x = 100 (10%)."),
     Metric("strength_liquidity", "Strength: liquidity", "pctl", DERIVED, "20-session dollar volume on a log scale, $1M = 0 to $1B = 100 (10%)."),
     Metric("market_cap", "Market cap", "$", REFERENCE, "Ingestion-time reference data: the latest fundamentals row our pipeline ingested by the cutoff (at most 30 days old). The original publication time is unknown, so it is not verified point-in-time information."),
+    Metric("pe_ratio", "P/E", "x", REFERENCE, "Price / earnings from the same fundamentals row as market cap (ingestion-time reference data, not verified point-in-time). Unavailable when it was not reported, e.g. with negative earnings."),
+    Metric("ps_ratio", "P/S", "x", REFERENCE, "Price / sales from the same fundamentals row as market cap (ingestion-time reference data, not verified point-in-time)."),
+    Metric("quality_score", "Quality score", "pctl", REFERENCE, "Overall quality score 0-100 (growth, profitability, financial health, valuation) from the same fundamentals row; a heuristic grade from reported fundamentals, descriptive only."),
+    Metric("float_shares", "Float", "shares", REFERENCE, "Shares available to trade, from the same fundamentals row (ingestion-time reference data)."),
+    Metric("days_to_earnings", "Days to next earnings", "days", REFERENCE, "Calendar days from the session to the next earnings report date after it, from the earnings calendar as stored (report dates can move)."),
+    Metric("days_since_earnings", "Days since last earnings", "days", REFERENCE, "Calendar days from the most recent stored earnings report date on or before the session (0 = on the session) to the session. The report time of day (before the open or after the close) is not stored."),
+    Metric("earnings_surprise_pct", "Last earnings surprise", "%", REFERENCE, "EPS surprise of that most recent report, as stored by the earnings calendar."),
 ]}
 SORT_KEYS = ("symbol", "sector", *METRICS.keys())
 
@@ -328,7 +337,10 @@ joined AS (
            rs.rs_20, rs.rs_60, rs.ret_5, rs.ret_20, rs.ret_60, rs.vs_spx_20, rs.vs_spx_60, rs.vs_sector_20,
            rs.rs_sector, rs.rs_sector_pit_safe, rs.symbol IS NOT NULL AS has_rs, ti.found IS NOT NULL AS has_tech,
            df.market_cap::float8 AS market_cap, df.sector AS fund_sector, df.industry, df.date AS fundamentals_date,
-           df.ingested_at AS fundamentals_ingested_at, disc.symbol IS NOT NULL AS has_disc
+           df.ingested_at AS fundamentals_ingested_at, disc.symbol IS NOT NULL AS has_disc,
+           df.pe_ratio::float8 AS pe_ratio, df.ps_ratio::float8 AS ps_ratio, df.overall_quality_score::float8 AS quality_score,
+           df.quality_grade, df.float_shares::float8 AS float_shares, co.company_name,
+           nx.report_date AS next_earnings_date, le.report_date AS last_earnings_date, le.surprise_pct::float8 AS earnings_surprise_pct
     FROM px
     LEFT JOIN pxp USING (symbol)
     LEFT JOIN LATERAL (
@@ -344,12 +356,21 @@ joined AS (
     LEFT JOIN rs USING (symbol)
     LEFT JOIN disc USING (symbol)
     LEFT JOIN LATERAL (
-        SELECT market_cap, sector, industry, date, greatest(d.created_at, coalesce(d.updated_at, d.created_at)) AS ingested_at
+        SELECT market_cap, sector, industry, date, greatest(d.created_at, coalesce(d.updated_at, d.created_at)) AS ingested_at,
+               pe_ratio, ps_ratio, overall_quality_score, quality_grade, float_shares
         FROM daily_fundamentals d
         WHERE d.symbol = px.symbol AND d.date <= %(s)s AND d.date > %(s)s::date - %(fund_age)s
           AND greatest(d.created_at, coalesce(d.updated_at, d.created_at)) <= %(cutoff)s
         ORDER BY d.date DESC LIMIT 1
     ) df ON true
+    LEFT JOIN LATERAL (SELECT c.company_name FROM companies c WHERE c.symbol = px.symbol LIMIT 1) co ON true
+    LEFT JOIN LATERAL (
+        SELECT e.report_date FROM earnings_calendar e WHERE e.symbol = px.symbol AND e.report_date > %(s)s ORDER BY e.report_date LIMIT 1
+    ) nx ON true
+    LEFT JOIN LATERAL (
+        SELECT e.report_date, e.surprise_pct FROM earnings_calendar e WHERE e.symbol = px.symbol AND e.report_date <= %(s)s
+        ORDER BY e.report_date DESC LIMIT 1
+    ) le ON true
 ),
 sc AS (
     SELECT j.*,
@@ -384,6 +405,10 @@ base AS (
            CASE WHEN atr_14 IS NOT NULL THEN atr_14 / close * 100 END AS atr_pct,
            CASE WHEN atr_14 IS NOT NULL THEN 100 * PERCENT_RANK() OVER (PARTITION BY atr_14 IS NOT NULL ORDER BY atr_14 / close) END AS atr_pct_pctile,
            volume_ratio, dollar_vol_20, dv_bars, market_cap, fundamentals_date,
+           company_name, pe_ratio, ps_ratio, quality_score, quality_grade, float_shares,
+           (next_earnings_date - %(s)s::date) AS days_to_earnings, (%(s)s::date - last_earnings_date) AS days_since_earnings,
+           earnings_surprise_pct, to_char(next_earnings_date, 'YYYY-MM-DD') AS next_earnings_date,
+           to_char(last_earnings_date, 'YYYY-MM-DD') AS last_earnings_date,
            to_char(fundamentals_ingested_at, 'YYYY-MM-DD"T"HH24:MI"Z"') AS fundamentals_ingested_at,
            CASE WHEN fundamentals_ingested_at IS NULL THEN NULL ELSE fundamentals_ingested_at > %(close_utc)s END AS fundamentals_after_close,
            CASE WHEN strength_reason IS NULL THEN ROUND((%(w_rs)s * s_rs + %(w_trend)s * s_trend + %(w_mom)s * s_mom
@@ -396,8 +421,8 @@ base AS (
 )
 """
 
-ROW_COLUMNS = ["symbol", "sector", "sector_source", "industry", *[k for k in METRICS.keys()], "strength_reason", "dv_bars", "fundamentals_date",
-               "fundamentals_ingested_at", "fundamentals_after_close"]
+ROW_COLUMNS = ["symbol", "company_name", "sector", "sector_source", "industry", *[k for k in METRICS.keys()], "quality_grade", "strength_reason",
+               "dv_bars", "fundamentals_date", "fundamentals_ingested_at", "fundamentals_after_close", "next_earnings_date", "last_earnings_date"]
 
 
 def page_sql(where: str, order: str) -> str:

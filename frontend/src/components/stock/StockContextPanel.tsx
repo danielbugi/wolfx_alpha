@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { clsx } from 'clsx';
-import { stockContextApi, StockContext } from '@/services/stockContextApi';
+import { StockContextState, useStockContext } from '@/hooks/useStockContext';
 import { screenerV2Api, MetricDefinition, ScreenerDefinitions, ScreenerRow } from '@/services/screenerV2Api';
 import DataStamp from '@/components/common/DataStamp';
 import { ScoreBadge, ScoreBreakdown } from '@/components/screener/StrengthScore';
@@ -85,22 +85,25 @@ function Metric({ def, row, item }: { def?: MetricDefinition; row: ScreenerRow; 
  * grouped and explained in plain language, plus the stock-only 200-session average. The discovery session is shown
  * separately from the chart's newest bar, because the chart can be a session ahead of the captured metrics.
  */
-export default function StockContextPanel({ symbol, chartDate }: { symbol: string; chartDate: string | null }) {
-  const [ctx, setCtx] = useState<StockContext | null>(null);
+export default function StockContextPanel({
+  symbol,
+  chartDate,
+  state,
+  showStrength = true,
+}: {
+  symbol: string;
+  chartDate: string | null;
+  /** The page's shared context (header + Strength card); when absent the panel loads its own. */
+  state?: StockContextState;
+  /** False when the page shows the Strength Score in its own card. */
+  showStrength?: boolean;
+}) {
+  const own = useStockContext(state ? null : symbol);
+  const { ctx, error } = state ?? own;
   const [defs, setDefs] = useState<ScreenerDefinitions | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setCtx(null);
-    setError(null);
-    stockContextApi
-      .get(symbol)
-      .then((c) => !cancelled && setCtx(c))
-      .catch((e) => {
-        if (cancelled) return;
-        setError(e?.response?.status === 404 ? 'Stock context is not available on this server yet.' : 'Stock context is unavailable right now.');
-      });
     screenerV2Api.definitions().then((d) => !cancelled && setDefs(d)).catch(() => {});
     return () => {
       cancelled = true;
@@ -146,6 +149,7 @@ export default function StockContextPanel({ symbol, chartDate }: { symbol: strin
               No observed relative-strength snapshot exists for this session, so relative strength and returns are unavailable.
             </p>
           )}
+          {showStrength && (
           <div className="mt-3 grid grid-cols-1 items-center gap-4 rounded-xl bg-slate-50 p-3 sm:grid-cols-[auto_minmax(0,1fr)]" data-testid="ctx-strength">
             <div className="flex items-center gap-3">
               <ScoreBadge row={ctx.row} size="lg" />
@@ -156,6 +160,7 @@ export default function StockContextPanel({ symbol, chartDate }: { symbol: strin
             </div>
             <ScoreBreakdown row={ctx.row} />
           </div>
+          )}
           <div className="mt-3 grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-3">
             {GROUPS.map((g) => (
               <div key={g.title} className="min-w-0">

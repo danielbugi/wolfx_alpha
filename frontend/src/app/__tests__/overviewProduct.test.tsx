@@ -16,6 +16,10 @@ vi.mock('@/components/earnings/EarningsCard', () => ({ default: () => null }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }), usePathname: () => '/' }));
 vi.mock('@/components/marketIntel/MarketIntelligencePanel', () => ({ default: () => <div data-testid="mi-panel" /> }));
 vi.mock('@/lib/topProgress', () => ({ useTopProgress: () => ({ start: () => {}, done: () => {} }) }));
+// The Momentum Today card reads the session's list ranks (through services/dayListsApi) to rank Today's Movers, by owner
+// decision 2026-10-21; it has its own test (components/dashboard/__tests__/MomentumTopCard.test.tsx). The page itself
+// must still make no direct call to the internal board or leaders APIs.
+vi.mock('@/components/dashboard/MomentumTopCard', () => ({ default: () => <div data-testid="momentum-top" /> }));
 
 const mainPage = (lastUpdated: string | null) => ({
   timestamp: '2026-10-16T21:00:00Z',
@@ -63,6 +67,7 @@ describe('Overview (product)', () => {
     expect(calls.leaders).toBe(0);
     expect(screen.getByTestId('data-stamp').textContent).toMatch(/Data as of\s*2026-10-16/);
     expect(screen.getByTestId('mi-panel')).toBeTruthy();
+    expect(screen.getByTestId('momentum-top')).toBeTruthy();
     // breadth appears once (in the market-intelligence panel); the legacy "N% up" tile and A/D box are gone
     expect(text).not.toMatch(/% up/);
     expect(text).not.toMatch(/Advance\/Decline/);

@@ -227,3 +227,20 @@ def test_v2_route_refuses_an_unknown_fundamentals_cutoff():
     c, _ = _client()
     assert c.get("/api/screener/v2/search?fundamentals_cutoff=session_close").status_code == 200
     assert c.get("/api/screener/v2/search?fundamentals_cutoff=tomorrow").status_code == 422
+
+
+def test_reference_fields_for_momentum_today_come_from_the_same_rows_and_session():
+    # P/E, P/S, quality and float come from the SAME fundamentals row as market cap (same cutoff and age rule); earnings
+    # dates are relative to the session (next strictly after it, last on or before it); the company name is a plain join.
+    for k in ("pe_ratio", "ps_ratio", "quality_score", "float_shares", "days_to_earnings", "days_since_earnings", "earnings_surprise_pct"):
+        assert D.METRICS[k].family == D.REFERENCE and k in D.SORT_KEYS
+    for k in ("company_name", "quality_grade", "next_earnings_date", "last_earnings_date"):
+        assert k in D.ROW_COLUMNS
+    sql = D.page_sql("TRUE", D.order_clause("pe_ratio", "asc"))
+    fund = re.search(r"SELECT market_cap, sector, industry, date,.*?\) df ON true", sql, re.S).group(0)
+    assert "pe_ratio, ps_ratio, overall_quality_score, quality_grade, float_shares" in fund and "<= %(cutoff)s" in fund
+    assert "e.report_date > %(s)s ORDER BY e.report_date LIMIT 1" in sql
+    assert "e.report_date <= %(s)s" in sql and "ORDER BY e.report_date DESC LIMIT 1" in sql
+    assert "(next_earnings_date - %(s)s::date) AS days_to_earnings" in sql
+    assert "(%(s)s::date - last_earnings_date) AS days_since_earnings" in sql
+    assert "not verified point-in-time" in D.METRICS["pe_ratio"].definition

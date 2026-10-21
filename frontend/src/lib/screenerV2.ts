@@ -107,6 +107,12 @@ export function formatValue(v: unknown, unit: string): string {
       if (Math.abs(v) >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
       if (Math.abs(v) >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
       return `$${v.toFixed(2)}`;
+    case 'shares':
+      if (Math.abs(v) >= 1e9) return `${(v / 1e9).toFixed(2)}B`;
+      if (Math.abs(v) >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
+      return v.toFixed(0);
+    case 'days':
+      return `${v.toFixed(0)}d`;
     default:
       return String(v);
   }

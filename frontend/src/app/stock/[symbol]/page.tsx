@@ -22,6 +22,9 @@ import {
 import StockChart from '@/components/charts/StockChart';
 import KeyLevels from '@/components/stock/KeyLevels';
 import StockContextPanel from '@/components/stock/StockContextPanel';
+import StockStrengthCard from '@/components/stock/StockStrengthCard';
+import { StrengthIcon } from '@/components/screener/StrengthScore';
+import { useStockContext } from '@/hooks/useStockContext';
 import FinancialGrowth from '@/components/stock/FinancialGrowth';
 import EarningsPanel from '@/components/stock/EarningsPanel';
 import PeersPanel from '@/components/stock/PeersPanel';
@@ -314,6 +317,8 @@ export default function StockDetailPage() {
   const nav = useStockNav(symbol);
   const watchlist = useWatchlist();
   const [tab, setTab] = useDetailTab();
+  // The Screener row for this stock (company name, Strength Score, context), loaded once for the header and the cards.
+  const context = useStockContext(symbol || null);
 
   const [detail, setDetail] = useState<StockDetail | null>(null);
   const [bars, setBars] = useState<PriceBar[]>([]);
@@ -454,6 +459,17 @@ export default function StockDetailPage() {
               <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="large-title">{detail.symbol}</h1>
+                {context.ctx?.row && (
+                  <a
+                    href="#strength-title"
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[12px] font-bold tabular-nums text-slate-800 hover:bg-slate-200"
+                    title={context.ctx.row.strength_score == null ? `No Strength Score: ${context.ctx.row.strength_reason ?? 'not available'}` : `Strength Score ${Math.round(context.ctx.row.strength_score)} of 100`}
+                    data-testid="header-strength"
+                  >
+                    <StrengthIcon score={context.ctx.row.strength_score} size={16} />
+                    Strength {context.ctx.row.strength_score == null ? '—' : Math.round(context.ctx.row.strength_score)}
+                  </a>
+                )}
                 <button
                   type="button"
                   onClick={() => watchlist.toggle(detail.symbol)}
@@ -501,6 +517,11 @@ export default function StockDetailPage() {
                   </Chip>
                 )}
               </div>
+              {context.ctx?.row?.company_name && (
+                <p className="truncate text-[15px] font-medium text-slate-700" data-testid="company-name">
+                  {context.ctx.row.company_name}
+                </p>
+              )}
               <p className="mt-0.5 truncate text-sm text-slate-500">
                 {sectorHref(snap.sector) ? (
                   <Link href={sectorHref(snap.sector)!} className="hover:text-accent hover:underline">
@@ -527,44 +548,6 @@ export default function StockDetailPage() {
             </div>
           </CardBody>
         </Card>
-
-        {/* Key numbers */}
-        <Card className="border border-black/[0.05] shadow-sm">
-          <CardBody className="grid grid-cols-2 divide-black/[0.06] p-0 sm:grid-cols-4 lg:grid-cols-8 lg:divide-x">
-            <Stat label="Market cap" value={snap.market_cap_formatted || (snap.market_cap != null ? formatters.marketCap(snap.market_cap) : UNKNOWN)} />
-            <Stat label="P/E" value={fmtNum(snap.pe_ratio, 1)} />
-            <Stat label="52-week range" value={hi52 != null && lo52 != null ? `${fmtRange(lo52)} – ${fmtRange(hi52)}` : UNKNOWN} />
-            <Stat label="Beta" value={fmtNum(snap.beta)} />
-            <Stat label="RSI (14d)" value={fmtNum(timeframes.daily.rsi, 1)} />
-            <Stat label="ATR (14d)" value={timeframes.daily.atr != null ? `$${fmtNum(timeframes.daily.atr)}` : UNKNOWN} />
-            <Stat label="Dividend yield" value={snap.dividend_yield != null ? `${fmtNum(snap.dividend_yield)}%` : UNKNOWN} />
-            <Stat
-              label="Next earnings"
-              value={nextEarnings ? nextEarnings.date : UNKNOWN}
-              hint={daysToEarnings != null ? (daysToEarnings === 0 ? 'today' : `in ${daysToEarnings} days`) : undefined}
-            />
-          </CardBody>
-          {performance.length > 0 && (
-            <div className="grid grid-cols-4 gap-y-2 border-t border-black/[0.06] px-4 py-3 sm:grid-cols-7" aria-label="Performance">
-              {performance.map((p) => (
-                <div key={p.label} className="text-center">
-                  <p className="text-[11px] font-medium text-slate-500">{p.label}</p>
-                  <p
-                    className={clsx(
-                      'text-[13px] font-semibold tabular-nums',
-                      p.value == null ? 'text-slate-400' : p.value >= 0 ? 'text-emerald-600' : 'text-red-600',
-                    )}
-                  >
-                    {fmtPct(p.value)}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        {/* Stock context: the Screener's metrics for this stock (same session and provenance), explained */}
-        <StockContextPanel symbol={detail.symbol} chartDate={bars.length ? bars[bars.length - 1].date : null} />
 
         {/* Chart */}
         <Card className="border border-black/[0.05] shadow-sm">
@@ -603,6 +586,47 @@ export default function StockDetailPage() {
             />
           </div>
         </Card>
+
+        {/* Strength: the session's Strength Score and its five parts (same value as the Screener and Momentum Today) */}
+        <StockStrengthCard state={context} />
+
+        {/* Key numbers */}
+        <Card className="border border-black/[0.05] shadow-sm">
+          <CardBody className="grid grid-cols-2 divide-black/[0.06] p-0 sm:grid-cols-4 lg:grid-cols-8 lg:divide-x">
+            <Stat label="Market cap" value={snap.market_cap_formatted || (snap.market_cap != null ? formatters.marketCap(snap.market_cap) : UNKNOWN)} />
+            <Stat label="P/E" value={fmtNum(snap.pe_ratio, 1)} />
+            <Stat label="52-week range" value={hi52 != null && lo52 != null ? `${fmtRange(lo52)} – ${fmtRange(hi52)}` : UNKNOWN} />
+            <Stat label="Beta" value={fmtNum(snap.beta)} />
+            <Stat label="RSI (14d)" value={fmtNum(timeframes.daily.rsi, 1)} />
+            <Stat label="ATR (14d)" value={timeframes.daily.atr != null ? `$${fmtNum(timeframes.daily.atr)}` : UNKNOWN} />
+            <Stat label="Dividend yield" value={snap.dividend_yield != null ? `${fmtNum(snap.dividend_yield)}%` : UNKNOWN} />
+            <Stat
+              label="Next earnings"
+              value={nextEarnings ? nextEarnings.date : UNKNOWN}
+              hint={daysToEarnings != null ? (daysToEarnings === 0 ? 'today' : `in ${daysToEarnings} days`) : undefined}
+            />
+          </CardBody>
+          {performance.length > 0 && (
+            <div className="grid grid-cols-4 gap-y-2 border-t border-black/[0.06] px-4 py-3 sm:grid-cols-7" aria-label="Performance">
+              {performance.map((p) => (
+                <div key={p.label} className="text-center">
+                  <p className="text-[11px] font-medium text-slate-500">{p.label}</p>
+                  <p
+                    className={clsx(
+                      'text-[13px] font-semibold tabular-nums',
+                      p.value == null ? 'text-slate-400' : p.value >= 0 ? 'text-emerald-600' : 'text-red-600',
+                    )}
+                  >
+                    {fmtPct(p.value)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {/* Stock context: the Screener's metrics for this stock (same session and provenance), explained */}
+        <StockContextPanel symbol={detail.symbol} chartDate={bars.length ? bars[bars.length - 1].date : null} state={context} showStrength={false} />
 
         {/* Details in tabs; the page remembers the last tab, so stepping through a list keeps you on it. */}
         <div className="overflow-x-auto pb-1 pt-2">
