@@ -26,6 +26,7 @@ import SegmentedControl from '@/components/ui/SegmentedControl';
 import DataStamp from '@/components/common/DataStamp';
 import MarketIntelligencePanel from '@/components/marketIntel/MarketIntelligencePanel';
 import MarketChartCard from '@/components/dashboard/MarketChartCard';
+import MomentumTopCard from '@/components/dashboard/MomentumTopCard';
 import { sectorHref } from '@/lib/sectors';
 import { ResolvedTheme, useResolvedTheme } from '@/lib/theme';
 
@@ -261,6 +262,9 @@ export default function DashboardPage() {
 
         {/* Candles for the main indices and Bitcoin, on the same chart as stock pages */}
         <MarketChartCard />
+
+        {/* The top five of each Momentum Today view (same data and ranking as that page) */}
+        <MomentumTopCard />
 
         {/* Market Overview v2: regime, breadth, returns and sector leadership from the observed daily snapshot */}
         <MarketIntelligencePanel priceDate={data.market_summary?.last_updated ?? null} />

@@ -2,7 +2,7 @@
 // a breakout track record with outcomes): none of it may reach the screen or the chart.
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 
 const chartProps = vi.hoisted(() => ({ last: null as null | Record<string, unknown> }));
 
@@ -20,7 +20,16 @@ vi.mock('@/components/charts/StockChart', () => ({
 vi.mock('@/components/stock/NewsPanel', () => ({ default: () => <div>news panel</div> }));
 vi.mock('@/components/stock/PeersPanel', () => ({ default: () => <div>peers panel</div> }));
 vi.mock('@/components/stock/StockContextPanel', () => ({
-  default: (props: { symbol: string; chartDate: string | null }) => <div data-testid="ctx-panel">{`${props.symbol} ${props.chartDate}`}</div>,
+  default: (props: { symbol: string; chartDate: string | null; showStrength?: boolean }) => (
+    <div data-testid="ctx-panel">{`${props.symbol} ${props.chartDate}${props.showStrength === false ? ' no-strength' : ''}`}</div>
+  ),
+}));
+const ctxRow = vi.hoisted(() => ({
+  symbol: 'ACME', company_name: 'Acme Corp.' as string | null, strength_score: 82.4, strength_reason: null,
+  strength_rs: 90, strength_trend: 100, strength_momentum: 70, strength_volume: 50, strength_liquidity: 60,
+}));
+vi.mock('@/services/stockContextApi', () => ({
+  stockContextApi: { get: vi.fn(async () => ({ session: '2026-10-20', in_universe: true, row: ctxRow, coverage: {}, stock_only: {}, fundamentals_basis: { note: '' } })) },
 }));
 
 const detail = {
@@ -116,7 +125,34 @@ describe('stock page (product view)', () => {
 
   it('places the stock context panel on the page for this symbol, with the chart data date passed separately', async () => {
     render(<StockDetailPage />);
-    expect((await screen.findByTestId('ctx-panel')).textContent).toBe('ACME null');
+    expect((await screen.findByTestId('ctx-panel')).textContent).toBe('ACME null no-strength');
+  });
+
+  it('shows the company name and the Strength Score in the header, then the chart, the Strength card and the fundamentals', async () => {
+    const { container } = render(<StockDetailPage />);
+    expect((await screen.findByTestId('company-name')).textContent).toBe('Acme Corp.');
+    expect(screen.getByTestId('header-strength').textContent).toBe('Strength 82');
+    expect(screen.getByTestId('header-strength').getAttribute('href')).toBe('#strength-title');
+    const card = screen.getByTestId('stock-strength');
+    expect(within(card).getByTestId('score-badge').getAttribute('aria-label')).toBe('Strength Score 82 of 100 (very strong)');
+    expect(within(card).getAllByTestId('score-part')).toHaveLength(5);
+    // order: chart, Strength card, key numbers (fundamentals), stock context (without its own Strength block)
+    const at = (el: Element) => Array.from(container.querySelectorAll('*')).indexOf(el);
+    const chart = screen.getByTestId('chart');
+    const marketCap = screen.getByText('Market cap');
+    const ctx = screen.getByTestId('ctx-panel');
+    expect(at(chart)).toBeLessThan(at(card));
+    expect(at(card)).toBeLessThan(at(marketCap));
+    expect(at(marketCap)).toBeLessThan(at(ctx));
+    expect(ctx.textContent).toBe('ACME null no-strength');
+  });
+
+  it('shows no company line when the name is not stored', async () => {
+    ctxRow.company_name = null;
+    render(<StockDetailPage />);
+    await screen.findByTestId('header-strength');
+    expect(screen.queryByTestId('company-name')).toBeNull();
+    ctxRow.company_name = 'Acme Corp.';
   });
 
   it('links the sector name to its sector page', async () => {

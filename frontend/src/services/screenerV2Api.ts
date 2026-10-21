@@ -57,6 +57,20 @@ export interface ScreenerRow {
   volume_ratio: number | null;
   dollar_vol_20: number | null;
   market_cap: number | null;
+  /** Company name from the companies reference table (null when not stored). */
+  company_name?: string | null;
+  /** Reference data from the same fundamentals row as market cap (ingestion-time, not verified point-in-time). */
+  pe_ratio?: number | null;
+  ps_ratio?: number | null;
+  quality_score?: number | null;
+  quality_grade?: string | null;
+  float_shares?: number | null;
+  /** Earnings calendar as stored: calendar days to the next report after the session / since the last one on or before it. */
+  days_to_earnings?: number | null;
+  days_since_earnings?: number | null;
+  earnings_surprise_pct?: number | null;
+  next_earnings_date?: string | null;
+  last_earnings_date?: string | null;
   /** Strength Score 0-100 (shared engine); null with strength_reason when the data-health gate withholds it */
   strength_score?: number | null;
   strength_rs?: number | null;
