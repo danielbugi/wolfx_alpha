@@ -9,6 +9,8 @@ import { capturedLabel, isOlderThan } from '@/lib/marketIntel';
 import RegimeCard from './RegimeCard';
 import BreadthCard, { BreadthTrend } from './BreadthCard';
 import SectorHeatmap from './SectorHeatmap';
+import SectorRotation, { SessionSectors } from './SectorRotation';
+import type { RegimePoint } from './RegimeCard';
 import ReturnsCard from './ReturnsCard';
 import SectorLeadershipCard from './SectorLeadershipCard';
 
@@ -28,6 +30,8 @@ export default function MarketIntelligencePanel({ priceDate }: { priceDate?: str
   const [sessions, setSessions] = useState<number | null>(null);
   const [firstSession, setFirstSession] = useState<string | null>(null);
   const [trend, setTrend] = useState<BreadthTrend>({});
+  const [sectorHistory, setSectorHistory] = useState<SessionSectors[]>([]);
+  const [regimeHistory, setRegimeHistory] = useState<RegimePoint[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -44,6 +48,7 @@ export default function MarketIntelligencePanel({ priceDate }: { priceDate?: str
       const obs = (h.sessions ?? []).filter((s) => s.provenance === 'observed');
       setSessions(h.available ? obs.length : null);
       setFirstSession(obs.length ? obs[obs.length - 1].session_date : null);
+      setRegimeHistory(obs.slice(0, TREND_SESSIONS).reverse().map((s) => ({ session: s.session_date, score: s.regime_score ?? null })));
       // breadth over the recorded sessions (up to TREND_SESSIONS, one small request each, after the cards render)
       const dates = obs.slice(0, TREND_SESSIONS).map((s) => s.session_date).reverse();
       if (dates.length >= 2) {
@@ -58,6 +63,13 @@ export default function MarketIntelligencePanel({ priceDate }: { priceDate?: str
           });
         }
         setTrend(next);
+        // the same snapshots give each sector's position per recorded session (for the rotation trails)
+        setSectorHistory(
+          dates.flatMap((d, i) => {
+            const r = snaps[i];
+            return r.status === 'fulfilled' && r.value.available && r.value.session_date === d ? [{ session: d, sectors: r.value.sectors ?? [] }] : [];
+          }),
+        );
       }
     } catch {
       setSessions(null);
@@ -115,10 +127,13 @@ export default function MarketIntelligencePanel({ priceDate }: { priceDate?: str
       )}
       {snap.provenance_note && <p className="mb-3 rounded-xl bg-slate-100 px-3 py-2 text-xs text-slate-600">{snap.provenance_note}</p>}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <RegimeCard snap={snap} />
+        <RegimeCard snap={snap} history={regimeHistory} />
         <div className="flex flex-col gap-4">
           <BreadthCard snap={snap} trend={trend} />
           <ReturnsCard snap={snap} />
+        </div>
+        <div className="lg:col-span-2">
+          <SectorRotation snap={snap} history={sectorHistory} />
         </div>
         <div className="lg:col-span-2">
           <SectorHeatmap snap={snap} />

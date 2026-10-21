@@ -52,6 +52,7 @@ const PRODUCT_FILES = [
   'components/marketIntel/ReturnsCard.tsx',
   'components/marketIntel/SectorLeadershipCard.tsx',
   'components/marketIntel/SectorHeatmap.tsx',
+  'components/marketIntel/SectorRotation.tsx',
 ];
 
 // Each entry: what it catches, and the pattern (case-insensitive).
