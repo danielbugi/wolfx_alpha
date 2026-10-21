@@ -44,16 +44,34 @@ describe('Momentum Today', () => {
     expect(head).toContain('of 3,060 stocks on 2026-10-20');
   });
 
-  it('colours each tile by its Strength Score and shows the reason when the score is withheld', async () => {
+  it('lists each board as a table shaded on one green scale (deeper = stronger), with the strength icon and the reason when withheld', async () => {
     render(<MomentumTodayPage />);
     const board = await screen.findByTestId('board-breakouts');
-    await waitFor(() => expect(within(board).getAllByTestId('momentum-tile')).toHaveLength(3));
-    const [a, b, c] = within(board).getAllByTestId('momentum-tile');
-    expect(a.className).toContain('emerald');
-    expect(within(a).getByTestId('score-badge').textContent).toBe('91');
-    expect(b.className).toContain('orange');
-    expect(within(c).getByTestId('score-badge').getAttribute('title')).toBe('No Strength Score: illiquid (under $1M a day)');
+    await waitFor(() => expect(within(board).getAllByTestId('momentum-row')).toHaveLength(3));
+    const [a, b, c] = within(board).getAllByTestId('momentum-row');
+    const shade = (el: HTMLElement) => Number(/rgba\(5, 150, 105, ([\d.]+)\)/.exec((el.firstElementChild as HTMLElement).style.background)?.[1]);
+    expect(within(a).getByTestId('momentum-score').textContent).toBe('91');
+    expect(shade(a)).toBeGreaterThan(shade(b)); // 91.3 is a deeper green than 35.2
+    expect(within(a).getByTestId('strength-icon').getAttribute('data-filled')).toBe('5');
+    expect(within(b).getByTestId('strength-icon').getAttribute('data-filled')).toBe('2');
+    expect(within(c).getByTestId('momentum-score').textContent).toBe('—');
+    expect(within(c).getByTestId('momentum-score').getAttribute('title')).toBe('No Strength Score: illiquid (under $1M a day)');
+    expect(within(c).getByTestId('strength-icon').getAttribute('data-filled')).toBe('0');
+    expect(within(a).getByTestId('part-strength_rs').textContent).toBe('95');
     expect(within(board).getByRole('link', { name: 'Open in Screener →' }).getAttribute('href')).toBe('/screener?breakout_20=true&sort=strength_score&order=desc&view=cards');
+    expect(within(board).getByTestId('momentum-table').parentElement!.className).toContain('overflow-x-auto');
+  });
+
+  it('shows 50 rows first, then more on request', async () => {
+    api.search.mockImplementation(async (pairs: QueryPairs) =>
+      has(pairs, 'breakout_20', 'true') ? result(Array.from({ length: 120 }, (_, i) => row(`S${i}`, { strength_score: 99 - i * 0.5 })), 120) : result([], 0));
+    render(<MomentumTodayPage />);
+    const board = await screen.findByTestId('board-breakouts');
+    await waitFor(() => expect(within(board).getAllByTestId('momentum-row')).toHaveLength(50));
+    fireEvent.click(within(board).getByRole('button', { name: 'Show 50 more' }));
+    expect(within(board).getAllByTestId('momentum-row')).toHaveLength(100);
+    fireEvent.click(within(board).getByRole('button', { name: 'Show 20 more' }));
+    expect(within(board).getAllByTestId('momentum-row')).toHaveLength(120);
   });
 
   it('shows which sectors the breakouts come from, and the star adds to the active watchlist', async () => {
@@ -75,6 +93,7 @@ describe('Momentum Today', () => {
     render(<MomentumTodayPage />);
     const legend = screen.getByTestId('momentum-legend').textContent!;
     expect(legend).toContain('relative strength 35%, trend 25%, momentum 20%, volume 10%, liquidity 10%');
+    expect(legend).toContain('pale (weak) to deep (strong)');
     expect(legend).toContain('not a forecast or a recommendation');
   });
 });

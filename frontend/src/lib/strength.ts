@@ -38,8 +38,17 @@ export function band(pctl: number | null | undefined): Band | null {
   return Math.min(4, Math.max(0, Math.floor(pctl / 20))) as Band;
 }
 export const BAND_LABEL = ['Very weak', 'Weak', 'Middle', 'Strong', 'Very strong'] as const;
-/** Tailwind background classes per band (red -> amber -> slate -> green). */
-export const BAND_BG = ['bg-red-500', 'bg-orange-400', 'bg-slate-400', 'bg-emerald-400', 'bg-emerald-600'] as const;
+/** One green scale for strength, pale (weak) to deep (strong); "no value" stays grey. Tailwind classes per band. */
+export const BAND_BG = ['bg-emerald-200', 'bg-emerald-300', 'bg-emerald-400', 'bg-emerald-600', 'bg-emerald-800'] as const;
+/** The same scale as hex colours (charts and SVG), pale to deep. */
+export const BAND_HEX = ['#a7f3d0', '#6ee7b7', '#34d399', '#059669', '#065f46'] as const;
+
+/** A table cell shaded by a 0-100 strength value on the green scale (continuous); grey when unavailable. */
+export function strengthCellStyle(v: number | null | undefined): { background: string; color: string } {
+  if (v == null || !Number.isFinite(v)) return { background: 'rgba(148,163,184,0.12)', color: '#94a3b8' };
+  const x = Math.max(0, Math.min(100, v)) / 100;
+  return { background: `rgba(5,150,105,${(0.06 + 0.84 * x).toFixed(3)})`, color: x >= 0.62 ? '#ffffff' : '#064e3b' };
+}
 
 export const QUADRANT_TONE: Record<Quadrant, string> = {
   leading: 'bg-emerald-100 text-emerald-800',

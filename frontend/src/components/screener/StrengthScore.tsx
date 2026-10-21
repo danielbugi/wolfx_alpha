@@ -4,14 +4,15 @@
 import React from 'react';
 import { clsx } from 'clsx';
 import type { ScreenerRow } from '@/services/screenerV2Api';
-import { BAND_BG, BAND_LABEL, SCORE_PARTS, band } from '@/lib/strength';
+import { BAND_BG, BAND_HEX, BAND_LABEL, SCORE_PARTS, band } from '@/lib/strength';
 
+/** Score badge tones on the one green scale: pale (weak) to deep (strong). */
 const BADGE_TONE = [
-  'bg-red-100 text-red-800',
-  'bg-orange-100 text-orange-800',
-  'bg-slate-100 text-slate-700',
+  'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100',
   'bg-emerald-100 text-emerald-800',
+  'bg-emerald-300 text-emerald-950',
   'bg-emerald-600 text-white',
+  'bg-emerald-800 text-white',
 ] as const;
 
 type ScoreRow = Pick<ScreenerRow, 'strength_score' | 'strength_reason'> & Partial<ScreenerRow>;
@@ -61,7 +62,7 @@ export function ScoreBreakdown({ row, compact = false }: { row: ScoreRow; compac
             <span className="truncate text-slate-600">
               {p.label} <span className="text-slate-400">{p.weight}%</span>
             </span>
-            <span className="relative block h-1.5 overflow-hidden rounded-full bg-slate-200" aria-hidden="true">
+            <span className="relative block h-1.5 overflow-hidden rounded-full bg-slate-100" aria-hidden="true">
               {b != null && <span className={clsx('absolute inset-y-0 left-0 rounded-full', BAND_BG[b])} style={{ width: `${Math.max(3, Math.min(100, v as number))}%` }} />}
             </span>
             <span className={clsx('text-right tabular-nums', b == null ? 'text-slate-400' : 'text-slate-700')}>{b == null ? '—' : Math.round(v as number)}</span>
@@ -69,5 +70,32 @@ export function ScoreBreakdown({ row, compact = false }: { row: ScoreRow; compac
         );
       })}
     </div>
+  );
+}
+
+/**
+ * The strength as a five-bar icon (like a signal meter): one bar per band reached, pale to deep green; all bars grey when
+ * the score is withheld. Decorative next to a number, labelled when alone.
+ */
+export function StrengthIcon({ score, size = 18, label = false }: { score: number | null | undefined; size?: number; label?: boolean }) {
+  const b = band(score);
+  const filled = b == null ? 0 : b + 1;
+  const text = b == null ? 'No Strength Score' : `Strength ${filled} of 5 (${BAND_LABEL[b].toLowerCase()})`;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 20 20"
+      role={label ? 'img' : undefined}
+      aria-label={label ? text : undefined}
+      aria-hidden={label ? undefined : true}
+      data-testid="strength-icon"
+      data-filled={filled}
+    >
+      {label && <title>{text}</title>}
+      {[0, 1, 2, 3, 4].map((i) => (
+        <rect key={i} x={1 + i * 3.8} y={17 - (i + 1) * 3.2} width={2.8} height={(i + 1) * 3.2} rx={0.8} fill={i < filled && b != null ? BAND_HEX[b] : '#e2e8f0'} />
+      ))}
+    </svg>
   );
 }

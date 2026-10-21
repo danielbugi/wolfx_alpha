@@ -9,47 +9,108 @@ import { StarIcon as StarSolid } from '@heroicons/react/20/solid';
 import { screenerV2Api, ScreenerResult, ScreenerRow } from '@/services/screenerV2Api';
 import { BOARDS } from '@/lib/momentumToday';
 import DataStamp from '@/components/common/DataStamp';
-import { ScoreBadge } from '@/components/screener/StrengthScore';
+import { StrengthIcon } from '@/components/screener/StrengthScore';
 import { formatValue } from '@/lib/screenerV2';
 import { sectorHref } from '@/lib/sectors';
-import { BAND_LABEL, band } from '@/lib/strength';
+import { BAND_LABEL, SCORE_PARTS, strengthCellStyle } from '@/lib/strength';
 import { useWatchlist } from '@/lib/watchlist';
 
-const TILES = 36;
-const TILE_TONE = ['border-red-200 bg-red-50', 'border-orange-200 bg-orange-50', 'border-slate-200 bg-white', 'border-emerald-200 bg-emerald-50', 'border-emerald-300 bg-emerald-100'] as const;
+const PAGE_ROWS = 50;
+const PART_COLS = SCORE_PARTS.map((p) => ({ key: p.key, label: p.label.replace('Relative strength', 'RS'), weight: p.weight, hint: p.hint }));
 
-function Tile({ r, starred, onStar }: { r: ScreenerRow; starred: boolean; onStar: () => void }) {
-  const b = band(r.strength_score);
+/** One board as a table: strength icon + score, the stock, its day change and the five parts shaded on the green scale. */
+function BoardTable({ rows, isStarred, onStar }: { rows: ScreenerRow[]; isStarred: (s: string) => boolean; onStar: (s: string) => void }) {
+  const [shown, setShown] = useState(PAGE_ROWS);
   return (
-    <div className={clsx('relative rounded-xl border p-2.5', b == null ? 'border-slate-200 bg-slate-50' : TILE_TONE[b])} data-testid="momentum-tile">
-      <div className="flex items-start justify-between gap-1">
-        <Link href={`/stock/${r.symbol}`} className="min-w-0 truncate text-[14px] font-bold text-slate-900 hover:underline">
-          {r.symbol}
-        </Link>
-        <ScoreBadge row={r} size="sm" />
+    <>
+      <div className="relative mt-3 overflow-x-auto">
+        <table className="w-full min-w-[760px] border-separate border-spacing-y-1 text-[13px]" data-testid="momentum-table">
+          <thead className="text-[11px] text-slate-500">
+            <tr>
+              <th className="sticky left-0 z-10 bg-white px-2 py-1 text-left font-medium">Strength</th>
+              <th className="px-2 py-1 text-left font-medium">Stock</th>
+              <th className="px-2 py-1 text-right font-medium">1D</th>
+              {PART_COLS.map((c) => (
+                <th key={c.key} className="px-1 py-1 text-center font-medium" title={`${c.label} (${c.weight}% of the score): ${c.hint}`}>
+                  {c.label} <span className="text-slate-400">{c.weight}%</span>
+                </th>
+              ))}
+              <th className="px-1 py-1">
+                <span className="sr-only">Watchlist</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, shown).map((r) => {
+              const sc = strengthCellStyle(r.strength_score);
+              return (
+                <tr key={r.symbol} data-testid="momentum-row">
+                  <td className="sticky left-0 z-10 rounded-l-lg px-2 py-1.5" style={sc}>
+                    <span
+                      className="inline-flex items-center gap-1.5 font-bold tabular-nums"
+                      title={r.strength_score == null ? `No Strength Score: ${r.strength_reason ?? 'not available'}` : `Strength Score ${Math.round(r.strength_score)} of 100`}
+                      data-testid="momentum-score"
+                    >
+                      <span className="rounded bg-white/80 p-0.5">
+                        <StrengthIcon score={r.strength_score} size={16} />
+                      </span>
+                      {r.strength_score == null ? '—' : Math.round(r.strength_score)}
+                    </span>
+                  </td>
+                  <td className="max-w-[220px] bg-slate-50/60 px-2 py-1.5">
+                    <Link href={`/stock/${r.symbol}`} className="font-semibold text-slate-900 hover:text-accent hover:underline">
+                      {r.symbol}
+                    </Link>
+                    <span className="block truncate text-[11px] text-slate-500">{r.industry ?? r.sector ?? '—'}</span>
+                  </td>
+                  <td className={clsx('bg-slate-50/60 px-2 py-1.5 text-right font-semibold tabular-nums', r.change_1d == null ? 'text-slate-400' : r.change_1d >= 0 ? 'text-emerald-700' : 'text-red-600')}>
+                    {formatValue(r.change_1d, '%')}
+                  </td>
+                  {PART_COLS.map((c) => {
+                    const v = r[c.key] as number | null | undefined;
+                    return (
+                      <td key={c.key} className="px-0.5 py-0.5">
+                        <span className="block rounded-md px-1 py-1 text-center tabular-nums" style={strengthCellStyle(v)} data-testid={`part-${c.key}`}>
+                          {v == null ? '—' : Math.round(v)}
+                        </span>
+                      </td>
+                    );
+                  })}
+                  <td className="rounded-r-lg bg-slate-50/60 px-1 py-1 text-center">
+                    <button
+                      type="button"
+                      onClick={() => onStar(r.symbol)}
+                      aria-pressed={isStarred(r.symbol)}
+                      aria-label={isStarred(r.symbol) ? `Remove ${r.symbol} from watchlist` : `Add ${r.symbol} to watchlist`}
+                      className="press inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-black/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    >
+                      {isStarred(r.symbol) ? <StarSolid className="h-4 w-4 text-amber-400" /> : <StarOutline className="h-4 w-4 text-slate-400" />}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
-      <p className="truncate text-[11px] text-slate-500">{r.industry ?? r.sector ?? '—'}</p>
-      <div className="mt-1 flex items-center justify-between">
-        <span className={clsx('text-[12px] font-semibold tabular-nums', r.change_1d == null ? 'text-slate-400' : r.change_1d >= 0 ? 'text-emerald-700' : 'text-red-600')}>
-          {formatValue(r.change_1d, '%')}
-        </span>
-        <button
-          type="button"
-          onClick={onStar}
-          aria-pressed={starred}
-          aria-label={starred ? `Remove ${r.symbol} from watchlist` : `Add ${r.symbol} to watchlist`}
-          className="press inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-black/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          {starred ? <StarSolid className="h-4 w-4 text-amber-400" /> : <StarOutline className="h-4 w-4 text-slate-400" />}
-        </button>
-      </div>
-    </div>
+      {rows.length > shown && (
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-[12px] text-slate-500">
+          <span>
+            Showing {shown} of {rows.length}
+          </span>
+          <button type="button" onClick={() => setShown((n) => n + PAGE_ROWS)} className="press rounded-full bg-slate-900 px-3 py-1 font-medium text-white">
+            Show {Math.min(PAGE_ROWS, rows.length - shown)} more
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 
 /**
  * Momentum Today: the session's momentum at a glance, from the Screener's shared engine -- stocks that broke out, new 20-day
- * highs, and the strongest by Strength Score, each stock a tile coloured by its score, plus where the breakouts come from.
+ * highs, and the strongest by Strength Score, as tables shaded on one green scale (pale = weak, deep = strong), plus where the
+ * breakouts come from.
  * Counts and descriptions of the session only; not a forecast or a recommendation.
  */
 export default function MomentumTodayPage() {
@@ -163,14 +224,10 @@ export default function MomentumTodayPage() {
                 <p className="mt-3 text-sm text-slate-500">None on {r.session}.</p>
               ) : (
                 <>
-                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-                    {r.rows.slice(0, TILES).map((row) => (
-                      <Tile key={row.symbol} r={row} starred={watchlist.has(row.symbol)} onStar={() => void watchlist.toggle(row.symbol)} />
-                    ))}
-                  </div>
-                  {r.total > TILES && (
+                  <BoardTable rows={r.rows} isStarred={watchlist.has} onStar={(s) => void watchlist.toggle(s)} />
+                  {r.total > r.rows.length && (
                     <p className="mt-2 text-[12px] text-slate-500">
-                      Showing the {TILES} strongest of {r.total.toLocaleString('en-US')}.{' '}
+                      The {r.rows.length} strongest of {r.total.toLocaleString('en-US')} are listed.{' '}
                       <Link href={b.screener} className="font-medium text-accent hover:underline">
                         See all in the Screener
                       </Link>
@@ -189,7 +246,8 @@ export default function MomentumTodayPage() {
         )}
 
         <p className="px-1 text-[11px] text-slate-400" data-testid="momentum-legend">
-          Tile colour = Strength Score: {BAND_LABEL.map((l, i) => `${l.toLowerCase()} ${i * 20}–${i === 4 ? 100 : i * 20 + 19}`).join(' · ')}; grey = no score
+          Shading = strength on one green scale, pale (weak) to deep (strong); the bar icon fills one bar per step:{' '}
+          {BAND_LABEL.map((l, i) => `${l.toLowerCase()} ${i * 20}–${i === 4 ? 100 : i * 20 + 19}`).join(' · ')}; grey = no score
           (data-health gate). Strength Score = relative strength 35%, trend 25%, momentum 20%, volume 10%, liquidity 10%, from the session&apos;s data. It
           describes the session; it is not a forecast or a recommendation.
         </p>
