@@ -1,0 +1,1 @@
+select session_date,symbol,horizon_sessions,provenance,sector,state,ret_pct,vs_spx_pp,vs_sector_pp,rs_percentile from stock_relative_strength

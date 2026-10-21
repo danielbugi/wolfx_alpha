@@ -1,0 +1,1 @@
+select id,session_date,scope,n_variants,n_candidates,n_registered,n_entered,n_closed,n_not_enterable,n_open_after from paper_session

@@ -1,0 +1,1 @@
+select id,variant_id,symbol,direction,signal_session,candidate_observation_id,atr,hold_cap,context from paper_observation

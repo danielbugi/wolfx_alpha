@@ -1,0 +1,1 @@
+select date,sector,stock_count,avg_performance from sector_performance_daily

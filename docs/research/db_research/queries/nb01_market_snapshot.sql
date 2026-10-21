@@ -1,0 +1,1 @@
+select session_date,provenance,regime_state,regime_score,regime_strength,regime_agreement,spx_ret_5,spx_ret_20,spx_ret_60,univ_ret_5,univ_ret_20,univ_ret_60,regime_components from market_snapshot
