@@ -29,6 +29,7 @@ describe('navigation groups', () => {
   it('puts the market-intelligence journey in Product; Deep Value is owner-only internal research', () => {
     expect(product.items.map((i) => [i.name, i.href])).toEqual([
       ['Overview', '/'],
+      ['Momentum Today', '/momentum-today'],
       ['Sectors', '/sectors'],
       ['Screener', '/screener'],
       ['Watchlist', '/watchlist'],

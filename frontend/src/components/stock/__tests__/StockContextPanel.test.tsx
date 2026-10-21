@@ -159,7 +159,7 @@ describe('StockContextPanel', () => {
     api.get.mockResolvedValue(ctx());
     const { container } = render(<StockContextPanel symbol="ACME" chartDate={null} />);
     await screen.findByText('Stock context');
-    const grid = container.querySelector('.grid')!;
+    const grid = container.querySelector('[class*="md:grid-cols-3"]')!;
     expect(grid.className).toContain('grid-cols-1');
     expect(grid.className).toContain('md:grid-cols-3');
   });

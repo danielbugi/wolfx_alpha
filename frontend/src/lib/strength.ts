@@ -48,6 +48,15 @@ export const QUADRANT_TONE: Record<Quadrant, string> = {
   lagging: 'bg-red-100 text-red-800',
 };
 
+/** The Strength Score's parts in display order, with their weights (backend STRENGTH_WEIGHTS). */
+export const SCORE_PARTS: { key: 'strength_rs' | 'strength_trend' | 'strength_momentum' | 'strength_volume' | 'strength_liquidity'; label: string; weight: number; hint: string }[] = [
+  { key: 'strength_rs', label: 'Relative strength', weight: 35, hint: 'mean of the 20- and 60-session RS percentiles' },
+  { key: 'strength_trend', label: 'Trend', weight: 25, hint: 'above its 20- and 50-day averages, 20-day above 50-day' },
+  { key: 'strength_momentum', label: 'Momentum', weight: 20, hint: 'position in the 20-day channel, plus a breakout or new high' },
+  { key: 'strength_volume', label: 'Volume', weight: 10, hint: 'volume vs its 10-day average (0.5x to 2x)' },
+  { key: 'strength_liquidity', label: 'Liquidity', weight: 10, hint: 'average daily dollar volume ($1M to $1B)' },
+];
+
 export type Trend = 'above_both' | 'below_both' | 'mixed';
 /** Close vs its 20- and 50-day averages (the stored session indicators); null when either is unavailable. */
 export function trend(dist20: number | null | undefined, dist50: number | null | undefined): Trend | null {

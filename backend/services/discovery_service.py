@@ -102,9 +102,25 @@ METRICS: Dict[str, Metric] = {m.key: m for m in [
     Metric("atr_pct_pctile", "ATR % percentile", "pctl", DERIVED, "Percentile of ATR % among stocks with a value on the session."),
     Metric("volume_ratio", "Volume ratio", "x", DERIVED, "Session volume vs its 10-day average volume."),
     Metric("dollar_vol_20", "Dollar volume (20)", "$", DERIVED, "Mean of close x volume over the last 20 sessions ending at the session; needs all 20 bars."),
+    Metric("strength_score", "Strength Score", "pctl", DERIVED,
+           "0-100 from this session's data: relative strength 35% (mean of the 20- and 60-session RS percentiles), trend 25% "
+           "(close above its 20- and 50-day averages, 20-day above 50-day), momentum 20% (channel position, plus a breakout or new "
+           "20-day high), volume 10% (volume ratio, 0.5x = 0 to 2x = 100) and liquidity 10% (20-session dollar volume, $1M = 0 to "
+           "$1B = 100). No score when data is missing, the stock is illiquid (under $1M a day) or a price discontinuity was recorded "
+           "in the last 90 days; the reason is given instead. Describes the session only."),
+    Metric("strength_rs", "Strength: relative strength", "pctl", DERIVED, "Mean of the 20- and 60-session RS percentiles (35% of the Strength Score)."),
+    Metric("strength_trend", "Strength: trend", "pctl", DERIVED, "Share of: close above its 20-day average, above its 50-day average, 20-day above 50-day (25%)."),
+    Metric("strength_momentum", "Strength: momentum", "pctl", DERIVED, "60% channel position + 40% a breakout or new 20-day high on the session (20%)."),
+    Metric("strength_volume", "Strength: volume", "pctl", DERIVED, "Volume ratio scaled 0.5x = 0 to 2x = 100 (10%)."),
+    Metric("strength_liquidity", "Strength: liquidity", "pctl", DERIVED, "20-session dollar volume on a log scale, $1M = 0 to $1B = 100 (10%)."),
     Metric("market_cap", "Market cap", "$", REFERENCE, "Ingestion-time reference data: the latest fundamentals row our pipeline ingested by the cutoff (at most 30 days old). The original publication time is unknown, so it is not verified point-in-time information."),
 ]}
 SORT_KEYS = ("symbol", "sector", *METRICS.keys())
+
+# Strength Score: weights (sum to 1) and data-health gate. Descriptive composite of this session's data, not a model.
+STRENGTH_WEIGHTS = {"rs": 0.35, "trend": 0.25, "momentum": 0.20, "volume": 0.10, "liquidity": 0.10}
+STRENGTH_MIN_DOLLAR_VOL = 1_000_000
+STRENGTH_DISCONTINUITY_DAYS = 90
 FLAG_FILTERS = ("breakout_20", "new_high_20")
 
 PRESETS: Dict[str, Dict[str, Any]] = {
@@ -116,6 +132,8 @@ PRESETS: Dict[str, Dict[str, Any]] = {
                        "filters": {"max_channel_width_pctile": 20, "min_dollar_vol_20": 5e6}, "sort": ("channel_width_pctile", "asc")},
     "liquid_large_caps": {"label": "Liquid large caps", "description": "Market cap at least $10B and at least $50M dollar volume.",
                           "filters": {"min_market_cap": 1e10, "min_dollar_vol_20": 5e7}, "sort": ("market_cap", "desc")},
+    "strongest": {"label": "Strongest", "description": "Highest Strength Score: relative strength, trend, momentum, volume and liquidity.",
+                  "filters": {}, "sort": ("strength_score", "desc")},
     "high_volatility": {"label": "High volatility", "description": "ATR % in the top 20% and at least $5M dollar volume.",
                         "filters": {"min_atr_pct_pctile": 80, "min_dollar_vol_20": 5e6}, "sort": ("atr_pct", "desc")},
 }
@@ -297,6 +315,10 @@ rs AS (
     WHERE session_date = %(s)s AND provenance = 'observed' AND model_version = %(rs_model)s
     GROUP BY symbol
 ),
+disc AS (
+    SELECT DISTINCT symbol FROM price_discontinuities
+    WHERE date > %(s)s::date - %(disc_days)s AND date <= %(s)s
+),
 joined AS (
     SELECT px.symbol, px.close, px.high,
            CASE WHEN pxp.close IS NOT NULL THEN (px.close / pxp.close - 1) * 100 END AS change_1d,
@@ -306,7 +328,7 @@ joined AS (
            rs.rs_20, rs.rs_60, rs.ret_5, rs.ret_20, rs.ret_60, rs.vs_spx_20, rs.vs_spx_60, rs.vs_sector_20,
            rs.rs_sector, rs.rs_sector_pit_safe, rs.symbol IS NOT NULL AS has_rs, ti.found IS NOT NULL AS has_tech,
            df.market_cap::float8 AS market_cap, df.sector AS fund_sector, df.industry, df.date AS fundamentals_date,
-           df.ingested_at AS fundamentals_ingested_at
+           df.ingested_at AS fundamentals_ingested_at, disc.symbol IS NOT NULL AS has_disc
     FROM px
     LEFT JOIN pxp USING (symbol)
     LEFT JOIN LATERAL (
@@ -320,6 +342,7 @@ joined AS (
     ) tip ON true
     LEFT JOIN dv USING (symbol)
     LEFT JOIN rs USING (symbol)
+    LEFT JOIN disc USING (symbol)
     LEFT JOIN LATERAL (
         SELECT market_cap, sector, industry, date, greatest(d.created_at, coalesce(d.updated_at, d.created_at)) AS ingested_at
         FROM daily_fundamentals d
@@ -327,6 +350,25 @@ joined AS (
           AND greatest(d.created_at, coalesce(d.updated_at, d.created_at)) <= %(cutoff)s
         ORDER BY d.date DESC LIMIT 1
     ) df ON true
+),
+sc AS (
+    SELECT j.*,
+           CASE WHEN rs_20 IS NULL OR rs_60 IS NULL THEN 'no relative-strength snapshot for the session'
+                WHEN sma_20 IS NULL OR sma_50 IS NULL OR sma_20 <= 0 OR sma_50 <= 0 OR price_position IS NULL
+                     OR donchian_high_20 IS NULL OR volume_ratio IS NULL THEN 'indicators missing for the session'
+                WHEN dollar_vol_20 IS NULL THEN 'fewer than 20 sessions of trading'
+                WHEN dollar_vol_20 < %(min_dv)s THEN 'illiquid (under $1M a day)'
+                WHEN has_disc THEN 'price discontinuity recorded in the last 90 days'
+           END AS strength_reason,
+           (rs_20 + rs_60) / 2 AS s_rs,
+           CASE WHEN sma_20 > 0 AND sma_50 > 0 THEN
+                100.0 * ((close > sma_20)::int + (close > sma_50)::int + (sma_20 > sma_50)::int) / 3 END AS s_trend,
+           CASE WHEN price_position IS NOT NULL AND donchian_high_20 IS NOT NULL THEN
+                0.6 * LEAST(100, GREATEST(0, price_position))
+                + 0.4 * (CASE WHEN COALESCE(close > prev_dh20, FALSE) OR high >= donchian_high_20 THEN 100 ELSE 0 END) END AS s_mom,
+           CASE WHEN volume_ratio IS NOT NULL THEN LEAST(100, GREATEST(0, (volume_ratio - 0.5) / 1.5 * 100)) END AS s_vol,
+           CASE WHEN dollar_vol_20 > 0 THEN LEAST(100, GREATEST(0, (LOG(dollar_vol_20) - 6) / 3 * 100)) END AS s_liq
+    FROM joined j
 ),
 base AS (
     SELECT symbol,
@@ -344,12 +386,17 @@ base AS (
            volume_ratio, dollar_vol_20, dv_bars, market_cap, fundamentals_date,
            to_char(fundamentals_ingested_at, 'YYYY-MM-DD"T"HH24:MI"Z"') AS fundamentals_ingested_at,
            CASE WHEN fundamentals_ingested_at IS NULL THEN NULL ELSE fundamentals_ingested_at > %(close_utc)s END AS fundamentals_after_close,
+           CASE WHEN strength_reason IS NULL THEN ROUND((%(w_rs)s * s_rs + %(w_trend)s * s_trend + %(w_mom)s * s_mom
+                                                         + %(w_vol)s * s_vol + %(w_liq)s * s_liq)::numeric, 1)::float8 END AS strength_score,
+           ROUND(s_rs::numeric, 1)::float8 AS strength_rs, ROUND(s_trend::numeric, 1)::float8 AS strength_trend,
+           ROUND(s_mom::numeric, 1)::float8 AS strength_momentum, ROUND(s_vol::numeric, 1)::float8 AS strength_volume,
+           ROUND(s_liq::numeric, 1)::float8 AS strength_liquidity, strength_reason,
            has_rs, has_tech
-    FROM joined
+    FROM sc
 )
 """
 
-ROW_COLUMNS = ["symbol", "sector", "sector_source", "industry", *[k for k in METRICS.keys()], "dv_bars", "fundamentals_date",
+ROW_COLUMNS = ["symbol", "sector", "sector_source", "industry", *[k for k in METRICS.keys()], "strength_reason", "dv_bars", "fundamentals_date",
                "fundamentals_ingested_at", "fundamentals_after_close"]
 
 
@@ -368,7 +415,7 @@ SELECT json_build_object(
         'fundamentals', COUNT(fundamentals_date), 'market_cap', COUNT(market_cap),
         'fundamentals_after_close', COUNT(*) FILTER (WHERE fundamentals_after_close),
         'sector', COUNT(sector), 'sector_observed', COUNT(*) FILTER (WHERE sector_source = 'observed'),
-        'change_1d', COUNT(change_1d)) FROM base),
+        'change_1d', COUNT(change_1d), 'strength_score', COUNT(strength_score)) FROM base),
     'total', (SELECT COUNT(*) FROM filtered),
     'rows', COALESCE((SELECT json_agg(r) FROM (SELECT {cols} FROM filtered ORDER BY {order} LIMIT %(limit)s OFFSET %(offset)s) r), '[]'::json)
 )
@@ -438,6 +485,9 @@ class DiscoveryService:
             sess = resolve_sessions([(d, int(n)) for d, n in cur.fetchall()], qr.session)
             named = {"s": sess["session"], "p": sess["previous_session"], "dv_start": sess["dv_start"], "dv_n": DV_SESSIONS,
                      "rs_model": RS_MODEL, "fund_age": FUNDAMENTALS_MAX_AGE_DAYS,
+                     "disc_days": STRENGTH_DISCONTINUITY_DAYS, "min_dv": STRENGTH_MIN_DOLLAR_VOL,
+                     "w_rs": STRENGTH_WEIGHTS["rs"], "w_trend": STRENGTH_WEIGHTS["trend"], "w_mom": STRENGTH_WEIGHTS["momentum"],
+                     "w_vol": STRENGTH_WEIGHTS["volume"], "w_liq": STRENGTH_WEIGHTS["liquidity"],
                      "cutoff": fundamentals_cutoff_utc(sess["session"], qr.fundamentals_cutoff), "close_utc": session_close_utc(sess["session"]),
                      "limit": MAX_EXPORT_ROWS if export else qr.page_size, "offset": 0 if export else (qr.page - 1) * qr.page_size}
             sql, params = _bind(page_sql(where, order_clause(sort, order)), named, wparams)

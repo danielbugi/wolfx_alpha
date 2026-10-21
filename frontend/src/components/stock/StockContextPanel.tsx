@@ -6,6 +6,7 @@ import { clsx } from 'clsx';
 import { stockContextApi, StockContext } from '@/services/stockContextApi';
 import { screenerV2Api, MetricDefinition, ScreenerDefinitions, ScreenerRow } from '@/services/screenerV2Api';
 import DataStamp from '@/components/common/DataStamp';
+import { ScoreBadge, ScoreBreakdown } from '@/components/screener/StrengthScore';
 import { FAMILY_LABEL, formatCell, formatValue } from '@/lib/screenerV2';
 
 const FAMILY_TONE = { observed: 'bg-sky-50 text-sky-700', derived: 'bg-slate-100 text-slate-600', reference: 'bg-amber-50 text-amber-700' } as const;
@@ -145,6 +146,16 @@ export default function StockContextPanel({ symbol, chartDate }: { symbol: strin
               No observed relative-strength snapshot exists for this session, so relative strength and returns are unavailable.
             </p>
           )}
+          <div className="mt-3 grid grid-cols-1 items-center gap-4 rounded-xl bg-slate-50 p-3 sm:grid-cols-[auto_minmax(0,1fr)]" data-testid="ctx-strength">
+            <div className="flex items-center gap-3">
+              <ScoreBadge row={ctx.row} size="lg" />
+              <div>
+                <p className="text-[13px] font-semibold text-slate-900">Strength Score</p>
+                <p className="text-[11px] text-slate-500">0-100 from this session&apos;s data · describes the session only</p>
+              </div>
+            </div>
+            <ScoreBreakdown row={ctx.row} />
+          </div>
           <div className="mt-3 grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-3">
             {GROUPS.map((g) => (
               <div key={g.title} className="min-w-0">

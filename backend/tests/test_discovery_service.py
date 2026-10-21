@@ -123,7 +123,7 @@ def test_definitions_cover_every_metric_with_a_family():
     assert {m["key"] for m in d["metrics"]} == set(D.METRICS)
     assert {m["family"] for m in d["metrics"]} == {D.OBSERVED, D.DERIVED, D.REFERENCE}
     assert all(m["definition"] for m in d["metrics"])
-    assert {p["key"] for p in d["presets"]} == {"leaders", "new_highs", "tight_channels", "liquid_large_caps", "high_volatility"}
+    assert {p["key"] for p in d["presets"]} == {"leaders", "new_highs", "tight_channels", "liquid_large_caps", "high_volatility", "strongest"}
     text = " ".join(m["definition"] for m in d["metrics"]).lower()
     for banned in ("buy", "sell", "predict", "forecast", "opportunit", "signal"):
         assert banned not in text

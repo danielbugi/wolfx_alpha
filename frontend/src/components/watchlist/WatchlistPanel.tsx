@@ -7,6 +7,7 @@ import { PencilIcon, PlusIcon, TrashIcon, XMarkIcon } from '@heroicons/react/20/
 import type { ScreenerRow } from '@/services/screenerV2Api';
 import { formatValue } from '@/lib/screenerV2';
 import { MAX_LISTS, MAIN_LIST_ID, useWatchlist } from '@/lib/watchlist';
+import { ScoreBadge } from '@/components/screener/StrengthScore';
 
 type Mode = { kind: 'idle' } | { kind: 'new' } | { kind: 'rename' } | { kind: 'delete' };
 
@@ -170,8 +171,9 @@ export default function WatchlistPanel({
       </div>
 
       {/* rows */}
-      <div className="grid grid-cols-[minmax(0,1fr)_5rem_4.5rem_2rem] gap-x-2 border-b border-black/[0.05] px-3 py-1.5 text-[11px] font-medium text-slate-400">
+      <div className="grid grid-cols-[minmax(0,1fr)_2.4rem_5rem_4.5rem_2rem] gap-x-2 border-b border-black/[0.05] px-3 py-1.5 text-[11px] font-medium text-slate-400">
         <span>Symbol</span>
+        <span className="text-center" title="Strength Score 0-100">Score</span>
         <span className="text-right">Last</span>
         <span className="text-right">Chg%</span>
         <span className="sr-only">Remove</span>
@@ -187,7 +189,7 @@ export default function WatchlistPanel({
             const chg = r?.change_1d ?? null;
             const on = s === selected;
             return (
-              <li key={s} className={clsx('grid grid-cols-[minmax(0,1fr)_5rem_4.5rem_2rem] items-center gap-x-2 px-3', on ? 'bg-accent-soft' : 'hover:bg-black/[0.03]')} data-testid="panel-row">
+              <li key={s} className={clsx('grid grid-cols-[minmax(0,1fr)_2.4rem_5rem_4.5rem_2rem] items-center gap-x-2 px-3', on ? 'bg-accent-soft' : 'hover:bg-black/[0.03]')} data-testid="panel-row">
                 <button
                   type="button"
                   data-symbol={s}
@@ -201,6 +203,7 @@ export default function WatchlistPanel({
                     {r?.industry ?? (unavailable ? '' : session && !loading && !r ? `no bar on ${session}` : '')}
                   </span>
                 </button>
+                <span className="text-center">{r ? <ScoreBadge row={r} size="sm" /> : <span className="text-[12px] text-slate-300">—</span>}</span>
                 <span className="text-right text-[13px] tabular-nums text-slate-800">{r?.close != null ? formatValue(r.close, '$') : loading ? '…' : '—'}</span>
                 <span className={clsx('text-right text-[13px] font-semibold tabular-nums', chg == null ? 'text-slate-400' : chg >= 0 ? 'text-emerald-600' : 'text-red-600')}>
                   {chg != null ? formatValue(chg, '%') : loading ? '' : '—'}

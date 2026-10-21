@@ -11,6 +11,7 @@ import { formatValue } from '@/lib/screenerV2';
 import { sectorHref } from '@/lib/sectors';
 import { liquidityLabel, quadrant, trend, TREND_LABEL } from '@/lib/strength';
 import { QuadrantChip, StrengthMeter } from '@/components/screener/StrengthMeter';
+import { ScoreBadge, ScoreBreakdown } from '@/components/screener/StrengthScore';
 
 /** A return vs the S&P 500 as a centred bar (scaled to ±20 pp, clipped) with its value. */
 function RelBar({ label, value }: { label: string; value: number | null }) {
@@ -60,6 +61,7 @@ export default function StrengthCards({ rows, isStarred, onStar }: { rows: Scree
               </div>
               <div className="flex items-center gap-1">
                 <QuadrantChip q={quadrant(r.rs_20, r.rs_60)} />
+                <ScoreBadge row={r} />
                 <button
                   type="button"
                   onClick={() => onStar(r.symbol)}
@@ -82,6 +84,13 @@ export default function StrengthCards({ rows, isStarred, onStar }: { rows: Scree
                 <StrengthMeter value={r.rs_60} label="RS 60" width="w-20" />
               </div>
             </div>
+
+            <details className="mt-3 group">
+              <summary className="cursor-pointer text-[11px] font-medium text-slate-500 hover:text-slate-800">What makes up the score</summary>
+              <div className="mt-1.5">
+                <ScoreBreakdown row={r} compact />
+              </div>
+            </details>
 
             <div className="mt-3 space-y-1">
               <p className="text-[11px] text-slate-400">Return vs the S&amp;P 500</p>
