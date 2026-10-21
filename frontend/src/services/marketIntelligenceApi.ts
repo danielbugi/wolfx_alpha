@@ -119,8 +119,9 @@ export interface MarketHistory {
 
 export const marketIntelligenceApi = {
   /** The newest observed session (no `session` parameter, no reconstructed rows). */
-  async getSnapshot(): Promise<MarketSnapshot> {
-    const r = await apiClient.get<MarketSnapshot>('/api/market-intelligence/snapshot');
+  /** The newest observed snapshot, or the one for `session` (YYYY-MM-DD). */
+  async getSnapshot(session?: string): Promise<MarketSnapshot> {
+    const r = await apiClient.get<MarketSnapshot>('/api/market-intelligence/snapshot', session ? { params: { session } } : undefined);
     return r.data;
   },
   /** Observed sessions, newest first. */
