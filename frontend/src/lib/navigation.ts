@@ -6,6 +6,7 @@
 // hiding a link protects nothing, and every internal page is still reachable by URL and served by its API to any
 // signed-in user. Access control lives on the backend (backend/auth/dependencies.py), not here.
 import {
+  ArrowTrendingUpIcon,
   BeakerIcon,
   BoltIcon,
   CalendarDaysIcon,
@@ -49,6 +50,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Product',
     items: [
       { name: 'Overview', href: '/', icon: Squares2X2Icon, description: 'Market overview: breadth, sectors, movers' },
+      { name: 'Momentum Today', href: '/momentum-today', icon: ArrowTrendingUpIcon, description: "The session's breakouts, new highs and strongest stocks" },
       { name: 'Sectors', href: '/sectors', icon: RectangleGroupIcon, description: 'Sector comparison and sector pages' },
       { name: 'Screener', href: '/screener', icon: FunnelIcon, description: 'Search & filter the universe' },
       { name: 'Watchlist', href: '/watchlist', icon: StarIcon, description: 'Your saved stocks, side by side (this browser)' },

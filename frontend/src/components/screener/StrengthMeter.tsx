@@ -11,7 +11,7 @@ export function StrengthMeter({ value, label, width = 'w-12', showValue = true }
   const text = b == null ? `${label}: unavailable` : `${label}: ${Math.round(value as number)} of 100 (${BAND_LABEL[b].toLowerCase()})`;
   return (
     <span className="inline-flex items-center gap-1.5" role="img" aria-label={text} title={text} data-testid="strength-meter">
-      <span className={clsx('relative inline-block h-1.5 overflow-hidden rounded-full bg-slate-200', width)} aria-hidden="true">
+      <span className={clsx('relative inline-block h-1.5 overflow-hidden rounded-full bg-slate-100', width)} aria-hidden="true">
         {b != null && <span className={clsx('absolute inset-y-0 left-0 rounded-full', BAND_BG[b])} style={{ width: `${Math.max(4, Math.min(100, value as number))}%` }} />}
       </span>
       {showValue && <span className={clsx('w-6 text-right tabular-nums', b == null ? 'text-slate-400' : 'text-slate-700')}>{b == null ? '—' : Math.round(value as number)}</span>}

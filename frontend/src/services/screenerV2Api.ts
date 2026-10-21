@@ -57,6 +57,14 @@ export interface ScreenerRow {
   volume_ratio: number | null;
   dollar_vol_20: number | null;
   market_cap: number | null;
+  /** Strength Score 0-100 (shared engine); null with strength_reason when the data-health gate withholds it */
+  strength_score?: number | null;
+  strength_rs?: number | null;
+  strength_trend?: number | null;
+  strength_momentum?: number | null;
+  strength_volume?: number | null;
+  strength_liquidity?: number | null;
+  strength_reason?: string | null;
   dv_bars: number;
   fundamentals_date: string | null;
   /** when our pipeline ingested the fundamentals row (UTC); the original publication time is unknown */

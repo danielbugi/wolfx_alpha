@@ -18,6 +18,7 @@ import SegmentedControl from '@/components/ui/SegmentedControl';
 import StrengthMap from '@/components/screener/StrengthMap';
 import StrengthCards from '@/components/screener/StrengthCards';
 import { QuadrantChip, StrengthMeter } from '@/components/screener/StrengthMeter';
+import { ScoreBadge } from '@/components/screener/StrengthScore';
 import { quadrant } from '@/lib/strength';
 import { sectorHref } from '@/lib/sectors';
 import {
@@ -358,7 +359,7 @@ function Screener() {
           {view === 'cards' && result && <StrengthCards rows={result.rows} isStarred={watchlist.has} onStar={(s) => void watchlist.toggle(s)} />}
           {view === 'table' && (
           <div className="relative overflow-x-auto">
-            <table className="w-full min-w-[1360px] text-[13px]">
+            <table className="w-full min-w-[1430px] text-[13px]">
               <thead className="bg-slate-50/70 text-[11px] text-slate-500">
                 <tr>
                   <th className="w-8 px-2 py-2">
@@ -372,6 +373,9 @@ function Screener() {
                   </th>
                   <th className="px-3 py-2 text-left font-medium" title="Where the stock sits on the Strength Map (relative strength over 20 and 60 sessions)">
                     Strength
+                  </th>
+                  <th className="px-3 py-2 text-right" title="Strength Score 0-100: relative strength 35%, trend 25%, momentum 20%, volume 10%, liquidity 10%">
+                    <SortHeader label="Score" active={state.sort === 'strength_score'} dir={state.sort === 'strength_score' ? state.order : null} onClick={() => sortBy('strength_score')} align="end" />
                   </th>
                   {COLUMNS.map((c) => {
                     const m = metric(c as string);
@@ -417,6 +421,9 @@ function Screener() {
                     <td className="px-3 py-1.5">
                       <QuadrantChip q={quadrant(r.rs_20, r.rs_60)} />
                     </td>
+                    <td className="px-3 py-1.5 text-right">
+                      <ScoreBadge row={r} size="sm" />
+                    </td>
                     {COLUMNS.map((c) => {
                       const m = metric(c as string);
                       if (METER_COLS.has(c as string)) {
@@ -451,7 +458,7 @@ function Screener() {
                 ))}
                 {result && result.rows.length === 0 && (
                   <tr>
-                    <td colSpan={COLUMNS.length + 4} className="py-10 text-center text-sm text-slate-400">
+                    <td colSpan={COLUMNS.length + 5} className="py-10 text-center text-sm text-slate-400">
                       No stocks match these filters for {result.session}.
                     </td>
                   </tr>
