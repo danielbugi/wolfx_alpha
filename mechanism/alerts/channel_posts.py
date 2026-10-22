@@ -123,7 +123,7 @@ PROMO_CAPTION = (
 PUBLIC_NOTES: List[Tuple[str, str, str]] = [
     ("market_report", "The daily brief",
      "Index, sector, commodity and Bitcoin moves are the session's closing changes. Sectors show the average move of each sector's stocks. "
-     "Top movers are the day's biggest % gains and drops among actively traded US stocks, ranked by today's price change alone. Who reports next comes "
+     "Top movers: the day's strongest momentum stocks on top, the biggest % drops among actively traded US stocks below. Who reports next comes "
      "from public calendars; dates can move."),
     ("assistant", "The private assistant",
      "Your figures use the prices you enter or the last close, and show the change since the day you added a stock. ATR levels are an educational "

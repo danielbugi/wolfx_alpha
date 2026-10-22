@@ -3,7 +3,7 @@
 The channel's ONE daily post: "First Light ⚡ Market Daily", a public market brief (owner decisions 2026-10-21/22).
 
 It describes the US market of the session with market-wide facts only -- index moves, the fear gauge (VIX), the 10-year
-yield, sectors, the day's top 5 gainers and losers (the same list as the Top gainers post), gold / oil / the dollar / Bitcoin, and the largest
+yield, sectors, the top 5 of the Momentum Board's breakout list (names and moves only) and the top 5 losers, gold / oil / the dollar / Bitcoin, and the largest
 companies reporting next session. It never shows anything about how First Light works: no breakout or list counts, no
 universe size, no rankings of our own, no method words. Breadth is said in words ("most stocks rose"), never as a count.
 

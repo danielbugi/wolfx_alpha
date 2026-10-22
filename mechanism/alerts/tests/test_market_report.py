@@ -178,3 +178,19 @@ def test_assistant_post_carries_its_picture_and_the_artwork_copy_is_clean():
     assert len(ba.BRAND_COPY["posts"]) == len(cx.ASSISTANT_POSTS)
     for png in (ba.render_channel_avatar(), ba.render_bot_avatar()):
         assert png[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_movers_are_the_momentum_boards_breakout_list_in_the_boards_order():
+    from alerts import digest_builder as dbld
+    from alerts.send_daily_digest import board_breakouts
+
+    def r(sym, ret, atr, vol, cat="breakout"):
+        return {"symbol": sym, "cat": cat, "dv20": 3e7, "ret1_pct": ret, "range_atr": atr, "rvol": vol, "close": 10.0, "new": False,
+                "prev_cat": None, "below_high_pct": None}
+    rows = [r("BIG", 9.0, 1.0, 1.0), r("STAR", 3.0, 9.0, 9.0), r("MID", 5.0, 2.0, 2.0), r("NEAR", 20.0, 9.5, 9.5, "near_breakout")]
+    # fillers that each make only ONE list, so STAR is the only stock in the top 5 of two or more lists
+    rows += [r(f"A{i}", -0.5, 5.0, 0.1) for i in range(6)] + [r(f"V{i}", -0.5, 0.1, 5.0) for i in range(6)]
+    rows += [r(f"G{i}", 1.0, 0.1, 0.1) for i in range(3)]
+    d = dbld.build_digest(rows, top_n=15)
+    got = [x["symbol"] for x in board_breakouts(d, 3)]
+    assert got == ["STAR", "BIG", "MID"]          # top 5 in 2+ lists first, then the 1-day gain; a near breakout never appears
