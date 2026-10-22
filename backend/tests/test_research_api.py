@@ -161,7 +161,7 @@ def test_a_strategy_without_captures_is_never_reported_as_zero(client, db):
     assert all(s["value"] is None for s in summary["funnel"]["stages"])
     assert all(c["value"] is None and c["state"] != "ok" for c in summary["cards"].values())
     assert all(r["value"] is None for r in summary["rates"].values())
-    assert summary["forward_outcomes"]["state"] == "not_available"
+    assert summary["forward_outcomes"]["state"] in ("not_available", "no_data") and summary["forward_outcomes"]["value"] is None
     runs = client.get(f"{root}/capture-runs").json()
     assert runs["history"] == [] and runs["latest"] is None
     assert runs["overall"]["status"] in ("not_available", "not_active")

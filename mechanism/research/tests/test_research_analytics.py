@@ -125,10 +125,12 @@ def test_complete_capture_funnel_cards_and_rates(fetch, strategy, seed):
     assert rates["missing_feature_rate"]["value"] == 0       # measured: 0 of 3 slots missing, n=3 snapshots
 
 
-def test_forward_outcomes_are_never_collected(fetch, strategy, seed):
+def test_forward_outcomes_are_measured_never_estimated(fetch, strategy, seed):
+    """No forward_return_label table in this schema: reported as not available (with the real reason), never estimated.
+    With labels present the state is measured too (test_availability.py)."""
     capture(seed, S3)
     fo = research.summary(fetch, strategy)["forward_outcomes"]
-    assert fo["state"] == "not_available" and fo["value"] is None and "migration 23" in fo["reason"]
+    assert fo["state"] in ("not_available", "no_data") and fo["value"] is None and "migration 23" not in fo["reason"]
 
 
 # ------------------------------------------------------------------ capture health classification (pure)

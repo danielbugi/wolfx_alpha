@@ -16,8 +16,9 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
+from strategy_analytics.availability import capabilities as _capabilities
 from strategy_analytics.definitions import (
-    ALL_STATUSES, CAPABILITIES, DEFINITIONS_VERSION, DIRECTION_VALUES, DIRECTIONS, EVALUATION_FLAGS,
+    ALL_STATUSES, DEFINITIONS_VERSION, DIRECTION_VALUES, DIRECTIONS, EVALUATION_FLAGS,
     LEGACY_UNSCORED_MODEL_VERSIONS, LIFECYCLE_HELD, LIFECYCLE_OPEN, LIFECYCLE_RESOLVED, LIFECYCLES, RESOLUTION_FLAGS, SESSION_WINDOW,
     STALE_AFTER_SESSIONS, TARGET_STATUSES, lifecycle, metric, not_available, ratio,
 )
@@ -240,7 +241,7 @@ def summary(fetch: Fetch, strategy: Dict[str, Any]) -> Dict[str, Any]:
         "performance": _performance(t),
         "outcomes": _outcomes(t),
         "directions": {name: _direction_block(agg[name]) for name in DIRECTIONS.values()},
-        "capabilities": CAPABILITIES,
+        "capabilities": _capabilities(fetch, strategy),
     }
 
 
@@ -440,11 +441,12 @@ def data_health(fetch: Fetch, strategy: Dict[str, Any]) -> Dict[str, Any]:
         "coverage": {
             "strategy_version": cov("strategy_version"),
             "model_version": cov("model_version"),
-            "feature_set_version": cov("feature_set_version", "B", collected=False),
-            "observation_id": cov("observation_id", "B", collected=False),
-            "feature_snapshot_id": cov("feature_snapshot_id", "B", collected=False),
+            # collected = this strategy's ledger rows really carry the identifier (measured, not declared)
+            "feature_set_version": cov("feature_set_version", "B", collected=int(ledger["c_feature_set_version"]) > 0),
+            "observation_id": cov("observation_id", "B", collected=int(ledger["c_observation_id"]) > 0),
+            "feature_snapshot_id": cov("feature_snapshot_id", "B", collected=int(ledger["c_feature_snapshot_id"]) > 0),
         },
-        "capabilities": CAPABILITIES,
+        "capabilities": _capabilities(fetch, strategy),
     }
 
 
