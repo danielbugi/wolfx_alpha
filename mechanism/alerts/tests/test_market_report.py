@@ -162,3 +162,19 @@ def test_assistant_posts_reveal_nothing_about_the_system():
         p = plain_text(body)
         assert not re.search(r"breakout|scan|\blists?\b|/screen|vol\s*>", p, re.I), p
         assert BANNED.findall(p) == [], p
+
+
+def test_assistant_post_carries_its_picture_and_the_artwork_copy_is_clean():
+    from alerts import brand_assets as ba
+    from alerts import channel_content as cx
+    for i in range(len(cx.ASSISTANT_POSTS)):
+        post = cx.post_assistant(cx.Ctx(session=SESSION, notice_index=i))
+        assert post.image and post.image[:8] == b"\x89PNG\r\n\x1a\n" and post.button
+        assert text_length(post.text) <= cx.CAPTION_LIMIT
+    words = " ".join([ba.BRAND_COPY["brand"], ba.BRAND_COPY["pill"], ba.BRAND_COPY["cta"], ba.BRAND_COPY["foot"], *ba.BRAND_COPY["mock"]]
+                     + [v for p in ba.BRAND_COPY["posts"] for v in p.values()])
+    assert BANNED.findall(words) == [], BANNED.findall(words)
+    assert not re.search(r"breakout|\bscan\b|\blists?\b|israel|jerusalem", words, re.I)
+    assert len(ba.BRAND_COPY["posts"]) == len(cx.ASSISTANT_POSTS)
+    for png in (ba.render_channel_avatar(), ba.render_bot_avatar()):
+        assert png[:8] == b"\x89PNG\r\n\x1a\n"

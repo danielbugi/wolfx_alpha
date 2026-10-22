@@ -5,7 +5,7 @@ The channel's public name and description (owner decision 2026-10-22: "First Lig
 in a channel's title and description, so both carry the plain words people search for (US stock market, S&P 500, Nasdaq, daily).
 
     python mechanism/alerts/channel_branding.py                     # DRY RUN: prints what would be set, changes nothing
-    python mechanism/alerts/channel_branding.py --apply --to prod   # sets the title and description of the production channel
+    python mechanism/alerts/channel_branding.py --apply --to prod   # sets the title, description and photo of the production channel
 
 The bot must be an admin of the channel with the "change channel info" right. The public @username cannot be changed by a bot
 (Telegram allows that only from the owner's account), so it is printed as a suggestion only. Production is still behind the
@@ -51,9 +51,12 @@ def main() -> int:
         tg = TelegramClient.from_env(args.to, dry_run=False)
         tg._post("setChatTitle", {"chat_id": tg.chat_id, "title": TITLE})
         tg._post("setChatDescription", {"chat_id": tg.chat_id, "description": DESCRIPTION})
+        from alerts.brand_assets import render_channel_avatar
+        tg._post("setChatPhoto", {"chat_id": tg.chat_id}, files={"photo": ("channel_avatar.png", render_channel_avatar(), "image/png")})
     except TelegramError as e:
         raise SystemExit(f"ABORT: {e}")
-    print(f"\nSET the title and description of the {args.to.upper()} channel.")
+    print(f"\nSET the title, description and photo of the {args.to.upper()} channel. The bot's own photo is set in BotFather "
+          "(/setuserpic) with brand_assets.py's bot_avatar.png -- a bot cannot change its own picture.")
     return 0
 
 

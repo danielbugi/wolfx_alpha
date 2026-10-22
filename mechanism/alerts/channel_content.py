@@ -434,9 +434,16 @@ ASSISTANT_POSTS: List[str] = [
 
 
 def post_assistant(ctx: Ctx) -> Optional[Post]:
-    """The commercial post for the private assistant (four rotating variants, chosen by ctx.notice_index). Says exactly what access is today."""
-    body = ASSISTANT_POSTS[ctx.notice_index % len(ASSISTANT_POSTS)]
-    return Post("assistant", "\n".join([body, "", ASSISTANT_ACCESS]), button=True)
+    """The commercial post for the private assistant (four rotating variants, chosen by ctx.notice_index). Says exactly what access is today.
+    Each variant carries its own picture (brand_assets.render_assistant_post, same index); a picture that fails to render never stops the post."""
+    i = ctx.notice_index % len(ASSISTANT_POSTS)
+    image = None
+    try:
+        from alerts.brand_assets import render_assistant_post
+        image = render_assistant_post(i)
+    except Exception:                                          # noqa: BLE001 - the picture is decoration
+        image = None
+    return Post("assistant", "\n".join([ASSISTANT_POSTS[i], "", ASSISTANT_ACCESS]), image, button=True)
 
 
 # ------------------------------------------------------------------ momentum board (daily)
