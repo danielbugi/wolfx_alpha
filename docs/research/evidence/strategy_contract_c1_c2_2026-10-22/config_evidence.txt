@@ -1,0 +1,13 @@
+# files in /opt/donchian/env that contain GUARDS_EFFECTIVE_FROM (name=value only; no other content); mtime UTC
+.env | 2026-10-08 08:55:26Z | GUARDS_EFFECTIVE_FROM=2026-10-02
+.env.bak.pre-capture-20261008T085526Z | 2026-10-08 08:55:00Z | GUARDS_EFFECTIVE_FROM=2026-10-02
+.env.bak.pre-recorder-20261008T085500Z | 2026-10-03 09:47:54Z | GUARDS_EFFECTIVE_FROM=2026-10-02
+.env.bak.pre-S10-20261003T094542Z | 2026-10-02 17:35:34Z | GUARDS_EFFECTIVE_FROM=2026-10-02
+# env backups WITHOUT the setting (names + mtime only)
+.env.bak.20260924T115858Z | 2026-09-24 11:58:58Z
+.env.bak.20260924T205418Z | 2026-09-24 20:54:18Z
+.env.bak.20261002T172757Z | 2026-09-25 06:56:30Z
+.env.bak-pre-prod-cutover-20260924113653 | 2026-09-24 08:07:25Z
+.env.bak.pre-smtp-20260924T213143Z | 2026-09-24 21:31:43Z
+.env.bak.pre-smtp2-20260925T065630Z | 2026-09-25 06:56:30Z
+# journal retention for donchian-pipeline.service starts at: 2026-09-24T22:01:28+00:00
