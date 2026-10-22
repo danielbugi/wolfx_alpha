@@ -423,11 +423,13 @@ def post_disclaimer(ctx: Ctx) -> Optional[Post]:
 
 
 ASSISTANT_ACCESS = "Access on request · seats limited."
+# Public voice "First Light ⚡ Market Daily" (owner decision 2026-10-22): one fixed emoji per variant, short and bold, and nothing
+# about how First Light works (no scan, no lists, no screen syntax).
 ASSISTANT_POSTS: List[str] = [
-    "<b>The channel shows what moved. The assistant shows what moved for you.</b>\nYour stocks, followed from the day you add them.",
-    "<b>Find any stock that fits your rules.</b>\nOne line: <code>/screen breakout vol&gt;3</code>. Every stock in the daily scan, filtered.",
-    "<b>One message when the scan is ready.</b>\nThe stocks you follow, what changed, nothing else.",
-    "<b>Type a ticker. Get the card.</b>\nThe facts, the lists it is in, headlines and a chart, in one tap.",
+    "🤖 <b>The channel shows the market. The assistant shows YOUR stocks.</b>\nYour watchlist and portfolio, followed from the day you add them.",
+    "🔎 <b>Your own stock screener, in a chat.</b>\nSet your rules once, see every US stock that fits, in seconds.",
+    "🔔 <b>One message after the close.</b>\nThe stocks you follow, what changed, nothing else.",
+    "📇 <b>Type a ticker. Get the card.</b>\nFacts, headlines and a chart, in one tap.",
 ]
 
 

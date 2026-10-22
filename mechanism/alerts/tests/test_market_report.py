@@ -143,3 +143,22 @@ def test_paused_posts_send_nothing_and_never_touch_telegram(script, argv, env, m
 def test_a_move_that_rounds_to_zero_is_flat_never_minus_zero():
     p = plain_text(mr.format_report(_brief(macro_pct={"dollar": -0.004})))
     assert "💵 Dollar 0.0%" in p and "−0.0%" not in p
+
+
+# ------------------------------------------------------------------ the public brand's pinned post and assistant posts
+def test_public_pinned_post_keeps_the_disclaimers_and_reveals_nothing_about_the_system():
+    from alerts import channel_posts as cp
+    t = cp.START_HERE_PUBLIC
+    assert tg_html.problems(t, 4096) == [] and text_length(t) <= 4000
+    p = plain_text(t)
+    assert re.search(r"not investment advice", p, re.I) and "First Light · Market Daily" in p
+    assert not re.search(r"breakout|near.high|\blists?\b|★|momentum board|scan|2,9\d\d|ranked by a formula", p, re.I)   # "watchlist" is fine
+    assert BANNED.findall(re.sub(r"not investment advice|Not investment advice", "", p)) == []
+
+
+def test_assistant_posts_reveal_nothing_about_the_system():
+    from alerts import channel_content as cx
+    for body in cx.ASSISTANT_POSTS:
+        p = plain_text(body)
+        assert not re.search(r"breakout|scan|\blists?\b|/screen|vol\s*>", p, re.I), p
+        assert BANNED.findall(p) == [], p

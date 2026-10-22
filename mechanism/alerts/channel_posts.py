@@ -116,8 +116,45 @@ PROMO_CAPTION = (
     "Access on request · seats limited. Tap <b>Request access</b> under today's post.")
 
 
-def post_start_here(tg: TelegramClient, pin: bool = True) -> list:
-    ids = tg.send_message(START_HERE, silent=True, kind="start_here")
+# The pinned post for the public brand "First Light ⚡ Market Daily" (owner decisions 2026-10-21/22): the channel now carries ONE public
+# market brief a day (market_report.py) and one assistant post. Nothing here describes how First Light works (no scan size, no lists,
+# no rankings); the general disclaimer block is the same as START_HERE's. START_HERE stays as it is for the previous format
+# (POST_MARKET_FORMAT=package), whose per-post notes it carries.
+PUBLIC_NOTES: List[Tuple[str, str, str]] = [
+    ("market_report", "The daily brief",
+     "Index, sector, commodity and Bitcoin moves are the session's closing changes. Sectors show the average move of each sector's stocks. "
+     "Top movers are large companies (market value $2B+) with active trading, ranked by today's price change alone. Who reports next comes "
+     "from public calendars; dates can move."),
+    ("assistant", "The private assistant",
+     "Your figures use the prices you enter or the last close, and show the change since the day you added a stock. ATR levels are an educational "
+     "reference, not a plan for you."),
+]
+START_HERE_PUBLIC = (
+    "⚡ <b>First Light · Market Daily</b>\n"
+    "The US stock market in 60 seconds. Every trading day, right after the close. 📊\n\n"
+    "📌 <b>Every day here</b>\n"
+    "🖼 The market card: S&amp;P 500, Nasdaq, Dow, Russell 2000, VIX, the 10-year yield and every sector.\n"
+    "📰 The brief: what moved, the top movers, gold, oil, the dollar, Bitcoin and who reports next.\n"
+    "🤖 One post about the First Light private assistant.\n\n"
+    "🕐 <b>How fresh?</b>\n"
+    "End of day, from the official US close. Nothing is live; prices may have moved since.\n\n"
+    "🤖 <b>The private assistant</b>\n"
+    "Your own watchlist and portfolio, followed from the day you add each stock, with news and a chart for every name. "
+    "Access on request, seats limited. Tap <b>Request access</b> under the daily brief.\n\n"
+    "⚠️ <b>Please read: important</b>\n"
+    "• This channel is educational information only. It is <b>not investment advice</b> and not a suggestion to trade any security. "
+    "Nothing here is tailored to you.\n"
+    "• It describes what already happened. It does not say what happens next.\n"
+    "• All investing carries risk, including the loss of what you invest.\n"
+    "• The data comes from public sources and can contain delays or mistakes. Check it before you rely on it.\n"
+    "• Everyone makes their own decisions.\n\n"
+    "<b>Notes</b> (tap to expand)\n<blockquote expandable>"
+    + "\n\n".join(f"<b>{html.escape(t)}</b>\n{html.escape(n, quote=False)}" for _k, t, n in PUBLIC_NOTES)
+    + "</blockquote>\n\n<i>* Not investment advice.</i>\n#StockMarket #SP500 #Nasdaq #Stocks")
+
+
+def post_start_here(tg: TelegramClient, pin: bool = True, text: str = START_HERE) -> list:
+    ids = tg.send_message(text, silent=True, kind="start_here")
     if pin and ids and ids[0]:
         try:
             tg.pin_message(ids[0], silent=True)
@@ -137,7 +174,10 @@ def main() -> int:
     ap.add_argument("--send", action="store_true", help="really send (dev unless --to prod)")
     ap.add_argument("--to", choices=["dev", "prod"], default="dev")
     ap.add_argument("--no-pin", action="store_true", help="do not pin the Start-here post")
+    ap.add_argument("--market-daily", action="store_true",
+                    help="the public 'First Light · Market Daily' Start-here (for the one-brief channel) instead of the previous one")
     args = ap.parse_args()
+    start_text = START_HERE_PUBLIC if args.market_daily else START_HERE
     if not (args.start_here or args.promo):
         ap.error("choose --start-here and/or --promo")
     png = None
@@ -146,7 +186,7 @@ def main() -> int:
         png = render_promo()
     if not args.send:
         if args.start_here:
-            print(f"--- START HERE ({len(START_HERE)} chars) ---\n{START_HERE}\n")
+            print(f"--- START HERE ({len(start_text)} chars) ---\n{start_text}\n")
         if args.promo:
             print(f"--- PROMO caption ({len(PROMO_CAPTION)} chars) + image {len(png) / 1024:.0f} KB ---\n{PROMO_CAPTION}\n")
         print("DRY RUN - nothing was sent. Add --send (dev) or --send --to prod (locked until launch).")
@@ -154,7 +194,7 @@ def main() -> int:
     try:
         tg = TelegramClient.from_env(args.to, dry_run=False)
         if args.start_here:
-            print("start-here:", post_start_here(tg, pin=not args.no_pin))
+            print("start-here:", post_start_here(tg, pin=not args.no_pin, text=start_text))
         if args.promo:
             print("promo:", post_promo(tg, png))
     except TelegramError as e:
