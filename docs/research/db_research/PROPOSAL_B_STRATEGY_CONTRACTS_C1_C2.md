@@ -7,7 +7,7 @@ Status: **proposal for owner review**, 2026-10-22. Read-only research. The gener
 | Evidence | What it shows | Durability |
 |---|---|---|
 | `/opt/donchian/env/.env`: `GUARDS_EFFECTIVE_FROM=2026-10-02` | The configured boundary | **Mutable** file; current value only |
-| Env backups: `.env.bak.pre-S10-20261003T094542Z` has mtime 2026-10-02 17:35Z and already contains the setting | The setting existed by 2026-10-02 17:35Z, before that session's nightly run | Mutable files; mtimes can change |
+| Env backups: `.env.bak.20261002T172757Z` (taken before an edit) **lacks** the setting; `.env.bak.pre-S10-20261003T094542Z` (mtime 2026-10-02 17:35:34Z) **has** it | The setting was added on 2026-10-02 between 17:27:57Z and 17:35:34Z, before that session's nightly run (23:15Z) | Mutable files; mtimes can change |
 | Pipeline journal: `Universe guards mode: ACTIVE (session 2026-10-02 >= GUARDS_EFFECTIVE_FROM=2026-10-02)` at 2026-10-02 23:15:48Z, then one line per session (13 lines up to 10-21) | The guards actually ran from session 2026-10-02 | **Rotating** journal (retention currently from 2026-09-24): it will be lost |
 | Pipeline runs for 09-28 and 10-01: no guards line at all in about 200k journal lines each | No guard evaluation happened for those cohorts | Same rotating journal |
 | `signal_ledger.model_version = 'unknown'` on 165/169 (10-02), 124/126 (10-05) and 98/99 (10-06) rows | A side effect that started exactly with the new screener behaviour (documented defect) and stopped after the provenance fix | Immutable-in-practice ledger rows; indirect evidence |
@@ -27,7 +27,7 @@ What cannot be recovered without reconstruction: **which c1 signals c2 would hav
 
 ## Smallest forward-only fix
 
-1. **Preserve the evidence before the journal rotates.**
+1. **Preserve the evidence before the journal rotates.** *(Done 2026-10-22: `docs/research/evidence/strategy_contract_c1_c2_2026-10-22/`, with sha256 sums.)*
    - Export the 13 `Universe guards mode` journal lines, the env-backup names with their mtimes, and the per-cohort `'unknown'` counts into a committed file, `docs/research/evidence/strategy_contract_c1_c2_2026-10-22/`, with sha256 sums.
    - This is a read-only export plus a docs commit. No secret values: only the one setting's name and value.
 2. **Code registry (no migration):**
