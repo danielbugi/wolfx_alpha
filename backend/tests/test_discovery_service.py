@@ -239,8 +239,8 @@ def test_reference_fields_for_momentum_today_come_from_the_same_rows_and_session
     sql = D.page_sql("TRUE", D.order_clause("pe_ratio", "asc"))
     fund = re.search(r"SELECT market_cap, sector, industry, date,.*?\) df ON true", sql, re.S).group(0)
     assert "pe_ratio, ps_ratio, overall_quality_score, quality_grade, float_shares" in fund and "<= %(cutoff)s" in fund
-    assert "e.report_date > %(s)s ORDER BY e.report_date LIMIT 1" in sql
-    assert "e.report_date <= %(s)s" in sql and "ORDER BY e.report_date DESC LIMIT 1" in sql
+    assert "MIN(report_date) AS report_date FROM earnings_current WHERE is_current AND report_date > %(s)s GROUP BY symbol" in sql
+    assert "WHERE is_current AND report_date <= %(s)s ORDER BY symbol, report_date DESC" in sql
     assert "(next_earnings_date - %(s)s::date) AS days_to_earnings" in sql
     assert "(%(s)s::date - last_earnings_date) AS days_since_earnings" in sql
     assert "not verified point-in-time" in D.METRICS["pe_ratio"].definition
