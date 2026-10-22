@@ -7,6 +7,12 @@
     python mechanism/alerts/send_daily_digest.py --send             # sends to the DEVELOPMENT channel
     python mechanism/alerts/send_daily_digest.py --send --to prod   # sends to the production channel
     python mechanism/alerts/send_daily_digest.py --snapshot-only    # only refresh the bot's Postgres snapshot
+    python mechanism/alerts/send_daily_digest.py --report --image   # DRY RUN of the ONE daily market report (card + report)
+    python mechanism/alerts/send_daily_digest.py --report --image --send --to owner   # preview in the owner's private chat
+
+--report (owner decision 2026-10-21) replaces the separate digest / board / top-gainers / health / earnings posts with ONE
+report: the market-card photo with a short caption, then a single message carrying every section (market_report.py). Same
+analysis, same snapshot for the bot. `--to owner` sends to the owner's private chat only: no snapshot, no session mark.
 
 Same safety rules as send_daily_alerts.py (dry-run default, dev channel unless --to prod, stale / half-loaded price
 data aborts, the token is never printed). A real send also saves the day's snapshot (digest_runs / digest_stocks) that
@@ -33,12 +39,15 @@ load_dotenv(MECH.parent / ".env", override=False)
 from shared import db, market_calendar  # noqa: E402
 from alerts import digest_builder as dbld  # noqa: E402
 from alerts.alert_builder import Skip  # noqa: E402
-from alerts.digest_format import SHOW_N, format_caption, format_header, group_messages, header_keyboard, headline  # noqa: E402
+from alerts.digest_format import (PRIVATE_ASSISTANT_BUTTON, SHOW_N, format_caption, format_header, group_messages,  # noqa: E402
+                                  header_keyboard, headline)
+from alerts import deeplink  # noqa: E402
+from alerts import market_report as mr  # noqa: E402
 from alerts.market_card import render_market_card  # noqa: E402
 from alerts.market_context import build_card_data, load_tiles  # noqa: E402
 from alerts.send_daily_alerts import resolve_session  # noqa: E402
 from alerts.snapshot import save_snapshot  # noqa: E402
-from alerts.telegram_client import TelegramClient, TelegramError  # noqa: E402
+from alerts.telegram_client import TelegramClient, TelegramError, text_length  # noqa: E402
 from ml_training.features import price_features as pf  # noqa: E402
 
 CALENDAR_DAYS_BACK = 460       # ~316 trading bars: SMA200 + 52-week range + a margin
@@ -137,7 +146,8 @@ def sp500_change(session):
 def main():
     ap = argparse.ArgumentParser(description="First Light digest -> Telegram (dry-run by default)")
     ap.add_argument("--send", action="store_true", help="actually send (dev channel unless --to prod)")
-    ap.add_argument("--to", choices=["dev", "prod"], default="dev")
+    ap.add_argument("--to", choices=["dev", "prod", "owner"], default="dev",
+                    help="owner = the owner's private chat with the bot (preview; no snapshot, no session mark)")
     ap.add_argument("--top", type=int, default=15, help="rows per list (the depth of the lists; also what the bot treats as 'in the lists')")
     ap.add_argument("--show", type=int, default=SHOW_N, help="rows of each list shown open; ranks below sit in a collapsed quote")
     ap.add_argument("--min-dv", type=float, default=dbld.DEFAULT_MIN_DV, help="min 20-day avg dollar volume for the ranked lists")
@@ -149,7 +159,11 @@ def main():
     ap.add_argument("--snapshot-only", action="store_true", help="write the bot snapshot to Postgres, send nothing")
     ap.add_argument("--image", action="store_true",
                     help="render the market-performance card (saved under reports/first_light/) and send it first")
+    ap.add_argument("--report", action="store_true",
+                    help="the ONE daily market report (card + one message) instead of the separate digest messages")
     args = ap.parse_args()
+    if args.to == "owner" and args.snapshot_only:
+        ap.error("--snapshot-only has nothing to send")
 
     tz = ZoneInfo(os.getenv("ALERTS_TIMEZONE", "Asia/Jerusalem"))
     now_local = datetime.now(tz)
@@ -161,7 +175,7 @@ def main():
     # Trading-day gate: only post when a US session completed that this channel has not been sent yet (weekends, NYSE
     # holidays, a second run the same day). --force / an explicit --date bypass it; --snapshot-only is never blocked.
     state_key = f"digest:{args.to}"
-    gate = market_calendar.check_new_session(state_key, force=args.force or bool(args.date))
+    gate = market_calendar.check_new_session(state_key, force=args.force or bool(args.date) or args.to == "owner")
     if not gate.run and not args.snapshot_only:
         if args.send:
             print(f"Skipping: {gate.reason}")
@@ -199,6 +213,9 @@ def main():
             print(f"Market card saved: {path} ({len(card_png) / 1024:.0f} KB)")
         except Exception as ex:                                     # noqa: BLE001
             print(f"WARNING: market card not rendered ({type(ex).__name__}: {ex}); sending the text-only digest.")
+    if args.report:
+        return send_report(args, session, df, rows, universe_n, breadth, digest, index_lines, hook, card_png, state_key, skipped)
+
     # With the market card the photo's caption IS the opening (hook, counts, the stars) and carries the buttons, so there is no separate header
     # message; without a card the text header opens the digest.
     caption = format_caption(session, digest, hook, notes) if card_png else None
@@ -232,6 +249,68 @@ def main():
         market_calendar.mark_processed(state_key, session)
         sent = f"1 photo + {len(messages)} messages" if card_png else f"{len(messages)} messages"
         print(f"\nSENT {sent} to the {args.to.upper()} channel; snapshot saved ({n} stocks). No alert-ledger rows written.")
+    except TelegramError as e:
+        raise SystemExit(f"ABORT: {e}")
+    return 0
+
+
+def next_session_after(session):
+    """The next US session on the calendar after `session` (whose reporters the report lists), or None."""
+    sessions, _source = market_calendar.get_sessions()
+    later = sorted(d for d in sessions if d > pd.Timestamp(session).date())
+    return later[0] if later else None
+
+
+def report_parts(session, df, rows, universe_n, breadth):
+    """Everything the report needs beyond the digest, computed by the SAME code the separate posts used (send_channel_posts /
+    channel_content / send_earnings_today) on the rows already analysed here -- no second analysis of the universe."""
+    from alerts import channel_content as cx
+    from alerts import market_stats as ms
+    from alerts.send_channel_posts import load_board, top_gainers_from
+    from alerts.send_earnings_today import load_todays_reporters
+
+    w = ms.to_wide(df, [r["symbol"] for r in rows])
+    sp = sp500_change(session)
+    ctx = cx.Ctx(session=pd.Timestamp(session).date(), universe_n=universe_n, up_n=breadth["up"], down_n=breadth["down"],
+                 health=ms.health(w), sp500_pct=sp)
+    health = cx.post_health(ctx)
+    health_lines = health.text.split("\n")[2:] if health else []           # drop the hook and date lines: the report has its own
+    day = next_session_after(session)
+    caps = {r["symbol"]: r.get("mcap") for r in rows}
+    reporters = load_todays_reporters(day) if day else []
+    reporters.sort(key=lambda r: (-(caps.get(r["symbol"]) or 0.0), r["symbol"]))   # largest first; unknown size last
+    return {"sp500_pct": sp, "health_lines": health_lines, "top_gainers": top_gainers_from(rows),
+            "board": load_board(session, w), "earnings_day": day, "earnings_rows": reporters}
+
+
+def send_report(args, session, df, rows, universe_n, breadth, digest, index_lines, hook, card_png, state_key, skipped) -> int:
+    parts = report_parts(session, df, rows, universe_n, breadth)
+    text = mr.format_report(pd.Timestamp(session).date(), digest, hook, universe_n=universe_n, **parts)
+    caption = mr.report_caption(pd.Timestamp(session).date(), digest, hook) if card_png else None
+    bar = "=" * 78
+    if caption:
+        print(f"\n{bar}\n[photo caption]\n{caption}\n{bar}   [{len(caption)} chars]")
+    print(f"\n{bar}\n[market report + Request access button]\n{text}\n{bar}   [{text_length(text)} parsed chars]")
+    if skipped:
+        print("\nSkipped: " + "; ".join(f"{v} x {k}" for k, v in sorted(skipped.items(), key=lambda kv: -kv[1])))
+    if text_length(text) > 4096:
+        raise SystemExit(f"ABORT: the report is {text_length(text)} parsed characters (limit 4096); nothing sent.")
+    if not args.send:
+        print("\nDRY RUN - nothing was sent.")
+        return 0
+    try:
+        tg = TelegramClient.from_env(args.to, dry_run=False)
+        username = os.getenv("TELEGRAM_BOT_USERNAME") or tg.get_me()["username"]
+        keyboard = {"inline_keyboard": [[{"text": PRIVATE_ASSISTANT_BUTTON, "url": deeplink.link(username, "ch")}]]}
+        if card_png:                                                # the photo notifies; the report follows silently under it
+            tg.send_photo(card_png, caption, kind="report_card")
+        tg.send_message(text, disable_preview=True, silent=bool(card_png), reply_markup=keyboard, kind="market_report")
+        if args.to == "owner":
+            print("\nSENT the report preview to the owner's private chat (no snapshot, no session mark).")
+            return 0
+        n = save_snapshot(db, session, rows, digest, universe_n, breadth, index_lines, args.top)
+        market_calendar.mark_processed(state_key, session)
+        print(f"\nSENT the market report ({'photo + ' if card_png else ''}1 message) to the {args.to.upper()} channel; snapshot saved ({n} stocks).")
     except TelegramError as e:
         raise SystemExit(f"ABORT: {e}")
     return 0

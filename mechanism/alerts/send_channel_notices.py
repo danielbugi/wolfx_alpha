@@ -33,6 +33,7 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(MECH.parent / ".env", override=False)
 
 from alerts import channel_content as cx  # noqa: E402
+from alerts import channel_switches  # noqa: E402
 from alerts import deeplink  # noqa: E402
 from alerts.digest_format import PRIVATE_ASSISTANT_BUTTON  # noqa: E402
 from alerts.telegram_client import TelegramClient, TelegramError, text_length  # noqa: E402
@@ -107,6 +108,9 @@ def main() -> int:
         print(f"Skipping: slot {args.slot} was already sent to {args.to} on {day}. Use --force to send it again.")
         return 0
     try:
+        if args.slot not in channel_switches.notice_slots():
+            print(f"Skipping: notice slot {args.slot} is paused (CHANNEL_NOTICE_SLOTS={sorted(channel_switches.notice_slots())}); nothing sent.")
+            return 0
         tg = TelegramClient.from_env(args.to, dry_run=False)
         username = os.getenv("TELEGRAM_BOT_USERNAME") or tg.get_me()["username"]
         keyboard = {"inline_keyboard": [[{"text": PRIVATE_ASSISTANT_BUTTON, "url": deeplink.link(username, "ch")}]]}

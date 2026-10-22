@@ -42,6 +42,7 @@ from alerts import channel_content as cx  # noqa: E402
 from alerts import deeplink  # noqa: E402
 from alerts import board as bd  # noqa: E402
 from alerts import channel_news  # noqa: E402
+from alerts import channel_switches  # noqa: E402
 from alerts import digest_builder as dbld  # noqa: E402
 from alerts import market_context as mc  # noqa: E402
 from alerts import market_stats as ms  # noqa: E402
@@ -254,6 +255,11 @@ def main() -> int:
     args = ap.parse_args()
     if args.all and args.send and args.to != "owner":
         ap.error("--all --send is only allowed with --to owner (the channel gets one extra post per session)")
+
+    if args.send and args.to != "owner" and args.kind == "auto" and not args.all and not channel_switches.extra_posts_enabled():
+        print("Skipping: the automatic extra post (rotation / weekly recap / education tips) is paused; the channel carries the daily "
+              "market report and the assistant post only. Set CHANNEL_EXTRA_POSTS_ENABLED=1 to restore it. Nothing sent.")
+        return 0
 
     tz = ZoneInfo(os.getenv("ALERTS_TIMEZONE", "Asia/Jerusalem"))
     now_local = datetime.now(tz)
