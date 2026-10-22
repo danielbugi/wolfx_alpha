@@ -140,21 +140,6 @@ def lifecycle(status: str, evaluation_flag: Optional[str]) -> str:
     return LIFECYCLE_HELD if evaluation_flag else LIFECYCLE_OPEN
 
 
-# What Release A does and does not collect -- so "0 observations" is never confused with
-# "not collected yet".
-CAPABILITIES: Dict[str, Dict[str, Any]] = {
-    "signal_ledger": {"available": True, "release": "A"},
-    "outcome_evaluation": {"available": True, "release": "A"},
-    "same_bar_ambiguity_flag": {"available": True, "release": "A"},
-    "split_suspect_hold": {"available": True, "release": "A"},
-    "max_adverse_excursion": {"available": True, "release": "A"},
-    "max_favourable_excursion": {"available": False, "release": "B"},
-    "post_exit_trajectory": {"available": False, "release": "B"},
-    "forward_return_labels": {"available": False, "release": "B"},
-    "candidate_observations": {"available": False, "release": "B"},
-    "feature_snapshots": {"available": False, "release": "B"},
-    "training_ready_observations": {"available": False, "release": "B"},
-    "evaluator_run_history": {"available": False, "release": None,
-                              "reason": "evaluator run results are only in the VPS wrapper log, not the "
-                                        "database -- see data health"},
-}
+# Research capabilities are MEASURED per strategy at request time -- see strategy_analytics/availability.py. The former
+# static CAPABILITIES table (Release A, 2026-09-29/10-04) kept declaring captured data "not collected" after it existed,
+# and was removed on purpose; do not reintroduce availability as a constant.

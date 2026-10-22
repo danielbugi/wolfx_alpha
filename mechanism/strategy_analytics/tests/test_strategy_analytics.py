@@ -181,7 +181,8 @@ def test_empty_strategy_reports_nothing_not_zero(fetch, ledger):
         assert p[m] == {"value": None, "n": 0, "state": "no_data"}
     assert p["average_mfe_r"]["state"] == "not_available"
     assert s["directions"]["bullish"]["signals"] == 0 and s["directions"]["bearish"]["win_rate"]["state"] == "no_data"
-    assert s["capabilities"]["candidate_observations"] == {"available": False, "release": "B"}
+    co = s["capabilities"]["candidate_observations"]           # measured (availability.py), not a constant
+    assert co["available"] is False and co["state"] == "unavailable" and co["release"] == "B" and co["reason"]
 
 
 def test_all_open_strategy(fetch, ledger):

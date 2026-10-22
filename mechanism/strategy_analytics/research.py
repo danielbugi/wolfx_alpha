@@ -40,8 +40,30 @@ HISTORY_MAX = 120
 SKIPPED_SYMBOLS_SHOWN = 25
 GUARD_STATUSES = ("passed", "rejected", "not_evaluated")
 
-FORWARD_OUTCOMES = not_available(
-    "Forward outcome labels are not collected: migration 23 and the fwd_v1 label set do not exist yet.")
+def forward_outcomes(fetch: Optional[Fetch], strategy: Dict[str, Any]) -> Dict[str, Any]:
+    """Measured, not declared (the former FORWARD_OUTCOMES constant said "migration 23 and fwd_v1 do not exist yet" after
+    tens of thousands of fwd_v1 labels existed). Outcome SUMMARIES are not computed here yet, so `value` stays None; the
+    state and reason say what exists: not_available (no table), no_data (no label for this strategy's candidates), or
+    not_available with the real label counts (labels exist; summaries not computed by this API)."""
+    if fetch is None:
+        return not_available("Research tables are not installed (migration 22), so no forward label can be linked.")
+    if not fetch("SELECT to_regclass('forward_return_label') IS NOT NULL AS ok", None)[0]["ok"]:
+        return not_available("Forward outcome labels are not collected: the forward_return_label table does not exist.")
+    r = fetch("""SELECT count(*) AS n, count(*) FILTER (WHERE f.label_status = 'final') AS final,
+                        min(f.t0_session) AS first, max(f.t0_session) AS last,
+                        array_agg(DISTINCT f.horizon_sessions ORDER BY f.horizon_sessions) AS horizons
+                 FROM forward_return_label f JOIN candidate_observation c ON c.id = f.observation_id AND c.strategy_id = %s""",
+              (strategy["id"],))[0]
+    if not r["n"]:
+        return {"value": None, "n": 0, "state": STATE_NO_DATA,
+                "reason": "No forward label has been computed for this strategy's candidates yet."}
+    horizons = [int(h) for h in (r["horizons"] or []) if h is not None]
+    out = not_available(
+        f"{int(r['n'])} forward labels ({int(r['final'])} final; horizons {', '.join(str(h) for h in horizons)} sessions) exist for "
+        f"candidates captured {r['first']} to {r['last']}; outcome summaries are not computed by this API yet.")
+    out.update({"labels": int(r["n"]), "final_labels": int(r["final"]), "horizons_sessions": horizons,
+                "period": {"first": r["first"], "last": r["last"]}})
+    return out
 
 DEFINITIONS: Dict[str, str] = {
     "candidate": "One row in candidate_observation: a breakout or near-breakout the strategy's own detection produced "
@@ -357,14 +379,14 @@ def _count(value: Optional[int], state: str = STATE_OK, reason: Optional[str] = 
     return out
 
 
-def _unavailable_summary(strategy: Dict[str, Any], avail: Dict[str, Any]) -> Dict[str, Any]:
+def _unavailable_summary(strategy: Dict[str, Any], avail: Dict[str, Any], fetch: Optional[Fetch] = None) -> Dict[str, Any]:
     state = avail["state"]
     na = lambda: _count(None, state, avail["reason"])  # noqa: E731
     stage_keys = (("evaluated", "Evaluated"), ("candidates", "Candidates"), ("guard_passed", "Guard Passed"),
                   ("ranked", "Qualified / Ranked"), ("selected", "Selected"), ("ledger_signals", "Ledger Signals"))
     rate = lambda: {"value": None, "n": None, "state": state, "reason": avail["reason"], "release": RELEASE}  # noqa: E731
     return {
-        "strategy": strategy, "availability": avail, "definitions": DEFINITIONS, "forward_outcomes": FORWARD_OUTCOMES,
+        "strategy": strategy, "availability": avail, "definitions": DEFINITIONS, "forward_outcomes": forward_outcomes(fetch, strategy),
         "latest_session": None, "feature_set": {"current": None, "registered": []},
         "funnel": {"session_date": None, "stages": [{"key": k, "label": lab, **na()} for k, lab in stage_keys]},
         "cards": {k: na() for k in ("observations", "snapshots", "sessions_captured", "bullish", "bearish",
@@ -391,7 +413,7 @@ def summary(fetch: Fetch, strategy: Dict[str, Any]) -> Dict[str, Any]:
     sid = strategy["id"]
     registered = _registered_feature_sets(fetch)
     if avail["state"] == STATE_NO_DATA:
-        out = _unavailable_summary(strategy, avail)
+        out = _unavailable_summary(strategy, avail, fetch)
         out["feature_set"] = {"current": None, "registered": registered}
         return out
 
@@ -458,7 +480,7 @@ def summary(fetch: Fetch, strategy: Dict[str, Any]) -> Dict[str, Any]:
         "missing_feature_rate": missing["rate"] if missing else metric(None, 0),
     }
     return {
-        "strategy": strategy, "availability": avail, "definitions": DEFINITIONS, "forward_outcomes": FORWARD_OUTCOMES,
+        "strategy": strategy, "availability": avail, "definitions": DEFINITIONS, "forward_outcomes": forward_outcomes(fetch, strategy),
         "latest_session": {"session_date": session, "run_id": latest["id"], "capture_status": latest["health"]["status"],
                            "finished_at": latest["finished_at"]} if latest else None,
         "feature_set": {"current": latest["feature_set_version"] if latest else None, "registered": registered},

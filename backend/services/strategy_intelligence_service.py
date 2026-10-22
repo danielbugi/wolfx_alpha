@@ -20,6 +20,7 @@ if _MECHANISM not in sys.path:
     sys.path.append(_MECHANISM)
 
 from strategy_analytics import analytics  # noqa: E402
+from strategy_analytics import availability  # noqa: E402
 from strategy_analytics import definitions  # noqa: E402
 from strategy_analytics import research  # noqa: E402
 
@@ -68,7 +69,7 @@ class StrategyIntelligenceService:
             "resolution_flags": list(definitions.RESOLUTION_FLAGS),
             "evaluation_flags": list(definitions.EVALUATION_FLAGS),
             "signal_sorts": list(analytics.SORTS),
-            "capabilities": definitions.CAPABILITIES,
+            "capabilities": availability.catalog(),   # static description only; availability is measured per strategy (summary)
         }
 
     def list_strategies(self) -> Dict[str, Any]:
