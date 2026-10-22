@@ -261,24 +261,10 @@ def next_session_after(session):
     return later[0] if later else None
 
 
-# Top movers (owner decision 2026-10-22): the gainers row is the Momentum Board's Breakout list (the dashboard's /momentum page,
-# backend momentum_board_service: top 5 in 2+ of the day's lists first, then the biggest 1-day gain) -- the same session's
-# digest, the same order. The losers row is the mirror of the Top gainers list (send_channel_posts.top_losers_from).
+# The movers rows (owner decision 2026-10-22): the day's breakout stocks, as the Momentum Board's lists rank them -- top 5 by
+# % gain and top 5 by volume surge (the digest's breakout "gainers" and "volume" lists, the same ones the board and the bot
+# read). Names and numbers only in the post.
 MOVERS_N = 5
-
-
-def board_breakouts(digest, n: int = MOVERS_N):
-    """The Momentum Board's Breakout rows for this session, in the board's order (momentum_board_service.get_board): the listed
-    breakout stocks (in any of the day's lists), stocks in the top 5 of 2+ lists first, then the biggest 1-day gain."""
-    from alerts.digest_builder import LISTS
-    from alerts.star import is_starred
-    board = digest["boards"]["breakout"]
-    seen = {}
-    for lst in LISTS:
-        for r in board[lst]:
-            seen.setdefault(r["symbol"], r)
-    ranked = sorted(seen.values(), key=lambda r: (not is_starred(r.get("list_ranks") or {}), -r["ret1_pct"], r["symbol"]))
-    return ranked[:n]
 MACRO_SYMBOLS = {"GC=F": "gold", "CL=F": "oil", "DX-Y.NYB": "dollar", "BTC-USD": "btc"}
 INDEX_SYMBOLS = ("^GSPC", "^IXIC", "^DJI", "^RUT", "^VIX", "^TNX")
 
@@ -303,7 +289,6 @@ def build_brief(session, rows, universe_n, breadth, digest):
     """The public market brief's numbers: market-wide facts only (see market_report.py). Movers come from the stocks analysed here,
     restricted to large liquid companies; sectors are the same equal-weighted averages the card draws."""
     from alerts.market_context import load_sectors
-    from alerts.send_channel_posts import top_losers_from
     from alerts.send_earnings_today import load_todays_reporters
 
     mv = market_moves(session)
@@ -311,8 +296,9 @@ def build_brief(session, rows, universe_n, breadth, digest):
     vix = (mv["^VIX"][0], pct("^VIX")) if "^VIX" in mv else None
     tnx = (mv["^TNX"][0], (mv["^TNX"][0] - mv["^TNX"][1]) * 100) if "^TNX" in mv else None
     bars, _unclassified = load_sectors(db, rows)
-    gainers = board_breakouts(digest)
-    losers = top_losers_from(rows, MOVERS_N)
+    breakouts = digest["boards"]["breakout"]
+    gainers = [r for r in breakouts["gainers"][:MOVERS_N] if r["ret1_pct"] > 0]
+    volume = [r for r in breakouts["volume"][:MOVERS_N] if r.get("rvol") is not None]
     day = next_session_after(session)
     caps = {r["symbol"]: r.get("mcap") for r in rows}
     reporters = load_todays_reporters(day) if day else []
@@ -324,7 +310,8 @@ def build_brief(session, rows, universe_n, breadth, digest):
         macro_pct={name: pct(sym) for sym, name in MACRO_SYMBOLS.items()},
         up_share=breadth["up"] / total * 100 if universe_n else None,
         sectors=[(b.name, b.change_pct) for b in bars],
-        gainers=[(r["symbol"], r["ret1_pct"]) for r in gainers], losers=[(r["symbol"], r["ret1_pct"]) for r in losers],
+        gainers=[(r["symbol"], r["ret1_pct"]) for r in gainers],
+        volume=[(r["symbol"], r["ret1_pct"], r["rvol"]) for r in volume],
         reporting_day=day, reporting=[r["symbol"] for r in reporters[:mr.REPORTING_N]])
 
 

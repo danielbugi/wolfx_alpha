@@ -27,7 +27,7 @@ def _brief(**kw):
                 tnx=(5.146, 2.9), macro_pct={"gold": 0.1, "oil": -2.0, "dollar": 0.2, "btc": 3.0}, up_share=50.4,
                 sectors=[("Technology", 1.81), ("Industrials", 1.10), ("Energy", 0.58), ("Healthcare", -0.25),
                          ("Consumer Cyclical", -1.24), ("Consumer Defensive", -1.25)],
-                gainers=[("NUAI", 17.7), ("ASST", 13.6), ("ENVX", 12.9)], losers=[("XYZ", -12.0), ("ABC", -8.1)],
+                gainers=[("NTSK", 10.0), ("APPN", 9.5), ("CRL", 9.3)], volume=[("BRZE", 0.2, 9.0), ("MEDP", 6.4, 4.5)],
                 reporting_day=date(2026, 10, 22), reporting=["INTC", "PG", "UNP", "SCCO", "WDC", "BX", "LMT", "VLO"])
     base.update(kw)
     return mr.Brief(**base)
@@ -41,7 +41,8 @@ def test_brief_is_one_valid_message_with_every_section():
                  "Stocks were split, roughly half up and half down.", "Tech led (+1.8%); Consumer Staples lagged (−1.2%).",
                  "📊 INDICES", "🟢 S&P 500 +0.58%", "😨 VIX 16.68 (−3.6%)", "🏦 10Y 5.15% (+2.9 bps)",
                  "🏭 SECTORS", "🟢 Tech +1.8% · Industrials +1.1% · Energy +0.6%", "🔴 Consumer Staples −1.2% · Consumer Cyclical −1.2%",
-                 "🚀 TOP MOVERS", "🟢 NUAI +17.7%", "🔴 XYZ −12.0%", "🌍 MACRO & CRYPTO", "🛢 Oil −2.0% · 🥇 Gold +0.1%",
+                 "🚀 TOP GAINERS\nNTSK +10.0% · APPN +9.5% · CRL +9.3%", "🔊 VOLUME SURGE\nBRZE 9.0× (+0.2%) · MEDP 4.5× (+6.4%)",
+                 "🌍 MACRO & CRYPTO", "🛢 Oil −2.0% · 🥇 Gold +0.1%",
                  "₿ Bitcoin +3.0%", "📅 REPORTING Thu 22 Oct", "INTC · PG · UNP", "\nFirst Light ⚡ Market Daily\n",
                  "Educational data. Not advice. Read the pinned message.", "#StockMarket"):
         assert part in p, part
@@ -76,8 +77,8 @@ def test_headline_rules(kw, expected):
 
 
 def test_missing_ingredients_are_left_out_never_invented():
-    p = plain_text(mr.format_report(_brief(vix=None, tnx=None, macro_pct={}, gainers=[], losers=[], reporting=[], sectors=[], up_share=None)))
-    for gone in ("VIX", "10Y", "MACRO", "TOP MOVERS", "REPORTING", "SECTORS", "Most US stocks", "split"):
+    p = plain_text(mr.format_report(_brief(vix=None, tnx=None, macro_pct={}, gainers=[], volume=[], reporting=[], sectors=[], up_share=None)))
+    for gone in ("VIX", "10Y", "MACRO", "TOP GAINERS", "VOLUME SURGE", "REPORTING", "SECTORS", "Most US stocks", "split"):
         assert gone not in p, gone
     assert "📊 INDICES" in p and "🟢 S&P 500 +0.58%" in p
 
@@ -180,17 +181,26 @@ def test_assistant_post_carries_its_picture_and_the_artwork_copy_is_clean():
         assert png[:8] == b"\x89PNG\r\n\x1a\n"
 
 
-def test_movers_are_the_momentum_boards_breakout_list_in_the_boards_order():
+def test_movers_rows_are_the_breakout_gainers_and_volume_lists():
+    """The brief's two rows are the day's breakout stocks as the Momentum Board's lists rank them: by % gain and by volume surge."""
     from alerts import digest_builder as dbld
-    from alerts.send_daily_digest import board_breakouts
 
-    def r(sym, ret, atr, vol, cat="breakout"):
-        return {"symbol": sym, "cat": cat, "dv20": 3e7, "ret1_pct": ret, "range_atr": atr, "rvol": vol, "close": 10.0, "new": False,
+    def r(sym, ret, vol, cat="breakout"):
+        return {"symbol": sym, "cat": cat, "dv20": 3e7, "ret1_pct": ret, "range_atr": 1.0, "rvol": vol, "close": 10.0, "new": False,
                 "prev_cat": None, "below_high_pct": None}
-    rows = [r("BIG", 9.0, 1.0, 1.0), r("STAR", 3.0, 9.0, 9.0), r("MID", 5.0, 2.0, 2.0), r("NEAR", 20.0, 9.5, 9.5, "near_breakout")]
-    # fillers that each make only ONE list, so STAR is the only stock in the top 5 of two or more lists
-    rows += [r(f"A{i}", -0.5, 5.0, 0.1) for i in range(6)] + [r(f"V{i}", -0.5, 0.1, 5.0) for i in range(6)]
-    rows += [r(f"G{i}", 1.0, 0.1, 0.1) for i in range(3)]
+    rows = [r("UP1", 9.0, 1.1), r("UP2", 7.0, 1.2), r("VOL1", 0.4, 8.0), r("VOL2", 2.0, 5.0), r("NEAR", 30.0, 20.0, "near_breakout")]
     d = dbld.build_digest(rows, top_n=15)
-    got = [x["symbol"] for x in board_breakouts(d, 3)]
-    assert got == ["STAR", "BIG", "MID"]          # top 5 in 2+ lists first, then the 1-day gain; a near breakout never appears
+    b = d["boards"]["breakout"]
+    assert [x["symbol"] for x in b["gainers"][:2]] == ["UP1", "UP2"]
+    assert [x["symbol"] for x in b["volume"][:2]] == ["VOL1", "VOL2"]     # a near breakout never appears in either row
+
+
+def test_market_moves_reads_only_the_session_bar_and_the_one_before(monkeypatch):
+    """The brief's data loader (send_daily_digest.market_moves): its constants exist and a symbol without a bar ON the session is left out."""
+    from alerts import send_daily_digest as sdd
+    rows = [{"symbol": "^GSPC", "date": SESSION, "close": 101.0}, {"symbol": "^GSPC", "date": date(2026, 10, 20), "close": 100.0},
+            {"symbol": "GC=F", "date": date(2026, 10, 20), "close": 2000.0}, {"symbol": "GC=F", "date": date(2026, 10, 19), "close": 1990.0}]
+    monkeypatch.setattr(sdd.db, "execute_dict_query", lambda sql, params: rows)
+    got = sdd.market_moves(SESSION)
+    assert got == {"^GSPC": (101.0, 100.0)} and "GC=F" not in got
+    assert set(sdd.MACRO_SYMBOLS.values()) == {"gold", "oil", "dollar", "btc"} and "^GSPC" in sdd.INDEX_SYMBOLS

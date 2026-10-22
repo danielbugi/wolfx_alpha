@@ -3,7 +3,7 @@
 The channel's ONE daily post: "First Light ⚡ Market Daily", a public market brief (owner decisions 2026-10-21/22).
 
 It describes the US market of the session with market-wide facts only -- index moves, the fear gauge (VIX), the 10-year
-yield, sectors, the top 5 of the Momentum Board's breakout list (names and moves only) and the top 5 losers, gold / oil / the dollar / Bitcoin, and the largest
+yield, sectors, two rows of the day's breakout stocks (top 5 by % gain, top 5 by volume surge; names and numbers only), gold / oil / the dollar / Bitcoin, and the largest
 companies reporting next session. It never shows anything about how First Light works: no breakout or list counts, no
 universe size, no rankings of our own, no method words. Breadth is said in words ("most stocks rose"), never as a count.
 
@@ -44,8 +44,8 @@ class Brief:
     macro_pct: Dict[str, Optional[float]] = field(default_factory=dict)     # gold / oil / dollar / btc -> % change
     up_share: Optional[float] = None                                        # % of US stocks that rose (said in words only)
     sectors: Sequence[Tuple[str, float]] = ()                               # (sector, avg % move) best -> worst
-    gainers: Sequence[Tuple[str, float]] = ()                               # (symbol, % change), biggest first
-    losers: Sequence[Tuple[str, float]] = ()                                # (symbol, % change), biggest drop first
+    gainers: Sequence[Tuple[str, float]] = ()                               # breakout stocks: (symbol, % change), biggest gain first
+    volume: Sequence[Tuple[str, float, float]] = ()                         # breakout stocks: (symbol, % change, volume x usual), biggest surge first
     reporting_day: Optional[date] = None
     reporting: Sequence[str] = ()                                           # symbols, largest first
 
@@ -157,12 +157,11 @@ def format_report(b: Brief, limit: int = REPORT_LIMIT) -> str:
             lines.append(f"{DOWN} " + " · ".join(f"{_sector(n)} {_pct(p)}" for n, p in downs))
         lines.append("")
 
-    if b.gainers or b.losers:
-        lines.append("🚀 <b>TOP MOVERS</b>")
-        if b.gainers:
-            lines.append(f"{UP} {_movers(b.gainers)}")
-        if b.losers:
-            lines.append(f"{DOWN} {_movers(b.losers)}")
+    if b.gainers:
+        lines += ["🚀 <b>TOP GAINERS</b>", _movers(b.gainers), ""]
+    if b.volume:
+        lines += ["🔊 <b>VOLUME SURGE</b>",
+                  " · ".join(f"<b>{_link(s)}</b> {x:.1f}× ({_pct(p)})" for s, p, x in b.volume)]
         lines.append("")
 
     labels = (("oil", "🛢 Oil"), ("gold", "🥇 Gold"), ("dollar", "💵 Dollar"), ("btc", "₿ Bitcoin"))
