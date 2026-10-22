@@ -13,7 +13,8 @@ Session alignment (the integrity rules this service exists to enforce):
   * Channel, breakout, ATR, volume-ratio and dollar-volume figures are computed from stored daily bars and indicators for S
     (and P): family "derived". They use bars up to and including S only.
   * Market cap, P/E, P/S, float, the quality score/grade, sector (fallback) and industry come from daily_fundamentals,
-    the next/last earnings dates (and the last EPS surprise) from earnings_calendar as stored, and the company name from
+    the next/last earnings dates (and the last EPS surprise) from earnings_calendar rows that are still current -- a
+    rescheduled report's obsolete date is skipped (rule in services/earnings_current.py) --, and the company name from
     companies: family "reference". For daily_fundamentals that means INGESTION-TIME REFERENCE
     DATA. The table has no original publication or filing timestamps, only the time our pipeline wrote the row
     (greatest(created_at, updated_at), UTC), so these values are NOT verified point-in-time information. A row is used
@@ -55,6 +56,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 from zoneinfo import ZoneInfo
+
+from services.earnings_current import EARNINGS_CURRENT_CTES
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +123,7 @@ METRICS: Dict[str, Metric] = {m.key: m for m in [
     Metric("ps_ratio", "P/S", "x", REFERENCE, "Price / sales from the same fundamentals row as market cap (ingestion-time reference data, not verified point-in-time)."),
     Metric("quality_score", "Quality score", "pctl", REFERENCE, "Overall quality score 0-100 (growth, profitability, financial health, valuation) from the same fundamentals row; a heuristic grade from reported fundamentals, descriptive only."),
     Metric("float_shares", "Float", "shares", REFERENCE, "Shares available to trade, from the same fundamentals row (ingestion-time reference data)."),
-    Metric("days_to_earnings", "Days to next earnings", "days", REFERENCE, "Calendar days from the session to the next earnings report date after it, from the earnings calendar as stored (report dates can move)."),
+    Metric("days_to_earnings", "Days to next earnings", "days", REFERENCE, "Calendar days from the session to the next earnings report date after it, from the earnings calendar (report dates can move; a date the vendor's latest complete calendar no longer lists is skipped)."),
     Metric("days_since_earnings", "Days since last earnings", "days", REFERENCE, "Calendar days from the most recent stored earnings report date on or before the session (0 = on the session) to the session. The report time of day (before the open or after the close) is not stored."),
     Metric("earnings_surprise_pct", "Last earnings surprise", "%", REFERENCE, "EPS surprise of that most recent report, as stored by the earnings calendar."),
 ]}
@@ -297,7 +300,8 @@ def order_clause(sort: str, order: str) -> str:
 
 
 BASE_SQL = """
-WITH px AS (
+WITH """ + EARNINGS_CURRENT_CTES + """,
+px AS (
     SELECT symbol, close::float8 AS close, high::float8 AS high, volume::float8 AS volume
     FROM stock_prices WHERE date = %(s)s AND close IS NOT NULL AND close > 0
 ),
@@ -365,10 +369,11 @@ joined AS (
     ) df ON true
     LEFT JOIN LATERAL (SELECT c.company_name FROM companies c WHERE c.symbol = px.symbol LIMIT 1) co ON true
     LEFT JOIN LATERAL (
-        SELECT e.report_date FROM earnings_calendar e WHERE e.symbol = px.symbol AND e.report_date > %(s)s ORDER BY e.report_date LIMIT 1
+        SELECT e.report_date FROM earnings_current e
+        WHERE e.symbol = px.symbol AND e.is_current AND e.report_date > %(s)s ORDER BY e.report_date LIMIT 1
     ) nx ON true
     LEFT JOIN LATERAL (
-        SELECT e.report_date, e.surprise_pct FROM earnings_calendar e WHERE e.symbol = px.symbol AND e.report_date <= %(s)s
+        SELECT e.report_date, e.surprise_pct FROM earnings_current e WHERE e.symbol = px.symbol AND e.is_current AND e.report_date <= %(s)s
         ORDER BY e.report_date DESC LIMIT 1
     ) le ON true
 ),

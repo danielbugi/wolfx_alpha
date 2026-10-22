@@ -36,6 +36,8 @@ if _MECHANISM not in sys.path:
 
 from alerts.star import is_starred, starred_lists  # noqa: E402
 
+from services.earnings_current import EARNINGS_CURRENT_CTES  # noqa: E402
+
 # digest_stocks is written once per session (when send_daily_digest.py --send runs), not on
 # every dashboard load -- a short cache still avoids a repeat query burst from the 5-minute
 # auto-refresh, but there is no data-freshness reason to keep it below a few minutes.
@@ -67,7 +69,8 @@ class MomentumBoardService:
 
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute("""
-            WITH latest_run AS (
+            WITH """ + EARNINGS_CURRENT_CTES + """,
+            latest_run AS (
                 SELECT session_date, created_at, universe_n, counts
                 FROM digest_runs
                 ORDER BY session_date DESC
@@ -84,16 +87,22 @@ class MomentumBoardService:
                 ds.symbol, ds.category, ds.close, ds.ret1_pct, ds.rvol, ds.range_atr,
                 ds.below_high_pct, ds.dv20, ds.list_ranks, ds.atr,
                 f.sector, f.quality_grade, f.overall_quality_score, f.market_cap,
-                nxt.report_date AS next_earnings_date
+                nxt.report_date AS next_earnings_date,
+                efs.latest_fetch_at AS earnings_fetched_at, efs.schedule_complete AS earnings_schedule_complete
             FROM latest_run lr
             JOIN digest_stocks ds ON ds.session_date = lr.session_date
             LEFT JOIN fundamentals f ON f.symbol = ds.symbol
             LEFT JOIN LATERAL (
-                SELECT report_date FROM earnings_calendar
-                WHERE symbol = ds.symbol AND report_date >= CURRENT_DATE
+                -- only dates still listed by the symbol's latest complete vendor fetch (services/earnings_current.py)
+                SELECT report_date FROM earnings_current
+                WHERE symbol = ds.symbol AND report_date >= CURRENT_DATE AND is_current
                 ORDER BY report_date
                 LIMIT 1
             ) nxt ON true
+            LEFT JOIN LATERAL (
+                SELECT MAX(latest_fetch_at) AS latest_fetch_at, BOOL_OR(latest_fetch_complete) AS schedule_complete
+                FROM earnings_current WHERE symbol = ds.symbol
+            ) efs ON true
             WHERE ds.category = ANY(%s) AND ds.list_ranks IS NOT NULL
         """, (list(LONG_CATEGORIES),))
         rows = cursor.fetchall()
@@ -165,6 +174,10 @@ class MomentumBoardService:
                 "market_cap": int(r["market_cap"]) if r["market_cap"] is not None else None,
                 "next_earnings_date": next_earnings.isoformat() if next_earnings else None,
                 "days_to_earnings": days_to_earnings,
+                # Freshness of the earnings source for this symbol: when the vendor calendar was last fetched, and
+                # whether that fetch was a complete answer (None = no calendar rows at all).
+                "earnings_fetched_at": r["earnings_fetched_at"].isoformat() if r.get("earnings_fetched_at") else None,
+                "earnings_schedule_complete": r.get("earnings_schedule_complete"),
             })
 
         # Confirmed-by-2+-lists names first, then biggest 1-day movers among the rest --
