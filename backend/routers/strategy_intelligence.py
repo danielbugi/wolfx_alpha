@@ -47,6 +47,19 @@ def definitions(service: StrategyIntelligenceService = Depends(get_strategy_inte
     return service.definitions()
 
 
+@strategy_intelligence_router.get("/{key}/{version}/contracts")
+def contracts(key: str = KEY, version: str = VERSION, session: Optional[date] = Query(None, description="also return the assignment for this signal session")):
+    """The declared rule contracts of a strategy version (static; no database), each with its sha256. With `session`, the
+    contract in force that session plus the evidence and certainty of that historical assignment."""
+    from strategy_analytics import contracts as strategy_contracts
+    view = strategy_contracts.public_view(key, version)
+    if view["state"] != "declared":
+        raise _not_found("contracts_not_declared", f"No rule contract is declared for {key}/{version}.")
+    if session is not None:
+        view["assignment"] = strategy_contracts.assignment(key, version, session)
+    return view
+
+
 @strategy_intelligence_router.get("/{key}/{version}/summary")
 def summary(key: str = KEY, version: str = VERSION,
             service: StrategyIntelligenceService = Depends(get_strategy_intelligence_service)):
