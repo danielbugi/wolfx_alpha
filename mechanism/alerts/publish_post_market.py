@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 # mechanism/alerts/publish_post_market.py
 """
-The post-market package -- Daily Digest, Momentum Board, Top Gainers, Market Health -- published together as
-soon as the session's market data is fresh, with per-post idempotency (mechanism/alerts/post_delivery.py,
-table telegram_post_delivery) so a partial failure only retries what is actually still missing.
+The post-market publication, sent as soon as the session's market data is fresh, with per-post idempotency
+(mechanism/alerts/post_delivery.py, table telegram_post_delivery) so a partial failure only retries what is missing.
+
+Two formats, chosen by POST_MARKET_FORMAT (env):
+  report  (default, owner decision 2026-10-21) -- ONE delivery kind, "market_report": the market-card photo and one
+          message carrying every section (send_daily_digest.py --report; market_report.py). The bot's snapshot is
+          saved exactly as before.
+  package -- the previous four kinds: Daily Digest, Momentum Board, Top Gainers, Market Health. Kept as the rollback:
+          set POST_MARKET_FORMAT=package and nothing else changes.
+The two formats use different claim kinds, so a session already delivered in one format is NOT known as delivered to
+the other: switch between sessions (never mid-session), or that session would go out in both formats.
 
     python mechanism/alerts/publish_post_market.py                          # DRY RUN: shows what would be attempted
     python mechanism/alerts/publish_post_market.py --send --to prod         # refresh data, then publish
@@ -62,6 +70,18 @@ REPO_ROOT = MECH.parent
 # None-marker for daily_digest's special case stays obvious, and so this table's own shape still documents
 # "these are the four claim kinds" without relying on a reader inferring it from a list.
 POST_MARKET_KINDS = {"daily_digest": None, "momentum_board": "momentum_board", "top_gainers": "top_gainers", "market_health": "market_health"}
+REPORT_KINDS = {"market_report": None}
+FORMATS = ("report", "package")
+
+
+def post_market_format() -> str:
+    """'report' unless POST_MARKET_FORMAT says 'package'; an unknown value falls back to 'report' (the decided default)."""
+    v = os.getenv("POST_MARKET_FORMAT", "report").strip().lower()
+    return v if v in FORMATS else "report"
+
+
+def kinds_for(fmt: str) -> dict:
+    return REPORT_KINDS if fmt == "report" else POST_MARKET_KINDS
 
 
 def run_step(script: str, *extra_args: str) -> None:
@@ -73,7 +93,7 @@ def run_step(script: str, *extra_args: str) -> None:
         raise SystemExit(f"ABORT: {script} exited {result.returncode}")
 
 
-def send_daily_digest(session: date, to: str, image: bool, buttons: bool, force: bool) -> None:
+def send_daily_digest(session: date, to: str, image: bool, buttons: bool, force: bool, report: bool = False) -> None:
     """Subprocess, not an in-process call: send_daily_digest.py's photo+multi-message send is proven, tested
     code -- reused unchanged rather than refactored, to avoid risking its existing behavior. Its own internal
     market_calendar 'digest:{to}' mark stays as a secondary safety net; the telegram_post_delivery claim this
@@ -85,6 +105,8 @@ def send_daily_digest(session: date, to: str, image: bool, buttons: bool, force:
         args.append("--buttons")
     if force:
         args.append("--force")
+    if report:
+        args.append("--report")
     result = subprocess.run([PYTHON, *args], cwd=REPO_ROOT)
     if result.returncode != 0:
         raise RuntimeError(f"send_daily_digest.py exited {result.returncode}")
@@ -110,10 +132,12 @@ def send_single_post(kind: str, ctx: cx.Ctx, to: str, username: Optional[str]) -
     return ids[0] if ids else None
 
 
-def publish(session: date, to: str, send: bool, image: bool, buttons: bool, force: bool) -> int:
+def publish(session: date, to: str, send: bool, image: bool, buttons: bool, force: bool, fmt: Optional[str] = None) -> int:
+    fmt = fmt or post_market_format()
     ctx: Optional[cx.Ctx] = None
     sent, skipped, failed, dry = [], [], [], []
-    for kind in POST_MARKET_KINDS:
+    print(f"Format: {fmt}")
+    for kind in kinds_for(fmt):
         if not send:
             already = post_delivery.already_sent(db, session, kind, to)
             dry.append(f"{kind}: {'already delivered' if already else 'would attempt'}")
@@ -124,7 +148,10 @@ def publish(session: date, to: str, send: bool, image: bool, buttons: bool, forc
             print(f"SKIP {kind}: already delivered for {session} ({to}), or another run is sending it now")
             continue
         try:
-            if kind == "daily_digest":
+            if kind == "market_report":
+                send_daily_digest(session, to, image, buttons, force, report=True)
+                message_id = None
+            elif kind == "daily_digest":
                 send_daily_digest(session, to, image, buttons, force)
                 message_id = None
             else:
@@ -141,7 +168,7 @@ def publish(session: date, to: str, send: bool, image: bool, buttons: bool, forc
     if not send:
         print("DRY RUN:\n  " + "\n  ".join(dry))
         return 0
-    print(f"\nPost-market package for {session} ({to}): sent={sent} skipped={skipped} failed={failed}")
+    print(f"\nPost-market {fmt} for {session} ({to}): sent={sent} skipped={skipped} failed={failed}")
     return 1 if failed else 0
 
 

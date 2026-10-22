@@ -9,6 +9,22 @@
 > plus automated tests including two independent real two-thread concurrency races (one within
 > `publish_post_market.py`, one across it and `send_channel_posts.py` — see §5b), full green in CI.
 
+## 0. Current format (2026-10-21, owner decision): ONE daily market report
+
+`publish_post_market.py` now publishes **one** delivery kind, `market_report`, by default (`POST_MARKET_FORMAT=report`):
+the market-card photo with a short caption, then a single message carrying every section the four posts below used to
+carry (hook and breadth, counts, the stocks in 2+ lists, Breakout and Near-breakout lists, top gainers, the momentum board,
+and the next session's reporting companies). Built by `send_daily_digest.py --report`, formatted by
+`mechanism/alerts/market_report.py`; the bot's `digest_runs`/`digest_stocks` snapshot is saved exactly as before.
+`POST_MARKET_FORMAT=package` restores the four separate posts described in the rest of this document (switch between
+sessions, never mid-session: the two formats use different claim kinds).
+
+The other recurring posts are paused by default through `mechanism/alerts/channel_switches.py` (env switches, no unit
+changes needed): the 12:00 notice slot (disclaimer + assistant) -- only the 20:00 assistant post sends
+(`CHANNEL_NOTICE_SLOTS`, default `2`); the separate 10:00 earnings post (`CHANNEL_EARNINGS_POST_ENABLED`); and the
+automatic extra post / weekly recap / education tips (`CHANNEL_EXTRA_POSTS_ENABLED`). The one-line disclaimer now sits in
+the report's footer; the full disclaimers stay in the pinned message.
+
 ## 1. What this subsystem is, and is not
 
 **This document covers exactly four things, published together as "the post-market package":**
