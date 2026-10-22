@@ -151,6 +151,12 @@ def top_gainers_from(rows, limit: int = 10) -> list:
     return sorted(pool, key=lambda r: (-r["ret1_pct"], r["symbol"]))[:limit]
 
 
+def top_losers_from(rows, limit: int = 10) -> list:
+    """The mirror of top_gainers_from: the biggest 1-day % drops, from the same pool (same rows, same liquidity floor)."""
+    pool = [r for r in rows if r["dv20"] >= dbld.DEFAULT_MIN_DV and r["ret1_pct"] < 0]
+    return sorted(pool, key=lambda r: (r["ret1_pct"], r["symbol"]))[:limit]
+
+
 def load_market_intelligence(session) -> Optional[dict]:
     """The OBSERVED Market Intelligence payload for exactly `session` (never "latest"), or None. Read-only. None when the snapshot is missing
     or the storage is not provisioned (migrations 24/25 / the runtime grant): the post then says nothing rather than something invented."""

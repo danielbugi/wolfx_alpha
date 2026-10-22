@@ -261,9 +261,8 @@ def next_session_after(session):
     return later[0] if later else None
 
 
-# Large, liquid names only in the public movers rows (a well-known company, not a thinly traded micro cap).
-MOVER_MIN_MCAP = 2_000_000_000.0
-MOVER_MIN_DV = 20_000_000.0
+# Top movers = the SAME lists as the channel's Top gainers post (send_channel_posts.top_gainers_from) and its mirror for
+# losers: no market-cap filter (owner decision 2026-10-22), only that list's own liquidity floor.
 MOVERS_N = 5
 MACRO_SYMBOLS = {"GC=F": "gold", "CL=F": "oil", "DX-Y.NYB": "dollar", "BTC-USD": "btc"}
 INDEX_SYMBOLS = ("^GSPC", "^IXIC", "^DJI", "^RUT", "^VIX", "^TNX")
@@ -289,6 +288,7 @@ def build_brief(session, rows, universe_n, breadth):
     """The public market brief's numbers: market-wide facts only (see market_report.py). Movers come from the stocks analysed here,
     restricted to large liquid companies; sectors are the same equal-weighted averages the card draws."""
     from alerts.market_context import load_sectors
+    from alerts.send_channel_posts import top_gainers_from, top_losers_from
     from alerts.send_earnings_today import load_todays_reporters
 
     mv = market_moves(session)
@@ -296,9 +296,8 @@ def build_brief(session, rows, universe_n, breadth):
     vix = (mv["^VIX"][0], pct("^VIX")) if "^VIX" in mv else None
     tnx = (mv["^TNX"][0], (mv["^TNX"][0] - mv["^TNX"][1]) * 100) if "^TNX" in mv else None
     bars, _unclassified = load_sectors(db, rows)
-    big = [r for r in rows if (r.get("mcap") or 0) >= MOVER_MIN_MCAP and (r.get("dv20") or 0) >= MOVER_MIN_DV]
-    gainers = sorted([r for r in big if r["ret1_pct"] > 0], key=lambda r: (-r["ret1_pct"], r["symbol"]))[:MOVERS_N]
-    losers = sorted([r for r in big if r["ret1_pct"] < 0], key=lambda r: (r["ret1_pct"], r["symbol"]))[:MOVERS_N]
+    gainers = [r for r in top_gainers_from(rows, MOVERS_N) if r["ret1_pct"] > 0]
+    losers = top_losers_from(rows, MOVERS_N)
     day = next_session_after(session)
     caps = {r["symbol"]: r.get("mcap") for r in rows}
     reporters = load_todays_reporters(day) if day else []
