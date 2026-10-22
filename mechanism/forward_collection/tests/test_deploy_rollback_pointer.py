@@ -70,7 +70,7 @@ class Host:
         base = _posix(self.base)
         for name in ("deploy.sh", "rollback.sh"):
             src = (VPS / name).read_text(encoding="utf-8").replace("BASE=/opt/donchian", f"BASE={base}")
-            (self.base / "scripts" / name).write_text(src, encoding="utf-8", newline="\n")
+            self._exe(self.base / "scripts" / name, src)        # rollback.sh exec's deploy.sh: executable, as installed (755)
         self._exe(self.bin / "docker", FAKE_DOCKER)
         if shutil.which("flock") is None:                       # Git Bash on Windows has no flock; CI (Ubuntu) uses the real one
             self._exe(self.bin / "flock", "#!/usr/bin/env bash\nexit 0\n")
