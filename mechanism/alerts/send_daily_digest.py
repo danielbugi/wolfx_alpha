@@ -200,6 +200,9 @@ def main():
         print(f"SNAPSHOT saved: {n} stocks for {session} (nothing sent).")
         return 0
 
+    if args.report:
+        return send_report(args, session, rows, universe_n, breadth, digest, index_lines, state_key, skipped)
+
     hook = headline(sp500_change(session), breadth["up"], breadth["down"], universe_n)
     card_png = None
     if args.image:
@@ -213,9 +216,6 @@ def main():
             print(f"Market card saved: {path} ({len(card_png) / 1024:.0f} KB)")
         except Exception as ex:                                     # noqa: BLE001
             print(f"WARNING: market card not rendered ({type(ex).__name__}: {ex}); sending the text-only digest.")
-    if args.report:
-        return send_report(args, session, df, rows, universe_n, breadth, digest, index_lines, hook, card_png, state_key, skipped)
-
     # With the market card the photo's caption IS the opening (hook, counts, the stars) and carries the buttons, so there is no separate header
     # message; without a card the text header opens the digest.
     caption = format_caption(session, digest, hook, notes) if card_png else None
@@ -261,40 +261,84 @@ def next_session_after(session):
     return later[0] if later else None
 
 
-def report_parts(session, df, rows, universe_n, breadth):
-    """Everything the report needs beyond the digest, computed by the SAME code the separate posts used (send_channel_posts /
-    channel_content / send_earnings_today) on the rows already analysed here -- no second analysis of the universe."""
-    from alerts import channel_content as cx
-    from alerts import market_stats as ms
-    from alerts.send_channel_posts import load_board, top_gainers_from
+# Large, liquid names only in the public movers rows (a well-known company, not a thinly traded micro cap).
+MOVER_MIN_MCAP = 2_000_000_000.0
+MOVER_MIN_DV = 20_000_000.0
+MOVERS_N = 5
+MACRO_SYMBOLS = {"GC=F": "gold", "CL=F": "oil", "DX-Y.NYB": "dollar", "BTC-USD": "btc"}
+INDEX_SYMBOLS = ("^GSPC", "^IXIC", "^DJI", "^RUT", "^VIX", "^TNX")
+
+
+def market_moves(session):
+    """{symbol: (last close, previous close)} for the index / macro symbols, using only the bar ON the session date and the one
+    before it; a symbol without a bar on the session date is left out (never filled from another day)."""
+    syms = list(INDEX_SYMBOLS) + list(MACRO_SYMBOLS)
+    rows = db.execute_dict_query(
+        "SELECT symbol, date, close FROM market_index_prices WHERE symbol = ANY(%s) AND date <= %s AND date > %s::date - 10 "
+        "ORDER BY symbol, date DESC", (syms, session, session))
+    out, by = {}, {}
+    for r in rows:
+        by.setdefault(r["symbol"], []).append(r)
+    for sym, v in by.items():
+        if len(v) >= 2 and v[0]["date"] == pd.Timestamp(session).date() and v[0]["close"] is not None and v[1]["close"] is not None:
+            out[sym] = (float(v[0]["close"]), float(v[1]["close"]))
+    return out
+
+
+def build_brief(session, rows, universe_n, breadth):
+    """The public market brief's numbers: market-wide facts only (see market_report.py). Movers come from the stocks analysed here,
+    restricted to large liquid companies; sectors are the same equal-weighted averages the card draws."""
+    from alerts.market_context import load_sectors
     from alerts.send_earnings_today import load_todays_reporters
 
-    w = ms.to_wide(df, [r["symbol"] for r in rows])
-    sp = sp500_change(session)
-    ctx = cx.Ctx(session=pd.Timestamp(session).date(), universe_n=universe_n, up_n=breadth["up"], down_n=breadth["down"],
-                 health=ms.health(w), sp500_pct=sp)
-    health = cx.post_health(ctx)
-    health_lines = health.text.split("\n")[2:] if health else []           # drop the hook and date lines: the report has its own
+    mv = market_moves(session)
+    pct = lambda sym: (mv[sym][0] / mv[sym][1] - 1) * 100 if sym in mv and mv[sym][1] else None   # noqa: E731
+    vix = (mv["^VIX"][0], pct("^VIX")) if "^VIX" in mv else None
+    tnx = (mv["^TNX"][0], (mv["^TNX"][0] - mv["^TNX"][1]) * 100) if "^TNX" in mv else None
+    bars, _unclassified = load_sectors(db, rows)
+    big = [r for r in rows if (r.get("mcap") or 0) >= MOVER_MIN_MCAP and (r.get("dv20") or 0) >= MOVER_MIN_DV]
+    gainers = sorted([r for r in big if r["ret1_pct"] > 0], key=lambda r: (-r["ret1_pct"], r["symbol"]))[:MOVERS_N]
+    losers = sorted([r for r in big if r["ret1_pct"] < 0], key=lambda r: (r["ret1_pct"], r["symbol"]))[:MOVERS_N]
     day = next_session_after(session)
     caps = {r["symbol"]: r.get("mcap") for r in rows}
     reporters = load_todays_reporters(day) if day else []
-    reporters.sort(key=lambda r: (-(caps.get(r["symbol"]) or 0.0), r["symbol"]))   # largest first; unknown size last
-    return {"sp500_pct": sp, "health_lines": health_lines, "top_gainers": top_gainers_from(rows),
-            "board": load_board(session, w), "earnings_day": day, "earnings_rows": reporters}
+    reporters.sort(key=lambda r: (-(caps.get(r["symbol"]) or 0.0), r["symbol"]))
+    total = max(universe_n, breadth["up"] + breadth["down"], 1)
+    return mr.Brief(
+        session=pd.Timestamp(session).date(),
+        index_pct={s: pct(s) for s in ("^GSPC", "^IXIC", "^DJI", "^RUT")}, vix=vix, tnx=tnx,
+        macro_pct={name: pct(sym) for sym, name in MACRO_SYMBOLS.items()},
+        up_share=breadth["up"] / total * 100 if universe_n else None,
+        sectors=[(b.name, b.change_pct) for b in bars],
+        gainers=[(r["symbol"], r["ret1_pct"]) for r in gainers], losers=[(r["symbol"], r["ret1_pct"]) for r in losers],
+        reporting_day=day, reporting=[r["symbol"] for r in reporters[:mr.REPORTING_N]])
 
 
-def send_report(args, session, df, rows, universe_n, breadth, digest, index_lines, hook, card_png, state_key, skipped) -> int:
-    parts = report_parts(session, df, rows, universe_n, breadth)
-    text = mr.format_report(pd.Timestamp(session).date(), digest, hook, universe_n=universe_n, **parts)
-    caption = mr.report_caption(pd.Timestamp(session).date(), digest, hook) if card_png else None
+def send_report(args, session, rows, universe_n, breadth, digest, index_lines, state_key, skipped) -> int:
+    brief = build_brief(session, rows, universe_n, breadth)
+    text = mr.format_report(brief)
+    card_png = None
+    if args.image:
+        try:                                                        # the image is decoration: never let it stop the post
+            card = build_card_data(db, session, rows, universe_n, breadth)
+            card.headline = mr.card_headline(brief)
+            card.public = True
+            card_png = render_market_card(card)
+            CARD_DIR.mkdir(parents=True, exist_ok=True)
+            path = CARD_DIR / f"market_daily_{session}.png"
+            path.write_bytes(card_png)
+            print(f"Market card saved: {path} ({len(card_png) / 1024:.0f} KB)")
+        except Exception as ex:                                     # noqa: BLE001
+            print(f"WARNING: market card not rendered ({type(ex).__name__}: {ex}); sending the text only.")
+    caption = mr.caption(brief) if card_png else None
     bar = "=" * 78
     if caption:
-        print(f"\n{bar}\n[photo caption]\n{caption}\n{bar}   [{len(caption)} chars]")
-    print(f"\n{bar}\n[market report + Request access button]\n{text}\n{bar}   [{text_length(text)} parsed chars]")
+        print(f"\n{bar}\n[photo caption]\n{caption}\n{bar}   [{text_length(caption)} parsed chars]")
+    print(f"\n{bar}\n[market brief + Request access button]\n{text}\n{bar}   [{text_length(text)} parsed chars]")
     if skipped:
         print("\nSkipped: " + "; ".join(f"{v} x {k}" for k, v in sorted(skipped.items(), key=lambda kv: -kv[1])))
-    if text_length(text) > 4096:
-        raise SystemExit(f"ABORT: the report is {text_length(text)} parsed characters (limit 4096); nothing sent.")
+    if text_length(text) > 4096 or (caption and text_length(caption) > 1024):
+        raise SystemExit("ABORT: the brief exceeds Telegram's limits; nothing sent.")
     if not args.send:
         print("\nDRY RUN - nothing was sent.")
         return 0
@@ -302,15 +346,15 @@ def send_report(args, session, df, rows, universe_n, breadth, digest, index_line
         tg = TelegramClient.from_env(args.to, dry_run=False)
         username = os.getenv("TELEGRAM_BOT_USERNAME") or tg.get_me()["username"]
         keyboard = {"inline_keyboard": [[{"text": PRIVATE_ASSISTANT_BUTTON, "url": deeplink.link(username, "ch")}]]}
-        if card_png:                                                # the photo notifies; the report follows silently under it
+        if card_png:                                                # the photo notifies; the brief follows silently under it
             tg.send_photo(card_png, caption, kind="report_card")
         tg.send_message(text, disable_preview=True, silent=bool(card_png), reply_markup=keyboard, kind="market_report")
         if args.to == "owner":
-            print("\nSENT the report preview to the owner's private chat (no snapshot, no session mark).")
+            print("\nSENT the preview to the owner's private chat (no snapshot, no session mark).")
             return 0
         n = save_snapshot(db, session, rows, digest, universe_n, breadth, index_lines, args.top)
         market_calendar.mark_processed(state_key, session)
-        print(f"\nSENT the market report ({'photo + ' if card_png else ''}1 message) to the {args.to.upper()} channel; snapshot saved ({n} stocks).")
+        print(f"\nSENT the market brief ({'photo + ' if card_png else ''}1 message) to the {args.to.upper()} channel; snapshot saved ({n} stocks).")
     except TelegramError as e:
         raise SystemExit(f"ABORT: {e}")
     return 0

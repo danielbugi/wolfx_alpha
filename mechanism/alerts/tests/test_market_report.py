@@ -1,4 +1,5 @@
-"""The ONE daily market report (owner decision 2026-10-21) and the switches that pause the other recurring channel posts."""
+"""The channel's ONE daily post -- the public market brief "First Light ⚡ Market Daily" (owner decisions 2026-10-21/22) -- and
+the switches that pause the other recurring channel posts."""
 import re
 import sys
 from datetime import date
@@ -12,89 +13,80 @@ sys.path.insert(0, str(MECH.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from alerts import channel_switches  # noqa: E402
-from alerts import digest_builder as dbld  # noqa: E402
 from alerts import market_report as mr  # noqa: E402
 from alerts import publish_post_market as ppm  # noqa: E402
 from alerts.telegram_client import plain_text, text_length  # noqa: E402
 from test_channel_content import BANNED  # noqa: E402
 import tg_html  # noqa: E402
 
-SESSION = date(2026, 10, 20)
+SESSION = date(2026, 10, 21)
 
 
-def _row(sym, cat, ret, atr, vol, dv=3e7):
-    return {"symbol": sym, "cat": cat, "dv20": dv, "ret1_pct": ret, "range_atr": atr, "rvol": vol, "close": 20.0 + ret,
-            "new": cat == "near_breakout", "prev_cat": None, "below_high_pct": 1.0 if cat == "near_breakout" else None}
-
-
-def _digest(n=40):
-    rows = [_row(f"B{i:02d}", "breakout", 50 - i, 10 - i * 0.2, 30 - i * 0.5) for i in range(n)]
-    rows += [_row(f"N{i:02d}", "near_breakout", 14 - i * 0.3, 4 - i * 0.05, 5 - i * 0.1) for i in range(n)]
-    return dbld.build_digest(rows, top_n=15)
-
-
-def _reporters(n):
-    return [{"symbol": f"E{i:03d}", "close": 10.0, "sector": "Tech", "eps_estimate": 1.0} for i in range(n)]
-
-
-def _board():
-    top = [{"symbol": f"M{i}", "close": 10.0, "ret1_pct": 9 - i, "listed_sessions": 1} for i in range(3)]
-    more = [{"symbol": f"M{i}", "close": 10.0, "ret1_pct": 5 - i * 0.5} for i in range(3, 8)]
-    return {"session": SESSION, "n_sessions": 5, "n_measured": 269, "higher": 205, "lower": 59, "at_day_high": 46, "top": top, "more": more}
-
-
-def _report(**kw):
-    base = dict(sp500_pct=0.3, health_lines=["Above 50-day average: 35% (10 sessions ago: 29%)", "Above 200-day average: 48%",
-                                             "52-week highs 85 · lows 86"],
-                top_gainers=[{"symbol": f"G{i}", "close": 5.0, "ret1_pct": 30 - i} for i in range(10)], board=_board(),
-                earnings_day=date(2026, 10, 21), earnings_rows=_reporters(116), universe_n=2897)
+def _brief(**kw):
+    base = dict(session=SESSION, index_pct={"^GSPC": 0.58, "^IXIC": 1.05, "^DJI": 0.69, "^RUT": 0.27}, vix=(16.68, -3.64),
+                tnx=(5.146, 2.9), macro_pct={"gold": 0.1, "oil": -2.0, "dollar": 0.2, "btc": 3.0}, up_share=50.4,
+                sectors=[("Technology", 1.81), ("Industrials", 1.10), ("Energy", 0.58), ("Healthcare", -0.25),
+                         ("Consumer Cyclical", -1.24), ("Consumer Defensive", -1.25)],
+                gainers=[("NUAI", 17.7), ("ASST", 13.6), ("ENVX", 12.9)], losers=[("XYZ", -12.0), ("ABC", -8.1)],
+                reporting_day=date(2026, 10, 22), reporting=["INTC", "PG", "UNP", "SCCO", "WDC", "BX", "LMT", "VLO"])
     base.update(kw)
-    return mr.format_report(SESSION, _digest(), "Broad rally. 77% of stocks up.", **base)
+    return mr.Brief(**base)
 
 
-def _plain(t):
-    return plain_text(t)                          # what Telegram shows: tags removed, entities unescaped
-
-
-def test_report_carries_every_section_in_one_valid_message():
-    text = _report()
+def test_brief_is_one_valid_message_with_every_section():
+    text = mr.format_report(_brief())
     assert tg_html.problems(text, 4096) == [] and text_length(text) <= mr.REPORT_LIMIT
-    p = _plain(text)
-    for part in ("Broad rally. 77% of stocks up.", "Tue 20 Oct · S&P 500 ▲0.3%", "Above 50-day average: 35%", "52-week highs 85",
-                 "40 broke out · 40 within 3% of it", "★ Top 5 in 2+ lists", "BREAKOUT · 40", "NEAR BREAKOUT · 40",
-                 "Gainers:", "Range:", "Volume:", "TOP GAINERS of 2,897 liquid stocks", "MOMENTUM BOARD", "REPORTING Wed 21 Oct · 116 companies",
-                 "Educational data. Not advice. Read the pinned message.", "Access on request · seats limited"):
+    p = plain_text(text)
+    for part in ("🔥 NASDAQ LEADS, TECH RIPS", "Wed 21 Oct · US close", "Nasdaq led (+1.1%) while Russell 2000 trailed (+0.3%).",
+                 "Stocks were split, roughly half up and half down.", "Tech led (+1.8%); Consumer Staples lagged (−1.2%).",
+                 "📊 INDICES", "🟢 S&P 500 +0.58%", "😨 VIX 16.68 (−3.6%)", "🏦 10Y 5.15% (+2.9 bps)",
+                 "🏭 SECTORS", "🟢 Tech +1.8% · Industrials +1.1% · Energy +0.6%", "🔴 Consumer Staples −1.2% · Consumer Cyclical −1.2%",
+                 "🚀 TOP MOVERS", "🟢 NUAI +17.7%", "🔴 XYZ −12.0%", "🌍 MACRO & CRYPTO", "🛢 Oil −2.0% · 🥇 Gold +0.1%",
+                 "₿ Bitcoin +3.0%", "📅 REPORTING Thu 22 Oct", "INTC · PG · UNP", "\nFirst Light ⚡ Market Daily\n",
+                 "Educational data. Not advice. Read the pinned message.", "#StockMarket"):
         assert part in p, part
-    # three names inline per list, the rest collapsed
-    assert "Gainers: B00 ▲50.0% · B01 ▲49.0% · B02 ▲48.0%" in p
-    assert "<blockquote expandable>4. <b>" in text
 
 
-def test_report_wording_follows_the_channel_rules():
-    p = _plain(_report())
-    assert BANNED.findall(p) == [], BANNED.findall(p)                  # e.g. never "earnings": the section says REPORTING
-    assert not re.search(r"investment advice|not a forecast|say nothing about", p, re.I)
+def test_brief_reveals_nothing_about_the_system():
+    p = plain_text(mr.format_report(_brief())) + plain_text(mr.caption(_brief()))
+    assert not re.search(r"breakout|break out|broke out|near break|list|★|momentum board|liquid|universe|scan|ranked|stocks? (up|down)\b \d", p, re.I)
+    assert not re.search(r"\b\d{1,3},\d{3}\b", p)                     # no stock counts (index levels are not printed in the text)
+    assert "%" not in p.split("Stocks were split")[1].split(".")[0]    # breadth is said in words, never as a number
 
 
-def test_report_shortens_only_the_collapsed_parts_when_it_would_not_fit():
-    full = _report()
-    tight = _report(earnings_rows=_reporters(900))
-    assert text_length(tight) <= mr.REPORT_LIMIT
-    first_lines = lambda t: [ln for ln in _plain(t).split("\n") if ln.startswith(("Gainers:", "Range:", "Volume:"))]
-    assert first_lines(full) == first_lines(tight)                     # the visible names never change
-    assert "more" in _plain(tight)                                     # the reporters list says how many it left out
+def test_brief_wording_follows_the_channel_rules():
+    for kw in ({}, {"index_pct": {"^GSPC": -1.4, "^IXIC": -1.9, "^DJI": -1.1, "^RUT": -2.0}, "up_share": 20.0}):
+        p = plain_text(mr.format_report(_brief(**kw)))
+        assert BANNED.findall(p) == [], BANNED.findall(p)            # never "sell-off", never "earnings"
+        assert not re.search(r"investment advice|not a forecast", p, re.I)
 
 
-def test_report_omits_a_missing_ingredient_instead_of_inventing_it():
-    p = _plain(_report(board=None, earnings_rows=[], top_gainers=[], sp500_pct=None, health_lines=[]))
-    assert "MOMENTUM BOARD" not in p and "REPORTING" not in p and "TOP GAINERS" not in p and "S&P 500" not in p
-    assert "BREAKOUT · 40" in p
+@pytest.mark.parametrize("kw,expected", [
+    ({"index_pct": {"^GSPC": 1.3, "^IXIC": 1.5, "^DJI": 1.0, "^RUT": 1.2}}, ("🚀", "Big green day on Wall Street")),
+    ({"index_pct": {"^GSPC": -1.2, "^IXIC": -1.5, "^DJI": -1.0, "^RUT": -1.2}}, ("🩸", "Heavy red day on Wall Street")),
+    ({"index_pct": {"^GSPC": -0.2, "^IXIC": -0.3, "^DJI": -0.1, "^RUT": -0.4}, "vix": (21.0, 12.0)}, ("😨", "Fear gauge jumps")),
+    ({"index_pct": {"^GSPC": 0.5, "^IXIC": 0.6, "^DJI": 0.4, "^RUT": 0.7}, "up_share": 70.0}, ("🟢", "Green across the board")),
+    ({"index_pct": {"^GSPC": 0.2, "^IXIC": 0.1, "^DJI": 0.2, "^RUT": 0.9}}, ("🐂", "Small caps run")),
+    ({"index_pct": {"^GSPC": 0.05, "^IXIC": 0.0, "^DJI": 0.1, "^RUT": 0.0}, "vix": (16.0, 1.0)}, ("😐", "Flat close")),
+    ({"index_pct": {"^GSPC": -0.4, "^IXIC": -0.5, "^DJI": -0.3, "^RUT": -0.6}, "up_share": 45.0, "vix": (16.0, 2.0)}, ("📉", "Stocks slip")),
+    ({"index_pct": {}}, ("📊", "US market close")),
+])
+def test_headline_rules(kw, expected):
+    assert mr.headline(_brief(**kw)) == expected
 
 
-def test_caption_is_short_and_points_to_the_report():
-    c = mr.report_caption(SESSION, _digest(), "Broad rally. 77% of stocks up.")
-    assert _plain(c) == "Broad rally. 77% of stocks up.\nTue 20 Oct · 40 broke out · 40 within 3% of it\nFull report below."
+def test_missing_ingredients_are_left_out_never_invented():
+    p = plain_text(mr.format_report(_brief(vix=None, tnx=None, macro_pct={}, gainers=[], losers=[], reporting=[], sectors=[], up_share=None)))
+    for gone in ("VIX", "10Y", "MACRO", "TOP MOVERS", "REPORTING", "SECTORS", "Most US stocks", "split"):
+        assert gone not in p, gone
+    assert "📊 INDICES" in p and "🟢 S&P 500 +0.58%" in p
+
+
+def test_caption_is_the_headline_and_the_two_main_indices():
+    c = mr.caption(_brief())
+    assert plain_text(c) == "🔥 Nasdaq leads, tech rips\nWed 21 Oct · S&P 500 +0.58% · Nasdaq +1.05%\nFull brief below 👇"
     assert text_length(c) <= 1024
+    assert mr.card_headline(_brief()) == "Nasdaq leads, tech rips"
 
 
 # ------------------------------------------------------------------ publishing format and switches
@@ -146,3 +138,8 @@ def test_paused_posts_send_nothing_and_never_touch_telegram(script, argv, env, m
     monkeypatch.setattr(sys, "argv", [script, *argv])
     assert mod.main() == 0
     assert "paused" in capsys.readouterr().out
+
+
+def test_a_move_that_rounds_to_zero_is_flat_never_minus_zero():
+    p = plain_text(mr.format_report(_brief(macro_pct={"dollar": -0.004})))
+    assert "💵 Dollar 0.0%" in p and "−0.0%" not in p
