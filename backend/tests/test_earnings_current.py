@@ -274,3 +274,96 @@ def test_real_discovery_query_uses_current_next_and_last_dates():
         assert rec["next_earnings_date"] == "2026-11-02"                               # not the obsolete 10-29
         assert rec["last_earnings_date"] == "2026-07-30"                               # not the never-reported 07-28
         assert rec["days_to_earnings"] == (date(2026, 11, 2) - s).days
+
+
+# ------------------------------------------------------------------------------- query shape (2026-10-22 regression)
+# A per-row LATERAL lookup into earnings_current rescans the materialised CTE once per stock: on production volume
+# (~3,000 symbols x ~65k calendar rows) every Screener request took ~30 s. The readers must aggregate once and join.
+def test_no_reader_uses_a_per_row_lateral_into_earnings_current():
+    import inspect
+    from services import discovery_service as D
+    from services import momentum_board_service as MB
+    for sql in (inspect.getsource(MB.MomentumBoardService._load_latest_session), D.BASE_SQL):
+        for m in re.finditer(r"LATERAL\s*\((.*?)\)\s*\w+\s+ON", sql, re.S):
+            assert "earnings_current" not in m.group(1), "per-row LATERAL into earnings_current"
+
+
+class _RecCursor:
+    def __init__(self, cur, log):
+        self._cur, self._log = cur, log
+
+    def execute(self, sql, params=None):
+        self._log.append(self._cur.mogrify(sql, params).decode())
+        return self._cur.execute(sql, params)
+
+    def __getattr__(self, name):
+        return getattr(self._cur, name)
+
+
+class _RecConn:
+    def __init__(self, conn, log):
+        self._conn, self._log = conn, log
+
+    def cursor(self, *a, **k):
+        return _RecCursor(self._conn.cursor(*a, **k), self._log)
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
+def _cte_loops(plan):
+    out = []
+    def walk(n):
+        if n.get("CTE Name", "").startswith("earnings"):
+            out.append((n["CTE Name"], n.get("Actual Loops")))
+        for c in n.get("Plans", []):
+            walk(c)
+    walk(plan[0]["Plan"])
+    return out
+
+
+def _bulk_fixture(cur, n_symbols=1000):
+    rows = []
+    for i in range(n_symbols):
+        sym = f"S{i:04d}"
+        rows += [row(sym, date(2025, m, 15), RUN2, actual=1.0) for m in (1, 4, 7, 10)]
+        rows += [row(sym, date(2026, m, 15), RUN2, actual=1.0) for m in (1, 4, 7)]
+        rows += [row(sym, date(2026, 10, 28), RUN1), row(sym, date(2026, 11, 3), RUN2)]
+    _insert(cur, rows)
+    return [f"S{i:04d}" for i in range(n_symbols)]
+
+
+def test_real_queries_scan_each_earnings_cte_at_most_once():
+    import json as _json
+    from services import discovery_service as D
+    from services import momentum_board_service as MB
+    with _schema() as (admin, conn):
+        cur = admin.cursor()
+        syms = _bulk_fixture(cur)
+        s = date(2026, 10, 20)
+        today = date.today()
+        cur.execute("INSERT INTO digest_runs (session_date, universe_n, up_n, down_n, counts, min_dv, top_n) "
+                    "VALUES (%s, %s, 1, 1, '{}'::jsonb, 0, 10)", (today, len(syms)))
+        for sym in syms:
+            for d in (date(2026, 10, 16), s):
+                cur.execute("INSERT INTO stock_prices (symbol, date, open, high, low, close, volume) VALUES (%s, %s, 100, 101, 99, 100, 1000000)", (sym, d))
+            cur.execute("INSERT INTO digest_stocks (session_date, symbol, category, close, ret1_pct, dv20, list_ranks) "
+                        "VALUES (%s, %s, 'breakout', 100, 1.0, 5e7, '{\"gainers\": 1}'::jsonb)", (today, sym))
+        admin.commit()
+        log = []
+        rec = lambda: _RecConn(conn(), log)                                              # noqa: E731
+        MB._board_cache.update({"data": None, "ts": 0.0})
+        board = MB.MomentumBoardService(rec).get_board(limit=5000)["results"]
+        MB._board_cache.update({"data": None, "ts": 0.0})
+        out = D.DiscoveryService(rec).search(D.normalise(D.Query(session=s)), export=True)
+        assert len(board) == len(syms) and len(out["rows"]) == len(syms)
+        assert {r["next_earnings_date"] for r in out["rows"]} == {"2026-11-03"}              # obsolete 10-28 never shown
+        heavy = [q for q in log if "earnings_current" in q]
+        assert len(heavy) >= 2
+        for q in heavy:
+            cur.execute("EXPLAIN (ANALYZE, FORMAT JSON) " + q)
+            plan = cur.fetchone()[0]
+            plan = _json.loads(plan) if isinstance(plan, str) else plan
+            loops = _cte_loops(plan)
+            assert loops and all(l <= 1 for _, l in loops), loops
+        admin.rollback()

@@ -301,6 +301,15 @@ def order_clause(sort: str, order: str) -> str:
 
 BASE_SQL = """
 WITH """ + EARNINGS_CURRENT_CTES + """,
+-- Next / last CURRENT report per symbol, aggregated ONCE and hash-joined below. Never a per-row LATERAL lookup into
+-- earnings_current: that CTE is materialised without an index, so a lookup per stock rescans it (2026-10-22: 30 s/request).
+earnings_next AS (
+    SELECT symbol, MIN(report_date) AS report_date FROM earnings_current WHERE is_current AND report_date > %(s)s GROUP BY symbol
+),
+earnings_last AS (
+    SELECT DISTINCT ON (symbol) symbol, report_date, surprise_pct FROM earnings_current
+    WHERE is_current AND report_date <= %(s)s ORDER BY symbol, report_date DESC
+),
 px AS (
     SELECT symbol, close::float8 AS close, high::float8 AS high, volume::float8 AS volume
     FROM stock_prices WHERE date = %(s)s AND close IS NOT NULL AND close > 0
@@ -368,14 +377,8 @@ joined AS (
         ORDER BY d.date DESC LIMIT 1
     ) df ON true
     LEFT JOIN LATERAL (SELECT c.company_name FROM companies c WHERE c.symbol = px.symbol LIMIT 1) co ON true
-    LEFT JOIN LATERAL (
-        SELECT e.report_date FROM earnings_current e
-        WHERE e.symbol = px.symbol AND e.is_current AND e.report_date > %(s)s ORDER BY e.report_date LIMIT 1
-    ) nx ON true
-    LEFT JOIN LATERAL (
-        SELECT e.report_date, e.surprise_pct FROM earnings_current e WHERE e.symbol = px.symbol AND e.is_current AND e.report_date <= %(s)s
-        ORDER BY e.report_date DESC LIMIT 1
-    ) le ON true
+    LEFT JOIN earnings_next nx ON nx.symbol = px.symbol
+    LEFT JOIN earnings_last le ON le.symbol = px.symbol
 ),
 sc AS (
     SELECT j.*,

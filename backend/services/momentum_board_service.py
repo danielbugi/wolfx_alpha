@@ -81,6 +81,17 @@ class MomentumBoardService:
                     symbol, sector, quality_grade, overall_quality_score, market_cap
                 FROM daily_fundamentals
                 ORDER BY symbol, date DESC
+            ),
+            -- Aggregated ONCE per symbol and hash-joined: never a per-row LATERAL into earnings_current (it is
+            -- materialised without an index, so a per-row lookup rescans it).
+            earnings_next AS (
+                -- only dates still listed by the symbol's latest complete vendor fetch (services/earnings_current.py)
+                SELECT symbol, MIN(report_date) AS report_date FROM earnings_current
+                WHERE is_current AND report_date >= CURRENT_DATE GROUP BY symbol
+            ),
+            earnings_fresh AS (
+                SELECT symbol, MAX(latest_fetch_at) AS latest_fetch_at, BOOL_OR(latest_fetch_complete) AS schedule_complete
+                FROM earnings_current GROUP BY symbol
             )
             SELECT
                 lr.session_date, lr.created_at, lr.universe_n, lr.counts,
@@ -92,17 +103,8 @@ class MomentumBoardService:
             FROM latest_run lr
             JOIN digest_stocks ds ON ds.session_date = lr.session_date
             LEFT JOIN fundamentals f ON f.symbol = ds.symbol
-            LEFT JOIN LATERAL (
-                -- only dates still listed by the symbol's latest complete vendor fetch (services/earnings_current.py)
-                SELECT report_date FROM earnings_current
-                WHERE symbol = ds.symbol AND report_date >= CURRENT_DATE AND is_current
-                ORDER BY report_date
-                LIMIT 1
-            ) nxt ON true
-            LEFT JOIN LATERAL (
-                SELECT MAX(latest_fetch_at) AS latest_fetch_at, BOOL_OR(latest_fetch_complete) AS schedule_complete
-                FROM earnings_current WHERE symbol = ds.symbol
-            ) efs ON true
+            LEFT JOIN earnings_next nxt ON nxt.symbol = ds.symbol
+            LEFT JOIN earnings_fresh efs ON efs.symbol = ds.symbol
             WHERE ds.category = ANY(%s) AND ds.list_ranks IS NOT NULL
         """, (list(LONG_CATEGORIES),))
         rows = cursor.fetchall()
