@@ -11,6 +11,17 @@
 # - On a failed health check the previous good tag is restored automatically and the script still
 #   exits non-zero, so the calling workflow fails loudly instead of reporting success.
 # - Postgres is started if it isn't running, never recreated by a deploy.
+#
+# Rollback pointers (2026-10-22 fix -- a rollback once recorded the release it rolled back FROM as the
+# "previous good" one, so the next rollback would have redeployed the known-slow image):
+#   CURRENT_SHA        the release running now (written only after a healthy rollout).
+#   PREVIOUS_GOOD_SHA  what rollback.sh restores. Invariant: never a release listed in FAILED_SHAS.
+#   KNOWN_GOOD_SHAS    releases that ran healthy and were later replaced by a normal deploy (newest last).
+#   FAILED_SHAS        releases that failed the health gate, or that an operator rolled back from.
+# DEPLOY_MODE=rollback (set only by rollback.sh) marks the release being left as failed and points
+# PREVIOUS_GOOD_SHA at the next older known-good release; a normal deploy records the replaced release as
+# known-good. A release in FAILED_SHAS is refused unless ALLOW_FAILED_TAG=1 (a deliberate operator retry).
+# Missing record files are treated as empty, so this is compatible with a host that has only the two pointers.
 set -euo pipefail
 
 SERVICE="${1:?usage: deploy.sh backend <12-hex-sha>}"
@@ -19,7 +30,14 @@ BASE=/opt/donchian
 COMPOSE_DIR="$BASE/compose"
 ENV_FILE="$BASE/env/.env"
 LOG="$BASE/logs/deploy.log"
+KNOWN_GOOD="$BASE/KNOWN_GOOD_SHAS"
+FAILED="$BASE/FAILED_SHAS"
+MODE="${DEPLOY_MODE:-deploy}"
 
+if [ "$MODE" != "deploy" ] && [ "$MODE" != "rollback" ]; then
+  echo "refused: DEPLOY_MODE must be 'deploy' or 'rollback'" >&2
+  exit 2
+fi
 if [ "$SERVICE" != "backend" ]; then
   echo "refused: only 'backend' is deployable by this script (bot/pipeline/channel-sender are cutover-gated)" >&2
   exit 2
@@ -45,6 +63,37 @@ log() { echo "$(date -u +%FT%TZ) $*" | tee -a "$LOG"; }
 
 PREV="$(cat "$BASE/CURRENT_SHA" 2>/dev/null || true)"
 T=""
+
+in_list() { [ -n "$1" ] && [ -f "$2" ] && grep -qx "$1" "$2"; }
+add_to() { in_list "$1" "$2" || echo "$1" >> "$2"; }
+# A usable rollback target: a well-formed 12-hex tag whose release bundle is still on disk and that is not failed.
+# Corrupt history lines (garbage, wrong length, a pruned bundle) are skipped, never deployed.
+usable_target() { [[ "$1" =~ ^[0-9a-f]{12}$ ]] && [ -f "$BASE/releases/$1/docker-compose.yml" ] && ! in_list "$1" "$FAILED"; }
+# newest known-good (health-verified, then replaced by a normal deploy) usable release other than $1; empty if none
+newest_good_except() {
+  [ -f "$KNOWN_GOOD" ] || return 0
+  local s
+  while read -r s; do
+    [ -z "$s" ] || [ "$s" = "$1" ] && continue
+    usable_target "$s" || continue
+    echo "$s"; return 0
+  done < <(tac "$KNOWN_GOOD")
+}
+# enforce the invariant: PREVIOUS_GOOD_SHA is empty or a usable, non-failed release other than the one running now
+heal_previous() {
+  local p cur
+  p="$(cat "$BASE/PREVIOUS_GOOD_SHA" 2>/dev/null || true)"
+  cur="$(cat "$BASE/CURRENT_SHA" 2>/dev/null || true)"
+  if [ -n "$p" ] && { ! usable_target "$p" || [ "$p" = "$cur" ]; }; then
+    echo "$(newest_good_except "$cur")" > "$BASE/PREVIOUS_GOOD_SHA"
+    log "PREVIOUS_GOOD_SHA '$p' is failed, unusable or current -> '$(cat "$BASE/PREVIOUS_GOOD_SHA")'"
+  fi
+}
+
+if in_list "$TAG" "$FAILED" && [ "${ALLOW_FAILED_TAG:-}" != "1" ]; then
+  log "refused: $TAG is recorded in FAILED_SHAS (set ALLOW_FAILED_TAG=1 to retry it deliberately)"
+  exit 2
+fi
 
 dc() {
   IMAGE_TAG="$T" docker compose --project-directory "$COMPOSE_DIR" \
@@ -93,23 +142,35 @@ publish_proxy() {
   dc exec -T reverse-proxy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 }
 
-log "deploy backend $TAG requested (current: ${PREV:-none})"
+log "$MODE backend $TAG requested (current: ${PREV:-none})"
 if rollout "$TAG"; then
   publish_proxy
   if [ -n "$PREV" ] && [ "$PREV" != "$TAG" ]; then
-    echo "$PREV" > "$BASE/PREVIOUS_GOOD_SHA"
+    if [ "$MODE" = "rollback" ]; then
+      # the release we rolled back FROM is failed; the fallback becomes the next older known-good one
+      add_to "$PREV" "$FAILED"
+      echo "$(newest_good_except "$TAG")" > "$BASE/PREVIOUS_GOOD_SHA"
+    elif in_list "$PREV" "$FAILED"; then
+      :   # a release already recorded as failed never becomes the rollback target
+    else
+      echo "$PREV" > "$BASE/PREVIOUS_GOOD_SHA"
+      add_to "$PREV" "$KNOWN_GOOD"
+    fi
   fi
   echo "$TAG" > "$BASE/CURRENT_SHA"
-  log "deploy backend $TAG OK (healthy); CURRENT_SHA=$TAG PREVIOUS_GOOD_SHA=$(cat "$BASE/PREVIOUS_GOOD_SHA" 2>/dev/null || echo none)"
-  # keep the 10 most recent release bundles, never the current/previous ones
-  keep="$(cat "$BASE/CURRENT_SHA") $(cat "$BASE/PREVIOUS_GOOD_SHA" 2>/dev/null || true)"
+  heal_previous
+  log "$MODE backend $TAG OK (healthy); CURRENT_SHA=$TAG PREVIOUS_GOOD_SHA=$(cat "$BASE/PREVIOUS_GOOD_SHA" 2>/dev/null || echo none)"
+  # keep the 10 most recent release bundles, never the current/previous ones nor the 3 newest known-good ones
+  keep="$(cat "$BASE/CURRENT_SHA") $(cat "$BASE/PREVIOUS_GOOD_SHA" 2>/dev/null || true) $(tail -n 3 "$KNOWN_GOOD" 2>/dev/null | tr '\n' ' ')"
   ls -1t "$BASE/releases" 2>/dev/null | tail -n +11 | while read -r old; do
     case " $keep " in *" $old "*) ;; *) rm -rf "${BASE:?}/releases/$old" ;; esac
   done
   exit 0
 fi
 
-log "deploy backend $TAG FAILED health gate"
+log "$MODE backend $TAG FAILED health gate"
+add_to "$TAG" "$FAILED"
+heal_previous
 dc logs --tail 40 backend || true
 if [ -n "$PREV" ] && [ "$PREV" != "$TAG" ]; then
   if rollout "$PREV"; then

@@ -7,7 +7,7 @@ administrator (root SSH) — the GitHub Actions key cannot change them.
 |---|---|---|---|
 | `ci-entry.sh` | `/opt/donchian/scripts/ci-entry.sh` | deploy, 755 | Forced command for the GitHub Actions key: accepts only `deploy backend <12-hex-sha>` + the release bundle on stdin |
 | `deploy.sh` | `/opt/donchian/scripts/deploy.sh` | deploy, 755 | Health-gated backend deploy at an immutable SHA tag; auto-restores the previous good tag on failure; records `CURRENT_SHA` / `PREVIOUS_GOOD_SHA` |
-| `rollback.sh` | `/opt/donchian/scripts/rollback.sh` | deploy, 755 | Redeploys `PREVIOUS_GOOD_SHA` (image + that commit's Compose config) |
+| `rollback.sh` | `/opt/donchian/scripts/rollback.sh` | deploy, 755 | Redeploys `PREVIOUS_GOOD_SHA` (image + that commit's Compose config) in `DEPLOY_MODE=rollback`: the release left is recorded as failed and `PREVIOUS_GOOD_SHA` moves to the next older known-good release |
 | `docker-user-firewall.sh` | `/usr/local/sbin/donchian-docker-firewall.sh` | root, 755 | DOCKER-USER filter: internet → containers allowed on tcp/80, tcp/443 only |
 | `donchian-docker-firewall.service` | `/etc/systemd/system/` | root, 644 | Re-applies the filter at boot and after every Docker restart |
 | `run_pipeline.sh` | `/opt/donchian/scripts/run_pipeline.sh` | root, 755 | `ExecStart` of `donchian-pipeline.service` — `docker compose run --rm pipeline` at `CURRENT_MECHANISM_SHA` |
@@ -86,6 +86,7 @@ diff /tmp/remote.sha /tmp/local.sha
   compose/                 active Compose config (copied from releases/<sha>/ by deploy.sh) + bind-mounted data dirs
   releases/<sha>/          per-commit bundle: docker-compose.yml, docker-compose.prod.yml, docker/Caddyfile.prod
   CURRENT_SHA, PREVIOUS_GOOD_SHA
+  KNOWN_GOOD_SHAS, FAILED_SHAS   rollback history (deploy.sh; see below)
   logs/deploy.log
 ```
 
@@ -101,3 +102,38 @@ Until cutover the VPS `.env` holds staging values (`PROD_SENDING_ENABLED=0`, pla
 `API_SITE_ADDRESS=:80`, disposable database). The production Postgres volume is **never**
 auto-bootstrapped (`docker-compose.prod.yml`); production data arrives by restoring a `pg_dump`
 (docs/devops/PRODUCTION_MIGRATION_RUNBOOK.md).
+
+## Rollback pointers (since the 2026-10-22 fix)
+
+| File | Meaning | Written by |
+|---|---|---|
+| `CURRENT_SHA` | Release running now | `deploy.sh`, after a healthy rollout only |
+| `PREVIOUS_GOOD_SHA` | What `rollback.sh` restores. **Never** a release listed in `FAILED_SHAS` and never `CURRENT_SHA`. | `deploy.sh` |
+| `KNOWN_GOOD_SHAS` | Releases that ran healthy and were then replaced by a normal deploy, newest last | `deploy.sh` (normal deploy) |
+| `FAILED_SHAS` | Releases that failed the health gate, or that were rolled back from | `deploy.sh` (failed gate; rollback mode) |
+
+**Behaviour:**
+- A normal deploy records the replaced release as known-good and makes it `PREVIOUS_GOOD_SHA`.
+- A rollback records the release it leaves as failed, and points `PREVIOUS_GOOD_SHA` at the next older known-good release. A second rollback therefore goes further back, and never returns to a failed image.
+- A release in `FAILED_SHAS` is refused unless `ALLOW_FAILED_TAG=1` is set for a deliberate retry. The CI forced command (`ci-entry.sh`) cannot set it.
+- Missing record files are treated as empty.
+- **Known-good means health-verified:** a release enters `KNOWN_GOOD_SHAS` only when a normal deploy replaces it, i.e. after it passed the health gate and ran.
+- **Corrupt history** (malformed lines, a SHA whose `releases/<sha>/` bundle was pruned, a failed SHA) is skipped when choosing a rollback target. It is never deployed.
+- **Inconsistent pointers:** `PREVIOUS_GOOD_SHA` equal to `CURRENT_SHA`, unusable, or failed is healed on the next deploy. `rollback.sh` refuses an unusable pointer and prints the manual path.
+- **Manual recovery** always works: `deploy.sh backend <12-hex-sha>` with any release under `releases/`. It is health-gated, and the previous release is restored automatically on failure.
+
+**Installing the fix** (an operator step; separate approval; no restart):
+1. Copy `deploy.sh` and `rollback.sh` to `/opt/donchian/scripts/` (owner deploy, mode 755), after taking a timestamped copy of the old ones.
+2. Optionally seed the history from `logs/deploy.log`. As of 2026-10-22:
+   ```
+   KNOWN_GOOD_SHAS: 57f2ab6b864d, 662cb38593ed
+   FAILED_SHAS:     190349e8a3db
+   ```
+   Seed by appending with `printf '%s
+' …`; never by editing `CURRENT_SHA` or `PREVIOUS_GOOD_SHA`.
+3. Verify without deploying:
+   - `cat CURRENT_SHA PREVIOUS_GOOD_SHA KNOWN_GOOD_SHAS FAILED_SHAS`;
+   - `PREVIOUS_GOOD_SHA` is not in `FAILED_SHAS`;
+   - `releases/$(cat PREVIOUS_GOOD_SHA)` exists.
+
+Tests: `mechanism/forward_collection/tests/test_deploy_rollback_pointer.py` runs the real scripts against a fake `docker` in a temporary base directory.

@@ -75,6 +75,7 @@ jobs:
             mechanism:
               - 'mechanism/**'
               - 'ml_training/**'
+              - 'deploy/vps/**'   # deploy.sh / rollback.sh pointer tests live in mechanism/forward_collection/tests
 
   # ---------------------------------------------------------------------------------------------
   frontend-ci:
