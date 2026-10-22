@@ -117,6 +117,10 @@ auto-bootstrapped (`docker-compose.prod.yml`); production data arrives by restor
 - A rollback records the release it leaves as failed, and points `PREVIOUS_GOOD_SHA` at the next older known-good release. A second rollback therefore goes further back, and never returns to a failed image.
 - A release in `FAILED_SHAS` is refused unless `ALLOW_FAILED_TAG=1` is set for a deliberate retry. The CI forced command (`ci-entry.sh`) cannot set it.
 - Missing record files are treated as empty.
+- **Known-good means health-verified:** a release enters `KNOWN_GOOD_SHAS` only when a normal deploy replaces it, i.e. after it passed the health gate and ran.
+- **Corrupt history** (malformed lines, a SHA whose `releases/<sha>/` bundle was pruned, a failed SHA) is skipped when choosing a rollback target. It is never deployed.
+- **Inconsistent pointers:** `PREVIOUS_GOOD_SHA` equal to `CURRENT_SHA`, unusable, or failed is healed on the next deploy. `rollback.sh` refuses an unusable pointer and prints the manual path.
+- **Manual recovery** always works: `deploy.sh backend <12-hex-sha>` with any release under `releases/`. It is health-gated, and the previous release is restored automatically on failure.
 
 **Installing the fix** (an operator step; separate approval; no restart):
 1. Copy `deploy.sh` and `rollback.sh` to `/opt/donchian/scripts/` (owner deploy, mode 755), after taking a timestamped copy of the old ones.

@@ -238,3 +238,40 @@ def test_ci_entry_still_cannot_select_rollback_mode():
     """The CI key's forced command accepts exactly `deploy backend <sha>` and passes nothing else to deploy.sh."""
     src = (VPS / "ci-entry.sh").read_text(encoding="utf-8")
     assert "DEPLOY_MODE" not in src and "ALLOW_FAILED_TAG" not in src
+
+
+# --------------------------------------------------------------------- history that is empty, corrupt or inconsistent
+def test_known_good_only_ever_holds_health_verified_releases(tmp_path):
+    """KNOWN_GOOD gets a release only when a normal deploy REPLACES it -- i.e. it had passed the health gate and ran."""
+    h = Host(tmp_path, current=A)
+    h.unhealthy(B)
+    assert h.deploy(B).returncode == 1                          # failed health gate
+    assert h.lines("KNOWN_GOOD_SHAS") == [] and h.lines("FAILED_SHAS") == [B]
+    assert h.deploy(C).returncode == 0
+    assert h.lines("KNOWN_GOOD_SHAS") == [A]                    # A ran healthy and was replaced; B never qualifies
+
+
+def test_corrupt_history_lines_are_skipped_never_deployed(tmp_path):
+    pruned = "eeeeeeeeeeee"                                     # well-formed but its release bundle is gone
+    h = Host(tmp_path, current=C, previous=B, known_good=[A, "garbage", "abc123", pruned, B])
+    assert h.rollback().returncode == 0                         # C -> B
+    assert h.read("PREVIOUS_GOOD_SHA") == A                    # walked past the bundle-less and malformed lines
+
+
+def test_an_unusable_pointer_is_refused_with_a_manual_recovery_hint(tmp_path):
+    h = Host(tmp_path, current=B, previous="not-a-sha")
+    r = h.rollback()
+    assert r.returncode == 1 and "Manual recovery" in r.stderr and h.running == B
+
+
+def test_an_inconsistent_pointer_equal_to_current_is_healed_on_the_next_deploy(tmp_path):
+    h = Host(tmp_path, current=B, previous=B, known_good=[A])
+    assert h.deploy(C).returncode == 0
+    assert (h.read("CURRENT_SHA"), h.read("PREVIOUS_GOOD_SHA")) == (C, B)
+
+
+def test_manual_recovery_by_explicit_deploy_works_with_no_history_at_all(tmp_path):
+    h = Host(tmp_path, current=C)                               # no PREVIOUS_GOOD_SHA, no record files
+    assert h.rollback().returncode == 1                         # nothing recorded to roll back to
+    assert h.deploy(A).returncode == 0 and h.running == A       # the operator names an older release explicitly
+    assert h.read("PREVIOUS_GOOD_SHA") == C and h.lines("KNOWN_GOOD_SHAS") == [C]

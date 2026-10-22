@@ -66,24 +66,27 @@ T=""
 
 in_list() { [ -n "$1" ] && [ -f "$2" ] && grep -qx "$1" "$2"; }
 add_to() { in_list "$1" "$2" || echo "$1" >> "$2"; }
-# newest known-good release that is not failed and not $1 (empty when there is none)
+# A usable rollback target: a well-formed 12-hex tag whose release bundle is still on disk and that is not failed.
+# Corrupt history lines (garbage, wrong length, a pruned bundle) are skipped, never deployed.
+usable_target() { [[ "$1" =~ ^[0-9a-f]{12}$ ]] && [ -f "$BASE/releases/$1/docker-compose.yml" ] && ! in_list "$1" "$FAILED"; }
+# newest known-good (health-verified, then replaced by a normal deploy) usable release other than $1; empty if none
 newest_good_except() {
   [ -f "$KNOWN_GOOD" ] || return 0
   local s
   while read -r s; do
     [ -z "$s" ] || [ "$s" = "$1" ] && continue
-    in_list "$s" "$FAILED" && continue
+    usable_target "$s" || continue
     echo "$s"; return 0
   done < <(tac "$KNOWN_GOOD")
 }
-# enforce the invariant: PREVIOUS_GOOD_SHA is never a failed release, and never the one running now
+# enforce the invariant: PREVIOUS_GOOD_SHA is empty or a usable, non-failed release other than the one running now
 heal_previous() {
   local p cur
   p="$(cat "$BASE/PREVIOUS_GOOD_SHA" 2>/dev/null || true)"
   cur="$(cat "$BASE/CURRENT_SHA" 2>/dev/null || true)"
-  if in_list "$p" "$FAILED" || { [ -n "$p" ] && [ "$p" = "$cur" ]; }; then
+  if [ -n "$p" ] && { ! usable_target "$p" || [ "$p" = "$cur" ]; }; then
     echo "$(newest_good_except "$cur")" > "$BASE/PREVIOUS_GOOD_SHA"
-    log "PREVIOUS_GOOD_SHA $p is failed or current -> $(cat "$BASE/PREVIOUS_GOOD_SHA")"
+    log "PREVIOUS_GOOD_SHA '$p' is failed, unusable or current -> '$(cat "$BASE/PREVIOUS_GOOD_SHA")'"
   fi
 }
 
