@@ -1,4 +1,5 @@
-# mechanism/Dockerfile.stage2 -- the Stage 2 image: the production-pinned mechanism image PLUS ONLY the reviewed quarterly-fundamentals correction.
+# mechanism/Dockerfile.stage2 -- the Stage 2 image: the production-pinned mechanism image PLUS ONLY the reviewed quarterly-fundamentals
+# correction and (since 2026-10-23) the reviewed channel earnings-post correction (PR #55).
 #
 # Why a derived image and not a rebuild of mechanism/Dockerfile: that Dockerfile builds FROM the floating tag python:3.11-slim, runs apt-get install and installs requirements, 5 of which are
 # unpinned ranges (aiogram>=3.13,<4, pillow>=10.1, matplotlib>=3.8, mplfinance, ...). A rebuild today could therefore change the base layers' packages and third-party libraries (for example the
@@ -11,3 +12,10 @@ COPY --chmod=755 automation_pipeline.sh /app/automation_pipeline.sh
 COPY mechanism/data_updaters/quarterly_fundamentals_updater.py /app/mechanism/data_updaters/quarterly_fundamentals_updater.py
 COPY mechanism/data_updaters/tests/test_quarterly_budget.py /app/mechanism/data_updaters/tests/test_quarterly_budget.py
 COPY mechanism/forward_collection/tests/test_quarterly_ordering_db.py /app/mechanism/forward_collection/tests/test_quarterly_ordering_db.py
+# Channel earnings correctness (PR #55, owner-approved 2026-10-23): the 'reports today' post reads only CURRENT earnings_calendar rows.
+# At the pinned commit 5c51189 send_earnings_today.py differs from main ONLY by PR #55; the other two modules are new and imported only
+# by it. Nothing here is imported by the screener, ledger writer, evaluator, collector or paper tracker.
+COPY mechanism/alerts/send_earnings_today.py /app/mechanism/alerts/send_earnings_today.py
+COPY mechanism/alerts/earnings_current.py /app/mechanism/alerts/earnings_current.py
+COPY mechanism/alerts/earnings_today_query.py /app/mechanism/alerts/earnings_today_query.py
+COPY mechanism/alerts/tests/test_earnings_today_current.py /app/mechanism/alerts/tests/test_earnings_today_current.py
