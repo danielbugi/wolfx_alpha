@@ -49,6 +49,7 @@ from shared import db  # noqa: E402
 from shared import market_calendar  # noqa: E402
 from alerts import channel_content as cx  # noqa: E402
 from alerts.telegram_client import TelegramClient, TelegramError, text_length  # noqa: E402
+from alerts.earnings_today_query import TODAYS_REPORTERS_SQL  # noqa: E402
 
 STATE_FILE = MECH.parent / "data" / "earnings_today_state.json"
 KEEP_DAYS = 14
@@ -82,27 +83,11 @@ def mark_sent(target: str, day: date, state_file: Path = STATE_FILE) -> None:
 def load_todays_reporters(day: date) -> List[Dict]:
     """Today's earnings_calendar reporters restricted to the covered/liquid universe -- symbols the
     digest actually classified in its most recent stored session -- with sector and last close for
-    context. Returns [] on any DB problem rather than raising (a missing extra post is never worse than
+    context. Only report dates the vendor's latest complete calendar still lists (TODAYS_REPORTERS_SQL).
+    Returns [] on any DB problem rather than raising (a missing extra post is never worse than
     a crashed scheduled job)."""
     try:
-        rows = db.execute_dict_query(
-            """
-            SELECT ec.symbol, ec.eps_estimate, df.sector, sp.close
-            FROM earnings_calendar ec
-            JOIN (SELECT DISTINCT symbol FROM digest_stocks
-                  WHERE session_date = (SELECT MAX(session_date) FROM digest_stocks)) cov
-                ON cov.symbol = ec.symbol
-            LEFT JOIN LATERAL (
-                SELECT sector FROM daily_fundamentals
-                WHERE symbol = ec.symbol AND sector IS NOT NULL ORDER BY date DESC LIMIT 1
-            ) df ON TRUE
-            LEFT JOIN LATERAL (
-                SELECT close FROM stock_prices WHERE symbol = ec.symbol ORDER BY date DESC LIMIT 1
-            ) sp ON TRUE
-            WHERE ec.report_date = %s
-            ORDER BY ec.symbol
-            """,
-            (day,))
+        rows = db.execute_dict_query(TODAYS_REPORTERS_SQL, (day,))
         return [{"symbol": r["symbol"], "eps_estimate": float(r["eps_estimate"]) if r["eps_estimate"] is not None else None,
                  "sector": r["sector"], "close": float(r["close"]) if r["close"] is not None else None} for r in rows]
     except Exception as e:
