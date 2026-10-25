@@ -124,8 +124,7 @@ describe('Markets freshness and coverage wording', () => {
     });
     const { container } = render(<MarketsPage />);
     await screen.findByText('S&P 500');
-    expect(container.textContent).toContain('exchanges as of 2026-10-16');
-    expect(container.textContent).toContain('crypto as of 2026-10-18');
+    expect(screen.getByTestId('data-stamp').textContent).toMatch(/^Data as of\s*2026-10-16·exchange closes · crypto as of 2026-10-18$/);
     expect(container.textContent).not.toContain('last close 2026-10-16');
     expect(container.textContent).toContain('Not covered yet: Silver.');
     expect(container.textContent).not.toMatch(/next data update/);

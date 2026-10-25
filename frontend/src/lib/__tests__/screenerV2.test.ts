@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_STATE, formatCell, formatValue, fromSearchParams, ofTotal, toQueryPairs } from '@/lib/screenerV2';
+import { DEFAULT_STATE, formatCell, formatValue, fromSearchParams, moversScreenerHref, ofTotal, screenSectorHref, toQueryPairs } from '@/lib/screenerV2';
 import type { ScreenerRow } from '@/services/screenerV2Api';
 
 describe('screen state <-> query', () => {
@@ -54,3 +54,36 @@ describe('formatting', () => {
     expect(ofTotal(null, 3063)).toBe('—');
   });
 });
+
+describe('links into the Screener', () => {
+  // the link must arrive as exactly this API query: parsed by the Screener's own URL reader, sent by its own query builder
+  const sent = (href: string) => toQueryPairs(fromSearchParams(new URLSearchParams(href.split('?')[1])));
+
+  it('Overview gainers / losers: ranked by 1-day change with the movers price and liquidity floor ($1+, $1M/day)', () => {
+    expect(sent(moversScreenerHref('gainers'))).toEqual([
+      ['sort', 'change_1d'], ['order', 'desc'], ['page', '1'], ['page_size', '50'], ['min_dollar_vol_20', '1000000'], ['min_close', '1'],
+    ]);
+    expect(sent(moversScreenerHref('losers'))).toEqual([
+      ['sort', 'change_1d'], ['order', 'asc'], ['page', '1'], ['page_size', '50'], ['min_dollar_vol_20', '1000000'], ['min_close', '1'],
+    ]);
+  });
+
+  it('Overview unusual volume: 2x+ volume ratio, highest first, with the same liquidity floor', () => {
+    expect(sent(moversScreenerHref('volume'))).toEqual([
+      ['sort', 'volume_ratio'], ['order', 'desc'], ['page', '1'], ['page_size', '50'], ['min_dollar_vol_20', '1000000'], ['min_close', '1'], ['min_volume_ratio', '2'],
+    ]);
+  });
+
+  it('the link filters show up in the filter panel in its units ($M for dollar volume), so they are visible and removable', () => {
+    const st = fromSearchParams(new URLSearchParams(moversScreenerHref('gainers').split('?')[1]));
+    expect(st.ranges).toEqual({ dollar_vol_20: { min: '1', max: '' }, close: { min: '1', max: '' } });
+  });
+
+  it('Screen this sector: one sector, strongest 20-session relative strength first; none for the Unknown bucket', () => {
+    expect(screenSectorHref('Consumer Cyclical')).toBe('/screener?sector=Consumer+Cyclical&sort=rs_20&order=desc');
+    expect(sent(screenSectorHref('Real Estate & REITs')!)).toEqual([['sort', 'rs_20'], ['order', 'desc'], ['page', '1'], ['page_size', '50'], ['sector', 'Real Estate & REITs']]);
+    expect(screenSectorHref('Unknown')).toBeNull();
+    expect(screenSectorHref(null)).toBeNull();
+  });
+});
+

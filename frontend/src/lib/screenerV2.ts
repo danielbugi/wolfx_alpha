@@ -15,6 +15,8 @@ export const RANGE_FILTERS: { key: string; label: string; suffix: string; scale:
   { key: 'atr_pct', label: 'ATR %', suffix: '%', scale: 1 },
   { key: 'dollar_vol_20', label: 'Dollar volume', suffix: '$M', scale: 1e6 },
   { key: 'market_cap', label: 'Market cap', suffix: '$B', scale: 1e9 },
+  { key: 'close', label: 'Price', suffix: '$', scale: 1 },
+  { key: 'volume_ratio', label: 'Volume ratio', suffix: '×', scale: 1 },
 ];
 
 export interface ScreenState {
@@ -138,3 +140,32 @@ export const COLUMNS: (keyof ScreenerRow)[] = [
 /** "3,061 of 3,063" */
 export const ofTotal = (n: number | null | undefined, total: number | null | undefined) =>
   n == null || total == null ? '—' : `${n.toLocaleString('en-US')} of ${total.toLocaleString('en-US')}`;
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Links INTO the Screener from other product pages. Every filter they set is an ordinary Screener filter (visible in the
+// filter panel, removable), so the destination is never a hidden or different query.
+
+export type MoversList = 'gainers' | 'losers' | 'volume';
+
+/** Liquidity floor of the Overview's movers lists (backend/main.py top gainers/losers): $1+ close, $1M/day 20-session dollar volume. */
+const MOVERS_FLOOR: [string, string][] = [['min_close', '1'], ['min_dollar_vol_20', '1000000']];
+
+/**
+ * The Screener ranked like an Overview movers list, for the Screener's ONE explicit session: gainers / losers by 1-day
+ * change, unusual volume by volume ratio (2x+). All three keep the card's "every liquid stock" floor.
+ */
+export function moversScreenerHref(list: MoversList): string {
+  const p = new URLSearchParams(
+    list === 'volume'
+      ? [...MOVERS_FLOOR, ['min_volume_ratio', '2'], ['sort', 'volume_ratio'], ['order', 'desc']]
+      : [...MOVERS_FLOOR, ['sort', 'change_1d'], ['order', list === 'gainers' ? 'desc' : 'asc']],
+  );
+  return `/screener?${p.toString()}`;
+}
+
+/** The Screener filtered to one sector, strongest 20-session relative strength first; null for the "Unknown" bucket. */
+export function screenSectorHref(sector: string | null | undefined): string | null {
+  if (!sector || sector === 'Unknown') return null;
+  return `/screener?${new URLSearchParams([['sector', sector], ['sort', 'rs_20'], ['order', 'desc']]).toString()}`;
+}
+

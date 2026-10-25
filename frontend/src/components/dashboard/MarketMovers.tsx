@@ -10,13 +10,14 @@ import SymbolHoverLink from '@/components/dashboard/SymbolHoverLink';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import SortHeader from '@/components/ui/SortHeader';
 import { useTableSort } from '@/hooks/useTableSort';
+import { moversScreenerHref } from '@/lib/screenerV2';
 
 type MoversList = 'gainers' | 'losers' | 'volume';
 
-const LISTS: { value: MoversList; label: string; screenerFilter: string; blurb: string }[] = [
-  { value: 'gainers', label: 'Top Gainers', screenerFilter: 'gainers', blurb: 'Biggest one-day rises' },
-  { value: 'losers', label: 'Top Losers', screenerFilter: 'losers', blurb: 'Biggest one-day falls' },
-  { value: 'volume', label: 'Unusual Volume', screenerFilter: 'volume', blurb: 'Trading well above their usual volume' },
+const LISTS: { value: MoversList; label: string; blurb: string }[] = [
+  { value: 'gainers', label: 'Top Gainers', blurb: 'Biggest one-day rises' },
+  { value: 'losers', label: 'Top Losers', blurb: 'Biggest one-day falls' },
+  { value: 'volume', label: 'Unusual Volume', blurb: 'Trading well above their usual volume' },
 ];
 
 const ACCESSORS = {
@@ -64,7 +65,9 @@ export default function MarketMovers({ gainers, losers, unusualVolume }: { gaine
             onChange={setList}
           />
           <Link
-            href={`/screener?filter=${meta.screenerFilter}`}
+            href={moversScreenerHref(list)}
+            title="The whole list in the Screener, ranked the same way (same price and liquidity floor)"
+            data-testid="movers-view-all"
             className="inline-flex items-center text-xs font-medium text-accent hover:underline"
           >
             View all

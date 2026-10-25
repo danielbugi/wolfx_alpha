@@ -17,6 +17,7 @@ import { useResolvedTheme } from '@/lib/theme';
 import { IndustryRow, rebasedComparison, SECTOR_WINDOWS, SectorDetail, SectorStock, SectorWindow } from '@/lib/sectors';
 import { marketIntelligenceApi, MarketSnapshot } from '@/services/marketIntelligenceApi';
 import DataStamp from '@/components/common/DataStamp';
+import { screenSectorHref } from '@/lib/screenerV2';
 import MembershipNote from '@/components/sectors/MembershipNote';
 import ObservedSectorContext from '@/components/sectors/ObservedSectorContext';
 
@@ -325,7 +326,12 @@ export default function SectorPage() {
                       {detail.industries.length} industries
                       {detail.market_cap ? ` · ${formatters.marketCap(detail.market_cap)} market cap` : ''}
                     </p>
-                    <DataStamp className="mt-0.5" label="Prices as of" asOf={detail.as_of} source="end-of-day prices · current membership" />
+                    <DataStamp className="mt-0.5" asOf={detail.as_of} source="end-of-day prices · current membership" />
+                    {screenSectorHref(detail.sector) && (
+                      <Link href={screenSectorHref(detail.sector)!} className="mt-1.5 inline-flex items-center text-sm font-medium text-accent hover:underline" data-testid="screen-sector">
+                        Screen this sector →
+                      </Link>
+                    )}
                   </div>
                   {detail.above_sma50_pct != null && (
                     <div className="text-right">

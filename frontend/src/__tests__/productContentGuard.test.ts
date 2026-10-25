@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { NAV_GROUPS } from '@/lib/navigation';
 
 const SRC = path.resolve(__dirname, '..');
 
@@ -60,6 +61,7 @@ const PRODUCT_FILES = [
   'components/marketIntel/SectorLeadershipCard.tsx',
   'components/marketIntel/SectorHeatmap.tsx',
   'components/marketIntel/SectorRotation.tsx',
+  'components/ui/InfoTip.tsx',
 ];
 
 // Each entry: what it catches, and the pattern (case-insensitive).
@@ -86,6 +88,24 @@ describe('product-facing pages', () => {
     const code = stripComments(fs.readFileSync(path.join(SRC, rel), 'utf-8'));
     const hits = BANNED.filter(([, re]) => re.test(code)).map(([what]) => what);
     expect(hits).toEqual([]);
+  });
+
+  // Internal tools (Momentum Board, Position Plans, Deep Value, ...) stay reachable by URL, but a product page never
+  // sends a user there: a route string literal such as '/momentum' or `/momentum?sector=` is a link into an internal tool.
+  const INTERNAL_ROUTES = NAV_GROUPS.filter((g) => g.internal).flatMap((g) => g.items.map((i) => i.href));
+  const internalLink = (code: string) =>
+    INTERNAL_ROUTES.filter((r) => new RegExp(`['"\`]${r.replace(/[-/]/g, '\$&')}(?=['"\`?#/])`).test(code));
+
+  it.each(PRODUCT_FILES)('%s links to no internal page', (rel) => {
+    expect(internalLink(stripComments(fs.readFileSync(path.join(SRC, rel), 'utf-8')))).toEqual([]);
+  });
+
+  it('the internal-link guard catches a link and ignores product routes that share a prefix', () => {
+    expect(INTERNAL_ROUTES).toContain('/momentum');
+    expect(internalLink('<Link href={`/momentum?sector=${s}`}>')).toEqual(['/momentum']);
+    expect(internalLink("href='/alerts'")).toEqual(['/alerts']);
+    expect(internalLink("href='/momentum-today'")).toEqual([]);
+    expect(internalLink("apiClient.post('/api/performance/client-metric')")).toEqual([]);
   });
 
   it('the guard itself catches each banned pattern (so a typo cannot silently disable it)', () => {

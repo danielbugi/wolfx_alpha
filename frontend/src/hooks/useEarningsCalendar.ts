@@ -83,6 +83,8 @@ export interface EarningsCalendarData {
   /** the official session calendar, null until loaded or when unavailable */
   calendar: MarketCalendar | null;
   board: MomentumBoardResult[];
+  /** the market session the board (and so its earnings dates) describes, as the API delivers it */
+  boardSession: string | null;
   boardState: LoadState;
   /** the official session calendar couldn't be loaded: dates fall back to Mon-Fri, holidays unverified */
   calendarFailed: boolean;
@@ -98,6 +100,7 @@ export function useEarningsCalendar(): EarningsCalendarData {
   const [cal, setCal] = useState<MarketCalendar | null>(null);
   const [calendarFailed, setCalendarFailed] = useState(false);
   const [board, setBoard] = useState<MomentumBoardResult[]>([]);
+  const [boardSession, setBoardSession] = useState<string | null>(null);
   const [boardState, setBoardState] = useState<LoadState>('loading');
 
   const load = useCallback(() => {
@@ -113,6 +116,7 @@ export function useEarningsCalendar(): EarningsCalendarData {
       .getBoard({ category: 'all', limit: 500 })
       .then((r) => {
         setBoard(r.results);
+        setBoardSession(r.session_date ?? null);
         setBoardState('ok');
       })
       // keep the last good board on a failed background refresh
@@ -133,5 +137,5 @@ export function useEarningsCalendar(): EarningsCalendarData {
 
   const anchors = nyToday ? sessionAnchors(nyToday, cal) : null;
 
-  return { anchors, calendar: cal, board, boardState, calendarFailed, watchlist, histories, reload: load };
+  return { anchors, calendar: cal, board, boardSession, boardState, calendarFailed, watchlist, histories, reload: load };
 }

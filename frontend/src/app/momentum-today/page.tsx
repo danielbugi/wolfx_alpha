@@ -137,7 +137,7 @@ export default function MomentumTodayPage() {
           <p className="mt-1.5 max-w-3xl text-[15px] text-slate-500">
             Two ways to read the session: what moved hardest today, and which stocks have the strongest trends.
           </p>
-          {any && <DataStamp className="mt-1" label="Session" asOf={any.session} source="same data as the Screener" />}
+          {any && <DataStamp className="mt-1" asOf={any.session} source="end-of-day prices · same data as the Screener" />}
         </div>
 
         {data.allFailed && (

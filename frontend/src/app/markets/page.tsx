@@ -7,6 +7,7 @@ import { clsx } from 'clsx';
 import { apiClient } from '@/services/api';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import { Skeleton } from '@/components/ui/Skeleton';
+import DataStamp from '@/components/common/DataStamp';
 import {
   fmtChange,
   formatInstrumentPrice,
@@ -104,9 +105,14 @@ export default function MarketsPage() {
           <h1 className="large-title">Markets</h1>
           <p className="mt-1.5 text-[15px] text-slate-500">
             Indices, futures, commodities, currencies and crypto · daily closes
-            {asOf && <span className="text-slate-400"> · exchanges as of {asOf}</span>}
-            {cryptoAsOf && cryptoAsOf !== asOf && <span className="text-slate-400"> · crypto as of {cryptoAsOf}</span>}
           </p>
+          {data && (
+            <DataStamp
+              className="mt-1"
+              asOf={asOf}
+              source={cryptoAsOf && cryptoAsOf !== asOf ? `exchange closes · crypto as of ${cryptoAsOf}` : 'daily closes'}
+            />
+          )}
         </div>
 
         {data && (

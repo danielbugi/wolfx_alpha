@@ -74,6 +74,7 @@ describe('Watchlist terminal layout', () => {
     expect(symbolsOf(scr.search.mock.calls[0][0])).toEqual(['NVDA', 'AAPL', 'ZZZZ']);
     expect(screen.getAllByTestId('panel-row')[2].textContent).toContain('no bar on 2026-10-16');
     expect(screen.getByTestId('panel-footer').textContent).toContain('Closes for the 2026-10-16 session');
+    expect(screen.getByTestId('data-stamp').textContent).toBe('Data as of 2026-10-16·end-of-day prices · same data as the Screener');
   });
 
   it('a click or the arrow keys switch the charted symbol; re-selecting a symbol refetches nothing', async () => {
