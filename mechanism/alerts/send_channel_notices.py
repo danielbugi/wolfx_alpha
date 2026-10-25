@@ -33,6 +33,7 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(MECH.parent / ".env", override=False)
 
 from alerts import channel_content as cx  # noqa: E402
+from alerts import channel_switches  # noqa: E402
 from alerts import deeplink  # noqa: E402
 from alerts.digest_format import PRIVATE_ASSISTANT_BUTTON  # noqa: E402
 from alerts.telegram_client import TelegramClient, TelegramError, text_length  # noqa: E402
@@ -56,6 +57,8 @@ def build_posts(day: date, slot: int):
     ctx = cx.Ctx(session=day, notice_index=variant_index(day, slot))
     posts = [cx.build_post(k, ctx) for k in kinds_for(slot)]
     for p in posts:
+        if p is not None and p.image and text_length(p.text) > cx.CAPTION_LIMIT:
+            raise SystemExit(f"ABORT: the '{p.kind}' caption is over Telegram's {cx.CAPTION_LIMIT}-character limit; nothing sent.")
         if p is None or text_length(p.text) > 4096:
             raise SystemExit(f"ABORT: the '{p.kind if p else '?'}' notice could not be built within Telegram's limits; nothing sent.")
     return posts
@@ -107,11 +110,18 @@ def main() -> int:
         print(f"Skipping: slot {args.slot} was already sent to {args.to} on {day}. Use --force to send it again.")
         return 0
     try:
+        if args.slot not in channel_switches.notice_slots():
+            print(f"Skipping: notice slot {args.slot} is paused (CHANNEL_NOTICE_SLOTS={sorted(channel_switches.notice_slots())}); nothing sent.")
+            return 0
         tg = TelegramClient.from_env(args.to, dry_run=False)
         username = os.getenv("TELEGRAM_BOT_USERNAME") or tg.get_me()["username"]
         keyboard = {"inline_keyboard": [[{"text": PRIVATE_ASSISTANT_BUTTON, "url": deeplink.link(username, "ch")}]]}
         for p in posts:
-            tg.send_message(p.text, disable_preview=p.disable_preview, silent=True, reply_markup=keyboard if p.button else None, kind=p.kind)
+            markup = keyboard if p.button else None
+            if p.image:                                         # the assistant post goes out as its picture with the text as caption
+                tg.send_photo(p.image, p.text, silent=True, reply_markup=markup, kind=p.kind)
+            else:
+                tg.send_message(p.text, disable_preview=p.disable_preview, silent=True, reply_markup=markup, kind=p.kind)
         mark_sent(args.to, day, args.slot)
         print(f"\nSENT {len(posts)} notices [{', '.join(p.kind for p in posts)}] to {args.to.upper()} (slot {args.slot}, {day}).")
     except TelegramError as e:

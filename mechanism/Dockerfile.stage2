@@ -19,3 +19,22 @@ COPY mechanism/alerts/send_earnings_today.py /app/mechanism/alerts/send_earnings
 COPY mechanism/alerts/earnings_current.py /app/mechanism/alerts/earnings_current.py
 COPY mechanism/alerts/earnings_today_query.py /app/mechanism/alerts/earnings_today_query.py
 COPY mechanism/alerts/tests/test_earnings_today_current.py /app/mechanism/alerts/tests/test_earnings_today_current.py
+# Channel rebrand "First Light ⚡ Market Daily" (owner decisions 2026-10-21..25, PR #49): the ONE daily public market brief replaces the
+# separate post-market posts (POST_MARKET_FORMAT=report, default; =package restores the old four), the other recurring posts are paused by
+# default (channel_switches.py), plus the brand artwork, the assistant posts' pictures and the channel branding script. At the pinned commit
+# 5c51189 every MODIFIED file below is byte-identical to its pre-change version on main (verified 2026-10-25), so the delta is exactly the
+# reviewed change. send_earnings_today.py (above) is PR #55's version plus the pause switch. None of these is imported by the screener, the
+# ledger writer, the evaluator, the collector or the paper tracker.
+COPY mechanism/alerts/channel_switches.py /app/mechanism/alerts/channel_switches.py
+COPY mechanism/alerts/market_report.py /app/mechanism/alerts/market_report.py
+COPY mechanism/alerts/brand_assets.py /app/mechanism/alerts/brand_assets.py
+COPY mechanism/alerts/channel_branding.py /app/mechanism/alerts/channel_branding.py
+COPY mechanism/alerts/market_card.py /app/mechanism/alerts/market_card.py
+COPY mechanism/alerts/channel_content.py /app/mechanism/alerts/channel_content.py
+COPY mechanism/alerts/channel_posts.py /app/mechanism/alerts/channel_posts.py
+COPY mechanism/alerts/publish_post_market.py /app/mechanism/alerts/publish_post_market.py
+COPY mechanism/alerts/send_channel_notices.py /app/mechanism/alerts/send_channel_notices.py
+COPY mechanism/alerts/send_channel_posts.py /app/mechanism/alerts/send_channel_posts.py
+COPY mechanism/alerts/send_daily_digest.py /app/mechanism/alerts/send_daily_digest.py
+COPY mechanism/alerts/tests/test_market_report.py /app/mechanism/alerts/tests/test_market_report.py
+COPY mechanism/alerts/tests/test_notices.py /app/mechanism/alerts/tests/test_notices.py

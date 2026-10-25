@@ -87,7 +87,8 @@ def test_the_disclaimer_notice_is_short_valid_and_points_to_the_pinned_message()
 def test_every_assistant_variant_is_clean_says_what_access_is_and_has_the_button(i):
     p = cx.build_post("assistant", cx.Ctx(session=date(2026, 9, 21), notice_index=i))
     plain = _plain(p.text)
-    assert p.button is True and p.image is None and tg_html.problems(p.text) == []
+    # each variant carries its own picture (owner decision 2026-10-22), so the text is a caption: within Telegram's 1024 limit
+    assert p.button is True and p.image and tg_html.problems(p.text, cx.CAPTION_LIMIT) == []
     assert BANNED.findall(plain) == [] and "advice" not in plain                            # no disclaimer of its own: the pinned post has it
     assert "Access on request" in plain and "seats limited" in plain and "beta" not in plain.lower()
     assert not re.search(r"\$\d|free forever|sign ?up|subscribe", plain, re.I)                # no price before a paid tier exists
