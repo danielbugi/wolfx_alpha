@@ -1,7 +1,9 @@
 // Watchlist performance rules: one common session baseline, YTD and month-end boundaries, late starts / missing baseline /
 // stale series flagged, discontinuities withheld, gaps never filled, the S&P 500 measured over the same dates.
 import { describe, expect, it } from 'vitest';
-import { Bar, baselineSession, chartRows, computePerformance, coverageNote, periodAnchor, ranked } from '@/lib/performance';
+import {
+  Bar, baselineSession, biggestMover, chartRows, computePerformance, coverageNote, equalWeightBasket, periodAnchor, ranked, sectorMix, sessionMove,
+} from '@/lib/performance';
 
 /** Weekday sessions between two dates, inclusive. */
 function sessions(from: string, to: string): string[] {
@@ -113,5 +115,71 @@ describe('computePerformance', () => {
       { symbol: 'HIGH', bars: bars(CAL, (i) => 10 + i) },
     ]);
     expect(ranked(r.series).map((s) => s.symbol)).toEqual(['HIGH', 'LOW', 'NONE']);
+  });
+});
+
+describe('equal-weight basket, session moves and sector mix', () => {
+  it('averages only comparable full-period members; the basket return equals the mean of their returns and its last point', () => {
+    const r = computePerformance('1m', spx, [
+      { symbol: 'UP', bars: bars(CAL, (i) => 100 + i) },
+      { symbol: 'DOWN', bars: bars(CAL, (i) => 400 - i) },
+      { symbol: 'LATE', bars: bars(CAL.filter((d) => d >= '2026-10-01'), (i) => 10 + i) },
+      { symbol: 'SPLIT', bars: bars(CAL, (i) => 50 + i), discontinuities: [{ date: '2026-10-05' }] },
+    ]);
+    const b = equalWeightBasket(r, ['UP', 'DOWN', 'LATE', 'SPLIT']);
+    expect(b.members).toEqual(['UP', 'DOWN']);
+    expect(b.excluded).toEqual(['LATE', 'SPLIT']);
+    const up = r.series.find((s) => s.symbol === 'UP')!.ret as number;
+    const down = r.series.find((s) => s.symbol === 'DOWN')!.ret as number;
+    expect(b.ret).toBeCloseTo((up + down) / 2, 10);
+    expect(b.points.get(r.end!)).toBeCloseTo(b.ret!, 10);
+    expect(b.points.get(r.baseline!)).toBe(0);
+    expect(b.vsBench).toBeCloseTo(b.ret! - r.bench!.get(r.end!)!, 10);
+    expect(b.beat).toBe(1); // UP beats the slowly rising index, DOWN does not
+    expect(b.beatOf).toBe(2);
+  });
+
+  it('a session where any member has no close is a gap in the basket, never an average of the rest', () => {
+    const hole = CAL[CAL.length - 3];
+    const r = computePerformance('1m', spx, [
+      { symbol: 'A', bars: bars(CAL, (i) => 100 + i) },
+      { symbol: 'B', bars: bars(CAL, (i, d) => (d === hole ? null : 200 + i)) },
+    ]);
+    const b = equalWeightBasket(r, ['A', 'B']);
+    expect(b.points.get(hole)).toBeNull();
+    expect(b.points.get(r.end!)).not.toBeNull();
+  });
+
+  it('has no basket return when nothing is comparable, and no relative figure without the S&P 500', () => {
+    const r = computePerformance('1m', null, [{ symbol: 'A', bars: bars(CAL, (i) => 100 + i) }]);
+    const b = equalWeightBasket(r, ['A']);
+    expect(b.ret).not.toBeNull();
+    expect(b.vsBench).toBeNull();
+    expect(b.beatOf).toBe(0);
+    const late = computePerformance('1m', spx, [{ symbol: 'L', bars: bars(CAL.filter((d) => d >= '2026-10-12'), (i) => 1 + i) }]);
+    expect(equalWeightBasket(late, ['L']).ret).toBeNull();
+  });
+
+  it('a session move is close-to-close against the previous session; a missing close gives no move', () => {
+    const hole = CAL[CAL.length - 3];
+    const r = computePerformance('1m', spx, [
+      { symbol: 'A', bars: bars(CAL, (i) => 100 + i) },
+      { symbol: 'B', bars: bars(CAL, (i, d) => (d === hole ? null : 200 + 5 * i)) },
+    ]);
+    const n = CAL.length - 1;
+    expect(sessionMove(r, 'A', CAL[n])).toBeCloseTo(((100 + n) / (100 + n - 1) - 1) * 100, 10);
+    expect(sessionMove(r, 'B', CAL[n - 1])).toBeNull(); // the previous session is the hole
+    expect(sessionMove(r, 'A', r.baseline!)).toBeNull(); // nothing before the window's first session
+    expect(biggestMover(r, ['A', 'B'], CAL[n])?.symbol).toBe('B');
+    expect(biggestMover(r, ['A', 'B'], r.baseline!)).toBeNull();
+  });
+
+  it('sector mix counts the current classification, largest first, unclassified last', () => {
+    const sec: Record<string, string | null> = { A: 'Technology', B: 'Energy', C: 'Technology', D: null };
+    expect(sectorMix(['A', 'B', 'C', 'D'], (s) => sec[s])).toEqual([
+      { sector: 'Technology', count: 2, share: 0.5 },
+      { sector: 'Energy', count: 1, share: 0.25 },
+      { sector: 'Unclassified', count: 1, share: 0.25 },
+    ]);
   });
 });
