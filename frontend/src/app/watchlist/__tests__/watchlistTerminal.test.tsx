@@ -1,6 +1,6 @@
 // Watchlist page, terminal layout: chart (left) for the selected symbol on the stock page's TradingView chart, the list
-// panel (right) with last close / day change from ONE Screener request, row and arrow-key selection, Chart / Compare /
-// Details tabs, several lists (create, switch, rename, delete, main list protected), the Screener star adding to the
+// panel (right) with last close / day change from ONE Screener request, row and arrow-key selection, Performance (default) /
+// Chart / Details tabs with the last view remembered, several lists (create, switch, rename, delete, main list protected), the Screener star adding to the
 // ACTIVE list, the 30-symbol refusal, and the backend being down never touching any list.
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -27,7 +27,11 @@ vi.mock('@/components/charts/StockChart', () => ({
     return <div data-testid="stock-chart">{(props.bars as unknown[]).length} bars</div>;
   },
 }));
-vi.mock('@/components/watchlist/WatchlistPerformance', () => ({ default: ({ saved }: { saved: string[] }) => <div data-testid="perf-stub">{saved.join(',')}</div> }));
+vi.mock('@/components/watchlist/WatchlistPerformance', () => ({
+  default: ({ saved, rows, session }: { saved: string[]; rows: Record<string, unknown>; session: string | null }) => (
+    <div data-testid="perf-stub" data-rows={Object.keys(rows ?? {}).join(',')} data-session={session ?? ''}>{saved.join(',')}</div>
+  ),
+}));
 vi.mock('@/components/watchlist/WatchlistDetails', () => ({ default: () => <div data-testid="details-stub" /> }));
 
 import WatchlistPage from '@/app/watchlist/page';
@@ -44,6 +48,7 @@ const save = (s: string[]) => window.localStorage.setItem('watchlist_symbols', J
 
 beforeEach(() => {
   window.localStorage.clear();
+  window.localStorage.setItem('watchlist_view', 'chart'); // the terminal tests start on the Chart view; the default is tested below
   _clearChartCache();
   chart.props = null;
   Object.values(scr).forEach((f) => f.mockReset());
@@ -86,12 +91,38 @@ describe('Watchlist terminal layout', () => {
     expect(screen.getByRole('button', { name: /^NVDA/ }).getAttribute('aria-current')).toBe('true');
   });
 
-  it('switches between Chart, Compare and Details', async () => {
+  it('opens on Performance by default with the ONE Screener request passed in, and remembers the last view', async () => {
+    window.localStorage.removeItem('watchlist_view');
+    save(['NVDA', 'AAPL', 'ZZZZ']);
+    const { unmount } = render(<WatchlistPage />);
+    const stub = await screen.findByTestId('perf-stub');
+    expect(stub.textContent).toBe('NVDA,AAPL,ZZZZ');
+    await waitFor(() => expect(screen.getByTestId('perf-stub').getAttribute('data-rows')).toBe('NVDA,AAPL'));
+    expect(screen.getByTestId('perf-stub').getAttribute('data-session')).toBe('2026-10-16');
+    expect(scr.search).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('stock-chart')).toBeNull(); // no TradingView history fetched for the default view
+    fireEvent.click(screen.getByRole('radio', { name: 'Details' }));
+    expect(window.localStorage.getItem('watchlist_view')).toBe('details');
+    unmount();
+    render(<WatchlistPage />);
+    expect(await screen.findByTestId('details-stub')).toBeTruthy();
+  });
+
+  it('falls back to Performance when the stored view is unknown', async () => {
+    window.localStorage.setItem('watchlist_view', 'bogus');
+    save(['NVDA']);
+    render(<WatchlistPage />);
+    expect(await screen.findByTestId('perf-stub')).toBeTruthy();
+  });
+
+  it('switches between Performance, Chart and Details; picking a stock in the list charts it', async () => {
     save(['NVDA', 'AAPL']);
     render(<WatchlistPage />);
     await screen.findByTestId('stock-chart');
-    fireEvent.click(screen.getByRole('radio', { name: 'Compare' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Performance' }));
     expect(screen.getByTestId('perf-stub').textContent).toBe('NVDA,AAPL');
+    fireEvent.click(screen.getByRole('button', { name: /^NVDA/ })); // from Performance, too
+    await waitFor(() => expect(screen.getByTestId('symbol-chart').textContent).toContain('NVDA'));
     fireEvent.click(screen.getByRole('radio', { name: 'Details' }));
     expect(screen.getByTestId('details-stub')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /^AAPL/ })); // picking a stock from Details returns to its chart

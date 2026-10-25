@@ -1,6 +1,7 @@
 // Watchlist performance view: default selection (first 3), add/remove with a 6-symbol maximum, bounded and cached
 // requests (period changes refetch nothing), the chart gets rebased series + a dashed S&P 500, ranked bars, cards, and
-// honest states for partial history, discontinuities, unavailable data and an older server.
+// honest states for partial history, discontinuities, unavailable data and an older server; the equal-weight summary,
+// sector mix, last-close strip and the chart tooltip.
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -25,7 +26,9 @@ vi.mock('recharts', () => {
   };
 });
 
-import WatchlistPerformance from '@/components/watchlist/WatchlistPerformance';
+import WatchlistPerformance, { ChartTip } from '@/components/watchlist/WatchlistPerformance';
+import { computePerformance } from '@/lib/performance';
+import type { ScreenerRow } from '@/services/screenerV2Api';
 
 function sessions(from: string, to: string): string[] {
   const out: string[] = [];
@@ -166,5 +169,120 @@ describe('WatchlistPerformance', () => {
     for (const s of ['AAA', 'BBB', 'CCC']) fireEvent.click(chip(s));
     expect(screen.getByText('Pick at least one stock above to chart it.')).toBeTruthy();
     expect(screen.queryByTestId('ranked')).toBeNull();
+  });
+
+  it('summarises the equal-weight basket of the comparable stocks against the S&P 500, with best and worst', async () => {
+    render(<WatchlistPerformance saved={SAVED} />);
+    await waitFor(() => expect(screen.getByTestId('beat').textContent).toBe('2 of 3'));
+    const r = computePerformance('6m', bench, ['AAA', 'BBB', 'CCC'].map((s) => DATA[s]));
+    const mean = (r.series.reduce((a, s) => a + (s.ret as number), 0) / 3).toFixed(2);
+    expect(screen.getByTestId('basket-ret').textContent).toBe(`+${mean}%`);
+    expect(screen.getByTestId('basket-vs').textContent).toMatch(/^[+-]\d+\.\d pp$/);
+    expect(screen.getByTestId('best-worst').textContent).toMatch(/^AAA \+.*BBB -/);
+    const note = screen.getByTestId('basket-note').textContent;
+    expect(note).toContain('The plain average of 3 stocks with a close on both 2026-04-16 and 2026-10-16 (AAA, BBB, CCC)');
+    expect(note).toContain('A reference for the list, not a portfolio.');
+    expect(note).toContain("measures today's list backwards in time");
+    expect(note).not.toContain('Not included');
+  });
+
+  it('leaves a late starter or a discontinuity out of the basket and says so', async () => {
+    DATA.AAA = hist('AAA', (i) => 10 + i, { from: '2026-08-03' });
+    DATA.BBB = hist('BBB', (i) => 80 + i, { disc: [{ date: '2026-07-01' }] });
+    render(<WatchlistPerformance saved={SAVED} />);
+    await waitFor(() => expect(screen.getByTestId('basket-note').textContent).toContain('Not included: AAA (no full-period return), BBB (no full-period return).'));
+    expect(screen.getByTestId('basket-note').textContent).toContain('The plain average of 1 stock with a close on both');
+    const ccc = computePerformance('6m', bench, [DATA.CCC]).series[0];
+    expect(screen.getByTestId('beat').textContent).toBe(`${(ccc.vsBench as number) > 0 ? 1 : 0} of 1`); // only CCC is a member
+    DATA.AAA = hist('AAA', (i) => 50 + i * 0.2);
+    DATA.BBB = hist('BBB', (i) => 80 - i * 0.05);
+  });
+
+  it('names a stock whose history failed to load as excluded, instead of dropping it silently', async () => {
+    api.stock.mockImplementation(async (s: string) => {
+      if (s === 'BBB') throw new Error('down');
+      return DATA[s];
+    });
+    render(<WatchlistPerformance saved={SAVED} />);
+    await waitFor(() => expect(screen.getByTestId('basket-note').textContent).toContain('Not included: BBB (history unavailable).'));
+    expect(screen.getByTestId('basket-note').textContent).toContain('(AAA, CCC)');
+  });
+
+  it('shows no partial average while a selected history is still loading', async () => {
+    let release: (v: unknown) => void = () => undefined;
+    api.stock.mockImplementation((s: string) => (s === 'CCC' ? new Promise((r) => { release = r; }) : Promise.resolve(DATA[s])));
+    render(<WatchlistPerformance saved={SAVED} />);
+    await waitFor(() => expect(chart.lines.map((l) => l.dataKey)).toEqual(['SPX', 'AAA', 'BBB']));
+    expect(screen.getByTestId('basket-ret').textContent).toBe('…');
+    expect(screen.getByTestId('beat').textContent).toBe('…');
+    expect(screen.getByTestId('basket-note').textContent).toBe('Waiting for every selected stock before averaging.');
+    release(DATA.CCC);
+    await waitFor(() => expect(screen.getByTestId('basket-note').textContent).toContain('(AAA, BBB, CCC)'));
+  });
+
+  it('shows no relative summary without the S&P 500', async () => {
+    api.benchmark.mockRejectedValue(new Error('down'));
+    render(<WatchlistPerformance saved={SAVED} />);
+    await waitFor(() => expect(screen.getAllByTestId('rank-row')).toHaveLength(3));
+    expect(screen.getByTestId('basket-vs').textContent).toBe('—');
+    expect(screen.getByTestId('beat').textContent).toBe('—');
+  });
+
+  it('with the Screener rows: a last-close strip for every saved symbol, the sector mix of the whole list, and closes on the cards', async () => {
+    const rows: Record<string, ScreenerRow> = {
+      AAA: { symbol: 'AAA', sector: 'Technology', close: 12.5, change_1d: 1.25 } as ScreenerRow,
+      BBB: { symbol: 'BBB', sector: 'Energy', close: 80, change_1d: -0.5 } as ScreenerRow,
+      CCC: { symbol: 'CCC', sector: 'Technology', close: 20, change_1d: null } as ScreenerRow,
+      DDD: { symbol: 'DDD', sector: null, close: 30, change_1d: 0 } as ScreenerRow,
+    };
+    render(<WatchlistPerformance saved={['AAA', 'BBB', 'CCC', 'DDD']} rows={rows} session="2026-10-16" />);
+    await waitFor(() => expect(screen.getAllByTestId('perf-card')).toHaveLength(3));
+    const items = screen.getAllByTestId('ticker-item');
+    expect(items.map((i) => i.textContent)).toEqual(['AAA$12.50+1.25%', 'BBB$80.00-0.50%', 'CCC$20.00', 'DDD$30.000.00%']);
+    expect(screen.getByText('Closes and day change for the 2026-10-16 session.')).toBeTruthy();
+    expect(screen.getAllByTestId('sector-row').map((r) => r.textContent)).toEqual(['Technology2 · 50%', 'Energy1 · 25%', 'Unclassified1 · 25%']);
+    expect(screen.getByTestId('sector-mix').textContent).toContain("today's sector classification (not as of past dates)");
+    expect(screen.getAllByTestId('card-close').map((c) => c.textContent)).toEqual(['$12.50', '$80.00', '$20.00']);
+    expect(screen.getAllByTestId('rank-row')[0].textContent).toContain('+1.25%');
+  });
+
+  it('without Screener rows there is no strip, no sector mix and no invented close', async () => {
+    render(<WatchlistPerformance saved={SAVED} />);
+    await waitFor(() => expect(screen.getAllByTestId('perf-card')).toHaveLength(3));
+    expect(screen.queryByTestId('ticker-item')).toBeNull();
+    expect(screen.queryByTestId('sector-mix')).toBeNull();
+    expect(screen.queryByTestId('card-close')).toBeNull();
+  });
+
+  it('states the baseline rule for the chosen period', async () => {
+    render(<WatchlistPerformance saved={SAVED} />);
+    await waitFor(() => expect(screen.getByTestId('baseline-rule').textContent).toContain('the same date 6M earlier'));
+    fireEvent.click(screen.getByRole('radio', { name: 'YTD' }));
+    expect(screen.getByTestId('baseline-rule').textContent).toContain('the same date at the end of last year');
+    expect(screen.getByTestId('baseline-rule').textContent).toContain('A missing close is a gap, never filled.');
+  });
+});
+
+describe('ChartTip', () => {
+  const r = computePerformance('1m', bench, [
+    { symbol: 'AAA', bars: DATA.AAA.bars },
+    { symbol: 'BBB', bars: DATA.BBB.bars },
+  ]);
+  const theme = { tipBg: '#fff', tipText: '#000', spx: '#888' };
+  const last = CAL[CAL.length - 1];
+
+  it('lists each line highest first, the S&P 500, and the biggest move that session', () => {
+    render(<ChartTip active label={last} result={r} symbols={['BBB', 'AAA']} colorOf={() => '#000'} theme={theme} />);
+    const tip = screen.getByTestId('chart-tip');
+    expect(tip.textContent).toMatch(/^Fri, Oct 16, 2026AAA\+.*BBB-.*S&P 500\+/);
+    expect(screen.getByTestId('chart-tip-mover').textContent).toMatch(/^Biggest move that session: AAA \+0\.\d\d%$/);
+  });
+
+  it('has no mover on the first session of the window, and renders nothing when inactive', () => {
+    const { container } = render(<ChartTip active label={r.baseline!} result={r} symbols={['AAA', 'BBB']} colorOf={() => '#000'} theme={theme} />);
+    expect(screen.queryByTestId('chart-tip-mover')).toBeNull();
+    expect(container.textContent).toContain('AAA0.0%');
+    const off = render(<ChartTip active={false} label={last} result={r} symbols={['AAA']} colorOf={() => '#000'} theme={theme} />);
+    expect(off.container.innerHTML).toBe('');
   });
 });

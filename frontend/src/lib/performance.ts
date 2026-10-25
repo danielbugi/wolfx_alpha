@@ -163,3 +163,83 @@ export function coverageNote(s: SeriesResult, baseline: string | null, end: stri
   if (s.flags.includes('stale')) parts.push(`last close ${s.end}, before ${end}`);
   return parts.length ? parts.join('; ') : null;
 }
+
+/**
+ * Equal-weight watchlist basket over the period: equal amounts bought at the baseline close of every COMPARABLE selected
+ * stock (full period, no flag), held without rebalancing. Its return is therefore the plain average of the members'
+ * returns, and its value on a session is the average of their rebased values (null when any member has no close then).
+ * It is a reference figure for the list, not a portfolio: the watchlist holds no positions. Stocks without a comparable
+ * full-period return are listed in `excluded`, never averaged in.
+ */
+export interface Basket {
+  members: string[];
+  excluded: string[];
+  ret: number | null;
+  benchRet: number | null;
+  vsBench: number | null;
+  points: Map<string, number | null>;
+  /** members whose return beat the S&P 500 over the same window, out of the members with a relative figure */
+  beat: number;
+  beatOf: number;
+}
+
+export function equalWeightBasket(r: PerformanceResult, symbols: string[]): Basket {
+  const all = symbols.map((s) => r.series.find((x) => x.symbol === s)).filter((s): s is SeriesResult => !!s);
+  const members = all.filter((s) => s.comparable && s.ret != null);
+  const excluded = symbols.filter((s) => !members.some((m) => m.symbol === s));
+  const points = new Map<string, number | null>();
+  if (members.length) {
+    for (const d of r.sessions) {
+      const vals = members.map((m) => m.points.get(d));
+      points.set(d, vals.every((v) => v != null) ? (vals as number[]).reduce((a, b) => a + b, 0) / vals.length : null);
+    }
+  }
+  const ret = members.length ? members.reduce((a, m) => a + (m.ret as number), 0) / members.length : null;
+  const benchRet = r.bench && r.end ? r.bench.get(r.end) ?? null : null;
+  const rel = members.filter((m) => m.vsBench != null);
+  return {
+    members: members.map((m) => m.symbol),
+    excluded,
+    ret,
+    benchRet: ret == null ? null : benchRet,
+    vsBench: ret != null && benchRet != null ? ret - benchRet : null,
+    points,
+    beat: rel.filter((m) => (m.vsBench as number) > 0).length,
+    beatOf: rel.length,
+  };
+}
+
+/** % move of a series on `date` versus the previous session of the window (null when either close is missing). */
+export function sessionMove(r: PerformanceResult, symbol: string, date: string): number | null {
+  const i = r.sessions.indexOf(date);
+  if (i < 1) return null;
+  const s = r.series.find((x) => x.symbol === symbol);
+  if (!s || s.flags.includes('discontinuity')) return null;
+  const cur = s.points.get(date);
+  const prev = s.points.get(r.sessions[i - 1]);
+  if (cur == null || prev == null) return null;
+  return ((1 + cur / 100) / (1 + prev / 100) - 1) * 100;
+}
+
+/** The selected stock with the largest absolute move on `date` (null when no move can be computed). */
+export function biggestMover(r: PerformanceResult, symbols: string[], date: string): { symbol: string; move: number } | null {
+  let best: { symbol: string; move: number } | null = null;
+  for (const s of symbols) {
+    const m = sessionMove(r, s, date);
+    if (m != null && (best == null || Math.abs(m) > Math.abs(best.move))) best = { symbol: s, move: m };
+  }
+  return best;
+}
+
+/** Count of saved symbols per CURRENT sector classification (not point-in-time), largest first; unknown last. */
+export function sectorMix(symbols: string[], sectorOf: (s: string) => string | null | undefined): { sector: string; count: number; share: number }[] {
+  const counts = new Map<string, number>();
+  for (const s of symbols) {
+    const k = sectorOf(s) || 'Unclassified';
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  const total = symbols.length || 1;
+  return [...counts.entries()]
+    .map(([sector, count]) => ({ sector, count, share: count / total }))
+    .sort((a, b) => (a.sector === 'Unclassified' ? 1 : 0) - (b.sector === 'Unclassified' ? 1 : 0) || b.count - a.count || a.sector.localeCompare(b.sector));
+}
