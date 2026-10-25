@@ -14,6 +14,7 @@ Research artifacts only. Nothing here is imported by the pipeline, backend, bot 
 | `EARNINGS_RISK_PRODUCT_SPEC.md` | Earnings Risk indicators (spec only) + point-in-time data audit |
 | `TAIL_RISK_ML_RESEARCH_PROPOSAL.md` | Tail-loss target proposal (no training) |
 | `PHASE2_RECAP_AND_ROADMAP.md` | Recap of what exists and what is unfinished (2026-10-21) |
+| `LEDGER_ANALYTICS_RESEARCH_PLAN_2026-10-25.md` | Plan for Notebooks 03/04: closed vs open cohorts, direction expectancy, execution-adjusted R, MFE/post-exit, c1/c2, portfolio simulation (plan only) |
 
 ## Reproduce
 
