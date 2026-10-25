@@ -179,20 +179,45 @@ describe('WatchlistPerformance', () => {
     expect(screen.getByTestId('basket-ret').textContent).toBe(`+${mean}%`);
     expect(screen.getByTestId('basket-vs').textContent).toMatch(/^[+-]\d+\.\d pp$/);
     expect(screen.getByTestId('best-worst').textContent).toMatch(/^AAA \+.*BBB -/);
-    expect(screen.getByTestId('basket-note').textContent).toContain('A reference for the list, not a portfolio.');
-    expect(screen.getByTestId('basket-note').textContent).not.toContain('Not included');
+    const note = screen.getByTestId('basket-note').textContent;
+    expect(note).toContain('The plain average of 3 stocks with a close on both 2026-04-16 and 2026-10-16 (AAA, BBB, CCC)');
+    expect(note).toContain('A reference for the list, not a portfolio.');
+    expect(note).toContain("measures today's list backwards in time");
+    expect(note).not.toContain('Not included');
   });
 
   it('leaves a late starter or a discontinuity out of the basket and says so', async () => {
     DATA.AAA = hist('AAA', (i) => 10 + i, { from: '2026-08-03' });
     DATA.BBB = hist('BBB', (i) => 80 + i, { disc: [{ date: '2026-07-01' }] });
     render(<WatchlistPerformance saved={SAVED} />);
-    await waitFor(() => expect(screen.getByTestId('basket-note').textContent).toContain('Not included (no full-period return): AAA, BBB.'));
-    expect(screen.getByTestId('basket-note').textContent).toContain('average of the 1 comparable stock');
+    await waitFor(() => expect(screen.getByTestId('basket-note').textContent).toContain('Not included: AAA (no full-period return), BBB (no full-period return).'));
+    expect(screen.getByTestId('basket-note').textContent).toContain('The plain average of 1 stock with a close on both');
     const ccc = computePerformance('6m', bench, [DATA.CCC]).series[0];
     expect(screen.getByTestId('beat').textContent).toBe(`${(ccc.vsBench as number) > 0 ? 1 : 0} of 1`); // only CCC is a member
     DATA.AAA = hist('AAA', (i) => 50 + i * 0.2);
     DATA.BBB = hist('BBB', (i) => 80 - i * 0.05);
+  });
+
+  it('names a stock whose history failed to load as excluded, instead of dropping it silently', async () => {
+    api.stock.mockImplementation(async (s: string) => {
+      if (s === 'BBB') throw new Error('down');
+      return DATA[s];
+    });
+    render(<WatchlistPerformance saved={SAVED} />);
+    await waitFor(() => expect(screen.getByTestId('basket-note').textContent).toContain('Not included: BBB (history unavailable).'));
+    expect(screen.getByTestId('basket-note').textContent).toContain('(AAA, CCC)');
+  });
+
+  it('shows no partial average while a selected history is still loading', async () => {
+    let release: (v: unknown) => void = () => undefined;
+    api.stock.mockImplementation((s: string) => (s === 'CCC' ? new Promise((r) => { release = r; }) : Promise.resolve(DATA[s])));
+    render(<WatchlistPerformance saved={SAVED} />);
+    await waitFor(() => expect(chart.lines.map((l) => l.dataKey)).toEqual(['SPX', 'AAA', 'BBB']));
+    expect(screen.getByTestId('basket-ret').textContent).toBe('…');
+    expect(screen.getByTestId('beat').textContent).toBe('…');
+    expect(screen.getByTestId('basket-note').textContent).toBe('Waiting for every selected stock before averaging.');
+    release(DATA.CCC);
+    await waitFor(() => expect(screen.getByTestId('basket-note').textContent).toContain('(AAA, BBB, CCC)'));
   });
 
   it('shows no relative summary without the S&P 500', async () => {

@@ -179,12 +179,16 @@ export default function WatchlistPerformance({ saved, rows = {}, session = null 
     [period, bench, loaded.join(','), histories],
   );
   const chartData = useMemo(() => chartRows(result, loaded), [result, loaded.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
-  const basket = useMemo(() => equalWeightBasket(result, loaded), [result, loaded.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+  // over the SELECTED symbols, so a stock whose history failed to load is named as excluded, never silently dropped
+  const basket = useMemo(() => equalWeightBasket(result, selected), [result, selKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const colorOf = (s: string) => palette[selected.indexOf(s) % palette.length];
   const bySymbol = new Map(result.series.map((s) => [s.symbol, s]));
   const benchRet = result.bench && result.end ? result.bench.get(result.end) ?? null : null;
   const unchecked = loaded.filter((s) => !(histories[s] as StockHistory).discontinuitiesChecked);
   const waiting = selected.some((s) => histories[s] === undefined) || bench === null;
+  // the summary waits for every selected history, so its member set never changes while data arrives
+  const settled = !waiting;
+  const excludedNote = basket.excluded.map((s) => `${s} (${failed.includes(s) ? 'history unavailable' : 'no full-period return'})`).join(', ');
   const periodLabel = PERIODS.find((p) => p.value === period)?.label;
   const hasRows = Object.keys(rows).length > 0;
 
@@ -264,32 +268,37 @@ export default function WatchlistPerformance({ saved, rows = {}, session = null 
               Equal-weight watchlist · {periodLabel}
             </h2>
             <p className={clsx('mt-1 text-[34px] font-semibold leading-tight tabular-nums', basket.ret == null ? 'text-slate-400' : 'text-slate-900')} data-testid="basket-ret">
-              {waiting && basket.ret == null ? '…' : pct(basket.ret, 2)}
+              {settled ? pct(basket.ret, 2) : '…'}
             </p>
             <p className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-slate-500">
               <span className={clsx('rounded-md px-1.5 py-0.5 font-semibold tabular-nums', pill(basket.vsBench))} data-testid="basket-vs">
-                {pp(basket.vsBench)}
+                {settled ? pp(basket.vsBench) : '…'}
               </span>
-              vs S&amp;P 500 {basket.benchRet != null ? `(${pct(basket.benchRet)})` : ''}
+              vs S&amp;P 500 {settled && basket.benchRet != null ? `(${pct(basket.benchRet)})` : ''}
             </p>
             <dl className="mt-4 grid grid-cols-2 gap-3 text-[12px]">
               <div>
                 <dt className="text-slate-400">Beat the S&amp;P 500</dt>
                 <dd className="text-[15px] font-semibold tabular-nums text-slate-900" data-testid="beat">
-                  {basket.beatOf ? `${basket.beat} of ${basket.beatOf}` : '—'}
+                  {!settled ? '…' : basket.beatOf ? `${basket.beat} of ${basket.beatOf}` : '—'}
                 </dd>
               </div>
               <div>
                 <dt className="text-slate-400">Best / worst</dt>
                 <dd className="text-[13px] font-semibold tabular-nums" data-testid="best-worst">
-                  {best ? <span className={tone(best.ret)}>{best.symbol} {pct(best.ret)}</span> : '—'}
-                  {worst && <span className={clsx('block', tone(worst.ret))}>{worst.symbol} {pct(worst.ret)}</span>}
+                  {!settled ? '…' : best ? <span className={tone(best.ret)}>{best.symbol} {pct(best.ret)}</span> : '—'}
+                  {settled && worst && <span className={clsx('block', tone(worst.ret))}>{worst.symbol} {pct(worst.ret)}</span>}
                 </dd>
               </div>
             </dl>
             <p className="mt-3 text-[11px] leading-snug text-slate-400" data-testid="basket-note">
-              The plain average of the {basket.members.length || 'selected'} comparable stock{basket.members.length === 1 ? '' : 's'}&apos; returns from {result.baseline ?? '—'} (equal amounts at that close, held, no rebalancing). A reference for the list, not a portfolio.
-              {basket.excluded.length > 0 && ` Not included (no full-period return): ${basket.excluded.join(', ')}.`}
+              {!settled
+                ? 'Waiting for every selected stock before averaging.'
+                : basket.members.length
+                  ? `The plain average of ${basket.members.length} stock${basket.members.length === 1 ? '' : 's'} with a close on both ${result.baseline} and ${result.end} (${basket.members.join(', ')}): equal amounts at the first close, held, no rebalancing. A reference for the list, not a portfolio.`
+                  : 'No selected stock has a full-period return, so no average is shown.'}
+              {settled && basket.excluded.length > 0 && ` Not included: ${excludedNote}.`}
+              {settled && basket.members.length > 0 && " It measures today's list backwards in time, so it shows how these stocks did, not how a list picked at the start would have done."}
             </p>
           </div>
 
