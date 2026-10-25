@@ -42,6 +42,7 @@ from alerts import channel_content as cx  # noqa: E402
 from alerts import deeplink  # noqa: E402
 from alerts import board as bd  # noqa: E402
 from alerts import channel_news  # noqa: E402
+from alerts import channel_switches  # noqa: E402
 from alerts import digest_builder as dbld  # noqa: E402
 from alerts import market_context as mc  # noqa: E402
 from alerts import market_stats as ms  # noqa: E402
@@ -150,6 +151,12 @@ def top_gainers_from(rows, limit: int = 10) -> list:
     return sorted(pool, key=lambda r: (-r["ret1_pct"], r["symbol"]))[:limit]
 
 
+def top_losers_from(rows, limit: int = 10) -> list:
+    """The mirror of top_gainers_from: the biggest 1-day % drops, from the same pool (same rows, same liquidity floor)."""
+    pool = [r for r in rows if r["dv20"] >= dbld.DEFAULT_MIN_DV and r["ret1_pct"] < 0]
+    return sorted(pool, key=lambda r: (r["ret1_pct"], r["symbol"]))[:limit]
+
+
 def load_market_intelligence(session) -> Optional[dict]:
     """The OBSERVED Market Intelligence payload for exactly `session` (never "latest"), or None. Read-only. None when the snapshot is missing
     or the storage is not provisioned (migrations 24/25 / the runtime grant): the post then says nothing rather than something invented."""
@@ -254,6 +261,11 @@ def main() -> int:
     args = ap.parse_args()
     if args.all and args.send and args.to != "owner":
         ap.error("--all --send is only allowed with --to owner (the channel gets one extra post per session)")
+
+    if args.send and args.to != "owner" and args.kind == "auto" and not args.all and not channel_switches.extra_posts_enabled():
+        print("Skipping: the automatic extra post (rotation / weekly recap / education tips) is paused; the channel carries the daily "
+              "market report and the assistant post only. Set CHANNEL_EXTRA_POSTS_ENABLED=1 to restore it. Nothing sent.")
+        return 0
 
     tz = ZoneInfo(os.getenv("ALERTS_TIMEZONE", "Asia/Jerusalem"))
     now_local = datetime.now(tz)
