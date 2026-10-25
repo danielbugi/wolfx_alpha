@@ -155,6 +155,12 @@ describe('Sector detail page', () => {
     expect(container.textContent).toMatch(/not point-in-time/);
   });
 
+  it('hands the sector to the Screener with its existing sector filter, and states the price date', async () => {
+    render(<SectorPage />);
+    expect((await screen.findByTestId('screen-sector')).getAttribute('href')).toBe('/screener?sector=Alpha&sort=rs_20&order=desc');
+    expect(screen.getAllByTestId('data-stamp').some((s) => /^Data as of /.test(s.textContent ?? ''))).toBe(true);
+  });
+
   it('keeps stock links and shows missing member values as dashes', async () => {
     render(<SectorPage />);
     expect((await screen.findByRole('link', { name: 'AAA' })).getAttribute('href')).toBe('/stock/AAA');

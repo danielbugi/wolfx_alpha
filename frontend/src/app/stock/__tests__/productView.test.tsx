@@ -2,7 +2,7 @@
 // a breakout track record with outcomes): none of it may reach the screen or the chart.
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const chartProps = vi.hoisted(() => ({ last: null as null | Record<string, unknown> }));
 
@@ -73,6 +73,7 @@ vi.mock('@/services/api', async (importOriginal) => {
 });
 
 import StockDetailPage from '@/app/stock/[symbol]/page';
+import { stockApi } from '@/services/api';
 
 const FORBIDDEN = [
   /trade plan/i, /\bEntry\b/, /\bStop\b/, /\bTP[123]\b/, /position size/i, /account risk/i, /model score/i, /experimental/i,
@@ -114,6 +115,19 @@ describe('stock page (product view)', () => {
     expect(await screen.findByText('news panel')).toBeTruthy();
     fireEvent.click(screen.getByText('Technicals'));
     expect(await screen.findByText('Key levels')).toBeTruthy();
+  });
+
+  it('states one "Data as of" line in the header: the newest stored daily bar the page charts', async () => {
+    const bar = (date: string) => ({ date, open: 10, high: 11, low: 9, close: 10, volume: 1000 });
+    vi.mocked(stockApi.getPriceHistory).mockResolvedValueOnce({ bars: [bar('2026-10-22'), bar('2026-10-23')] } as never);
+    render(<StockDetailPage />);
+    await waitFor(() => expect(screen.getAllByTestId('data-stamp').map((s) => s.textContent)).toContain('Data as of 2026-10-23·end-of-day prices'));
+  });
+
+  it('says the date is unavailable when there is no price history, never a guessed date', async () => {
+    render(<StockDetailPage />);
+    await screen.findByText('ACME');
+    expect(screen.getAllByTestId('data-stamp').map((s) => s.textContent)).toContain('Data as of unavailable·end-of-day prices');
   });
 
   it('keeps missing values unavailable instead of inventing them', async () => {

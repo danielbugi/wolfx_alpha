@@ -124,7 +124,7 @@ export default function SectorsPage() {
         <div className="mb-3 flex flex-wrap items-end justify-between gap-3 px-1">
           <div>
             <h2 className="text-[19px] font-semibold text-slate-900">Performance of current members</h2>
-            <DataStamp className="mt-0.5" label="Prices as of" asOf={data?.as_of ?? null} source="end-of-day prices" />
+            <DataStamp className="mt-0.5" asOf={data?.as_of ?? null} source="end-of-day prices" />
           </div>
           <SegmentedControl aria-label="Window" value={win} onChange={setWin} options={SECTOR_WINDOWS.map((w) => ({ value: w.key, label: w.label }))} />
         </div>

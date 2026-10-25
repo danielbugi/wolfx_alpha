@@ -9,6 +9,7 @@ import SymbolChart from '@/components/watchlist/SymbolChart';
 import WatchlistPanel from '@/components/watchlist/WatchlistPanel';
 import WatchlistPerformance from '@/components/watchlist/WatchlistPerformance';
 import WatchlistDetails from '@/components/watchlist/WatchlistDetails';
+import DataStamp from '@/components/common/DataStamp';
 import { useWatchlist } from '@/lib/watchlist';
 import { watchlistPairs } from '@/lib/watchlistView';
 
@@ -123,6 +124,7 @@ export default function WatchlistPage() {
           <div className="min-w-0">
             <h1 className="large-title">Watchlist</h1>
             <p className="mt-1.5 text-[15px] text-slate-500">Your lists, saved in this browser. Compare several against the S&amp;P 500, or pick one to chart it.</p>
+            {symbols.length > 0 && (session || unavailable) && <DataStamp className="mt-1" asOf={session} source="end-of-day prices · same data as the Screener" />}
           </div>
         </div>
 

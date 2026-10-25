@@ -6,6 +6,7 @@ import { Card, CardBody, CardHeader } from '@nextui-org/react';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/20/solid';
 import { clsx } from 'clsx';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import DataStamp from '@/components/common/DataStamp';
 import ErrorAlert from '@/components/common/ErrorAlert';
 import { SelectField, TextField } from '@/components/ui/Field';
 import EarningsTable from '@/components/earnings/EarningsTable';
@@ -65,7 +66,7 @@ function EarningsCalendar() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const { anchors, calendar, board, boardState, calendarFailed, watchlist, histories, reload } = useEarningsCalendar();
+  const { anchors, calendar, board, boardSession, boardState, calendarFailed, watchlist, histories, reload } = useEarningsCalendar();
   const [query, setQuery] = useState('');
 
   // URL state: week (its Monday), selected day, filters -- shareable and back-button friendly
@@ -136,6 +137,7 @@ function EarningsCalendar() {
           <p className="mt-1.5 max-w-3xl text-[15px] leading-relaxed text-slate-500">
             Who reports, day by day · New York dates · a daily list of US stocks with notable recent price moves and your watchlist
           </p>
+          {boardState !== 'loading' && <DataStamp className="mt-1" asOf={boardSession} source="earnings dates as stored for the list's stocks" />}
         </div>
 
         {/* Week navigator + filters */}

@@ -80,7 +80,7 @@ beforeEach(() => {
 describe('Screener v2 page', () => {
   it('states the session, previous session, dollar-volume window and coverage', async () => {
     render(<ScreenerPage />);
-    expect((await screen.findByTestId('data-stamp')).textContent).toMatch(/Session\s*2026-10-16.*previous 2026-10-15.*2026-09-21 to 2026-10-16/);
+    expect((await screen.findByTestId('data-stamp')).textContent).toMatch(/Data as of\s*2026-10-16.*end-of-day prices · previous 2026-10-15.*2026-09-21 to 2026-10-16/);
     const cov = screen.getByTestId('coverage').textContent!;
     expect(cov).toMatch(/Universe 3,063 stocks with a bar on 2026-10-16/);
     expect(cov).toMatch(/Relative strength \(observed\): 3,063 of 3,063/);
@@ -152,13 +152,22 @@ describe('Screener v2 page', () => {
     expect(create).toHaveBeenCalled();
   });
 
-  it('lists every metric definition with its data family, and titles each column with it', async () => {
+  it('lists every metric definition with its data family, and explains each column on tap without sorting it', async () => {
     render(<ScreenerPage />);
     const d = await screen.findByTestId('definitions');
     expect(d.textContent).toMatch(/ObservedRS percentile, 20 sessions: Percentile of the 20-session return\./);
     expect(d.textContent).toMatch(/Reference \(ingestion-time\)Market cap: Fundamentals known by the session\./);
     const th = screen.getByRole('button', { name: /^RS 20/ }).closest('th')!;
-    expect(th.getAttribute('title')).toMatch(/RS percentile, 20 sessions \(observed\)/);
+    const calls = nav.replace.mock.calls.length;
+    fireEvent.click(within(th).getByRole('button', { name: 'About RS percentile, 20 sessions' }));
+    expect(screen.getByRole('tooltip').textContent).toBe('RS percentile, 20 sessionsPercentile of the 20-session return. Data: observed.');
+    expect(nav.replace.mock.calls.length).toBe(calls); // explaining a column never sorts it
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    // the same API definitions explain the filters
+    const legend = screen.getByText('Market cap', { selector: 'legend' });
+    fireEvent.click(within(legend).getByRole('button', { name: 'About Market cap' }));
+    expect(screen.getByRole('tooltip').textContent).toContain('Fundamentals known by the session.');
   });
 
   it('keeps the wide table inside its own positioned scroller (no page-wide horizontal scroll on phones)', async () => {

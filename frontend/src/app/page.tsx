@@ -28,6 +28,7 @@ import MarketIntelligencePanel from '@/components/marketIntel/MarketIntelligence
 import MarketChartCard from '@/components/dashboard/MarketChartCard';
 import MomentumTopCard from '@/components/dashboard/MomentumTopCard';
 import { sectorHref } from '@/lib/sectors';
+import { screenSectorHref } from '@/lib/screenerV2';
 import { ResolvedTheme, useResolvedTheme } from '@/lib/theme';
 
 function timeAgo(date: Date | null): string {
@@ -358,14 +359,11 @@ export default function DashboardPage() {
                           {selectedSector} page →
                         </Link>
                       )}
-                      {/* Internal tool: the selected sector filters the internal momentum lists on /momentum. */}
-                      <Link
-                        href={`/momentum?sector=${encodeURIComponent(selectedSector)}`}
-                        title="Open the internal momentum view filtered to this sector"
-                        className="text-xs font-medium text-accent hover:underline"
-                      >
-                        Internal view →
-                      </Link>
+                      {screenSectorHref(selectedSector) && (
+                        <Link href={screenSectorHref(selectedSector)!} className="text-xs font-medium text-accent hover:underline" data-testid="screen-sector">
+                          Screen this sector →
+                        </Link>
+                      )}
                     </div>
                   )}
                 </div>

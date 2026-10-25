@@ -37,6 +37,7 @@ import { StockNavButtons, StockNavCaption, useStockNav } from '@/components/stoc
 import { positionPct } from '@/lib/priceMath';
 import { gradeColor } from '@/lib/uiColors';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import DataStamp from '@/components/common/DataStamp';
 import SearchBox from '@/components/layout/SearchBox';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 
@@ -531,8 +532,9 @@ export default function StockDetailPage() {
                   snap.sector || 'Unknown sector'
                 )}
                 {snap.industry ? ` · ${snap.industry}` : ''}
-                {asOfDate ? ` · data as of ${asOfDate}` : ''}
               </p>
+              {/* the newest stored daily bar this page charts; the stored snapshot date when there is no price history */}
+              <DataStamp className="mt-0.5" asOf={bars.length ? bars[bars.length - 1].date : asOfDate} source="end-of-day prices" />
               {nav.list && nav.index >= 0 && (
                 <p className="mt-0.5 text-xs text-slate-400">
                   <StockNavCaption nav={nav} />

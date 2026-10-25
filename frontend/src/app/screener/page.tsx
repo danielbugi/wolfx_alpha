@@ -12,6 +12,7 @@ import DataStamp from '@/components/common/DataStamp';
 import ErrorAlert from '@/components/common/ErrorAlert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import SortHeader from '@/components/ui/SortHeader';
+import InfoTip from '@/components/ui/InfoTip';
 import { MultiSelect, TextField } from '@/components/ui/Field';
 import { useWatchlist } from '@/lib/watchlist';
 import SegmentedControl from '@/components/ui/SegmentedControl';
@@ -163,9 +164,8 @@ function Screener() {
             {result && (
               <DataStamp
                 className="mt-1"
-                label="Session"
                 asOf={result.session}
-                source={`previous ${result.previous_session ?? '—'} · dollar volume ${result.dollar_volume_window.from ?? '—'} to ${result.dollar_volume_window.to}`}
+                source={`end-of-day prices · previous ${result.previous_session ?? '—'} · dollar volume ${result.dollar_volume_window.from ?? '—'} to ${result.dollar_volume_window.to}`}
               />
             )}
           </div>
@@ -236,6 +236,12 @@ function Screener() {
                 <legend className="mb-1 block text-xs font-medium text-slate-600">
                   {f.label}
                   {f.suffix ? <span className="font-normal text-slate-400"> ({f.suffix})</span> : null}
+                  {metric(f.key)?.definition && (
+                    <>
+                      {' '}
+                      <InfoTip label={metric(f.key)!.label} text={metric(f.key)!.definition} />
+                    </>
+                  )}
                 </legend>
                 <div className="grid grid-cols-2 gap-1">
                   <input
@@ -371,17 +377,26 @@ function Screener() {
                   <th className="px-3 py-2 text-left">
                     <SortHeader label="Sector" active={state.sort === 'sector'} dir={state.sort === 'sector' ? state.order : null} onClick={() => sortBy('sector')} />
                   </th>
-                  <th className="px-3 py-2 text-left font-medium" title="Where the stock sits on the Strength Map (relative strength over 20 and 60 sessions)">
-                    Strength
+                  <th className="px-3 py-2 text-left font-medium">
+                    <span className="inline-flex items-center gap-1">
+                      Strength
+                      <InfoTip label="Strength" text="Where the stock sits on the Strength Map: its relative strength over 20 and 60 sessions." />
+                    </span>
                   </th>
-                  <th className="px-3 py-2 text-right" title="Strength Score 0-100: relative strength 35%, trend 25%, momentum 20%, volume 10%, liquidity 10%">
-                    <SortHeader label="Score" active={state.sort === 'strength_score'} dir={state.sort === 'strength_score' ? state.order : null} onClick={() => sortBy('strength_score')} align="end" />
+                  <th className="px-3 py-2 text-right">
+                    <span className="inline-flex items-center justify-end gap-1">
+                      <SortHeader label="Score" active={state.sort === 'strength_score'} dir={state.sort === 'strength_score' ? state.order : null} onClick={() => sortBy('strength_score')} align="end" />
+                      <InfoTip label="Strength Score" text="0-100. Relative strength 35%, trend 25%, momentum 20%, volume 10%, liquidity 10%. Withheld when the data-health check fails." />
+                    </span>
                   </th>
                   {COLUMNS.map((c) => {
                     const m = metric(c as string);
                     return (
-                      <th key={c} className="whitespace-nowrap px-3 py-2 text-right font-medium" title={m ? `${m.label} (${FAMILY_LABEL[m.family].toLowerCase()}): ${m.definition}` : undefined}>
-                        <SortHeader label={SHORT[c] ?? String(c)} active={state.sort === c} dir={state.sort === c ? state.order : null} onClick={() => sortBy(c as string)} align="end" />
+                      <th key={c} className="whitespace-nowrap px-3 py-2 text-right font-medium">
+                        <span className="inline-flex items-center justify-end gap-1">
+                          <SortHeader label={SHORT[c] ?? String(c)} active={state.sort === c} dir={state.sort === c ? state.order : null} onClick={() => sortBy(c as string)} align="end" />
+                          {m && <InfoTip label={m.label} text={`${m.definition} Data: ${FAMILY_LABEL[m.family].toLowerCase()}.`} />}
+                        </span>
                       </th>
                     );
                   })}
