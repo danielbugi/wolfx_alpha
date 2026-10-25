@@ -154,12 +154,13 @@ const MOVERS_FLOOR: [string, string][] = [['min_close', '1'], ['min_dollar_vol_2
  * The Screener ranked like an Overview movers list, for the Screener's ONE explicit session: gainers / losers by 1-day
  * change, unusual volume by volume ratio (2x+). All three keep the card's "every liquid stock" floor.
  */
-export function moversScreenerHref(list: MoversList): string {
+export function moversScreenerHref(list: MoversList, session?: string | null): string {
   const p = new URLSearchParams(
     list === 'volume'
       ? [...MOVERS_FLOOR, ['min_volume_ratio', '2'], ['sort', 'volume_ratio'], ['order', 'desc']]
       : [...MOVERS_FLOOR, ['sort', 'change_1d'], ['order', list === 'gainers' ? 'desc' : 'asc']],
   );
+  if (session) p.append('session', session); // the exact session the card's lists describe
   return `/screener?${p.toString()}`;
 }
 
@@ -167,5 +168,16 @@ export function moversScreenerHref(list: MoversList): string {
 export function screenSectorHref(sector: string | null | undefined): string | null {
   if (!sector || sector === 'Unknown') return null;
   return `/screener?${new URLSearchParams([['sector', sector], ['sort', 'rs_20'], ['order', 'desc']]).toString()}`;
+}
+
+/** Stock Peers = the Screener's own query: the stock's Screener sector on the stock's session, largest first. */
+export function peersState(sector: string, session: string | null, size: number): ScreenState {
+  return { ...DEFAULT_STATE, session, sectors: [sector], sort: 'market_cap', order: 'desc', pageSize: size };
+}
+
+/** The Screener view that lists the same peers (the Peers panel's "All ... in the Screener" link). */
+export function peersScreenerHref(sector: string, session: string | null): string {
+  const pairs = toQueryPairs(peersState(sector, session, DEFAULT_STATE.pageSize)).filter(([k]) => k !== 'page' && k !== 'page_size');
+  return `/screener?${new URLSearchParams(pairs).toString()}`;
 }
 

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, CardBody, CardHeader, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow } from '@nextui-org/react';
 import { ChevronRightIcon } from '@heroicons/react/20/solid';
-import { StockItem } from '@/services/api';
+import { MoversMeta, StockItem } from '@/services/api';
 import SymbolHoverLink from '@/components/dashboard/SymbolHoverLink';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import SortHeader from '@/components/ui/SortHeader';
@@ -39,23 +39,51 @@ const COLUMNS: { key: Col; label: string; align: 'start' | 'end' }[] = [
   { key: 'sector', label: 'Sector', align: 'start' },
 ];
 
+const pct = (v: number | null) => (v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`);
+
+/** Why a list is empty, from what the session's data actually holds (never a generic "nothing today"). */
+function emptyReason(list: MoversList, meta: MoversMeta | null | undefined): string {
+  if (!meta) return 'Nothing on this list today.';
+  const s = meta.session;
+  if (list === 'volume')
+    return meta.coverage.volume_ratio === 0
+      ? `Volume ratios for the ${s} session are not available yet.`
+      : `No stock traded at ${meta.min_volume_ratio}× its usual volume on ${s}.`;
+  if (meta.coverage.change_1d === 0) return `No previous session to compare ${s} with.`;
+  return `No stock ${list === 'gainers' ? 'rose' : 'fell'} on ${s}.`;
+}
+
 /**
  * Whole-market movers: the three "any stock" lists (gainers, losers, unusual volume) in one card behind a segmented
- * control, instead of three stacked tables. Every liquid stock is eligible, whatever its channel position.
+ * control. They are Screener queries for ONE explicit session (`meta.session`, served by the backend's Screener v2
+ * engine), and "View all" opens exactly that query and session in the Screener.
  */
-export default function MarketMovers({ gainers, losers, unusualVolume }: { gainers: StockItem[]; losers: StockItem[]; unusualVolume: StockItem[] }) {
+export default function MarketMovers({
+  gainers,
+  losers,
+  unusualVolume,
+  meta,
+}: {
+  gainers: StockItem[];
+  losers: StockItem[];
+  unusualVolume: StockItem[];
+  meta?: MoversMeta | null;
+}) {
   const router = useRouter();
   const [list, setList] = useState<MoversList>('gainers');
   const rows = list === 'gainers' ? gainers : list === 'losers' ? losers : unusualVolume;
   const { sorted, sortKey, sortDir, toggle } = useTableSort(rows, ACCESSORS);
-  const meta = LISTS.find((l) => l.value === list)!;
+  const listMeta = LISTS.find((l) => l.value === list)!;
 
   return (
     <Card className="border border-black/[0.05] shadow-sm">
       <CardHeader className="flex flex-wrap items-end justify-between gap-3 px-5 pt-5 pb-3">
         <div>
           <h2 className="text-[17px] font-semibold text-slate-900">Whole-Market Movers</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Every liquid stock · {meta.blurb.toLowerCase()}</p>
+          <p className="mt-0.5 text-xs text-slate-500" data-testid="movers-session">
+            Every liquid stock ($1+, $1M+ a day) · {listMeta.blurb.toLowerCase()}
+            {meta?.session ? ` · session ${meta.session}` : ''}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <SegmentedControl
@@ -65,7 +93,7 @@ export default function MarketMovers({ gainers, losers, unusualVolume }: { gaine
             onChange={setList}
           />
           <Link
-            href={moversScreenerHref(list)}
+            href={moversScreenerHref(list, meta?.session)}
             title="The whole list in the Screener, ranked the same way (same price and liquidity floor)"
             data-testid="movers-view-all"
             className="inline-flex items-center text-xs font-medium text-accent hover:underline"
@@ -77,11 +105,13 @@ export default function MarketMovers({ gainers, losers, unusualVolume }: { gaine
       </CardHeader>
       <CardBody className="p-0">
         {sorted.length === 0 ? (
-          <p className="py-10 text-center text-sm text-slate-400">Nothing on this list today.</p>
+          <p className="py-10 text-center text-sm text-slate-400" data-testid="movers-empty">
+            {emptyReason(list, meta)}
+          </p>
         ) : (
           <Table
             removeWrapper
-            aria-label={meta.label}
+            aria-label={listMeta.label}
             onRowAction={(key) => router.push(`/stock/${key}`)}
             classNames={{
               th: 'bg-slate-50/70 text-slate-500 font-medium text-[11px] h-8 first:pl-5 last:pr-5',
@@ -104,12 +134,15 @@ export default function MarketMovers({ gainers, losers, unusualVolume }: { gaine
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-slate-800">${stock.current_price.toFixed(2)}</TableCell>
                   <TableCell className="text-right">
-                    <span className={`font-semibold tabular-nums ${stock.price_change_pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                      {stock.price_change_pct >= 0 ? '+' : ''}
-                      {stock.price_change_pct.toFixed(2)}%
+                    <span
+                      className={`font-semibold tabular-nums ${
+                        stock.price_change_pct == null ? 'text-slate-400' : stock.price_change_pct >= 0 ? 'text-emerald-600' : 'text-red-600'
+                      }`}
+                    >
+                      {pct(stock.price_change_pct)}
                     </span>
                   </TableCell>
-                  <TableCell className="text-right tabular-nums text-slate-600">{(stock.volume / 1_000_000).toFixed(1)}M</TableCell>
+                  <TableCell className="text-right tabular-nums text-slate-600">{stock.volume != null ? `${(stock.volume / 1_000_000).toFixed(1)}M` : '—'}</TableCell>
                   <TableCell className="text-right">
                     <span
                       className={`font-semibold tabular-nums ${

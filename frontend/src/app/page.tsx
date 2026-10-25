@@ -460,6 +460,7 @@ export default function DashboardPage() {
           gainers={data.top_gainers ?? []}
           losers={data.top_losers ?? []}
           unusualVolume={data.unusual_volume ?? []}
+          meta={data.movers ?? null}
         />
 
         <p className="pt-8 pb-2 text-center text-xs text-slate-400">This page refreshes automatically every 5 minutes.</p>

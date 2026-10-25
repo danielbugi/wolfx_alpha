@@ -703,7 +703,12 @@ export default function StockDetailPage() {
         {tab === 'peers' && (
           <>
             <Section>
-              <PeersPanel symbol={detail.symbol} sector={snap.sector} />
+              <PeersPanel
+                symbol={detail.symbol}
+                sector={context.ctx?.row?.sector}
+                session={context.ctx?.session}
+                contextState={context.ctx ? 'ready' : context.error ? 'unavailable' : 'loading'}
+              />
             </Section>
           </>
         )}

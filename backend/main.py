@@ -10,7 +10,6 @@ import os
 import time
 import threading
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 from typing import List, Dict, Any, Optional
 import json
@@ -671,10 +670,12 @@ def _build_main_page_data():
     """Fetch every dashboard component and populate the cache. Used both by
     the route handler (on a cache miss) and by the background pre-warm loop
     below (so a user request essentially never pays this cost -- see
-    _main_page_prewarm_loop). The three sub-fetches are independent blocking
-    DB calls; running them concurrently instead of sequentially means a
-    cold-cache build takes as long as the slowest one, not the sum of all
-    three.
+    _main_page_prewarm_loop). The three movers lists come from ONE Smart Screener v2
+    evaluation for one explicit session (DiscoveryService.movers, 2026-10-25): the same
+    filters and ordering as the Screener views the Overview links to, and never a
+    symbol whose newest bar is older than the session (the old per-list queries took
+    each symbol's latest row within 7 days, and unusual volume its latest ratio >= 2,
+    so a past day's move could be shown as today's).
 
     No longer fetches "top AI picks" here (removed 2026-09-23, see CLAUDE.md's
     dashboard reframe entries): that endpoint read alignment-only scores from
@@ -683,14 +684,7 @@ def _build_main_page_data():
     has rendered its list since AIPicksWidget.tsx was deleted. The Active
     Signals summary card now gets its number from Momentum Board's
     `starred_total` instead (frontend-side), not from this endpoint."""
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        f_gainers = executor.submit(get_top_gainers_internal, 5)
-        f_losers = executor.submit(get_top_losers_internal, 5)
-        f_volume = executor.submit(get_unusual_volume_internal, 5)
-
-        top_gainers = f_gainers.result()
-        top_losers = f_losers.result()
-        unusual_volume = f_volume.result()
+    movers = _screener_movers(5)
 
     # Market summary - use latest available data
     conn = get_database_connection()
@@ -725,9 +719,10 @@ def _build_main_page_data():
             "last_updated": summary_stats['latest_date'].strftime("%Y-%m-%d") if summary_stats and summary_stats[
                 'latest_date'] else "Unknown"
         },
-        "top_gainers": top_gainers,
-        "top_losers": top_losers,
-        "unusual_volume": unusual_volume,
+        "top_gainers": movers["top_gainers"],
+        "top_losers": movers["top_losers"],
+        "unusual_volume": movers["unusual_volume"],
+        "movers": movers["meta"],
     }
 
     set_cached_data("main_page_data", main_page_data)
@@ -776,385 +771,66 @@ def get_main_page_data():
 # INDIVIDUAL DASHBOARD COMPONENT ENDPOINTS
 # ============================================================================
 
+def _mover_item(r: Dict[str, Any]) -> Dict[str, Any]:
+    """A Screener v2 row in the dashboard's StockItem shape. Missing values stay null (never 0 or 1.0)."""
+    return {
+        "symbol": r["symbol"],
+        "current_price": round(float(r["close"]), 4),
+        "price_change_pct": round(float(r["change_1d"]), 2) if r["change_1d"] is not None else None,
+        "volume": int(r["volume"]) if r["volume"] is not None else None,
+        "volume_ratio": round(float(r["volume_ratio"]), 2) if r["volume_ratio"] is not None else None,
+        "sector": r["sector"] or "Unknown",
+        "market_cap": int(r["market_cap"]) if r["market_cap"] is not None else None,
+    }
+
+
+def _screener_movers(limit: int) -> Dict[str, Any]:
+    """Top gainers / losers / unusual volume for the newest real session, from one Screener v2 evaluation."""
+    from services.discovery_service import DiscoveryService, MOVERS_FLOOR
+    m = DiscoveryService(get_database_connection).movers(limit)
+    out = {k: [_mover_item(r) for r in m[k]] for k in ("top_gainers", "top_losers", "unusual_volume")}
+    out["meta"] = {
+        "session": m["session"],
+        "previous_session": m["previous_session"],
+        "universe": m["universe"],
+        "coverage": m["coverage"],
+        "totals": {k: m[f"{k}_total"] for k in ("top_gainers", "top_losers", "unusual_volume")},
+        "floor": {"min_close": MOVERS_FLOOR["close"][0], "min_dollar_vol_20": MOVERS_FLOOR["dollar_vol_20"][0]},
+        "min_volume_ratio": 2.0,
+    }
+    return out
+
+
+def _movers_list(key: str, limit: int) -> List[Dict[str, Any]]:
+    cache_key = f"movers_{key}_{limit}"
+    cached = get_cached_data(cache_key)
+    if cached:
+        return cached
+    try:
+        items = _screener_movers(limit)[key]
+    except Exception as e:
+        logger.error(f"Error getting {key}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving {key.replace('_', ' ')}")
+    set_cached_data(cache_key, items)
+    return items
+
+
 @app.get("/api/dashboard/top-gainers", dependencies=[Depends(require_authenticated_user)])
 def get_top_gainers(limit: int = Query(10, ge=5, le=50)):
-    """Get top gaining stocks"""
-    return get_top_gainers_internal(limit)
-
-
-def get_top_gainers_internal(limit: int = 10):
-    """Internal function to get top gainers - FIXED VERSION"""
-    cache_key = f"top_gainers_{limit}"
-    cached_data = get_cached_data(cache_key)
-
-    if cached_data:
-        return cached_data
-
-    try:
-        conn = get_database_connection()
-        if not conn:
-            raise HTTPException(status_code=500, detail="Database connection failed")
-
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-
-        # SIMPLIFIED query that handles missing join data gracefully
-        cursor.execute("""
-            WITH latest_data AS (
-                SELECT DISTINCT ON (sp.symbol) 
-                    sp.symbol,
-                    sp.date,
-                    sp.close,
-                    sp.volume,
-                    sp.open
-                FROM stock_prices sp
-                WHERE sp.date >= CURRENT_DATE - INTERVAL '7 days'
-                ORDER BY sp.symbol, sp.date DESC
-            ),
-            previous_data AS (
-                -- LATERAL per-symbol lookup (uses idx_stock_prices_symbol_date) instead of
-                -- an INNER JOIN across the whole table -- the old version merge-joined all
-                -- 6.4M rows of stock_prices against latest_data before filtering, which
-                -- alone cost ~7.5s of this query's ~7.8s total (see EXPLAIN ANALYZE in
-                -- SYSTEM_HEALTH_REPORT.md's 2026-09-19 performance investigation). This
-                -- form matches the technical_indicators/daily_fundamentals joins below,
-                -- which were already fast because they do the same per-symbol lookup.
-                SELECT
-                    ld.symbol,
-                    prev.close AS prev_close
-                FROM latest_data ld
-                LEFT JOIN LATERAL (
-                    SELECT sp.close
-                    FROM stock_prices sp
-                    WHERE sp.symbol = ld.symbol AND sp.date < ld.date
-                    ORDER BY sp.date DESC
-                    LIMIT 1
-                ) prev ON true
-            ),
-            liquidity AS (
-                -- Prior-20-session average dollar volume, same definition and $1M floor as
-                -- ml_training/features/price_features.py's MIN_DOLLAR_VOLUME_20 (the guard
-                -- the digest/screener breakout lists already enforce -- see CLAUDE.md's
-                -- 2026-09-22 M7 fix). Without this, raw share-volume filtering here let
-                -- illiquid low-dollar-volume names show up as "top gainers".
-                SELECT
-                    ld.symbol,
-                    dv.dv20
-                FROM latest_data ld
-                LEFT JOIN LATERAL (
-                    SELECT AVG(sp.close * sp.volume) AS dv20
-                    FROM (
-                        SELECT close, volume FROM stock_prices sp
-                        WHERE sp.symbol = ld.symbol AND sp.date < ld.date
-                        ORDER BY sp.date DESC
-                        LIMIT 20
-                    ) sp
-                ) dv ON true
-            ),
-            price_changes AS (
-                SELECT
-                    ld.symbol,
-                    ld.close as current_price,
-                    ld.volume,
-                    pd.prev_close,
-                    CASE
-                        WHEN pd.prev_close > 0
-                        THEN ((ld.close - pd.prev_close) / pd.prev_close * 100)
-                        ELSE 0
-                    END as price_change_pct
-                FROM latest_data ld
-                LEFT JOIN previous_data pd ON ld.symbol = pd.symbol
-                JOIN liquidity liq ON liq.symbol = ld.symbol
-                WHERE ld.close >= 1.0  -- Filter penny stocks
-                AND liq.dv20 >= 1000000  -- $1M/day 20-session dollar-volume floor
-                AND pd.prev_close IS NOT NULL
-            )
-            SELECT
-                pc.symbol,
-                pc.current_price,
-                pc.price_change_pct,
-                pc.volume,
-                ti.volume_ratio,
-                COALESCE(df.sector, 'Unknown') as sector,
-                df.market_cap
-            FROM price_changes pc
-            LEFT JOIN technical_indicators ti ON pc.symbol = ti.symbol
-                AND ti.date = (SELECT MAX(date) FROM technical_indicators WHERE symbol = pc.symbol)
-            LEFT JOIN daily_fundamentals df ON pc.symbol = df.symbol
-                AND df.date = (SELECT MAX(date) FROM daily_fundamentals WHERE symbol = pc.symbol)
-            WHERE pc.price_change_pct > 0
-            ORDER BY pc.price_change_pct DESC
-            LIMIT %s
-        """, (limit,))
-
-        gainers = cursor.fetchall()
-        cursor.close()
-        conn.close()
-
-        # Format results
-        formatted_gainers = []
-        for gainer in gainers:
-            formatted_gainers.append({
-                "symbol": gainer['symbol'],
-                "current_price": float(gainer['current_price']),
-                "price_change_pct": round(float(gainer['price_change_pct']), 2),
-                "volume": int(gainer['volume']) if gainer['volume'] else 0,
-                # No fabricated 1.0 default -- null means "not known", not "normal volume"
-                # (see CLAUDE.md's FM3.4 finding on fabricated defaults).
-                "volume_ratio": round(float(gainer['volume_ratio']), 2) if gainer['volume_ratio'] is not None else None,
-                "sector": gainer['sector'] or "Unknown",
-                "market_cap": int(gainer['market_cap']) if gainer['market_cap'] else None
-            })
-
-        set_cached_data(cache_key, formatted_gainers)
-        return formatted_gainers
-
-    except Exception as e:
-        import traceback
-        error_details = traceback.format_exc()
-        logger.error(f"Error getting top gainers: {e}")
-        logger.error(f"Full traceback: {error_details}")
-        raise HTTPException(status_code=500, detail=f"Error retrieving top gainers: {str(e)}")
+    """Top gaining stocks for the newest real session (Screener v2 rules: $1+ close, $1M+/day dollar volume)."""
+    return _movers_list("top_gainers", limit)
 
 
 @app.get("/api/dashboard/top-losers", dependencies=[Depends(require_authenticated_user)])
 def get_top_losers(limit: int = Query(10, ge=5, le=50)):
-    """Get top losing stocks"""
-    return get_top_losers_internal(limit)
-
-
-def get_top_losers_internal(limit: int = 10):
-    """Internal function to get top losers - FIXED VERSION"""
-    cache_key = f"top_losers_{limit}"
-    cached_data = get_cached_data(cache_key)
-
-    if cached_data:
-        return cached_data
-
-    try:
-        conn = get_database_connection()
-        if not conn:
-            raise HTTPException(status_code=500, detail="Database connection failed")
-
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-
-        # Same query as gainers but with price_change_pct < 0 and ORDER BY ASC
-        cursor.execute("""
-            WITH latest_data AS (
-                SELECT DISTINCT ON (sp.symbol) 
-                    sp.symbol,
-                    sp.date,
-                    sp.close,
-                    sp.volume,
-                    sp.open
-                FROM stock_prices sp
-                WHERE sp.date >= CURRENT_DATE - INTERVAL '7 days'
-                ORDER BY sp.symbol, sp.date DESC
-            ),
-            previous_data AS (
-                -- LATERAL per-symbol lookup, not a full-table INNER JOIN -- see the
-                -- matching comment in get_top_gainers_internal for why.
-                SELECT
-                    ld.symbol,
-                    prev.close AS prev_close
-                FROM latest_data ld
-                LEFT JOIN LATERAL (
-                    SELECT sp.close
-                    FROM stock_prices sp
-                    WHERE sp.symbol = ld.symbol AND sp.date < ld.date
-                    ORDER BY sp.date DESC
-                    LIMIT 1
-                ) prev ON true
-            ),
-            liquidity AS (
-                -- Same $1M/day 20-session dollar-volume floor as get_top_gainers_internal --
-                -- see its comment for why the old raw share-volume filter wasn't enough.
-                SELECT
-                    ld.symbol,
-                    dv.dv20
-                FROM latest_data ld
-                LEFT JOIN LATERAL (
-                    SELECT AVG(sp.close * sp.volume) AS dv20
-                    FROM (
-                        SELECT close, volume FROM stock_prices sp
-                        WHERE sp.symbol = ld.symbol AND sp.date < ld.date
-                        ORDER BY sp.date DESC
-                        LIMIT 20
-                    ) sp
-                ) dv ON true
-            ),
-            price_changes AS (
-                SELECT
-                    ld.symbol,
-                    ld.close as current_price,
-                    ld.volume,
-                    pd.prev_close,
-                    CASE
-                        WHEN pd.prev_close > 0
-                        THEN ((ld.close - pd.prev_close) / pd.prev_close * 100)
-                        ELSE 0
-                    END as price_change_pct
-                FROM latest_data ld
-                LEFT JOIN previous_data pd ON ld.symbol = pd.symbol
-                JOIN liquidity liq ON liq.symbol = ld.symbol
-                WHERE ld.close >= 1.0  -- Filter penny stocks
-                AND liq.dv20 >= 1000000  -- $1M/day 20-session dollar-volume floor
-                AND pd.prev_close IS NOT NULL
-            )
-            SELECT
-                pc.symbol,
-                pc.current_price,
-                pc.price_change_pct,
-                pc.volume,
-                ti.volume_ratio,
-                COALESCE(df.sector, 'Unknown') as sector,
-                df.market_cap
-            FROM price_changes pc
-            LEFT JOIN technical_indicators ti ON pc.symbol = ti.symbol
-                AND ti.date = (SELECT MAX(date) FROM technical_indicators WHERE symbol = pc.symbol)
-            LEFT JOIN daily_fundamentals df ON pc.symbol = df.symbol
-                AND df.date = (SELECT MAX(date) FROM daily_fundamentals WHERE symbol = pc.symbol)
-            WHERE pc.price_change_pct < 0
-            ORDER BY pc.price_change_pct ASC
-            LIMIT %s
-        """, (limit,))
-
-        losers = cursor.fetchall()
-        cursor.close()
-        conn.close()
-
-        # Format results
-        formatted_losers = []
-        for loser in losers:
-            formatted_losers.append({
-                "symbol": loser['symbol'],
-                "current_price": float(loser['current_price']),
-                "price_change_pct": round(float(loser['price_change_pct']), 2),
-                "volume": int(loser['volume']) if loser['volume'] else 0,
-                "volume_ratio": round(float(loser['volume_ratio']), 2) if loser['volume_ratio'] is not None else None,
-                "sector": loser['sector'] or "Unknown",
-                "market_cap": int(loser['market_cap']) if loser['market_cap'] else None
-            })
-
-        set_cached_data(cache_key, formatted_losers)
-        return formatted_losers
-
-    except Exception as e:
-        import traceback
-        error_details = traceback.format_exc()
-        logger.error(f"Error getting top losers: {e}")
-        logger.error(f"Full traceback: {error_details}")
-        raise HTTPException(status_code=500, detail=f"Error retrieving top losers: {str(e)}")
+    """Top losing stocks for the newest real session (same rules as the gainers)."""
+    return _movers_list("top_losers", limit)
 
 
 @app.get("/api/dashboard/unusual-volume", dependencies=[Depends(require_authenticated_user)])
 def get_unusual_volume(limit: int = Query(10, ge=5, le=50)):
-    """Get stocks with unusual volume activity"""
-    return get_unusual_volume_internal(limit)
-
-
-def get_unusual_volume_internal(limit: int = 10):
-    """Internal function to get unusual volume stocks - FIXED VERSION"""
-    cache_key = f"unusual_volume_{limit}"
-    cached_data = get_cached_data(cache_key)
-
-    if cached_data:
-        return cached_data
-
-    try:
-        conn = get_database_connection()
-        if not conn:
-            raise HTTPException(status_code=500, detail="Database connection failed")
-
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-
-        # Focus on technical_indicators table which has volume_ratio
-        cursor.execute("""
-            WITH latest_tech AS (
-                SELECT DISTINCT ON (ti.symbol)
-                    ti.symbol,
-                    ti.date,
-                    ti.volume_ratio
-                FROM technical_indicators ti
-                WHERE ti.date >= CURRENT_DATE - INTERVAL '7 days'
-                AND ti.volume_ratio >= 2.0  -- At least 2x normal volume
-                ORDER BY ti.symbol, ti.date DESC
-            ),
-            latest_prices AS (
-                SELECT DISTINCT ON (sp.symbol)
-                    sp.symbol,
-                    sp.date,
-                    sp.close as current_price,
-                    sp.volume
-                FROM stock_prices sp
-                WHERE sp.date >= CURRENT_DATE - INTERVAL '7 days'
-                ORDER BY sp.symbol, sp.date DESC
-            ),
-            previous_prices AS (
-                -- LATERAL per-symbol lookup, not an INNER JOIN + correlated MAX(date)
-                -- subquery over the whole table -- see the matching comment in
-                -- get_top_gainers_internal for why this was the dashboard's main
-                -- slow-query source.
-                SELECT
-                    lp.symbol,
-                    prev.close AS prev_close
-                FROM latest_prices lp
-                LEFT JOIN LATERAL (
-                    SELECT sp.close
-                    FROM stock_prices sp
-                    WHERE sp.symbol = lp.symbol AND sp.date < lp.date
-                    ORDER BY sp.date DESC
-                    LIMIT 1
-                ) prev ON true
-            )
-            SELECT 
-                lt.symbol,
-                lp.current_price,
-                lp.volume,
-                lt.volume_ratio,
-                CASE 
-                    WHEN pp.prev_close > 0 
-                    THEN ((lp.current_price - pp.prev_close) / pp.prev_close * 100)
-                    ELSE 0 
-                END as price_change_pct,
-                COALESCE(df.sector, 'Unknown') as sector,
-                df.market_cap
-            FROM latest_tech lt
-            INNER JOIN latest_prices lp ON lt.symbol = lp.symbol
-            LEFT JOIN previous_prices pp ON lt.symbol = pp.symbol
-            LEFT JOIN daily_fundamentals df ON lt.symbol = df.symbol 
-                AND df.date = (SELECT MAX(date) FROM daily_fundamentals WHERE symbol = lt.symbol)
-            WHERE lp.current_price >= 1.0    -- Filter penny stocks
-            AND lp.volume >= 500000         -- High absolute volume
-            ORDER BY lt.volume_ratio DESC
-            LIMIT %s
-        """, (limit,))
-
-        unusual_volume_stocks = cursor.fetchall()
-        cursor.close()
-        conn.close()
-
-        # Format results
-        formatted_stocks = []
-        for stock in unusual_volume_stocks:
-            formatted_stocks.append({
-                "symbol": stock['symbol'],
-                "current_price": float(stock['current_price']),
-                "volume": int(stock['volume']) if stock['volume'] else 0,
-                "volume_ratio": round(float(stock['volume_ratio']), 2),
-                "price_change_pct": round(float(stock['price_change_pct']), 2) if stock['price_change_pct'] else 0,
-                "sector": stock['sector'] or "Unknown",
-                "market_cap": int(stock['market_cap']) if stock['market_cap'] else None
-            })
-
-        set_cached_data(cache_key, formatted_stocks)
-        return formatted_stocks
-
-    except Exception as e:
-        import traceback
-        error_details = traceback.format_exc()
-        logger.error(f"Error getting unusual volume: {e}")
-        logger.error(f"Full traceback: {error_details}")
-        raise HTTPException(status_code=500, detail=f"Error retrieving unusual volume: {str(e)}")
+    """Stocks trading at 2x+ their usual volume ON the newest real session (same price and liquidity floor)."""
+    return _movers_list("unusual_volume", limit)
 
 
 # /api/dashboard/top-ai-picks removed 2026-09-23 (see CLAUDE.md's dashboard reframe entries):
