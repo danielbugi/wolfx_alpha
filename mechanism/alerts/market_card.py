@@ -62,6 +62,8 @@ class CardData:
     sectors: List[SectorBar]
     unclassified_n: int = 0
     headline: Optional[str] = None          # the day's hook (digest_format.headline); shown under the title instead of the generic subtitle
+    public: bool = False                    # the channel's public card (owner decision 2026-10-21): no stock counts, no universe size, no
+                                            # words about how the data is built -- percentages and market facts only
 
 
 @lru_cache(maxsize=None)
@@ -150,15 +152,18 @@ def _tile(c: _Canvas, x, y, w, h, t: Tile):
     _spark(c, (x + w - 22 - 176, y + 28, x + w - 22, y + h - 28), t.spark, t.direction)
 
 
-def _breadth(c: _Canvas, y, up_n: int, down_n: int, universe_n: int):
+def _breadth(c: _Canvas, y, up_n: int, down_n: int, universe_n: int, public: bool = False):
     total = max(universe_n, up_n + down_n, 1)
     flat_n = max(total - up_n - down_n, 0)
-    c.text(MARGIN, y, "Stocks up vs down today", 30, INK, bold=True)
-    c.text(W - MARGIN, y, f"of {_fmt_int(universe_n)} liquid US stocks", 22, MUTED, anchor="rs")
+    c.text(MARGIN, y, "US stocks up vs down today" if public else "Stocks up vs down today", 30, INK, bold=True)
+    if not public:
+        c.text(W - MARGIN, y, f"of {_fmt_int(universe_n)} liquid US stocks", 22, MUTED, anchor="rs")
     ly = y + 46
     c.triangle(MARGIN + 8, ly - 9, 15, +1)
-    c.text(MARGIN + 24, ly, f"{_fmt_int(up_n)} up · {up_n / total * 100:.0f}%", 26)
-    c.text(W - MARGIN - 24, ly, f"{down_n / total * 100:.0f}% · {_fmt_int(down_n)} down", 26, anchor="rs")
+    up_label = f"{up_n / total * 100:.0f}% up" if public else f"{_fmt_int(up_n)} up · {up_n / total * 100:.0f}%"
+    down_label = f"{down_n / total * 100:.0f}% down" if public else f"{down_n / total * 100:.0f}% · {_fmt_int(down_n)} down"
+    c.text(MARGIN + 24, ly, up_label, 26)
+    c.text(W - MARGIN - 24, ly, down_label, 26, anchor="rs")
     c.triangle(W - MARGIN - 8, ly - 9, 15, -1)
     by, bh, x0, x1, gap = ly + 20, 40, MARGIN, W - MARGIN, 2
     usable = (x1 - x0) - 2 * gap
@@ -173,7 +178,7 @@ def _breadth(c: _Canvas, y, up_n: int, down_n: int, universe_n: int):
         corners = (i == 0 or x == x0, x + wd >= x1 - 1, x + wd >= x1 - 1, i == 0 or x == x0)
         c.rrect((x, by, x + wd, by + bh), 4, fill=col, corners=corners)
         x += wd + gap
-    if flat_n:
+    if flat_n and not public:
         c.text(W // 2, by + bh + 32, f"{_fmt_int(flat_n)} unchanged", 22, MUTED, anchor="ms")
 
 
@@ -210,7 +215,7 @@ def _sectors(c: _Canvas, y, sectors: List[SectorBar], unclassified_n: int,
 
 def render_market_card(data: CardData) -> bytes:
     c = _Canvas()
-    c.text(MARGIN, 82, "FIRST LIGHT", 26, INK2, bold=True)
+    c.text(MARGIN, 82, "FIRST LIGHT · MARKET DAILY" if data.public else "FIRST LIGHT", 26, INK2, bold=True)
     c.text(MARGIN, 148, f"US close · {data.session:%a %d %b}", 60, INK, bold=True)
     if data.headline:
         c.text(MARGIN, 196, data.headline, 30, INK2, bold=True)
@@ -223,6 +228,9 @@ def render_market_card(data: CardData) -> bytes:
         col, row = i % 2, i // 2
         _tile(c, MARGIN + col * (tile_w + 24), ty + row * (tile_h + gap), tile_w, tile_h, t)
 
-    _breadth(c, 742, data.up_n, data.down_n, data.universe_n)
-    _sectors(c, 936, data.sectors, data.unclassified_n)
+    _breadth(c, 742, data.up_n, data.down_n, data.universe_n, public=data.public)
+    if data.public:
+        _sectors(c, 936, data.sectors, 0, title="Sectors today", subtitle="average move of each sector's stocks")
+    else:
+        _sectors(c, 936, data.sectors, data.unclassified_n)
     return c.png()

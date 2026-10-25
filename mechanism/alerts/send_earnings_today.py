@@ -48,6 +48,7 @@ load_dotenv(MECH.parent / ".env", override=False)
 from shared import db  # noqa: E402
 from shared import market_calendar  # noqa: E402
 from alerts import channel_content as cx  # noqa: E402
+from alerts import channel_switches  # noqa: E402
 from alerts.telegram_client import TelegramClient, TelegramError, text_length  # noqa: E402
 from alerts.earnings_today_query import TODAYS_REPORTERS_SQL  # noqa: E402
 
@@ -102,6 +103,11 @@ def main() -> int:
     ap.add_argument("--force", action="store_true", help="send even if already sent today, or on a non-trading day")
     ap.add_argument("--date", help="pretend it is this day (YYYY-MM-DD), for previews")
     args = ap.parse_args()
+
+    if args.send and not channel_switches.earnings_post_enabled():
+        print("Skipping: the separate earnings post is paused (the daily market report lists the next session's reporters; "
+              "set CHANNEL_EARNINGS_POST_ENABLED=1 to restore it). Nothing sent.")
+        return 0
 
     tz = ZoneInfo(os.getenv("ALERTS_TIMEZONE", "Asia/Jerusalem"))
     day = date.fromisoformat(args.date) if args.date else datetime.now(tz).astimezone(ZoneInfo("America/New_York")).date()
