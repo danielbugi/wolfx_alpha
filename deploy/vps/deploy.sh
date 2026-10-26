@@ -33,6 +33,10 @@ LOG="$BASE/logs/deploy.log"
 KNOWN_GOOD="$BASE/KNOWN_GOOD_SHAS"
 FAILED="$BASE/FAILED_SHAS"
 MODE="${DEPLOY_MODE:-deploy}"
+# Optional (operator path only; ci-entry.sh cannot set it): the exact image digest that must be running for $TAG,
+# e.g. the digest that passed an isolated soak. Tags are mutable; a digest is not. Never applied to the automatic
+# restore of the previous release.
+EXPECTED_DIGEST="${EXPECTED_DIGEST:-}"
 
 if [ "$MODE" != "deploy" ] && [ "$MODE" != "rollback" ]; then
   echo "refused: DEPLOY_MODE must be 'deploy' or 'rollback'" >&2
@@ -44,6 +48,10 @@ if [ "$SERVICE" != "backend" ]; then
 fi
 if ! [[ "$TAG" =~ ^[0-9a-f]{12}$ ]]; then
   echo "refused: image tag must be a 12-hex commit SHA (never :latest)" >&2
+  exit 2
+fi
+if [ -n "$EXPECTED_DIGEST" ] && ! [[ "$EXPECTED_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  echo "refused: EXPECTED_DIGEST must be sha256:<64 hex>" >&2
   exit 2
 fi
 for f in docker-compose.yml docker-compose.prod.yml docker/Caddyfile.prod; do
@@ -133,6 +141,12 @@ rollout() {
   want="ghcr.io/danielbugi/wolfx_alpha-backend:$T"
   got="$(docker inspect -f '{{.Config.Image}}' "$(dc ps -q backend)" 2>/dev/null || true)"
   [ "$got" = "$want" ] || { echo "running backend image is '$got', expected '$want'" >&2; return 1; }
+  if [ -n "$EXPECTED_DIGEST" ] && [ "$T" = "$TAG" ]; then
+    # the digest of the image the running container was created from (not of whatever the tag points to now)
+    local have
+    have="$(docker image inspect -f '{{range .RepoDigests}}{{println .}}{{end}}'               "$(docker inspect -f '{{.Image}}' "$(dc ps -q backend)" 2>/dev/null)" 2>/dev/null | sed -n 's/.*@//p' | head -n 1)"
+    [ "$have" = "$EXPECTED_DIGEST" ] || { echo "running backend digest is '$have', expected '$EXPECTED_DIGEST'" >&2; return 1; }
+  fi
   wait_healthy
 }
 
@@ -159,7 +173,7 @@ if rollout "$TAG"; then
   fi
   echo "$TAG" > "$BASE/CURRENT_SHA"
   heal_previous
-  log "$MODE backend $TAG OK (healthy); CURRENT_SHA=$TAG PREVIOUS_GOOD_SHA=$(cat "$BASE/PREVIOUS_GOOD_SHA" 2>/dev/null || echo none)"
+  log "$MODE backend $TAG OK (healthy${EXPECTED_DIGEST:+, digest $EXPECTED_DIGEST verified}); CURRENT_SHA=$TAG PREVIOUS_GOOD_SHA=$(cat "$BASE/PREVIOUS_GOOD_SHA" 2>/dev/null || echo none)"
   # keep the 10 most recent release bundles, never the current/previous ones nor the 3 newest known-good ones
   keep="$(cat "$BASE/CURRENT_SHA") $(cat "$BASE/PREVIOUS_GOOD_SHA" 2>/dev/null || true) $(tail -n 3 "$KNOWN_GOOD" 2>/dev/null | tr '\n' ' ')"
   ls -1t "$BASE/releases" 2>/dev/null | tail -n +11 | while read -r old; do

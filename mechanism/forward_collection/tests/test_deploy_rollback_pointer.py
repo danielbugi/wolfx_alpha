@@ -35,10 +35,17 @@ if [ "$1" = "compose" ]; then
   esac
   exit 0
 fi
+if [ "$1" = "image" ] && [ "$2" = "inspect" ]; then
+  ref="${@: -1}"; tag="${ref#img-}"
+  d="$(grep "^$tag " "$S/digests" 2>/dev/null | cut -d' ' -f2)"
+  [ -n "$d" ] && echo "ghcr.io/danielbugi/wolfx_alpha-backend@$d"
+  exit 0
+fi
 if [ "$1" = "inspect" ]; then
   tag="$(cat "$S/running" 2>/dev/null || true)"
   case "$3" in
     *Health.Status*) if grep -qx "$tag" "$S/unhealthy" 2>/dev/null; then echo unhealthy; else echo healthy; fi ;;
+    '{{.Image}}') echo "img-$tag" ;;
     *) echo "ghcr.io/danielbugi/wolfx_alpha-backend:$tag" ;;
   esac
   exit 0
@@ -91,6 +98,10 @@ class Host:
 
     def _set(self, name, value):
         (self.base / name).write_text(value + "\n", newline="\n")
+
+    def digests(self, **by_tag):
+        """What the registry/local image for each tag resolves to (sha256:<64 hex>); a tag without an entry has none."""
+        (self.state / "digests").write_text("".join(f"{t} {d}" + chr(10) for t, d in by_tag.items()), newline=chr(10))
 
     def unhealthy(self, *tags):
         (self.state / "unhealthy").write_text("".join(t + "\n" for t in tags), newline="\n")
@@ -275,3 +286,42 @@ def test_manual_recovery_by_explicit_deploy_works_with_no_history_at_all(tmp_pat
     assert h.rollback().returncode == 1                         # nothing recorded to roll back to
     assert h.deploy(A).returncode == 0 and h.running == A       # the operator names an older release explicitly
     assert h.read("PREVIOUS_GOOD_SHA") == C and h.lines("KNOWN_GOOD_SHAS") == [C]
+
+
+# ------------------------------------------------------------------------------- EXPECTED_DIGEST (promotion safety)
+SOAKED = "sha256:" + "1" * 64
+OTHER = "sha256:" + "2" * 64
+
+
+def test_expected_digest_deploys_the_exact_soaked_image_and_says_so(tmp_path):
+    h = Host(tmp_path, current=A)
+    h.digests(**{B: SOAKED})
+    r = h.deploy(B, EXPECTED_DIGEST=SOAKED)
+    assert r.returncode == 0, r.stderr
+    assert (h.read("CURRENT_SHA"), h.read("PREVIOUS_GOOD_SHA"), h.running) == (B, A, B)
+    assert f"digest {SOAKED} verified" in (h.base / "logs" / "deploy.log").read_text()
+
+
+def test_a_tag_that_now_points_to_another_digest_is_never_kept_and_the_previous_release_is_restored(tmp_path):
+    h = Host(tmp_path, current=A)
+    h.digests(**{B: OTHER})                                   # the tag was re-pushed after the soak
+    r = h.deploy(B, EXPECTED_DIGEST=SOAKED)
+    assert r.returncode == 1
+    assert "running backend digest is" in r.stderr
+    # the previous release is restored WITHOUT the digest check (A has no recorded digest here) and stays current
+    assert (h.read("CURRENT_SHA"), h.running) == (A, A)
+    assert h.lines("FAILED_SHAS") == [B] and h.lines("KNOWN_GOOD_SHAS") == []
+    log = (h.base / "logs" / "deploy.log").read_text()
+    assert f"restored previous good backend {A}" in log and "ALSO failed" not in log
+
+
+def test_a_malformed_expected_digest_is_refused_before_anything_changes(tmp_path):
+    h = Host(tmp_path, current=A)
+    r = h.deploy(B, EXPECTED_DIGEST="sha256:abc")
+    assert r.returncode == 2 and "EXPECTED_DIGEST must be" in r.stderr
+    assert (h.read("CURRENT_SHA"), h.running) == (A, A) and h.lines("FAILED_SHAS") == []
+
+
+def test_without_expected_digest_nothing_changes_and_ci_entry_cannot_set_it():
+    src = (VPS / "ci-entry.sh").read_text(encoding="utf-8")
+    assert "EXPECTED_DIGEST" not in src and src.rstrip().endswith('exec /opt/donchian/scripts/deploy.sh backend "$TAG"')
