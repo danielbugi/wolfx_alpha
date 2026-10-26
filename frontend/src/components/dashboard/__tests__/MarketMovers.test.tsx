@@ -44,6 +44,14 @@ describe('MarketMovers', () => {
     expect(screen.getByTestId('movers-view-all').getAttribute('href')).toBe('/screener?min_close=1&min_dollar_vol_20=1000000&sort=change_1d&order=desc');
   });
 
+  it('a row with no price, change, volume or ratio renders dashes and never crashes', () => {
+    const bad = item('BAD', { current_price: null as unknown as number, price_change_pct: null, volume: null, volume_ratio: null });
+    render(<MarketMovers gainers={[bad]} losers={[]} unusualVolume={[]} meta={META} />);
+    const row = screen.getByRole('row', { name: /BAD/ });
+    expect(row.textContent).not.toMatch(/NaN|undefined|null|\$0\.00/);
+    expect((row.textContent?.match(/—/g) ?? []).length).toBeGreaterThanOrEqual(4);
+  });
+
   it('shows missing change and volume as dashes, never 0', () => {
     render(<MarketMovers gainers={[]} losers={[]} unusualVolume={[item('VOL', { price_change_pct: null, volume: null })]} meta={META} />);
     fireEvent.click(screen.getByRole('radio', { name: 'Unusual Volume' }));
