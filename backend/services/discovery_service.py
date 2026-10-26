@@ -556,6 +556,7 @@ class DiscoveryService:
         sess, payload = self._run(work)
         return {"session": sess["session"].isoformat(),
                 "previous_session": sess["previous_session"].isoformat() if sess["previous_session"] else None,
+                "newest_price_date": sess["newest_price_date"].isoformat(),
                 **payload}
 
 
@@ -569,6 +570,7 @@ def _session_params(cur, requested: Optional[date], fundamentals_cutoff: str) ->
             raise InvalidRequest("no price data")
     cur.execute(SESSIONS_SQL, {"lo": hi - timedelta(days=SESSION_WINDOW_DAYS), "hi": hi})
     sess = resolve_sessions([(d, int(n)) for d, n in cur.fetchall()], requested)
+    sess["newest_price_date"] = hi if requested is None else None   # the watermark a cached movers result is tied to
     named = {"s": sess["session"], "p": sess["previous_session"], "dv_start": sess["dv_start"], "dv_n": DV_SESSIONS,
              "rs_model": RS_MODEL, "fund_age": FUNDAMENTALS_MAX_AGE_DAYS,
              "disc_days": STRENGTH_DISCONTINUITY_DAYS, "min_dv": STRENGTH_MIN_DOLLAR_VOL,

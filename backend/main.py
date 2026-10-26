@@ -1,5 +1,5 @@
 # File: backend/main.py
-from fastapi import FastAPI, HTTPException, Query, Depends, Request
+from fastapi import FastAPI, HTTPException, Query, Depends, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import psycopg2
@@ -750,9 +750,10 @@ def _main_page_prewarm_loop():
 
 @app.get("/api/dashboard/main-page-data", dependencies=[Depends(require_authenticated_user)])
 def get_main_page_data():
-    """Get all main page data in a single request"""
+    """Get all main page data in a single request. The 15-minute cache is reused only while no newer price date has
+    been stored since it was built (see _movers_cache_current): a new session never waits behind an old one."""
     cached_data = get_cached_data("main_page_data", 900)  # 15 minute cache
-    if cached_data:
+    if cached_data and _movers_cache_current(cached_data.get("movers")):
         return cached_data
 
     try:
@@ -792,6 +793,7 @@ def _screener_movers(limit: int) -> Dict[str, Any]:
     out["meta"] = {
         "session": m["session"],
         "previous_session": m["previous_session"],
+        "newest_price_date": m["newest_price_date"],
         "universe": m["universe"],
         "coverage": m["coverage"],
         "totals": {k: m[f"{k}_total"] for k in ("top_gainers", "top_losers", "unusual_volume")},
@@ -801,36 +803,63 @@ def _screener_movers(limit: int) -> Dict[str, Any]:
     return out
 
 
-def _movers_list(key: str, limit: int) -> List[Dict[str, Any]]:
-    cache_key = f"movers_{key}_{limit}"
-    cached = get_cached_data(cache_key)
-    if cached:
-        return cached
+def _newest_price_date() -> Optional[str]:
+    """MAX(date) of stock_prices (index-only, ~0.3 ms on production). None when it cannot be read."""
+    conn = get_database_connection()
+    if not conn:
+        return None
     try:
-        items = _screener_movers(limit)[key]
-    except Exception as e:
-        logger.error(f"Error getting {key}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error retrieving {key.replace('_', ' ')}")
-    set_cached_data(cache_key, items)
-    return items
+        cur = conn.cursor()
+        cur.execute("SELECT MAX(date) FROM stock_prices")
+        d = cur.fetchone()[0]
+        return d.isoformat() if d else None
+    except Exception:
+        return None
+    finally:
+        conn.close()
+
+
+def _movers_cache_current(meta: Optional[Dict[str, Any]]) -> bool:
+    """A cached movers result is reused only while the newest stored price date equals the one it was built from.
+    Any newer date (a new session, or one still loading) forces a rebuild, which resolves the session again; nothing
+    built for an older session is served as current. Unknown either way -> rebuild."""
+    if not meta or not meta.get("newest_price_date"):
+        return False
+    return _newest_price_date() == meta["newest_price_date"]
+
+
+def _movers_list(key: str, limit: int, response: Response) -> List[Dict[str, Any]]:
+    """One list of _screener_movers, cached per limit together with its session; the session is stated in the
+    X-Data-Session header (the body stays the bare list existing callers expect)."""
+    cache_key = f"movers_{limit}"
+    cached = get_cached_data(cache_key)
+    if not (cached and _movers_cache_current(cached.get("meta"))):
+        try:
+            cached = _screener_movers(limit)
+        except Exception as e:
+            logger.error(f"Error getting {key}: {e}")
+            raise HTTPException(status_code=500, detail=f"Error retrieving {key.replace('_', ' ')}")
+        set_cached_data(cache_key, cached)
+    response.headers["X-Data-Session"] = cached["meta"]["session"]
+    return cached[key]
 
 
 @app.get("/api/dashboard/top-gainers", dependencies=[Depends(require_authenticated_user)])
-def get_top_gainers(limit: int = Query(10, ge=5, le=50)):
+def get_top_gainers(response: Response, limit: int = Query(10, ge=5, le=50)):
     """Top gaining stocks for the newest real session (Screener v2 rules: $1+ close, $1M+/day dollar volume)."""
-    return _movers_list("top_gainers", limit)
+    return _movers_list("top_gainers", limit, response)
 
 
 @app.get("/api/dashboard/top-losers", dependencies=[Depends(require_authenticated_user)])
-def get_top_losers(limit: int = Query(10, ge=5, le=50)):
+def get_top_losers(response: Response, limit: int = Query(10, ge=5, le=50)):
     """Top losing stocks for the newest real session (same rules as the gainers)."""
-    return _movers_list("top_losers", limit)
+    return _movers_list("top_losers", limit, response)
 
 
 @app.get("/api/dashboard/unusual-volume", dependencies=[Depends(require_authenticated_user)])
-def get_unusual_volume(limit: int = Query(10, ge=5, le=50)):
+def get_unusual_volume(response: Response, limit: int = Query(10, ge=5, le=50)):
     """Stocks trading at 2x+ their usual volume ON the newest real session (same price and liquidity floor)."""
-    return _movers_list("unusual_volume", limit)
+    return _movers_list("unusual_volume", limit, response)
 
 
 # /api/dashboard/top-ai-picks removed 2026-09-23 (see CLAUDE.md's dashboard reframe entries):

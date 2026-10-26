@@ -174,6 +174,7 @@ def db():
 def test_one_session_and_stale_symbols_are_never_current_movers(db):
     m = D.DiscoveryService(db).movers(5)
     assert m["session"] == "2026-10-23" and m["previous_session"] == "2026-10-22"     # not the half-loaded 10-26
+    assert m["newest_price_date"] == "2026-10-26"                  # the cache watermark: the newest stored date, loaded or not
     assert [r["symbol"] for r in m["top_gainers"]] == ["UP"]       # PSKY's +50% was on 10-22: not a 10-23 mover
     assert [r["symbol"] for r in m["top_losers"]] == ["DOWN"]
     assert [r["symbol"] for r in m["unusual_volume"]] == ["VOL"]   # BRZE's 7.81x was three sessions ago: 0.58x now

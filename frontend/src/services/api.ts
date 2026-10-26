@@ -187,6 +187,8 @@ export interface StockItem {
 export interface MoversMeta {
   session: string;
   previous_session: string | null;
+  /** newest stored price date when the lists were built (the cache watermark; may be a still-loading date) */
+  newest_price_date?: string;
   universe: number;
   coverage: { change_1d: number; volume_ratio: number; dollar_vol_20: number };
   totals: { top_gainers: number; top_losers: number; unusual_volume: number };
