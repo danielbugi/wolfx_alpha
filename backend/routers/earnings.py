@@ -20,7 +20,7 @@ def get_earnings_read_model():
 
 
 @earnings_router.get("")
-def earnings_batch(symbol: List[str] = Query(...), past: int = Query(12, ge=0, le=40),
+def earnings_batch(symbol: List[str] = Query(default=[]), past: int = Query(12, ge=0, le=40),
                    model: EarningsReadModel = Depends(get_earnings_read_model)):
     symbols = [s for s in symbol if s.strip()]
     if not symbols or len(set(s.upper() for s in symbols)) > MAX_SYMBOLS:
