@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { isUnverified, previouslyReported } from '@/lib/earningsConfidence';
 import {
   createChart,
   IChartApi,
@@ -128,6 +129,7 @@ interface EarningsBadge {
 
 function earningsTitle(e: EarningsDateEntry, next: boolean): string {
   const eps = (v: number | null) => (v == null ? '—' : `$${v.toFixed(2)}`);
+  if (next && isUnverified(e.confidence)) return previouslyReported(e.date);
   if (next) return `Next earnings ${e.date}${e.eps_estimate != null ? ` · est. EPS ${eps(e.eps_estimate)}` : ''}`;
   const surprise = e.surprise_pct != null ? ` (${e.surprise_pct >= 0 ? '+' : ''}${e.surprise_pct.toFixed(1)}%)` : '';
   return `Earnings ${e.date} · EPS ${eps(e.eps_actual)} vs est. ${eps(e.eps_estimate)}${surprise}`;
@@ -465,7 +467,8 @@ export default function StockChart({
           out.push({
             x,
             next: true,
-            label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+            // a previously reported, unconfirmed date keeps a "?" -- never drawn like a scheduled report
+            label: `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}${isUnverified(nextEarnings.entry.confidence) ? '?' : ''}`,
             title: earningsTitle(nextEarnings.entry, true),
           });
         }

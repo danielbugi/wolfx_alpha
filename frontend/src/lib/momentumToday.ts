@@ -5,6 +5,7 @@
 //   Strength — strength and trend health: the Strength Score, highest first.
 // Pure helpers only (no I/O): the boards, the two rankings, the filters and the "why it's moving" label.
 import type { QueryPairs, ScreenerRow } from '@/services/screenerV2Api';
+import { isUnverified, previouslyReported } from '@/lib/earningsConfidence';
 
 /** The three boards, each from the Screener's shared engine (same session, same values as everywhere else). */
 export const BOARDS: { key: 'breakouts' | 'new_highs' | 'strongest'; title: string; blurb: string; pairs: QueryPairs; screener: string }[] = [
@@ -156,7 +157,10 @@ export type CatalystTone = 'reported' | 'soon' | 'upcoming' | 'none';
  * What the stored data says about a catalyst. Only earnings are known for every stock (news is fetched per stock page),
  * so "no report" means no earnings report in the window, not that nothing happened.
  */
-export function catalyst(r: Pick<ScreenerRow, 'days_since_earnings' | 'days_to_earnings' | 'earnings_surprise_pct' | 'last_earnings_date' | 'next_earnings_date'>): {
+export function catalyst(
+  r: Pick<ScreenerRow, 'days_since_earnings' | 'days_to_earnings' | 'earnings_surprise_pct' | 'last_earnings_date' | 'next_earnings_date'> &
+    Partial<Pick<ScreenerRow, 'next_earnings_confidence'>>,
+): {
   tone: CatalystTone;
   label: string;
   title: string;
@@ -172,6 +176,10 @@ export function catalyst(r: Pick<ScreenerRow, 'days_since_earnings' | 'days_to_e
     };
   }
   const to = r.days_to_earnings;
+  if (to != null && to <= UPCOMING_REPORT_DAYS && r.next_earnings_date && isUnverified(r.next_earnings_confidence)) {
+    // never an ordinary countdown for a date the latest calendar check did not confirm
+    return { tone: 'upcoming', label: previouslyReported(r.next_earnings_date), title: previouslyReported(r.next_earnings_date) };
+  }
   if (to != null && to <= UPCOMING_REPORT_DAYS) {
     return {
       tone: to <= EARNINGS_SOON_DAYS ? 'soon' : 'upcoming',

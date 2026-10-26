@@ -10,6 +10,7 @@
 
 import type { EarningsDateEntry, MomentumBoardResult } from '@/services/api';
 import { zoneParts, type MarketCalendar } from '@/lib/marketSession';
+import { isUnverified } from '@/lib/earningsConfidence';
 
 const NY = 'America/New_York';
 
@@ -214,7 +215,7 @@ export function buildRows({
   for (const r of board) {
     const d = r.next_earnings_date;
     if (!d || fromHistory.has(r.symbol) || d < from || d > to) continue;
-    out.set(`${r.symbol}|${d}`, base(r.symbol, d));
+    out.set(`${r.symbol}|${d}`, { ...base(r.symbol, d), unverified: isUnverified(r.next_earnings_confidence) });
   }
   return [...out.values()].map((row) => enrich(row, histories[row.symbol]));
 }
@@ -234,7 +235,7 @@ export function enrich(row: EarningsRow, history: HistoryState): EarningsRow {
     surprisePct: own?.surprise_pct ?? null,
     beats: judged.length ? judged.filter((e) => (e.eps_actual as number) > (e.eps_estimate as number)).length : null,
     judged: judged.length || null,
-    unverified: own?.status === 'upcoming' && own.listed_by_latest_check === false,
+    unverified: row.unverified || (own?.status === 'upcoming' && isUnverified(own.confidence)),
   };
 }
 

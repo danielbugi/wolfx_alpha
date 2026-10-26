@@ -32,6 +32,7 @@ import PeersPanel from '@/components/stock/PeersPanel';
 import NewsPanel from '@/components/stock/NewsPanel';
 import { reactionPct } from '@/components/stock/EarningsPanel';
 import { nextUpcoming } from '@/lib/earningsCalendar';
+import { UNVERIFIED_NOTE, isUnverified, previouslyReported } from '@/lib/earningsConfidence';
 import { useWatchlist } from '@/lib/watchlist';
 import { neutralBreakoutMarkers } from '@/lib/productSafe';
 import { sectorHref } from '@/lib/sectors';
@@ -426,7 +427,8 @@ export default function StockDetailPage() {
 
   // the read model's own "upcoming" status (New York date); a date the latest check did not re-list is still shown, labelled
   const nextEarnings = nextUpcoming(earnings, earningsMeta?.today ?? new Date().toISOString().slice(0, 10));
-  const earningsUnverified = nextEarnings?.status === 'upcoming' && nextEarnings.listed_by_latest_check === false;
+  // previously reported, not confirmed by the latest check: shown with that note, never as an ordinary countdown
+  const earningsUnverified = nextEarnings?.status === 'upcoming' && isUnverified(nextEarnings.confidence);
   const daysToEarnings = nextEarnings ? daysUntil(nextEarnings.date) : null;
   // Typical size of the move around past reports (same 2-day window as the Earnings section), for the header badge.
   const pastMoves = earnings
@@ -514,20 +516,21 @@ export default function StockDetailPage() {
                     Loss to profit
                   </Chip>
                 )}
-                {daysToEarnings != null && daysToEarnings <= 21 && (
+                {daysToEarnings != null && daysToEarnings <= 21 && nextEarnings && (
                   <Chip
                     size="sm"
-                    title={
-                      earningsUnverified
-                        ? `Reports ${nextEarnings?.date} -- unverified: listed by an earlier earnings-calendar check, not by the latest one`
-                        : `Reports ${nextEarnings?.date}`
-                    }
+                    title={earningsUnverified ? previouslyReported(nextEarnings.date) : `Reports ${nextEarnings.date}`}
                     data-testid="earnings-badge"
-                    className={`text-xs ${daysToEarnings <= 3 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}
+                    className={`text-xs ${earningsUnverified ? 'bg-slate-100 text-slate-700' : daysToEarnings <= 3 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}
                   >
-                    Earnings {daysToEarnings === 0 ? 'today' : `in ${daysToEarnings}d`}
-                    {earningsUnverified && ' (unverified)'}
-                    {avgEarningsMove != null && ` · avg move ±${avgEarningsMove.toFixed(1)}%`}
+                    {earningsUnverified ? (
+                      previouslyReported(nextEarnings.date)
+                    ) : (
+                      <>
+                        Earnings {daysToEarnings === 0 ? 'today' : `in ${daysToEarnings}d`}
+                        {avgEarningsMove != null && ` · avg move ±${avgEarningsMove.toFixed(1)}%`}
+                      </>
+                    )}
                   </Chip>
                 )}
               </div>
@@ -620,7 +623,11 @@ export default function StockDetailPage() {
               value={nextEarnings ? nextEarnings.date : UNKNOWN}
               hint={
                 daysToEarnings != null
-                  ? `${daysToEarnings === 0 ? 'today' : `in ${daysToEarnings} days`}${earningsUnverified ? ' · unverified' : ''}`
+                  ? earningsUnverified
+                    ? `previously reported — ${UNVERIFIED_NOTE}`
+                    : daysToEarnings === 0
+                      ? 'today'
+                      : `in ${daysToEarnings} days`
                   : undefined
               }
             />

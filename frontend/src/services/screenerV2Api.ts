@@ -70,6 +70,9 @@ export interface ScreenerRow {
   days_since_earnings?: number | null;
   earnings_surprise_pct?: number | null;
   next_earnings_date?: string | null;
+  /** the earnings read model's confidence for next_earnings_date; when the calendar was last checked (UTC) */
+  next_earnings_confidence?: 'confirmed' | 'unverified' | null;
+  earnings_checked_at?: string | null;
   last_earnings_date?: string | null;
   /** Strength Score 0-100 (shared engine); null with strength_reason when the data-health gate withholds it */
   strength_score?: number | null;

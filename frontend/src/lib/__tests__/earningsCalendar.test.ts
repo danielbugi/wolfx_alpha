@@ -22,7 +22,7 @@ describe('earnings read model in the calendar', () => {
   const e = (date: string, over: Partial<EarningsDateEntry> = {}): EarningsDateEntry => ({ date, eps_estimate: 1, eps_actual: null, surprise_pct: null, ...over });
 
   it("next upcoming follows the server's status (New York date), not the browser clock", () => {
-    const rows = [e('2026-07-29', { status: 'reported', eps_actual: 6.18 }), e('2026-10-24', { status: 'upcoming', listed_by_latest_check: true })];
+    const rows = [e('2026-07-29', { status: 'reported', eps_actual: 6.18 }), e('2026-10-24', { status: 'upcoming', confidence: 'confirmed' })];
     expect(nextUpcoming(rows, '2026-10-25')?.date).toBe('2026-10-24');   // the server says it is still upcoming in New York
     expect(nextUpcoming([e('2026-10-20', { status: 'awaiting_results' })], '2026-10-01')).toBeNull();
   });
@@ -31,13 +31,16 @@ describe('earnings read model in the calendar', () => {
     expect(nextUpcoming([e('2026-10-20'), e('2026-11-02')], '2026-10-25')?.date).toBe('2026-11-02');
   });
 
-  it('marks a row whose upcoming date the latest check did not re-list (META-style) as unverified', () => {
+  it('marks a previously reported date the latest check did not confirm (META-style), from history or from the board', () => {
     const board = [{ symbol: 'META', next_earnings_date: '2026-10-28', category: 'breakout', starred: false, sector: 'Communication Services', close: 700, market_cap: 1 }] as unknown as MomentumBoardResult[];
-    const hist = [e('2026-07-29', { status: 'reported', eps_actual: 6.18 }), e('2026-10-28', { status: 'upcoming', listed_by_latest_check: false })];
+    const hist = [e('2026-07-29', { status: 'reported', eps_actual: 6.18 }), e('2026-10-28', { status: 'upcoming', confidence: 'unverified' })];
     const rows = buildRows({ board, watchlist: ['META'], histories: { META: hist }, from: '2026-10-26', to: '2026-10-30' });
     expect(rows.map((r) => [r.symbol, r.date, r.unverified])).toEqual([['META', '2026-10-28', true]]);
-    const ok = buildRows({ board, watchlist: ['META'], histories: { META: [e('2026-10-28', { status: 'upcoming', listed_by_latest_check: true })] }, from: '2026-10-26', to: '2026-10-30' });
+    const ok = buildRows({ board, watchlist: ['META'], histories: { META: [e('2026-10-28', { status: 'upcoming', confidence: 'confirmed' })] }, from: '2026-10-26', to: '2026-10-30' });
     expect(ok[0].unverified).toBe(false);
+    // a board-only row carries the board's confidence (same rule as the read model)
+    const boardOnly = [{ ...board[0], symbol: 'ARR', next_earnings_confidence: 'unverified' }] as unknown as MomentumBoardResult[];
+    expect(buildRows({ board: boardOnly, watchlist: [], histories: {}, from: '2026-10-26', to: '2026-10-30' })[0].unverified).toBe(true);
   });
 });
 

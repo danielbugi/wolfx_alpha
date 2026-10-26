@@ -528,7 +528,7 @@ export interface PriceHistoryResponse {
 }
 
 // One stored earnings_calendar row through the approved current-row rule (backend services/earnings_read_model.py).
-// status/listed_by_latest_check/listed_at are absent from an older backend (which answered from Yahoo live).
+// status/confidence/listed_at are absent from an older backend (which answered from Yahoo live).
 export interface EarningsDateEntry {
   date: string;
   eps_estimate: number | null;
@@ -536,8 +536,9 @@ export interface EarningsDateEntry {
   surprise_pct: number | null;
   /** reported = EPS stored; upcoming = on/after today (New York); awaiting_results = past date, no EPS stored yet */
   status?: 'reported' | 'upcoming' | 'awaiting_results';
-  /** upcoming only: listed by the symbol's latest provider fetch (false = only an older fetch listed it) */
-  listed_by_latest_check?: boolean | null;
+  /** upcoming only: "confirmed" = listed by the latest COMPLETE calendar check; "unverified" = previously reported, not
+   * confirmed by it (lib/earningsConfidence.ts) */
+  confidence?: 'confirmed' | 'unverified' | null;
   /** when the provider last listed this row (UTC) */
   listed_at?: string | null;
 }
@@ -553,7 +554,7 @@ export interface EarningsResponse {
   latest_fetch_at?: string | null;
   /** whether that answer included an upcoming date (false = it did not say what is next) */
   schedule_complete?: boolean | null;
-  next?: { date: string; listed_by_latest_check: boolean | null; listed_at: string | null } | null;
+  next?: { date: string; confidence: 'confirmed' | 'unverified' | null; listed_at: string | null } | null;
 }
 
 export interface EarningsBatchResponse {
@@ -635,6 +636,8 @@ export interface MomentumBoardResult {
   // From earnings_calendar -- coverage is thin as of 2026-09-23 (a handful of symbols), so
   // this is null for most rows today; it fills in as the updater's backfill progresses.
   next_earnings_date: string | null;
+  /** same rule as the earnings read model; null without a next date (absent from an older backend) */
+  next_earnings_confidence?: 'confirmed' | 'unverified' | null;
   days_to_earnings: number | null;
 }
 

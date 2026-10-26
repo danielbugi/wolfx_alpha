@@ -6,6 +6,7 @@ import { clsx } from 'clsx';
 import type { EarningsDateEntry, EarningsResponse, PriceBar } from '@/services/api';
 import DataStamp from '@/components/common/DataStamp';
 import { nextUpcoming } from '@/lib/earningsCalendar';
+import { UNVERIFIED_NOTE, isUnverified } from '@/lib/earningsConfidence';
 
 const UNKNOWN = '—';
 
@@ -58,7 +59,7 @@ export default function EarningsPanel({ earnings, bars, meta = null }: { earning
   }, [earnings, bars, meta?.today]);
 
   const days = next ? daysUntil(next.date) : null;
-  const unverified = next?.status === 'upcoming' && next.listed_by_latest_check === false;
+  const unverified = next?.status === 'upcoming' && isUnverified(next.confidence);
 
   return (
     <div>
@@ -69,8 +70,17 @@ export default function EarningsPanel({ earnings, bars, meta = null }: { earning
           <p className="text-[11px] font-medium text-slate-500">Next report</p>
           <p className="text-[15px] font-semibold tabular-nums text-slate-900">{next ? next.date : UNKNOWN}</p>
           <p className="text-[11px] text-slate-400">
-            {days == null ? (meta?.schedule_complete === false ? 'not listed by the latest check' : 'not scheduled') : days === 0 ? 'today' : `in ${days} days`}
-            {unverified && <span className="font-medium text-amber-700" data-testid="next-unverified"> · unverified</span>}
+            {unverified ? (
+              <span className="font-medium text-amber-700" data-testid="next-unverified">
+                previously reported — {UNVERIFIED_NOTE}
+              </span>
+            ) : days == null ? (
+              meta?.schedule_complete === false ? 'not listed by the latest check' : 'not scheduled'
+            ) : days === 0 ? (
+              'today'
+            ) : (
+              `in ${days} days`
+            )}
             {next?.eps_estimate != null && ` · est. EPS $${next.eps_estimate.toFixed(2)}`}
           </p>
         </div>

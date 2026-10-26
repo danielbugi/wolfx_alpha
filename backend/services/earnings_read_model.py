@@ -6,14 +6,24 @@ earnings_calendar rows the pipeline's updater wrote, read through the rule.
 
 Per symbol it returns the current rows with an explicit status, never an invented one:
   * reported          -- a reported EPS is stored (history; always current under the rule).
-  * upcoming          -- on or after `today` (New York date). `listed_by_latest_check` = listed by the symbol's latest fetch;
-                         an upcoming date NOT listed by it is one an older fetch listed and the latest fetch neither listed nor
-                         ruled out (an incomplete answer is not evidence of a cancellation -- e.g. META 2026-10-28:
-                         listed 10-07, the 10-21 fetch returned no upcoming date at all).
+  * upcoming          -- on or after `today` (New York date), with a confidence (CONFIDENCE_SQL):
+      - confirmed   = present in the symbol's latest stored check AND that check is complete (it answered "what is
+                      next": it listed an upcoming date and wrote more than one row, or every row the symbol has).
+      - unverified  = everything else the rule keeps current: a date an earlier check listed that the latest check did
+                      not list, when the latest check was partial (e.g. META 2026-10-28: listed 10-07; the 10-21 check
+                      returned only past reports) or did not cover that period; and a date listed only by a partial check.
+    A date a COMPLETE newer check no longer lists inside the period it answered for is superseded by the approved rule
+    (the vendor moved or withdrew it) and is not returned as upcoming at all -- unless an EPS was reported on it.
   * awaiting_results  -- a past date with no reported EPS stored yet.
-plus the provenance a page needs to say how fresh it is: source, rule, latest_fetch_at (when the provider was last
-asked) and schedule_complete (whether that answer included an upcoming date). No report time (BMO/AMC) is stored, so
-none is returned.
+plus the provenance a page needs to say how fresh it is: source, rule, latest_fetch_at (when the provider last answered
+for the symbol) and schedule_complete (whether that answer was complete). No report time (BMO/AMC) is stored, so none is
+returned.
+
+Known limit: only SUCCESSFUL checks are visible. A check that failed writes nothing, so "latest check" means the latest
+one that stored rows; there is no record of failed attempts (the first-seen source_poll log, migration 27, is applied but
+has no writer). A failed check therefore never removes or downgrades a date -- the previous answer stands, with its own
+age in latest_fetch_at -- and completeness is inferred from what the stored check contains (above), not from a vendor
+status.
 
 Query shape: ONE statement for any number of symbols. The approved CTEs are reused verbatim except that their two reads
 of earnings_calendar are narrowed to the requested symbols -- the rule is evaluated per symbol, so the result for those
@@ -38,9 +48,13 @@ FILTERED_CTES = (EARNINGS_CURRENT_CTES
                  .replace("FROM earnings_calendar e JOIN", "FROM (SELECT * FROM earnings_calendar WHERE symbol = ANY(%(symbols)s)) e JOIN"))
 assert FILTERED_CTES.count("ANY(%(symbols)s)") == 2
 
+# The one confidence rule (SQL form), shared with the Screener engine and the board: a current upcoming date is confirmed
+# only when the latest stored check is complete and lists it.
+CONFIDENCE_SQL = "(in_latest_fetch AND latest_fetch_complete)"
+
 READ_SQL = "WITH " + FILTERED_CTES + """
 SELECT c.symbol, c.report_date, e.eps_estimate::float8, c.eps_actual::float8, c.surprise_pct::float8, c.fetched_at,
-       c.latest_fetch_at, c.in_latest_fetch, c.latest_fetch_complete
+       c.latest_fetch_at, (c.in_latest_fetch AND c.latest_fetch_complete) AS confirmed, c.latest_fetch_complete
 FROM earnings_current c
 JOIN earnings_calendar e ON e.symbol = c.symbol AND e.report_date = c.report_date
 WHERE c.is_current
@@ -67,10 +81,11 @@ def assemble(rows: Sequence[Sequence[Any]], symbols: Sequence[str], today: date,
     for sym in symbols:
         rs = by.get(sym, [])
         dates = []
-        for (_, d, est, act, surp, fetched, latest, in_latest, complete) in rs:
+        for (_, d, est, act, surp, fetched, latest, confirmed, complete) in rs:
             status = "reported" if act is not None else "upcoming" if d >= today else "awaiting_results"
             dates.append({"date": d.isoformat(), "eps_estimate": est, "eps_actual": act, "surprise_pct": surp, "status": status,
-                          "listed_by_latest_check": bool(in_latest) if status == "upcoming" else None, "listed_at": _iso(fetched)})
+                          "confidence": ("confirmed" if confirmed else "unverified") if status == "upcoming" else None,
+                          "listed_at": _iso(fetched)})
         upcoming = [x for x in dates if x["status"] == "upcoming"]
         past = [x for x in dates if x["status"] != "upcoming"][-past_limit:] if past_limit else []
         nxt = upcoming[0] if upcoming else None
@@ -81,7 +96,7 @@ def assemble(rows: Sequence[Sequence[Any]], symbols: Sequence[str], today: date,
             "today": today.isoformat(),
             "latest_fetch_at": _iso(rs[0][6]) if rs else None,
             "schedule_complete": bool(rs[0][8]) if rs else None,
-            "next": {"date": nxt["date"], "listed_by_latest_check": nxt["listed_by_latest_check"], "listed_at": nxt["listed_at"]} if nxt else None,
+            "next": {"date": nxt["date"], "confidence": nxt["confidence"], "listed_at": nxt["listed_at"]} if nxt else None,
             "earnings_dates": past + upcoming,
         }
     return out

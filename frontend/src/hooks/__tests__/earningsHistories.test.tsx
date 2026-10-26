@@ -16,7 +16,7 @@ describe('earnings histories', () => {
     api.getEarningsBatch.mockResolvedValue({
       source: 'earnings_calendar', rule: 'current_row_v1', today: '2026-10-25',
       symbols: {
-        AAPL: { symbol: 'AAPL', earnings_dates: [{ date: '2026-11-02', eps_estimate: 1.98, eps_actual: null, surprise_pct: null, status: 'upcoming', listed_by_latest_check: true }] },
+        AAPL: { symbol: 'AAPL', earnings_dates: [{ date: '2026-11-02', eps_estimate: 1.98, eps_actual: null, surprise_pct: null, status: 'upcoming', confidence: 'confirmed' }] },
         META: { symbol: 'META', earnings_dates: [] },
       },
     });

@@ -4,6 +4,7 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { Table, TableBody, TableCell, TableColumn, TableHeader, TableRow } from '@nextui-org/react';
 import { clsx } from 'clsx';
+import { UNVERIFIED_NOTE } from '@/lib/earningsConfidence';
 import SymbolHoverLink from '@/components/dashboard/SymbolHoverLink';
 import SortHeader from '@/components/ui/SortHeader';
 import { useTableSort } from '@/hooks/useTableSort';
@@ -106,10 +107,10 @@ export default function EarningsTable({
                   {r.unverified && (
                     <span
                       className="rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-800"
-                      title="Listed by an earlier earnings-calendar check, not by the latest one"
+                      title="Previously reported date; the latest calendar check did not list it"
                       data-testid="unverified-date"
                     >
-                      Unverified
+                      Previously reported · {UNVERIFIED_NOTE}
                     </span>
                   )}
                 </div>

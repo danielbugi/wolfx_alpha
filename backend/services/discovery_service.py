@@ -58,6 +58,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 from zoneinfo import ZoneInfo
 
 from services.earnings_current import EARNINGS_CURRENT_CTES
+from services.earnings_read_model import CONFIDENCE_SQL
 
 logger = logging.getLogger(__name__)
 
@@ -303,8 +304,10 @@ BASE_SQL = """
 WITH """ + EARNINGS_CURRENT_CTES + """,
 -- Next / last CURRENT report per symbol, aggregated ONCE and hash-joined below. Never a per-row LATERAL lookup into
 -- earnings_current: that CTE is materialised without an index, so a lookup per stock rescans it (2026-10-22: 30 s/request).
+-- earnings_next: the earliest current date after the session (the same date MIN() picked) with the read model's confidence.
 earnings_next AS (
-    SELECT symbol, MIN(report_date) AS report_date FROM earnings_current WHERE is_current AND report_date > %(s)s GROUP BY symbol
+    SELECT DISTINCT ON (symbol) symbol, report_date, """ + CONFIDENCE_SQL + """ AS confirmed, latest_fetch_at
+    FROM earnings_current WHERE is_current AND report_date > %(s)s ORDER BY symbol, report_date
 ),
 earnings_last AS (
     SELECT DISTINCT ON (symbol) symbol, report_date, surprise_pct FROM earnings_current
@@ -353,7 +356,8 @@ joined AS (
            df.ingested_at AS fundamentals_ingested_at, disc.symbol IS NOT NULL AS has_disc,
            df.pe_ratio::float8 AS pe_ratio, df.ps_ratio::float8 AS ps_ratio, df.overall_quality_score::float8 AS quality_score,
            df.quality_grade, df.float_shares::float8 AS float_shares, co.company_name,
-           nx.report_date AS next_earnings_date, le.report_date AS last_earnings_date, le.surprise_pct::float8 AS earnings_surprise_pct
+           nx.report_date AS next_earnings_date, nx.confirmed AS next_earnings_confirmed, nx.latest_fetch_at AS earnings_checked_at,
+           le.report_date AS last_earnings_date, le.surprise_pct::float8 AS earnings_surprise_pct
     FROM px
     LEFT JOIN pxp USING (symbol)
     LEFT JOIN LATERAL (
@@ -416,6 +420,9 @@ base AS (
            company_name, pe_ratio, ps_ratio, quality_score, quality_grade, float_shares,
            (next_earnings_date - %(s)s::date) AS days_to_earnings, (%(s)s::date - last_earnings_date) AS days_since_earnings,
            earnings_surprise_pct, to_char(next_earnings_date, 'YYYY-MM-DD') AS next_earnings_date,
+           CASE WHEN next_earnings_date IS NULL THEN NULL WHEN next_earnings_confirmed THEN 'confirmed' ELSE 'unverified' END
+               AS next_earnings_confidence,
+           to_char(earnings_checked_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI"Z"') AS earnings_checked_at,
            to_char(last_earnings_date, 'YYYY-MM-DD') AS last_earnings_date,
            to_char(fundamentals_ingested_at, 'YYYY-MM-DD"T"HH24:MI"Z"') AS fundamentals_ingested_at,
            CASE WHEN fundamentals_ingested_at IS NULL THEN NULL ELSE fundamentals_ingested_at > %(close_utc)s END AS fundamentals_after_close,
@@ -430,7 +437,8 @@ base AS (
 """
 
 ROW_COLUMNS = ["symbol", "company_name", "sector", "sector_source", "industry", *[k for k in METRICS.keys()], "quality_grade", "strength_reason",
-               "dv_bars", "fundamentals_date", "fundamentals_ingested_at", "fundamentals_after_close", "next_earnings_date", "last_earnings_date"]
+               "dv_bars", "fundamentals_date", "fundamentals_ingested_at", "fundamentals_after_close", "next_earnings_date", "last_earnings_date",
+               "next_earnings_confidence", "earnings_checked_at"]
 
 
 def page_sql(where: str, order: str) -> str:

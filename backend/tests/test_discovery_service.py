@@ -239,7 +239,10 @@ def test_reference_fields_for_momentum_today_come_from_the_same_rows_and_session
     sql = D.page_sql("TRUE", D.order_clause("pe_ratio", "asc"))
     fund = re.search(r"SELECT market_cap, sector, industry, date,.*?\) df ON true", sql, re.S).group(0)
     assert "pe_ratio, ps_ratio, overall_quality_score, quality_grade, float_shares" in fund and "<= %(cutoff)s" in fund
-    assert "MIN(report_date) AS report_date FROM earnings_current WHERE is_current AND report_date > %(s)s GROUP BY symbol" in sql
+    # the earliest current date after the session (what MIN() picked), with the read model's one confidence rule
+    assert "SELECT DISTINCT ON (symbol) symbol, report_date, (in_latest_fetch AND latest_fetch_complete) AS confirmed, latest_fetch_at" in sql
+    assert "FROM earnings_current WHERE is_current AND report_date > %(s)s ORDER BY symbol, report_date" in sql
+    assert "next_earnings_confidence" in D.ROW_COLUMNS and "earnings_checked_at" in D.ROW_COLUMNS
     assert "WHERE is_current AND report_date <= %(s)s ORDER BY symbol, report_date DESC" in sql
     assert "(next_earnings_date - %(s)s::date) AS days_to_earnings" in sql
     assert "(%(s)s::date - last_earnings_date) AS days_since_earnings" in sql
