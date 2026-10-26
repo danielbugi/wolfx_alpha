@@ -527,16 +527,41 @@ export interface PriceHistoryResponse {
   bars: PriceBar[];
 }
 
+// One stored earnings_calendar row through the approved current-row rule (backend services/earnings_read_model.py).
+// status/confidence/listed_at are absent from an older backend (which answered from Yahoo live).
 export interface EarningsDateEntry {
   date: string;
   eps_estimate: number | null;
   eps_actual: number | null;
   surprise_pct: number | null;
+  /** reported = EPS stored; upcoming = on/after today (New York); awaiting_results = past date, no EPS stored yet */
+  status?: 'reported' | 'upcoming' | 'awaiting_results';
+  /** upcoming only: "confirmed" = listed by the latest COMPLETE calendar check; "unverified" = previously reported, not
+   * confirmed by it (lib/earningsConfidence.ts) */
+  confidence?: 'confirmed' | 'unverified' | null;
+  /** when the provider last listed this row (UTC) */
+  listed_at?: string | null;
 }
 
 export interface EarningsResponse {
   symbol: string;
   earnings_dates: EarningsDateEntry[];
+  source?: string;
+  rule?: string;
+  /** the New York date `upcoming` is measured from */
+  today?: string;
+  /** when the provider was last asked about this symbol (UTC); null = never */
+  latest_fetch_at?: string | null;
+  /** whether that answer included an upcoming date (false = it did not say what is next) */
+  schedule_complete?: boolean | null;
+  next?: { date: string; confidence: 'confirmed' | 'unverified' | null; listed_at: string | null } | null;
+}
+
+export interface EarningsBatchResponse {
+  source: string;
+  rule: string;
+  today: string;
+  symbols: Record<string, EarningsResponse>;
 }
 
 export interface SignalSummary {
@@ -611,6 +636,8 @@ export interface MomentumBoardResult {
   // From earnings_calendar -- coverage is thin as of 2026-09-23 (a handful of symbols), so
   // this is null for most rows today; it fills in as the updater's backfill progresses.
   next_earnings_date: string | null;
+  /** same rule as the earnings read model; null without a next date (absent from an older backend) */
+  next_earnings_confidence?: 'confirmed' | 'unverified' | null;
   days_to_earnings: number | null;
 }
 
@@ -1136,6 +1163,14 @@ class ApiService {
     return response.data;
   }
 
+  /** Earnings for up to 50 symbols in ONE request (GET /api/earnings), from the same read model as getStockEarnings. */
+  async getEarningsBatch(symbols: string[], past: number = 12): Promise<EarningsBatchResponse> {
+    const params = new URLSearchParams(symbols.map((s) => ['symbol', s]));
+    params.append('past', String(past));
+    const response = await apiClient.get<EarningsBatchResponse>(`/api/earnings?${params.toString()}`);
+    return response.data;
+  }
+
   async getStockEarnings(symbol: string, limit: number = 12): Promise<EarningsResponse> {
     const response = await apiClient.get<EarningsResponse>(`/api/stock/${symbol}/earnings`, {
       params: { limit },
@@ -1256,6 +1291,7 @@ export const stockApi = {
   getDetail: (symbol: string) => apiService.getStockDetail(symbol),
   getPriceHistory: (symbol: string, days?: number) => apiService.getStockPriceHistory(symbol, days),
   getEarnings: (symbol: string, limit?: number) => apiService.getStockEarnings(symbol, limit),
+  getEarningsBatch: (symbols: string[], past?: number) => apiService.getEarningsBatch(symbols, past),
   getSignal: (symbol: string) => apiService.getStockSignal(symbol),
   search: (query: string, limit?: number) => apiService.searchSymbols(query, limit),
 };

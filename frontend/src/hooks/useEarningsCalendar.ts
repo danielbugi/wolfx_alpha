@@ -7,18 +7,17 @@ import { nyDateOf, sessionAnchors, type HistoryState, type SessionAnchors } from
 import { useWatchlist } from '@/lib/watchlist';
 
 // ---------------------------------------------------------------------------------------------------------------
-// Per-symbol earnings history, shared by every consumer on the page. The endpoint behind it looks each symbol up live
-// (yfinance, cached server-side for an hour), so requests are de-duplicated, capped at MAX_CONCURRENT in flight and
-// kept for HISTORY_TTL_MS -- the dashboard card and the calendar page never fan out more than the rows on screen.
+// Per-symbol earnings history, shared by every consumer on the page, from the backend's one earnings read model (the
+// approved current-row rule). Symbols are requested in batches of up to BATCH_SIZE per request (one query each),
+// de-duplicated and kept for HISTORY_TTL_MS.
 
-const MAX_CONCURRENT = 4;
+const BATCH_SIZE = 50;
 const HISTORY_TTL_MS = 30 * 60 * 1000;
 
 const store = new Map<string, { data: EarningsDateEntry[] | 'error'; ts: number }>();
 const pending = new Set<string>();
 const queue: string[] = [];
 const listeners = new Set<() => void>();
-let active = 0;
 let snapshot: Record<string, HistoryState> = {};
 
 function publish() {
@@ -27,18 +26,18 @@ function publish() {
 }
 
 function pump() {
-  while (active < MAX_CONCURRENT && queue.length > 0) {
-    const symbol = queue.shift() as string;
-    active++;
+  while (queue.length > 0) {
+    const batch = queue.splice(0, BATCH_SIZE);
     stockApi
-      .getEarnings(symbol, 12)
-      .then((r) => store.set(symbol, { data: r.earnings_dates, ts: Date.now() }))
-      .catch(() => store.set(symbol, { data: 'error', ts: Date.now() }))
+      .getEarningsBatch(batch, 12)
+      .then((r) => {
+        // a symbol the server did not answer for is an error, never an empty "no earnings" history
+        for (const s of batch) store.set(s, { data: r.symbols[s] ? r.symbols[s].earnings_dates : 'error', ts: Date.now() });
+      })
+      .catch(() => batch.forEach((s) => store.set(s, { data: 'error', ts: Date.now() })))
       .finally(() => {
-        active--;
-        pending.delete(symbol);
+        batch.forEach((s) => pending.delete(s));
         publish();
-        pump();
       });
   }
 }

@@ -37,6 +37,7 @@ if _MECHANISM not in sys.path:
 from alerts.star import is_starred, starred_lists  # noqa: E402
 
 from services.earnings_current import EARNINGS_CURRENT_CTES  # noqa: E402
+from services.earnings_read_model import CONFIDENCE_SQL  # noqa: E402
 
 # digest_stocks is written once per session (when send_daily_digest.py --send runs), not on
 # every dashboard load -- a short cache still avoids a repeat query burst from the 5-minute
@@ -86,8 +87,9 @@ class MomentumBoardService:
             -- materialised without an index, so a per-row lookup rescans it).
             earnings_next AS (
                 -- only dates still listed by the symbol's latest complete vendor fetch (services/earnings_current.py)
-                SELECT symbol, MIN(report_date) AS report_date FROM earnings_current
-                WHERE is_current AND report_date >= CURRENT_DATE GROUP BY symbol
+                -- (the earliest one -- what MIN() picked -- with the read model's confidence)
+                SELECT DISTINCT ON (symbol) symbol, report_date, """ + CONFIDENCE_SQL + """ AS confirmed FROM earnings_current
+                WHERE is_current AND report_date >= CURRENT_DATE ORDER BY symbol, report_date
             ),
             earnings_fresh AS (
                 SELECT symbol, MAX(latest_fetch_at) AS latest_fetch_at, BOOL_OR(latest_fetch_complete) AS schedule_complete
@@ -98,7 +100,7 @@ class MomentumBoardService:
                 ds.symbol, ds.category, ds.close, ds.ret1_pct, ds.rvol, ds.range_atr,
                 ds.below_high_pct, ds.dv20, ds.list_ranks, ds.atr,
                 f.sector, f.quality_grade, f.overall_quality_score, f.market_cap,
-                nxt.report_date AS next_earnings_date,
+                nxt.report_date AS next_earnings_date, nxt.confirmed AS next_earnings_confirmed,
                 efs.latest_fetch_at AS earnings_fetched_at, efs.schedule_complete AS earnings_schedule_complete
             FROM latest_run lr
             JOIN digest_stocks ds ON ds.session_date = lr.session_date
@@ -176,6 +178,9 @@ class MomentumBoardService:
                 "market_cap": int(r["market_cap"]) if r["market_cap"] is not None else None,
                 "next_earnings_date": next_earnings.isoformat() if next_earnings else None,
                 "days_to_earnings": days_to_earnings,
+                # confirmed = in the latest stored check and that check complete; unverified = previously reported,
+                # not re-listed by a complete check (services/earnings_read_model.py)
+                "next_earnings_confidence": (("confirmed" if r.get("next_earnings_confirmed") else "unverified") if next_earnings else None),
                 # Freshness of the earnings source for this symbol: when the vendor calendar was last fetched, and
                 # whether that fetch was a complete answer (None = no calendar rows at all).
                 "earnings_fetched_at": r["earnings_fetched_at"].isoformat() if r.get("earnings_fetched_at") else None,

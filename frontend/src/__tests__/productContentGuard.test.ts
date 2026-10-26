@@ -62,7 +62,13 @@ const PRODUCT_FILES = [
   'components/marketIntel/SectorHeatmap.tsx',
   'components/marketIntel/SectorRotation.tsx',
   'components/ui/InfoTip.tsx',
+  'lib/earningsConfidence.ts',
 ];
+
+// The one allowed use of the word: the earnings date confidence note (lib/earningsConfidence.ts, owner-approved wording
+// 2026-10-26). Only this exact phrase is exempt; every other "confirmed" is still caught.
+const ALLOWED = [/not confirmed by latest check/gi];
+const allow = (code: string) => ALLOWED.reduce((c, re) => c.replace(re, ''), code);
 
 // Each entry: what it catches, and the pattern (case-insensitive).
 const BANNED: [string, RegExp][] = [
@@ -85,7 +91,7 @@ function stripComments(code: string): string {
 
 describe('product-facing pages', () => {
   it.each(PRODUCT_FILES)('%s carries no trade plan, sizing, experimental ML, signal performance or claims', (rel) => {
-    const code = stripComments(fs.readFileSync(path.join(SRC, rel), 'utf-8'));
+    const code = allow(stripComments(fs.readFileSync(path.join(SRC, rel), 'utf-8')));
     const hits = BANNED.filter(([, re]) => re.test(code)).map(([what]) => what);
     expect(hits).toEqual([]);
   });
@@ -112,5 +118,8 @@ describe('product-facing pages', () => {
     const samples = ['Trade plan', 'Suggested position size', 'TP1', 'Model score', 'Win rate', 'Strategy score', 'Confirmed today', 'will outperform'];
     for (const s of samples) expect(BANNED.some(([, re]) => re.test(s))).toBe(true);
     expect(stripComments('// Trade plan removed\nconst a = 1; /* Model score */')).not.toMatch(/Trade plan|Model score/);
+    // the earnings note is the only exemption, and it does not hide anything else
+    expect(BANNED.some(([, re]) => re.test(allow('Previously reported: Oct 28 — not confirmed by latest check')))).toBe(false);
+    expect(BANNED.some(([, re]) => re.test(allow('not confirmed by latest check · Confirmed signal')))).toBe(true);
   });
 });

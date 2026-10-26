@@ -10,6 +10,7 @@
 
 import type { EarningsDateEntry, MomentumBoardResult } from '@/services/api';
 import { zoneParts, type MarketCalendar } from '@/lib/marketSession';
+import { isUnverified } from '@/lib/earningsConfidence';
 
 const NY = 'America/New_York';
 
@@ -147,6 +148,18 @@ export interface EarningsRow {
   /** beats out of judged reports, over the last 8 reports before this one; null until history is loaded */
   beats: number | null;
   judged: number | null;
+  /** an upcoming date listed by an older provider fetch but not by the latest one */
+  unverified?: boolean;
+}
+
+/**
+ * The next upcoming report of a symbol's dates: the read model's own `upcoming` status when present (measured from the
+ * New York date), else (an older backend) the first date on or after `todayIso`.
+ */
+export function nextUpcoming(entries: EarningsDateEntry[], todayIso: string): EarningsDateEntry | null {
+  const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
+  const typed = sorted.some((e) => e.status !== undefined);
+  return (typed ? sorted.find((e) => e.status === 'upcoming') : sorted.find((e) => e.date >= todayIso)) ?? null;
 }
 
 export type HistoryState = EarningsDateEntry[] | 'error' | undefined;
@@ -188,6 +201,7 @@ export function buildRows({
       surprisePct: null,
       beats: null,
       judged: null,
+      unverified: false,
     };
   };
 
@@ -201,7 +215,7 @@ export function buildRows({
   for (const r of board) {
     const d = r.next_earnings_date;
     if (!d || fromHistory.has(r.symbol) || d < from || d > to) continue;
-    out.set(`${r.symbol}|${d}`, base(r.symbol, d));
+    out.set(`${r.symbol}|${d}`, { ...base(r.symbol, d), unverified: isUnverified(r.next_earnings_confidence) });
   }
   return [...out.values()].map((row) => enrich(row, histories[row.symbol]));
 }
@@ -221,6 +235,7 @@ export function enrich(row: EarningsRow, history: HistoryState): EarningsRow {
     surprisePct: own?.surprise_pct ?? null,
     beats: judged.length ? judged.filter((e) => (e.eps_actual as number) > (e.eps_estimate as number)).length : null,
     judged: judged.length || null,
+    unverified: row.unverified || (own?.status === 'upcoming' && isUnverified(own.confidence)),
   };
 }
 

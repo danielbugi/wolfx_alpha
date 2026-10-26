@@ -4,6 +4,7 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { Table, TableBody, TableCell, TableColumn, TableHeader, TableRow } from '@nextui-org/react';
 import { clsx } from 'clsx';
+import { UNVERIFIED_NOTE } from '@/lib/earningsConfidence';
 import SymbolHoverLink from '@/components/dashboard/SymbolHoverLink';
 import SortHeader from '@/components/ui/SortHeader';
 import { useTableSort } from '@/hooks/useTableSort';
@@ -101,6 +102,15 @@ export default function EarningsTable({
                   {r.onWatchlist && (
                     <span className="rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-accent" title="On your watchlist">
                       Watchlist
+                    </span>
+                  )}
+                  {r.unverified && (
+                    <span
+                      className="rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-800"
+                      title="Previously reported date; the latest calendar check did not list it"
+                      data-testid="unverified-date"
+                    >
+                      Previously reported · {UNVERIFIED_NOTE}
                     </span>
                   )}
                 </div>

@@ -13,7 +13,7 @@ import logging
 from services.stock_service import StockService
 from services import discovery_service as discovery
 from services.strategy_calc import compute_strategy_plan
-from services.earnings_service import get_earnings_dates
+from services.earnings_read_model import EarningsReadModel
 from utils import load_ml_enhanced_data_cached
 
 logger = logging.getLogger(__name__)
@@ -111,21 +111,23 @@ def get_signal_summary(symbol: str):
     }
 
 
+def get_earnings_read_model():
+    from main import get_database_connection
+    return EarningsReadModel(get_database_connection)
+
+
 @stock_router.get("/{symbol}/earnings")
-def get_earnings(symbol: str, limit: int = Query(12, ge=1, le=40)):
-    """Earnings-date markers for the chart, fetched from yfinance on demand
-    (see services/earnings_service.py for why -- no other provider covers this
-    for the full universe). Declared as a plain `def`, not `async def` like the
-    rest of this router: yfinance does blocking HTTP that can take several
-    seconds or hang under rate limiting, and awaiting it directly would stall
-    the whole event loop. A sync route runs in Starlette's threadpool instead."""
-    symbol = symbol.upper()
+def get_earnings(symbol: str = Path(..., pattern=r"^[A-Za-z0-9.\-]{1,10}$"), limit: int = Query(12, ge=1, le=40),
+                 model: EarningsReadModel = Depends(get_earnings_read_model)):
+    """Earnings dates for the Stock page (badge, Earnings tab, chart markers) and the Watchlist chart, from the ONE
+    earnings read model (services/earnings_read_model.py: stored earnings_calendar rows through the approved current-row
+    rule, the same rule as the Screener and the board). `limit` = past reports; every current upcoming date is included.
+    Same `earnings_dates` row shape as before (plus status/confirmed/listed_at), with source, as-of and `next`."""
     try:
-        dates = get_earnings_dates(symbol, limit)
+        return model.for_symbols([symbol], past_limit=limit)[symbol.upper()]
     except Exception as e:
-        logger.warning(f"Earnings lookup failed for {symbol}: {e}")
-        dates = []
-    return {"symbol": symbol, "earnings_dates": dates}
+        logger.error(f"Earnings read failed for {symbol}: {e}")
+        raise HTTPException(status_code=503, detail="Earnings dates are unavailable right now")
 
 
 def get_discovery_service():
