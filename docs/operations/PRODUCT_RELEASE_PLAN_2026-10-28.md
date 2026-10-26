@@ -95,9 +95,75 @@ Consequences:
 - The two-version state (new backend, old frontend) **must not span a pipeline run**: the frontend follows the backend within the same window.
 - If the frontend has to be rolled back, the backend is rolled back too, before 23:45 Jerusalem (§5).
 
+## 2a. Soak isolation, transition and residual risk (owner refinement, 2026-10-26)
+
+### Why §2's rule is not enough
+
+A day-of B3a check proves only that **today's** payload is null-free. Nulls are produced by later transitions:
+- a new session's prices loaded before its indicators (the nightly pipeline);
+- a new listing without a previous close.
+
+So the old frontend must never depend on the new backend for longer than a short, supervised, daytime switch.
+
+### The new frontend is null-safe (PR #70)
+
+- The market-overview payload is normalised once, where it is fetched.
+- Every Overview figure, the movers rows, the heatmap and the "Sectors today" tile render null, missing or partially loaded values as "—". They never crash or show a default.
+- Regression tests cover null, missing blocks and fields, partially loaded and garbage values, and are mutation-checked.
+
+**PR #70 must be merged, and the new commit reviewed, before this release.** It becomes `<RELEASE_SHA>`.
+
+### Option A (recommended): build once, soak in isolation, promote the same artifact
+
+Public traffic never sees an un-soaked backend, and the deployed image is byte-for-byte the soaked one.
+
+1. **Pin the artifact, not `main`.**
+   - Create `release/product-<date>` pointing exactly at `<RELEASE_SHA>`.
+   - Dispatch `cd.yml` (`service=backend`) **on that branch**. `build-and-push` runs, re-running CI's backend slice, and pushes `wolfx_alpha-backend:<RELEASE_SHA[:12]>`.
+   - The `deploy` job is refused by the `production` environment, whose branch policy is `main` only (verified 2026-10-26). This is how the Stage 2 images were built.
+   - Record the image digest. **Everything downstream uses this tag and digest, never `main`'s tip.**
+2. **Isolated backend soak (30 min, no public traffic).**
+   - On the VPS, run the image as a separate container `fl-release-soak`, following the private-preview precedent (`fl-preview-backend`):
+     - on `donchian-screener_app_net`;
+     - published only on `127.0.0.1:8101`; Caddy does not route to it;
+     - `PGOPTIONS=-c default_transaction_read_only=on` and `ENVIRONMENT=release-soak`;
+     - no Telegram or SMTP secrets; `restart=no`.
+   - Run gates B1–B6 (§3) against it. Re-run B1, B4 and B6 at 30 minutes.
+   - The live backend and frontend are untouched throughout. Remove the container afterwards.
+3. **Stage the frontend, without switching the domain.**
+   - From `git archive <RELEASE_SHA> frontend`, run `vercel build --prod`, then `vercel deploy --prebuilt --prod --skip-domain`.
+   - The result is a production deployment that is **not** aliased to `dashboard.first-light.finance`. Record its id. Smoke-check its URL as far as CORS allows: static pages and bundle load.
+4. **Switch (supervised, daytime, about 2 minutes).**
+   - Deliver the `<RELEASE_SHA>` bundle (`docker-compose.yml`, `docker-compose.prod.yml`, `docker/Caddyfile.prod` from `git archive`) to `releases/<RELEASE_SHA[:12]>/`.
+   - Run the documented operator path, `/opt/donchian/scripts/deploy.sh backend <RELEASE_SHA[:12]>`. It is health-gated, auto-restores on failure and keeps the pointers.
+   - Verify the running image digest = the soaked digest.
+   - **Immediately** run `vercel promote <staged deployment id>`.
+5. **Public gates.** Run F1, then F2 on the promoted build. Run B3/B4 once more on the public backend.
+
+**Residual risk (Option A):** the old frontend runs on the new backend for about 1–2 minutes, between `deploy.sh` turning healthy and `vercel promote`, in a daytime window with no price-loading job scheduled. A null can only appear if a price load happens in those minutes. None is scheduled (§1.3), and the movers and overview caches change only when a new price date is stored.
+
+**Deviation to approve:** this uses `deploy.sh` directly (the documented manual path) instead of the CD `deploy` job. The reason: the CD job always deploys a **fresh** build of `main`'s tip, which is not the soaked artifact.
+
+### Option B: no isolation (CD on `main`)
+
+1. **Merge freeze** on `main` for the release (no merges until the release is done or rolled back).
+2. `git rev-parse origin/main` = `<RELEASE_SHA>`; the §0 identity check passes.
+3. Dispatch `cd.yml --ref main`.
+4. **Immediately** confirm the run's `headSha` = `<RELEASE_SHA>` (`gh run list --workflow cd.yml -L 1 --json headSha`). If it differs, **cancel the run before its `deploy` job starts**; the build takes several minutes.
+5. After the deploy, confirm the running tag = `<RELEASE_SHA[:12]>`.
+6. **Soak with public traffic on the old frontend** (30 min), then deploy the frontend.
+
+**Residual risk (Option B):** the old frontend runs on the new backend for the whole ~30-minute soak. It is protected only by the B3a check and the absence of a price load in the window. The payload is static between price loads (§1.3), so the practical risk is low, but it is **not** structurally excluded as in Option A.
+
+### Rollback rule (unchanged, both options)
+
+- If the frontend returns to `bezlzpzie`, the backend returns to `b8b706d33bab` as well, **before the 23:45 Jerusalem pipeline**.
+- Order: frontend first, then backend.
+- The new frontend is never left on the old backend, and the old frontend is never left on the new backend across a pipeline run.
+
 ## 3. Backend release
 
-**Run (only after the §0 check):** `gh workflow run cd.yml --ref main -f service=backend -f confirm_ci_passed=yes`. Its `deploy` job runs `deploy.sh backend <tag>`. The container health gate rolls back automatically on failure, and the pointers are kept by `deploy.sh`.
+**Run (only after the §0 check):** Option A (§2a) by default. Under Option B: `gh workflow run cd.yml --ref main -f service=backend -f confirm_ci_passed=yes`, with the head-SHA confirmation of §2a. Its `deploy` job runs `deploy.sh backend <tag>`. The container health gate rolls back automatically on failure, and the pointers are kept by `deploy.sh`.
 
 Record the image tag and digest.
 
