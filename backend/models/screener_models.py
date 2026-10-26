@@ -168,6 +168,12 @@ class MarketOverviewResponse(BaseModel):
     market_breadth: Dict[str, Any]
     market_indicators: Dict[str, Any]
     sector_performance: List[Dict[str, Any]]
+    # the explicit session and population these figures describe (absent from the pre-2026-10-26 engine)
+    session: Optional[str] = None
+    previous_session: Optional[str] = None
+    newest_price_date: Optional[str] = None
+    population: Optional[Dict[str, Any]] = None
+    coverage: Optional[Dict[str, Any]] = None
 
     class Config:
         schema_extra = {

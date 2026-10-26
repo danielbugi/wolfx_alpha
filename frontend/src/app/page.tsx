@@ -293,7 +293,10 @@ export default function DashboardPage() {
           {marketOverview && (
             <Card className="h-full border border-black/[0.05] shadow-sm">
               <CardHeader className="px-5 pt-5 pb-3 flex items-center justify-between flex-wrap gap-2">
-                <h3 className="text-[17px] font-semibold text-slate-900">Today&apos;s activity <span className="font-normal text-slate-400">latest session</span></h3>
+                <h3 className="text-[17px] font-semibold text-slate-900" data-testid="activity-title">
+                  Today&apos;s activity{' '}
+                  <span className="font-normal text-slate-400">{marketOverview.session ? `session ${marketOverview.session}` : 'latest session'}</span>
+                </h3>
                 <div className="flex items-center gap-2">
                   {marketOverviewError && (
                     <Chip size="sm" className="bg-amber-100 text-amber-800 text-[10px]">
@@ -318,7 +321,16 @@ export default function DashboardPage() {
                     <p className="text-xl font-semibold tracking-[-0.01em] tabular-nums text-slate-900">
                       {marketOverview.market_breadth.unusual_volume_count} <span className="text-sm font-normal text-slate-500">of {marketOverview.market_breadth.total_stocks}</span>
                     </p>
-                    <p className="text-xs text-slate-500">volume at least 2× its 10-day average</p>
+                    <p className="text-xs text-slate-500">volume at least 2× its 10-day average · all stocks priced $1+, no liquidity floor</p>
+                    {marketOverview.session && (
+                      <Link
+                        href={`/screener?min_close=1&min_volume_ratio=2&sort=volume_ratio&order=desc&session=${marketOverview.session}`}
+                        className="mt-1 inline-block text-xs font-medium text-accent hover:underline"
+                        data-testid="activity-unusual-link"
+                      >
+                        See them in the Screener →
+                      </Link>
+                    )}
                   </div>
                   <div className="bg-slate-50 rounded-xl p-4">
                     <p className="text-xs font-medium text-slate-500 mb-1">RSI above 70 / below 30</p>
@@ -328,12 +340,18 @@ export default function DashboardPage() {
                       {marketOverview.market_breadth.oversold_count}{' '}
                       <span className="text-sm font-normal text-slate-500">of {marketOverview.market_breadth.total_stocks}</span>
                     </p>
-                    <p className="text-xs text-slate-500">14-session RSI</p>
+                    <p className="text-xs text-slate-500">
+                      14-session RSI of the session
+                      {marketOverview.coverage && marketOverview.coverage.rsi_known < marketOverview.market_breadth.total_stocks
+                        ? ` · known for ${marketOverview.coverage.rsi_known}`
+                        : ''}
+                    </p>
                   </div>
                   <div className="bg-slate-50 rounded-xl p-4">
                     <p className="text-xs font-medium text-slate-500 mb-1">Average RSI / volume ratio</p>
                     <p className="text-xl font-semibold tracking-[-0.01em] tabular-nums text-slate-900">
-                      {marketOverview.market_indicators.avg_rsi.toFixed(0)} / {marketOverview.market_indicators.avg_volume_ratio.toFixed(2)}x
+                      {marketOverview.market_indicators.avg_rsi != null ? marketOverview.market_indicators.avg_rsi.toFixed(0) : '—'} /{' '}
+                      {marketOverview.market_indicators.avg_volume_ratio != null ? `${marketOverview.market_indicators.avg_volume_ratio.toFixed(2)}x` : '—'}
                     </p>
                     <p className="text-xs text-slate-500">mean across {marketOverview.market_breadth.total_stocks} stocks priced $1+</p>
                   </div>
@@ -342,8 +360,8 @@ export default function DashboardPage() {
                 <div className="flex justify-between items-center mb-2">
                   <p className="text-xs text-slate-500">
                     {sectorView === 'heatmap'
-                      ? 'Sector performance today: box size = number of stocks, colour = average change. Click a sector to highlight it.'
-                      : 'Sector performance: 90-day cumulative return. Click a sector to isolate it.'}
+                      ? 'Sector performance on the session: box size = number of stocks priced $1+, colour = their average change. Click a sector to highlight it.'
+                      : "Sector performance: daily average changes of each sector's current members (stocks priced $1+) summed over 90 days -- today's membership, not as of past dates. Click a sector to isolate it."}
                   </p>
                   {selectedSector && (
                     <div className="flex items-center gap-2">
