@@ -4,7 +4,7 @@ Status: **plan for owner approval**, prepared 2026-10-26. Nothing in it has been
 
 ## 0. What ships
 
-The release is one `main` commit, the merge of PR #66 (written `<RELEASE_SHA>` below; the first 12 characters are the image tag).
+The release is one `main` commit, the merge of PR #66 (written `<RELEASE_SHA>` below; the first 12 characters are the image tag). **Candidate: `f7059e0dd69b`**, `main` CI green 2026-10-26. Re-confirm it is still `main`'s head, or re-pick, on the day.
 
 | PR | Backend | Frontend |
 |---|---|---|
