@@ -287,16 +287,17 @@ export interface FilterPreset {
 // Overview market activity + sector heatmap: one Screener v2 evaluation for ONE session (backend
 // DiscoveryService.market_overview). Averages are null when nothing has the value for the session (never 1.0 / 50).
 export interface MarketOverview {
+  // every figure may be null: not computable for the session, or missing from the payload (lib/marketOverview.ts)
   market_breadth: {
-    total_stocks: number;
-    gainers: number;
-    losers: number;
-    unchanged?: number;
+    total_stocks: number | null;
+    gainers: number | null;
+    losers: number | null;
+    unchanged?: number | null;
     /** null when no stock fell (no ratio, never gainers / 1) */
     advance_decline_ratio: number | null;
-    unusual_volume_count: number;
-    overbought_count: number;
-    oversold_count: number;
+    unusual_volume_count: number | null;
+    overbought_count: number | null;
+    oversold_count: number | null;
   };
   market_indicators: {
     avg_volume_ratio: number | null;

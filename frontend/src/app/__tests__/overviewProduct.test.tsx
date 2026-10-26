@@ -56,6 +56,31 @@ vi.mock('@/services/api', async (importOriginal) => {
 import DashboardPage from '@/app/page';
 
 describe('Overview (product)', () => {
+  it('renders a partially loaded session (no indicators yet) without crashing: every unknown figure is a dash', async () => {
+    state.overview = {
+      market_breadth: { total_stocks: 3043, gainers: 990, losers: 0, advance_decline_ratio: null, unusual_volume_count: 0, overbought_count: 0, oversold_count: 0 },
+      market_indicators: { avg_rsi: null, avg_volume_ratio: null, total_market_cap: null },
+      sector_performance: [{ sector: 'Energy', stock_count: 126, avg_performance: null }, { sector: 'Technology', stock_count: 425, avg_performance: 0.45 }],
+      session: '2026-10-27',
+      coverage: { change_known: 3043, volume_ratio_known: 0, rsi_known: 0, market_cap_known: 0 },
+    };
+    const { container } = render(<DashboardPage />);
+    expect((await screen.findByTestId('activity-title')).textContent).toContain('session 2026-10-27');
+    expect(container.textContent).toMatch(/— \/ —/);
+    expect(container.textContent).toContain('known for 0');
+    expect(container.textContent).not.toMatch(/NaN|undefined|null/);
+    state.overview = null;
+  });
+
+  it('renders a payload with whole blocks missing (older or partial response) without crashing', async () => {
+    state.overview = { sector_performance: null, session: null } as unknown as Record<string, unknown>;
+    const { container } = render(<DashboardPage />);
+    expect((await screen.findByTestId('activity-title')).textContent).toBe("Today's activity latest session");
+    expect(container.textContent).toMatch(/— of —/);
+    expect(container.textContent).not.toMatch(/NaN|undefined/);
+    state.overview = null;
+  });
+
   it('states the market-activity session, its population, links the unusual-volume tile to the same Screener view, and shows missing averages as dashes', async () => {
     state.overview = {
       market_breadth: { gainers: 990, losers: 1850, advance_decline_ratio: 0.54, total_stocks: 3043, unusual_volume_count: 80, overbought_count: 202, oversold_count: 254 },

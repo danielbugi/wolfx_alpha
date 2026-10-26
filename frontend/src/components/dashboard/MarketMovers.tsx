@@ -132,7 +132,9 @@ export default function MarketMovers({
                   <TableCell>
                     <SymbolHoverLink symbol={stock.symbol} />
                   </TableCell>
-                  <TableCell className="text-right tabular-nums text-slate-800">${stock.current_price.toFixed(2)}</TableCell>
+                  <TableCell className="text-right tabular-nums text-slate-800">
+                    {Number.isFinite(stock.current_price) ? `$${stock.current_price.toFixed(2)}` : '—'}
+                  </TableCell>
                   <TableCell className="text-right">
                     <span
                       className={`font-semibold tabular-nums ${

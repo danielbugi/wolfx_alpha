@@ -29,6 +29,7 @@ import MarketChartCard from '@/components/dashboard/MarketChartCard';
 import MomentumTopCard from '@/components/dashboard/MomentumTopCard';
 import { sectorHref } from '@/lib/sectors';
 import { screenSectorHref } from '@/lib/screenerV2';
+import { normalizeMarketOverview, showCount } from '@/lib/marketOverview';
 import { ResolvedTheme, useResolvedTheme } from '@/lib/theme';
 
 function timeAgo(date: Date | null): string {
@@ -140,7 +141,7 @@ export default function DashboardPage() {
 
   const fetchMarketOverview = useCallback(async () => {
     try {
-      const overview = await screenerApi.getMarketOverview();
+      const overview = normalizeMarketOverview(await screenerApi.getMarketOverview());
       setMarketOverview(overview);
       setMarketOverviewError(false);
     } catch {
@@ -319,7 +320,8 @@ export default function DashboardPage() {
                   <div className="bg-slate-50 rounded-xl p-4">
                     <p className="text-xs font-medium text-slate-500 mb-1">Unusual volume</p>
                     <p className="text-xl font-semibold tracking-[-0.01em] tabular-nums text-slate-900">
-                      {marketOverview.market_breadth.unusual_volume_count} <span className="text-sm font-normal text-slate-500">of {marketOverview.market_breadth.total_stocks}</span>
+                      {showCount(marketOverview.market_breadth.unusual_volume_count)}{' '}
+                      <span className="text-sm font-normal text-slate-500">of {showCount(marketOverview.market_breadth.total_stocks)}</span>
                     </p>
                     <p className="text-xs text-slate-500">volume at least 2× its 10-day average · all stocks priced $1+, no liquidity floor</p>
                     {marketOverview.session && (
@@ -335,14 +337,16 @@ export default function DashboardPage() {
                   <div className="bg-slate-50 rounded-xl p-4">
                     <p className="text-xs font-medium text-slate-500 mb-1">RSI above 70 / below 30</p>
                     <p className="text-xl font-semibold tracking-[-0.01em] tabular-nums text-slate-900">
-                      {marketOverview.market_breadth.overbought_count}
+                      {showCount(marketOverview.market_breadth.overbought_count)}
                       {' / '}
-                      {marketOverview.market_breadth.oversold_count}{' '}
-                      <span className="text-sm font-normal text-slate-500">of {marketOverview.market_breadth.total_stocks}</span>
+                      {showCount(marketOverview.market_breadth.oversold_count)}{' '}
+                      <span className="text-sm font-normal text-slate-500">of {showCount(marketOverview.market_breadth.total_stocks)}</span>
                     </p>
                     <p className="text-xs text-slate-500">
                       14-session RSI of the session
-                      {marketOverview.coverage && marketOverview.coverage.rsi_known < marketOverview.market_breadth.total_stocks
+                      {marketOverview.coverage &&
+                      marketOverview.market_breadth.total_stocks != null &&
+                      marketOverview.coverage.rsi_known < marketOverview.market_breadth.total_stocks
                         ? ` · known for ${marketOverview.coverage.rsi_known}`
                         : ''}
                     </p>
@@ -353,7 +357,7 @@ export default function DashboardPage() {
                       {marketOverview.market_indicators.avg_rsi != null ? marketOverview.market_indicators.avg_rsi.toFixed(0) : '—'} /{' '}
                       {marketOverview.market_indicators.avg_volume_ratio != null ? `${marketOverview.market_indicators.avg_volume_ratio.toFixed(2)}x` : '—'}
                     </p>
-                    <p className="text-xs text-slate-500">mean across {marketOverview.market_breadth.total_stocks} stocks priced $1+</p>
+                    <p className="text-xs text-slate-500">mean across {showCount(marketOverview.market_breadth.total_stocks)} stocks priced $1+</p>
                   </div>
                 </div>
 
@@ -411,7 +415,10 @@ export default function DashboardPage() {
                       const avgPerformance: number | undefined = node.avg_performance;
                       const stockCount: number | undefined = node.stock_count;
                       const isSelected = selectedSector === name;
-                      const perf = avgPerformance ?? 0;
+                      // an unknown change is shown as unknown (neutral box, "—"), never as 0%
+                      const known = typeof avgPerformance === 'number' && Number.isFinite(avgPerformance);
+                      const perf = known ? (avgPerformance as number) : 0;
+                      const perfText = known ? `${perf >= 0 ? '+' : ''}${perf.toFixed(2)}%` : '—';
 
                       // Always show a label — scale font down and abbreviate/truncate
                       // as the box shrinks, instead of hiding small sectors entirely.
@@ -426,7 +433,7 @@ export default function DashboardPage() {
                           style={{ cursor: 'pointer' }}
                         >
                           <title>
-                            {name}: {perf >= 0 ? '+' : ''}{perf.toFixed(2)}% ({stockCount} stocks)
+                            {name}: {perfText} ({stockCount ?? '—'} stocks)
                           </title>
                           <rect
                             x={x}
@@ -435,7 +442,7 @@ export default function DashboardPage() {
                             height={height}
                             rx={6}
                             style={{
-                              fill: sectorColor(perf, theme),
+                              fill: known ? sectorColor(perf, theme) : palette.gap,
                               stroke: isSelected ? palette.label : palette.gap,
                               strokeWidth: isSelected ? 3 : 2,
                             }}
@@ -453,8 +460,7 @@ export default function DashboardPage() {
                           </text>
                           {canShowPerf && (
                             <text x={x + width / 2} y={y + height / 2 + 11} textAnchor="middle" fontSize={10} fill={palette.sub} stroke="none">
-                              {perf >= 0 ? '+' : ''}
-                              {perf.toFixed(2)}%
+                              {perfText}
                             </text>
                           )}
                         </g>

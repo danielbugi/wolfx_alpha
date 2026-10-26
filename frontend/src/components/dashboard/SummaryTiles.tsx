@@ -59,7 +59,10 @@ export default function SummaryTiles({
   const vix = indices.find((i) => i.symbol === '^VIX');
   const regime = vix?.regime ? REGIME[vix.regime] : null;
 
-  const sectors = [...(overview?.sector_performance ?? [])].filter((s) => s.stock_count >= 5).sort((a, b) => b.avg_performance - a.avg_performance);
+  // only sectors with a numeric change can be ranked (the payload is normalised, this guards any other caller)
+  const sectors = [...(overview?.sector_performance ?? [])]
+    .filter((s) => Number.isFinite(s.avg_performance) && s.stock_count >= 5)
+    .sort((a, b) => b.avg_performance - a.avg_performance);
   const best = sectors[0];
   const worst = sectors.length > 1 ? sectors[sectors.length - 1] : undefined;
   const pct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
