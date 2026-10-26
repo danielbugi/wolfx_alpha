@@ -284,26 +284,35 @@ export interface FilterPreset {
   filters: ScreenerFilterRequest;
 }
 
+// Overview market activity + sector heatmap: one Screener v2 evaluation for ONE session (backend
+// DiscoveryService.market_overview). Averages are null when nothing has the value for the session (never 1.0 / 50).
 export interface MarketOverview {
   market_breadth: {
     total_stocks: number;
     gainers: number;
     losers: number;
-    advance_decline_ratio: number;
+    unchanged?: number;
+    /** null when no stock fell (no ratio, never gainers / 1) */
+    advance_decline_ratio: number | null;
     unusual_volume_count: number;
     overbought_count: number;
     oversold_count: number;
   };
   market_indicators: {
-    avg_volume_ratio: number;
-    avg_rsi: number;
-    total_market_cap: number;
+    avg_volume_ratio: number | null;
+    avg_rsi: number | null;
+    total_market_cap: number | null;
   };
   sector_performance: Array<{
     sector: string;
     stock_count: number;
     avg_performance: number;
+    up_count?: number;
   }>;
+  /** absent from an older backend */
+  session?: string | null;
+  population?: { min_close: number; liquidity_floor: number | null; universe: number; description: string } | null;
+  coverage?: { change_known: number; volume_ratio_known: number; rsi_known: number; market_cap_known: number } | null;
 }
 
 export interface SectorBreakdownResponse {

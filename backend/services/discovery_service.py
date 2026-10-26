@@ -344,7 +344,7 @@ disc AS (
 joined AS (
     SELECT px.symbol, px.close, px.high, px.volume,
            CASE WHEN pxp.close IS NOT NULL THEN (px.close / pxp.close - 1) * 100 END AS change_1d,
-           ti.atr_14, ti.donchian_high_20, ti.price_position, ti.channel_width_pct, ti.volume_ratio, ti.sma_20, ti.sma_50,
+           ti.atr_14, ti.donchian_high_20, ti.price_position, ti.channel_width_pct, ti.volume_ratio, ti.sma_20, ti.sma_50, ti.rsi_14,
            tip.donchian_high_20 AS prev_dh20,
            CASE WHEN dv.dv_bars = %(dv_n)s THEN dv.dollar_vol_20 END AS dollar_vol_20, COALESCE(dv.dv_bars, 0) AS dv_bars,
            rs.rs_20, rs.rs_60, rs.ret_5, rs.ret_20, rs.ret_60, rs.vs_spx_20, rs.vs_spx_60, rs.vs_sector_20,
@@ -359,7 +359,7 @@ joined AS (
     LEFT JOIN LATERAL (
         SELECT 1 AS found, atr_14::float8 AS atr_14, donchian_high_20::float8 AS donchian_high_20, price_position::float8 AS price_position,
                channel_width_pct::float8 AS channel_width_pct, volume_ratio::float8 AS volume_ratio,
-               sma_20::float8 AS sma_20, sma_50::float8 AS sma_50
+               sma_20::float8 AS sma_20, sma_50::float8 AS sma_50, rsi_14::float8 AS rsi_14
         FROM technical_indicators t WHERE t.symbol = px.symbol AND t.date = %(s)s
     ) ti ON true
     LEFT JOIN LATERAL (
@@ -412,7 +412,7 @@ base AS (
            CASE WHEN channel_width_pct IS NOT NULL THEN 100 * PERCENT_RANK() OVER (PARTITION BY channel_width_pct IS NOT NULL ORDER BY channel_width_pct) END AS channel_width_pctile,
            CASE WHEN atr_14 IS NOT NULL THEN atr_14 / close * 100 END AS atr_pct,
            CASE WHEN atr_14 IS NOT NULL THEN 100 * PERCENT_RANK() OVER (PARTITION BY atr_14 IS NOT NULL ORDER BY atr_14 / close) END AS atr_pct_pctile,
-           volume_ratio, dollar_vol_20, dv_bars, market_cap, fundamentals_date,
+           volume_ratio, rsi_14, dollar_vol_20, dv_bars, market_cap, fundamentals_date,
            company_name, pe_ratio, ps_ratio, quality_score, quality_grade, float_shares,
            (next_earnings_date - %(s)s::date) AS days_to_earnings, (%(s)s::date - last_earnings_date) AS days_since_earnings,
            earnings_surprise_pct, to_char(next_earnings_date, 'YYYY-MM-DD') AS next_earnings_date,
@@ -560,6 +560,23 @@ class DiscoveryService:
                 **payload}
 
 
+    def market_overview(self) -> Dict[str, Any]:
+        """The Overview's market-activity counts and sector heatmap for the newest real session, from ONE evaluation of the
+        Screener base (see OVERVIEW_SQL): only symbols with a bar ON the session, indicators OF the session, the Screener's
+        sector membership; a figure that cannot be computed is null, never a default."""
+        def work(cur):
+            sess, named = _session_params(cur, None, "post_session")
+            named["min_close"] = OVERVIEW_MIN_CLOSE
+            cur.execute(OVERVIEW_SQL, named)
+            payload = cur.fetchone()[0]
+            return sess, json.loads(payload) if isinstance(payload, str) else payload
+
+        sess, payload = self._run(work)
+        return {"session": sess["session"].isoformat(),
+                "previous_session": sess["previous_session"].isoformat() if sess["previous_session"] else None,
+                "newest_price_date": sess["newest_price_date"].isoformat(), **payload}
+
+
 def _session_params(cur, requested: Optional[date], fundamentals_cutoff: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Resolve S/P/dv_start (the newest real session when none is requested) and the base query's named parameters."""
     hi = requested or date.max
@@ -614,6 +631,38 @@ SELECT json_build_object(
 )
 """
     return sql, params
+
+
+# ------------------------------------------------------------------------------------------------ Overview market activity
+# Population: every stock with a bar on the session and a close >= $1 (the Overview's long-standing "priced $1+" rule; NO
+# liquidity floor -- deliberately broader than the movers lists, and labelled so on the page). Counts and averages use
+# only the stocks that have the value for the session; the known counts are returned so the page can say so.
+OVERVIEW_MIN_CLOSE = 1.0
+OVERVIEW_SQL = BASE_SQL + """
+, pop AS (SELECT * FROM base WHERE close >= %(min_close)s)
+SELECT json_build_object(
+    'universe', (SELECT COUNT(*) FROM base),
+    'breadth', (SELECT json_build_object(
+        'total_stocks', COUNT(*),
+        'gainers', COUNT(*) FILTER (WHERE change_1d > 0),
+        'losers', COUNT(*) FILTER (WHERE change_1d < 0),
+        'unchanged', COUNT(*) FILTER (WHERE change_1d = 0),
+        'change_known', COUNT(change_1d),
+        'unusual_volume_count', COUNT(*) FILTER (WHERE volume_ratio >= 2),
+        'volume_ratio_known', COUNT(volume_ratio),
+        'overbought_count', COUNT(*) FILTER (WHERE rsi_14 > 70),
+        'oversold_count', COUNT(*) FILTER (WHERE rsi_14 < 30),
+        'rsi_known', COUNT(rsi_14),
+        'avg_volume_ratio', AVG(volume_ratio),
+        'avg_rsi', AVG(rsi_14),
+        'total_market_cap', SUM(market_cap),
+        'market_cap_known', COUNT(market_cap)) FROM pop),
+    'sectors', COALESCE((SELECT json_agg(s ORDER BY s.avg_performance DESC, s.sector) FROM (
+        SELECT COALESCE(sector, 'Unknown') AS sector, COUNT(change_1d) AS stock_count, AVG(change_1d) AS avg_performance,
+               COUNT(*) FILTER (WHERE change_1d > 0) AS up_count
+        FROM pop GROUP BY 1 HAVING COUNT(change_1d) > 0) s), '[]'::json)
+)
+"""
 
 
 def _bind(sql: str, named: Dict[str, Any], positional: List[Any]) -> Tuple[str, Dict[str, Any]]:

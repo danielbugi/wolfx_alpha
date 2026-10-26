@@ -28,7 +28,7 @@ const mainPage = (lastUpdated: string | null) => ({
   top_losers: [],
   unusual_volume: [],
 });
-const state = vi.hoisted(() => ({ lastUpdated: '2026-10-16' as string | null }));
+const state = vi.hoisted(() => ({ lastUpdated: '2026-10-16' as string | null, overview: null as null | Record<string, unknown> }));
 
 vi.mock('@/services/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/api')>();
@@ -37,7 +37,7 @@ vi.mock('@/services/api', async (importOriginal) => {
     apiClient: { get: vi.fn(async () => ({ data: mainPage(state.lastUpdated) })) },
     screenerApi: {
       ...actual.screenerApi,
-      getMarketOverview: vi.fn(async () => ({
+      getMarketOverview: vi.fn(async () => state.overview ?? ({
         market_breadth: { gainers: 1800, losers: 1100, advance_decline_ratio: 1.64, total_stocks: 2950, unusual_volume_count: 40, overbought_count: 90, oversold_count: 30 },
         market_indicators: { avg_rsi: 55, avg_volume_ratio: 1.1 },
         sector_performance: [{ sector: 'Technology', stock_count: 400, avg_performance: 0.8 }],
@@ -56,6 +56,25 @@ vi.mock('@/services/api', async (importOriginal) => {
 import DashboardPage from '@/app/page';
 
 describe('Overview (product)', () => {
+  it('states the market-activity session, its population, links the unusual-volume tile to the same Screener view, and shows missing averages as dashes', async () => {
+    state.overview = {
+      market_breadth: { gainers: 990, losers: 1850, advance_decline_ratio: 0.54, total_stocks: 3043, unusual_volume_count: 80, overbought_count: 202, oversold_count: 254 },
+      market_indicators: { avg_rsi: null, avg_volume_ratio: null, total_market_cap: null },
+      sector_performance: [{ sector: 'Technology', stock_count: 425, avg_performance: 0.45 }],
+      session: '2026-10-23',
+      population: { min_close: 1, liquidity_floor: null, universe: 3060, description: '' },
+      coverage: { change_known: 3043, volume_ratio_known: 3040, rsi_known: 3001, market_cap_known: 3000 },
+    };
+    const { container } = render(<DashboardPage />);
+    expect((await screen.findByTestId('activity-title')).textContent).toBe("Today's activity session 2026-10-23");
+    expect(screen.getByTestId('activity-unusual-link').getAttribute('href')).toBe('/screener?min_close=1&min_volume_ratio=2&sort=volume_ratio&order=desc&session=2026-10-23');
+    expect(container.textContent).toContain('all stocks priced $1+, no liquidity floor');
+    expect(container.textContent).toContain('known for 3001');
+    expect(container.textContent).toMatch(/— \/ —/);
+    expect(container.textContent).not.toMatch(/\b50 \/|1\.00x/);
+    state.overview = null;
+  });
+
   it('uses neutral wording and shows no momentum board, confirmed names or signal language', async () => {
     const { container } = render(<DashboardPage />);
     expect(await screen.findByText('Market overview')).toBeTruthy();

@@ -9,10 +9,19 @@ from psycopg2.extras import RealDictCursor
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 import logging
+import threading
+import time
 import numpy as np
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+
+# get_market_overview evaluates the whole Screener base (~0.5 s on production), but its figures change only when new
+# prices are stored: one result is kept per newest stored price date (MAX(date), index-only, ~0.3 ms) and rebuilt as soon
+# as a newer date exists, or after OVERVIEW_CACHE_TTL_S at the latest. Never an older session served as the newest.
+OVERVIEW_CACHE_TTL_S = 900
+_overview_cache: Dict[str, Any] = {"watermark": None, "at": 0.0, "data": None}
+_overview_lock = threading.Lock()
 
 
 @dataclass
@@ -44,153 +53,68 @@ class MarketService:
         self.get_db_connection = db_connection_func
 
     def get_market_overview(self) -> Dict[str, Any]:
-        """Get comprehensive market overview statistics"""
+        """Market activity counts and the sector heatmap for the newest real session, computed by the Smart Screener v2
+        engine (DiscoveryService.market_overview, 2026-10-26): only stocks with a bar ON the session, indicators OF the
+        session and the Screener's sector membership. The previous queries took each symbol's latest row within 5 days
+        and its latest indicator row of any date, used each symbol's latest fundamentals sector of any age, and filled
+        missing averages with 1.0 / 50.0 / 0. Same response keys; values that cannot be computed are null."""
+        from services.discovery_service import DiscoveryService, OVERVIEW_MIN_CLOSE
+
+        watermark = self._newest_price_date()
+        with _overview_lock:
+            c = dict(_overview_cache)
+        if watermark is not None and c["data"] is not None and c["watermark"] == watermark and time.monotonic() - c["at"] < OVERVIEW_CACHE_TTL_S:
+            return c["data"]
+
+        o = DiscoveryService(self.get_db_connection).market_overview()
+        b = o["breadth"]
+        rnd = lambda v, n: None if v is None else round(float(v), n)  # noqa: E731
+        result = {
+            "market_breadth": {
+                "total_stocks": b["total_stocks"],
+                "gainers": b["gainers"],
+                "losers": b["losers"],
+                "unchanged": b["unchanged"],
+                "advance_decline_ratio": round(b["gainers"] / b["losers"], 2) if b["losers"] else None,
+                "unusual_volume_count": b["unusual_volume_count"],
+                "overbought_count": b["overbought_count"],
+                "oversold_count": b["oversold_count"],
+            },
+            "market_indicators": {
+                "avg_volume_ratio": rnd(b["avg_volume_ratio"], 2),
+                "avg_rsi": rnd(b["avg_rsi"], 2),
+                "total_market_cap": int(b["total_market_cap"]) if b["total_market_cap"] is not None else None,
+            },
+            "sector_performance": [
+                {"sector": x["sector"], "stock_count": x["stock_count"], "avg_performance": rnd(x["avg_performance"], 2),
+                 "up_count": x["up_count"]}
+                for x in o["sectors"]
+            ],
+            "session": o["session"],
+            "previous_session": o["previous_session"],
+            "newest_price_date": o["newest_price_date"],
+            "population": {"min_close": OVERVIEW_MIN_CLOSE, "liquidity_floor": None, "universe": o["universe"],
+                           "description": "every stock with a bar on the session and a close of $1 or more"},
+            "coverage": {k: b[k] for k in ("change_known", "volume_ratio_known", "rsi_known", "market_cap_known")},
+        }
+        with _overview_lock:
+            _overview_cache.update(watermark=o["newest_price_date"], at=time.monotonic(), data=result)
+        return result
+
+    def _newest_price_date(self) -> Optional[str]:
+        """MAX(date) of stock_prices, or None when it cannot be read (then nothing cached is trusted)."""
+        conn = self.get_db_connection()
+        if not conn:
+            return None
         try:
-            conn = self.get_db_connection()
-            if not conn:
-                raise Exception("Database connection failed")
-
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
-
-            # Market breadth analysis
-            # NOTE: technical_indicators/daily_fundamentals are joined via
-            # LATERAL against the already-deduped one-row-per-symbol
-            # latest_prices CTE, not against the raw 5-day stock_prices window
-            # -- the old version ran a correlated MAX(date) subquery per row
-            # of that window (~5x more rows than symbols), for both tables, in
-            # both queries below. This is the same per-symbol-lookup anti-
-            # pattern already fixed for the dashboard's top-gainers/losers/
-            # unusual-volume queries in main.py (see CLAUDE.md's 2026-09-19
-            # changelog) -- just never applied here.
-            cursor.execute("""
-                WITH latest_prices AS (
-                    SELECT DISTINCT ON (sp.symbol)
-                        sp.symbol,
-                        sp.close,
-                        sp.volume,
-                        LAG(sp.close) OVER (PARTITION BY sp.symbol ORDER BY sp.date) as prev_close
-                    FROM stock_prices sp
-                    WHERE sp.date >= CURRENT_DATE - INTERVAL '5 days'
-                    ORDER BY sp.symbol, sp.date DESC
-                ),
-                latest_data AS (
-                    SELECT
-                        lp.symbol,
-                        lp.close,
-                        lp.volume,
-                        lp.prev_close,
-                        ti.volume_ratio,
-                        ti.rsi_14,
-                        df.sector,
-                        df.market_cap,
-                        df.quality_grade
-                    FROM latest_prices lp
-                    LEFT JOIN LATERAL (
-                        SELECT volume_ratio, rsi_14
-                        FROM technical_indicators
-                        WHERE symbol = lp.symbol
-                        ORDER BY date DESC
-                        LIMIT 1
-                    ) ti ON true
-                    LEFT JOIN LATERAL (
-                        SELECT sector, market_cap, quality_grade
-                        FROM daily_fundamentals
-                        WHERE symbol = lp.symbol
-                        ORDER BY date DESC
-                        LIMIT 1
-                    ) df ON true
-                )
-                SELECT
-                    COUNT(*) as total_stocks,
-                    COUNT(CASE WHEN prev_close IS NOT NULL AND ((close - prev_close) / prev_close * 100) > 0 THEN 1 END) as gainers,
-                    COUNT(CASE WHEN prev_close IS NOT NULL AND ((close - prev_close) / prev_close * 100) < 0 THEN 1 END) as losers,
-                    COUNT(CASE WHEN volume_ratio >= 2.0 THEN 1 END) as unusual_volume_count,
-                    COUNT(CASE WHEN rsi_14 > 70 THEN 1 END) as overbought_count,
-                    COUNT(CASE WHEN rsi_14 < 30 THEN 1 END) as oversold_count,
-                    AVG(volume_ratio) as avg_volume_ratio,
-                    AVG(rsi_14) as avg_rsi,
-                    SUM(market_cap) as total_market_cap
-                FROM latest_data
-                WHERE close >= 1.0  -- Filter penny stocks
-            """)
-
-            market_stats = cursor.fetchone()
-
-            # Sector analysis
-            cursor.execute("""
-                WITH latest_prices AS (
-                    SELECT DISTINCT ON (sp.symbol)
-                        sp.symbol,
-                        sp.close,
-                        LAG(sp.close) OVER (PARTITION BY sp.symbol ORDER BY sp.date) as prev_close
-                    FROM stock_prices sp
-                    WHERE sp.date >= CURRENT_DATE - INTERVAL '5 days'
-                    ORDER BY sp.symbol, sp.date DESC
-                ),
-                latest_data AS (
-                    SELECT
-                        lp.symbol,
-                        lp.close,
-                        lp.prev_close,
-                        df.sector
-                    FROM latest_prices lp
-                    LEFT JOIN LATERAL (
-                        SELECT sector
-                        FROM daily_fundamentals
-                        WHERE symbol = lp.symbol
-                        ORDER BY date DESC
-                        LIMIT 1
-                    ) df ON true
-                )
-                SELECT
-                    COALESCE(sector, 'Unknown') as sector,
-                    COUNT(*) as stock_count,
-                    AVG(CASE 
-                        WHEN prev_close > 0 
-                        THEN ((close - prev_close) / prev_close * 100)
-                        ELSE 0 
-                    END) as avg_performance
-                FROM latest_data
-                WHERE close >= 1.0 AND prev_close IS NOT NULL
-                GROUP BY sector
-                ORDER BY avg_performance DESC
-            """)
-
-            sector_performance = cursor.fetchall()
-
-            cursor.close()
+            cur = conn.cursor()
+            cur.execute("SELECT MAX(date) FROM stock_prices")
+            d = cur.fetchone()[0]
+            return d.isoformat() if d else None
+        except Exception:
+            return None
+        finally:
             conn.close()
-
-            return {
-                "market_breadth": {
-                    "total_stocks": market_stats['total_stocks'],
-                    "gainers": market_stats['gainers'],
-                    "losers": market_stats['losers'],
-                    "advance_decline_ratio": round(market_stats['gainers'] / max(market_stats['losers'], 1), 2),
-                    "unusual_volume_count": market_stats['unusual_volume_count'],
-                    "overbought_count": market_stats['overbought_count'],
-                    "oversold_count": market_stats['oversold_count']
-                },
-                "market_indicators": {
-                    "avg_volume_ratio": round(float(market_stats['avg_volume_ratio']), 2) if market_stats[
-                        'avg_volume_ratio'] else 1.0,
-                    "avg_rsi": round(float(market_stats['avg_rsi']), 2) if market_stats['avg_rsi'] else 50.0,
-                    "total_market_cap": int(market_stats['total_market_cap']) if market_stats['total_market_cap'] else 0
-                },
-                "sector_performance": [
-                    {
-                        "sector": sector['sector'],
-                        "stock_count": sector['stock_count'],
-                        "avg_performance": round(float(sector['avg_performance']), 2) if sector[
-                            'avg_performance'] else 0
-                    }
-                    for sector in sector_performance
-                ]
-            }
-
-        except Exception as e:
-            logger.error(f"Error getting market overview: {e}")
-            raise
 
     def get_filtered_stocks(self, filter_criteria: MarketFilter, limit: int = 100) -> List[Dict[str, Any]]:
         """Get stocks matching sophisticated filter criteria - FIXED VERSION"""
