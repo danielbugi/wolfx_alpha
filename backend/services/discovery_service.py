@@ -342,7 +342,7 @@ disc AS (
     WHERE date > %(s)s::date - %(disc_days)s AND date <= %(s)s
 ),
 joined AS (
-    SELECT px.symbol, px.close, px.high,
+    SELECT px.symbol, px.close, px.high, px.volume,
            CASE WHEN pxp.close IS NOT NULL THEN (px.close / pxp.close - 1) * 100 END AS change_1d,
            ti.atr_14, ti.donchian_high_20, ti.price_position, ti.channel_width_pct, ti.volume_ratio, ti.sma_20, ti.sma_50,
            tip.donchian_high_20 AS prev_dh20,
@@ -403,7 +403,7 @@ base AS (
     SELECT symbol,
            COALESCE(rs_sector, fund_sector) AS sector,
            CASE WHEN rs_sector IS NOT NULL THEN 'observed' WHEN fund_sector IS NOT NULL THEN 'reference' END AS sector_source,
-           industry, close, change_1d, ret_5, ret_20, ret_60, vs_spx_20, vs_spx_60, vs_sector_20, rs_20, rs_60,
+           industry, close, volume, change_1d, ret_5, ret_20, ret_60, vs_spx_20, vs_spx_60, vs_sector_20, rs_20, rs_60,
            CASE WHEN prev_dh20 IS NULL THEN NULL ELSE close > prev_dh20 END AS breakout_20,
            CASE WHEN donchian_high_20 IS NULL OR high IS NULL THEN NULL ELSE high >= donchian_high_20 END AS new_high_20,
            CASE WHEN sma_20 > 0 THEN (close / sma_20 - 1) * 100 END AS dist_sma20,
@@ -508,21 +508,8 @@ class DiscoveryService:
         where, wparams = build_where(qr)
 
         def work(cur):
-            hi = qr.session or date.max
-            if qr.session is None:
-                cur.execute("SELECT MAX(date) FROM stock_prices")
-                hi = cur.fetchone()[0]
-                if hi is None:
-                    raise InvalidRequest("no price data")
-            cur.execute(SESSIONS_SQL, {"lo": hi - timedelta(days=SESSION_WINDOW_DAYS), "hi": hi})
-            sess = resolve_sessions([(d, int(n)) for d, n in cur.fetchall()], qr.session)
-            named = {"s": sess["session"], "p": sess["previous_session"], "dv_start": sess["dv_start"], "dv_n": DV_SESSIONS,
-                     "rs_model": RS_MODEL, "fund_age": FUNDAMENTALS_MAX_AGE_DAYS,
-                     "disc_days": STRENGTH_DISCONTINUITY_DAYS, "min_dv": STRENGTH_MIN_DOLLAR_VOL,
-                     "w_rs": STRENGTH_WEIGHTS["rs"], "w_trend": STRENGTH_WEIGHTS["trend"], "w_mom": STRENGTH_WEIGHTS["momentum"],
-                     "w_vol": STRENGTH_WEIGHTS["volume"], "w_liq": STRENGTH_WEIGHTS["liquidity"],
-                     "cutoff": fundamentals_cutoff_utc(sess["session"], qr.fundamentals_cutoff), "close_utc": session_close_utc(sess["session"]),
-                     "limit": MAX_EXPORT_ROWS if export else qr.page_size, "offset": 0 if export else (qr.page - 1) * qr.page_size}
+            sess, named = _session_params(cur, qr.session, qr.fundamentals_cutoff)
+            named.update(limit=MAX_EXPORT_ROWS if export else qr.page_size, offset=0 if export else (qr.page - 1) * qr.page_size)
             sql, params = _bind(page_sql(where, order_clause(sort, order)), named, wparams)
             cur.execute(sql, params)
             payload = cur.fetchone()[0]
@@ -550,6 +537,83 @@ class DiscoveryService:
             "rows": payload["rows"],
             "truncated": export and payload["total"] > MAX_EXPORT_ROWS,
         }
+
+
+    def movers(self, limit: int = 5) -> Dict[str, Any]:
+        """The Overview's three movers lists for the newest real session, from ONE evaluation of the Screener base (see
+        MOVERS): every row has a bar on the session, so a symbol whose newest bar is older is never listed."""
+        if not (1 <= limit <= 50):
+            raise InvalidRequest("limit must be 1-50")
+
+        def work(cur):
+            sess, named = _session_params(cur, None, "post_session")
+            named["limit"] = limit
+            msql, mparams = movers_sql()
+            cur.execute(*_bind(msql, named, mparams))
+            payload = cur.fetchone()[0]
+            return sess, json.loads(payload) if isinstance(payload, str) else payload
+
+        sess, payload = self._run(work)
+        return {"session": sess["session"].isoformat(),
+                "previous_session": sess["previous_session"].isoformat() if sess["previous_session"] else None,
+                "newest_price_date": sess["newest_price_date"].isoformat(),
+                **payload}
+
+
+def _session_params(cur, requested: Optional[date], fundamentals_cutoff: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Resolve S/P/dv_start (the newest real session when none is requested) and the base query's named parameters."""
+    hi = requested or date.max
+    if requested is None:
+        cur.execute("SELECT MAX(date) FROM stock_prices")
+        hi = cur.fetchone()[0]
+        if hi is None:
+            raise InvalidRequest("no price data")
+    cur.execute(SESSIONS_SQL, {"lo": hi - timedelta(days=SESSION_WINDOW_DAYS), "hi": hi})
+    sess = resolve_sessions([(d, int(n)) for d, n in cur.fetchall()], requested)
+    sess["newest_price_date"] = hi if requested is None else None   # the watermark a cached movers result is tied to
+    named = {"s": sess["session"], "p": sess["previous_session"], "dv_start": sess["dv_start"], "dv_n": DV_SESSIONS,
+             "rs_model": RS_MODEL, "fund_age": FUNDAMENTALS_MAX_AGE_DAYS,
+             "disc_days": STRENGTH_DISCONTINUITY_DAYS, "min_dv": STRENGTH_MIN_DOLLAR_VOL,
+             "w_rs": STRENGTH_WEIGHTS["rs"], "w_trend": STRENGTH_WEIGHTS["trend"], "w_mom": STRENGTH_WEIGHTS["momentum"],
+             "w_vol": STRENGTH_WEIGHTS["volume"], "w_liq": STRENGTH_WEIGHTS["liquidity"],
+             "cutoff": fundamentals_cutoff_utc(sess["session"], fundamentals_cutoff), "close_utc": session_close_utc(sess["session"])}
+    return sess, named
+
+
+# ------------------------------------------------------------------------------------------------------- Overview movers
+# The Overview's "Whole-Market Movers" lists ARE Screener queries: the same base, filters and ordering as the Screener
+# views their "View all" links open (frontend/src/lib/screenerV2.ts moversScreenerHref), for one explicit session.
+# Gainers / losers additionally keep only rises / falls, so their first rows equal the linked view's first rows whenever
+# that many stocks rose (fell). Floor = the old dashboard rule: close >= $1 and a full 20-session dollar volume >= $1M.
+MOVERS_FLOOR: Dict[str, Tuple[Optional[float], Optional[float]]] = {"close": (1.0, None), "dollar_vol_20": (1_000_000.0, None)}
+MOVERS: Dict[str, Tuple[Query, str]] = {
+    "top_gainers": (Query(sort="change_1d", order="desc", ranges=dict(MOVERS_FLOOR)), "change_1d > 0"),
+    "top_losers": (Query(sort="change_1d", order="asc", ranges=dict(MOVERS_FLOOR)), "change_1d < 0"),
+    "unusual_volume": (Query(sort="volume_ratio", order="desc", ranges={**MOVERS_FLOOR, "volume_ratio": (2.0, None)}), "TRUE"),
+}
+MOVER_COLUMNS = ["symbol", "sector", "close", "change_1d", "volume", "volume_ratio", "dollar_vol_20", "market_cap"]
+
+
+def movers_sql() -> Tuple[str, List[Any]]:
+    """BASE_SQL once, then the three lists (rows + totals) and the coverage that explains an empty list."""
+    cols = ", ".join(MOVER_COLUMNS)
+    parts, params = [], []
+    for key, (qr, extra) in MOVERS.items():
+        where, wparams = build_where(normalise(qr))
+        params += wparams * 2                                      # used by the rows and by the total
+        cond = f"{where} AND {extra}"
+        parts.append(f"'{key}', COALESCE((SELECT json_agg(r) FROM (SELECT {cols} FROM base WHERE {cond} "
+                     f"ORDER BY {order_clause(qr.sort, qr.order)} LIMIT %(limit)s) r), '[]'::json), "
+                     f"'{key}_total', (SELECT COUNT(*) FROM base WHERE {cond})")
+    sql = BASE_SQL + f"""
+SELECT json_build_object(
+    {', '.join(parts)},
+    'universe', (SELECT COUNT(*) FROM base),
+    'coverage', (SELECT json_build_object('change_1d', COUNT(change_1d), 'volume_ratio', COUNT(volume_ratio),
+                                          'dollar_vol_20', COUNT(dollar_vol_20)) FROM base)
+)
+"""
+    return sql, params
 
 
 def _bind(sql: str, named: Dict[str, Any], positional: List[Any]) -> Tuple[str, Dict[str, Any]]:

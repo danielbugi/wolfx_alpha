@@ -171,17 +171,29 @@ export interface MarketSummary {
   last_updated: string;
 }
 
+// One Overview movers row: a Smart Screener v2 row for the movers session (backend DiscoveryService.movers).
+// Missing values are null ("not known"), never 0 or a fabricated "normal volume" 1.0 (FM3.4).
 export interface StockItem {
   symbol: string;
   current_price: number;
-  price_change_pct: number;
-  volume: number;
-  // null on the gainers/losers lists when no technical_indicators row exists for the
-  // symbol -- "not known", never a fabricated "normal volume" default (see CLAUDE.md's
-  // FM3.4 finding). The unusual-volume list only ever returns a real value.
+  price_change_pct: number | null;
+  volume: number | null;
   volume_ratio: number | null;
   sector: string;
   market_cap: number | null;
+}
+
+/** The ONE session the three movers lists describe, with the coverage that explains an empty list. */
+export interface MoversMeta {
+  session: string;
+  previous_session: string | null;
+  /** newest stored price date when the lists were built (the cache watermark; may be a still-loading date) */
+  newest_price_date?: string;
+  universe: number;
+  coverage: { change_1d: number; volume_ratio: number; dollar_vol_20: number };
+  totals: { top_gainers: number; top_losers: number; unusual_volume: number };
+  floor: { min_close: number; min_dollar_vol_20: number };
+  min_volume_ratio: number;
 }
 
 export interface MainPageData {
@@ -190,6 +202,8 @@ export interface MainPageData {
   top_gainers: StockItem[];
   top_losers: StockItem[];
   unusual_volume: StockItem[];
+  /** absent from an older backend: the card then shows no session line */
+  movers?: MoversMeta;
 }
 
 export interface ScreenerFilterRequest {
