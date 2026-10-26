@@ -523,6 +523,18 @@ except Exception as e:
     logger.error(f"❌ Error including strategy performance router: {e}")
 
 
+# Import and include the earnings router (batch earnings dates from the one earnings read model)
+try:
+    from routers.earnings import earnings_router
+
+    app.include_router(earnings_router)
+    logger.info("✅ Earnings router included successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  Earnings router not available: {e}")
+except Exception as e:
+    logger.error(f"❌ Error including earnings router: {e}")
+
+
 # Import and include the Market Intelligence router (internal, read-only: session market regime and sector / relative-strength
 # snapshots from mechanism/market_intelligence; answers `available: false` until migrations 24/25 are applied)
 try:

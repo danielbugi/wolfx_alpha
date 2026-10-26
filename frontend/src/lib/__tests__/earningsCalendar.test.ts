@@ -10,12 +10,36 @@ import {
   filterRows,
   formatWeekRange,
   mondayOf,
+  nextUpcoming,
   nyDateOf,
   rankRows,
   reportResult,
   sessionAnchors,
   type EarningsRow,
 } from '@/lib/earningsCalendar';
+
+describe('earnings read model in the calendar', () => {
+  const e = (date: string, over: Partial<EarningsDateEntry> = {}): EarningsDateEntry => ({ date, eps_estimate: 1, eps_actual: null, surprise_pct: null, ...over });
+
+  it("next upcoming follows the server's status (New York date), not the browser clock", () => {
+    const rows = [e('2026-07-29', { status: 'reported', eps_actual: 6.18 }), e('2026-10-24', { status: 'upcoming', listed_by_latest_check: true })];
+    expect(nextUpcoming(rows, '2026-10-25')?.date).toBe('2026-10-24');   // the server says it is still upcoming in New York
+    expect(nextUpcoming([e('2026-10-20', { status: 'awaiting_results' })], '2026-10-01')).toBeNull();
+  });
+
+  it('falls back to the date for an older backend without statuses', () => {
+    expect(nextUpcoming([e('2026-10-20'), e('2026-11-02')], '2026-10-25')?.date).toBe('2026-11-02');
+  });
+
+  it('marks a row whose upcoming date the latest check did not re-list (META-style) as unverified', () => {
+    const board = [{ symbol: 'META', next_earnings_date: '2026-10-28', category: 'breakout', starred: false, sector: 'Communication Services', close: 700, market_cap: 1 }] as unknown as MomentumBoardResult[];
+    const hist = [e('2026-07-29', { status: 'reported', eps_actual: 6.18 }), e('2026-10-28', { status: 'upcoming', listed_by_latest_check: false })];
+    const rows = buildRows({ board, watchlist: ['META'], histories: { META: hist }, from: '2026-10-26', to: '2026-10-30' });
+    expect(rows.map((r) => [r.symbol, r.date, r.unverified])).toEqual([['META', '2026-10-28', true]]);
+    const ok = buildRows({ board, watchlist: ['META'], histories: { META: [e('2026-10-28', { status: 'upcoming', listed_by_latest_check: true })] }, from: '2026-10-26', to: '2026-10-30' });
+    expect(ok[0].unverified).toBe(false);
+  });
+});
 
 // Thanksgiving week 2026: Thu 11-26 is a holiday (absent from the calendar).
 const cal: MarketCalendar = {

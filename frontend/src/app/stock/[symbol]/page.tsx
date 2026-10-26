@@ -17,6 +17,7 @@ import {
   StockDetail,
   PriceBar,
   EarningsDateEntry,
+  EarningsResponse,
   SectorHistoryEntry,
 } from '@/services/api';
 import StockChart from '@/components/charts/StockChart';
@@ -30,6 +31,7 @@ import EarningsPanel from '@/components/stock/EarningsPanel';
 import PeersPanel from '@/components/stock/PeersPanel';
 import NewsPanel from '@/components/stock/NewsPanel';
 import { reactionPct } from '@/components/stock/EarningsPanel';
+import { nextUpcoming } from '@/lib/earningsCalendar';
 import { useWatchlist } from '@/lib/watchlist';
 import { neutralBreakoutMarkers } from '@/lib/productSafe';
 import { sectorHref } from '@/lib/sectors';
@@ -324,6 +326,7 @@ export default function StockDetailPage() {
   const [detail, setDetail] = useState<StockDetail | null>(null);
   const [bars, setBars] = useState<PriceBar[]>([]);
   const [earnings, setEarnings] = useState<EarningsDateEntry[]>([]);
+  const [earningsMeta, setEarningsMeta] = useState<EarningsResponse | null>(null);
   const [sectorHistory, setSectorHistory] = useState<SectorHistoryEntry[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -343,10 +346,14 @@ export default function StockDetailPage() {
       // history are in, and the markers pop in afterwards. Not awaited on
       // purpose; a failure just means no markers.
       setEarnings([]);
+      setEarningsMeta(null);
       stockApi
         .getEarnings(symbol, EARNINGS_LIMIT)
         .then((r) => {
-          if (latestSymbolRef.current === symbol) setEarnings(r.earnings_dates);
+          if (latestSymbolRef.current === symbol) {
+            setEarnings(r.earnings_dates);
+            setEarningsMeta(r);
+          }
         })
         .catch(() => {});
 
@@ -417,9 +424,9 @@ export default function StockDetailPage() {
   const priceChangePct = snap.price_change_pct;
   const isUp = (priceChangePct ?? 0) >= 0;
 
-  const nextEarnings = earnings
-    .filter((e) => daysUntil(e.date) >= 0)
-    .sort((a, b) => a.date.localeCompare(b.date))[0];
+  // the read model's own "upcoming" status (New York date); a date the latest check did not re-list is still shown, labelled
+  const nextEarnings = nextUpcoming(earnings, earningsMeta?.today ?? new Date().toISOString().slice(0, 10));
+  const earningsUnverified = nextEarnings?.status === 'upcoming' && nextEarnings.listed_by_latest_check === false;
   const daysToEarnings = nextEarnings ? daysUntil(nextEarnings.date) : null;
   // Typical size of the move around past reports (same 2-day window as the Earnings section), for the header badge.
   const pastMoves = earnings
@@ -510,10 +517,16 @@ export default function StockDetailPage() {
                 {daysToEarnings != null && daysToEarnings <= 21 && (
                   <Chip
                     size="sm"
-                    title={`Reports ${nextEarnings?.date}`}
+                    title={
+                      earningsUnverified
+                        ? `Reports ${nextEarnings?.date} -- unverified: listed by an earlier earnings-calendar check, not by the latest one`
+                        : `Reports ${nextEarnings?.date}`
+                    }
+                    data-testid="earnings-badge"
                     className={`text-xs ${daysToEarnings <= 3 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}
                   >
                     Earnings {daysToEarnings === 0 ? 'today' : `in ${daysToEarnings}d`}
+                    {earningsUnverified && ' (unverified)'}
                     {avgEarningsMove != null && ` · avg move ±${avgEarningsMove.toFixed(1)}%`}
                   </Chip>
                 )}
@@ -605,7 +618,11 @@ export default function StockDetailPage() {
             <Stat
               label="Next earnings"
               value={nextEarnings ? nextEarnings.date : UNKNOWN}
-              hint={daysToEarnings != null ? (daysToEarnings === 0 ? 'today' : `in ${daysToEarnings} days`) : undefined}
+              hint={
+                daysToEarnings != null
+                  ? `${daysToEarnings === 0 ? 'today' : `in ${daysToEarnings} days`}${earningsUnverified ? ' · unverified' : ''}`
+                  : undefined
+              }
             />
           </CardBody>
           {performance.length > 0 && (
@@ -695,7 +712,7 @@ export default function StockDetailPage() {
         {tab === 'earnings' && (
           <>
             <Section>
-              <EarningsPanel earnings={earnings} bars={bars} />
+              <EarningsPanel earnings={earnings} bars={bars} meta={earningsMeta} />
             </Section>
           </>
         )}

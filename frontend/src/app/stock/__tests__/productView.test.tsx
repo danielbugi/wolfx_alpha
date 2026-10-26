@@ -87,6 +87,25 @@ beforeEach(() => {
 });
 
 describe('stock page (product view)', () => {
+  it('labels an upcoming date the latest calendar check did not re-list, and states where the dates come from', async () => {
+    vi.mocked(stockApi.getEarnings).mockResolvedValueOnce({
+      symbol: 'ACME', source: 'earnings_calendar', rule: 'current_row_v1', today: '2026-10-25',
+      latest_fetch_at: '2026-10-21T20:18:58+00:00', schedule_complete: false,
+      next: { date: '2099-10-28', listed_by_latest_check: false, listed_at: '2026-10-07T20:37:58+00:00' },
+      earnings_dates: [
+        { date: '2026-07-29', eps_estimate: 5.9, eps_actual: 6.18, surprise_pct: 4.7, status: 'reported', listed_by_latest_check: null, listed_at: null },
+        { date: '2099-10-28', eps_estimate: 6.5, eps_actual: null, surprise_pct: null, status: 'upcoming', listed_by_latest_check: false, listed_at: '2026-10-07T20:37:58+00:00' },
+      ],
+    } as never);
+    render(<StockDetailPage />);
+    await screen.findByText('ACME');
+    await waitFor(() => expect(screen.getByText('Next earnings').parentElement?.textContent).toContain('2099-10-28'));
+    expect(screen.getByText('Next earnings').parentElement?.textContent).toContain('unverified');
+    fireEvent.click(screen.getByRole('radio', { name: 'Earnings' }));
+    expect((await screen.findByTestId('next-unverified')).textContent).toContain('unverified');
+    expect(screen.getAllByTestId('data-stamp').map((s) => s.textContent)).toContain('Earnings calendar checked 2026-10-21·that check listed no upcoming date');
+  });
+
   it('shows no trade plan, sizing, ML score, signal chip or track record even when the API sends them', async () => {
     const { container } = render(<StockDetailPage />);
     expect(await screen.findByText('ACME')).toBeTruthy();

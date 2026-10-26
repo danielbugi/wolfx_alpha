@@ -103,6 +103,15 @@ export default function EarningsTable({
                       Watchlist
                     </span>
                   )}
+                  {r.unverified && (
+                    <span
+                      className="rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-800"
+                      title="Listed by an earlier earnings-calendar check, not by the latest one"
+                      data-testid="unverified-date"
+                    >
+                      Unverified
+                    </span>
+                  )}
                 </div>
                 <div className="text-[11px] text-slate-400 sm:hidden">{r.sector ?? UNKNOWN}</div>
               </TableCell>,

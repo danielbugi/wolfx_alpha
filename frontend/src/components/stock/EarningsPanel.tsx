@@ -3,7 +3,9 @@
 import React, { useMemo } from 'react';
 import { Chip, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow } from '@nextui-org/react';
 import { clsx } from 'clsx';
-import type { EarningsDateEntry, PriceBar } from '@/services/api';
+import type { EarningsDateEntry, EarningsResponse, PriceBar } from '@/services/api';
+import DataStamp from '@/components/common/DataStamp';
+import { nextUpcoming } from '@/lib/earningsCalendar';
 
 const UNKNOWN = '—';
 
@@ -26,12 +28,12 @@ export function reactionPct(bars: PriceBar[], reportDate: string): number | null
   return (bars[i + 1].close / bars[i - 1].close - 1) * 100;
 }
 
-export default function EarningsPanel({ earnings, bars }: { earnings: EarningsDateEntry[]; bars: PriceBar[] }) {
+export default function EarningsPanel({ earnings, bars, meta = null }: { earnings: EarningsDateEntry[]; bars: PriceBar[]; meta?: EarningsResponse | null }) {
   const { next, past, stats } = useMemo(() => {
     const sorted = [...earnings].sort((a, b) => a.date.localeCompare(b.date));
-    const nextE = sorted.find((e) => daysUntil(e.date) >= 0) ?? null;
+    const nextE = nextUpcoming(sorted, meta?.today ?? new Date().toISOString().slice(0, 10));
     const pastE = sorted
-      .filter((e) => daysUntil(e.date) < 0)
+      .filter((e) => (e.status ? e.status !== 'upcoming' : daysUntil(e.date) < 0))
       .reverse()
       .slice(0, 8)
       .map((e) => ({
@@ -53,9 +55,10 @@ export default function EarningsPanel({ earnings, bars }: { earnings: EarningsDa
         moves: moves.length,
       },
     };
-  }, [earnings, bars]);
+  }, [earnings, bars, meta?.today]);
 
   const days = next ? daysUntil(next.date) : null;
+  const unverified = next?.status === 'upcoming' && next.listed_by_latest_check === false;
 
   return (
     <div>
@@ -66,7 +69,8 @@ export default function EarningsPanel({ earnings, bars }: { earnings: EarningsDa
           <p className="text-[11px] font-medium text-slate-500">Next report</p>
           <p className="text-[15px] font-semibold tabular-nums text-slate-900">{next ? next.date : UNKNOWN}</p>
           <p className="text-[11px] text-slate-400">
-            {days == null ? 'not scheduled' : days === 0 ? 'today' : `in ${days} days`}
+            {days == null ? (meta?.schedule_complete === false ? 'not listed by the latest check' : 'not scheduled') : days === 0 ? 'today' : `in ${days} days`}
+            {unverified && <span className="font-medium text-amber-700" data-testid="next-unverified"> · unverified</span>}
             {next?.eps_estimate != null && ` · est. EPS $${next.eps_estimate.toFixed(2)}`}
           </p>
         </div>
@@ -142,6 +146,14 @@ export default function EarningsPanel({ earnings, bars }: { earnings: EarningsDa
         Price reaction = close before the report to close the day after (covers both before-open and after-close reports;
         the report time isn&apos;t recorded yet).
       </p>
+      {meta?.source && (
+        <DataStamp
+          className="mt-1"
+          label="Earnings calendar checked"
+          asOf={meta.latest_fetch_at ? meta.latest_fetch_at.slice(0, 10) : null}
+          source={meta.schedule_complete === false ? 'that check listed no upcoming date' : 'stored calendar, current dates only'}
+        />
+      )}
     </div>
   );
 }
