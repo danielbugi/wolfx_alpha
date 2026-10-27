@@ -182,15 +182,15 @@ Public traffic never sees an un-soaked backend, and the deployed image is byte-f
 - a **read-only DB login** for the soak (§2b.1, item 2);
 - a **digest-exact promotion** (§2b.2, item 1).
 
-Both have a smallest correction prepared for owner review (§2b.4). Nothing below has been changed in production.
+Both now have a prepared correction (§2b.4); neither is installed or created in production. Nothing below has been changed in production.
 
 ### 2b.1 Soak isolation
 
 | # | Requirement | Evidence (2026-10-26) | Status |
 |---|---|---|---|
 | 1 | **Not publicly reachable** | The precedent `fl-preview-backend` publishes only `127.0.0.1:8100`. `docker inspect` shows network `donchian-screener_app_net` with **no aliases**. Caddy routes to the service name `backend` only. The soak copies this: `-p 127.0.0.1:8101:8000`, no `--network-alias`. | Met by design. **Verify at run time**: `ss -ltn` shows `127.0.0.1:8101` only, and `https://api.first-light.finance` still answers from `donchian-screener-backend-1`. |
-| 2 | **Read-only DB credentials** | `pg_roles` has no read-only login. The login roles are `donchian_app` (writable), `forward_research_admin` and `trading_user` (superuser). `PGOPTIONS=-c default_transaction_read_only=on` is a session default that the client can override, so it is not an enforcement boundary. The precedent's container uses a writable login. | **GAP.** Correction: a SELECT-only role (§2b.4 a). |
-| 3 | **No workers, schedulers, collectors or jobs** | The backend has no scheduler or worker. The only background activity is the lifespan's `_main_page_prewarm_loop` thread (`backend/main.py`): SELECTs that fill the container's own in-process cache, and it stops with the container. No systemd unit or timer references a soak container. | **Owner decision** (§2b.4 c). |
+| 2 | **Read-only DB credentials** | `pg_roles` has no read-only login. The login roles are `donchian_app` (writable), `forward_research_admin` and `trading_user` (superuser). `PGOPTIONS=-c default_transaction_read_only=on` is a session default that the client can override, so it is not an enforcement boundary. The precedent's container uses a writable login. | **GAP, correction prepared and tested** (§2b.4 a); role created only after Stage 2. |
+| 3 | **No workers, schedulers, collectors or jobs** | The backend has no scheduler or worker. The only background activity is the lifespan's `_main_page_prewarm_loop` thread (`backend/main.py`): SELECTs that fill the container's own in-process cache, and it stops with the container. No systemd unit or timer references a soak container. | Audited and accepted by the owner (§2b.4 c). |
 | 4 | **Cannot send notifications or other side effects** | Telegram (`bot_access_service`) needs `TELEGRAM_BOT_TOKEN`; email needs `SMTP_HOST`; the news and market-calendar fetches need `ALPACA_API_KEY/SECRET`. **None is given to the soak.** Without them: no Telegram call; logins fail at the DB (no write grant) before any email; Alpaca calls fail and fall back. The precedent's environment **does** carry the Alpaca keys and the production `JWT_SECRET`, so it must not be copied. | Met by the env file below. |
 | 5 | **No mutation of shared cache or production state** | There is no Redis or shared cache: all backend caches are in-process. GET paths that would write are the news cache (`news_items`, `news_fetched`), login/session rows (`auth/store.py`), and the market-calendar cache file. With a SELECT-only role the DB writes fail in Postgres. The cache file lands in the container's own filesystem because **no volume is mounted**. | Met **once item 2 is fixed**. Run-time check: `has_table_privilege('fl_release_soak', t, 'INSERT')` is false for every table. |
 | 6 | **Fully removable** | No volumes, `--restart no`, no network alias, no systemd unit. Removal: `docker rm -f fl-release-soak`; delete the root-only env file; `DROP OWNED BY fl_release_soak; DROP ROLE fl_release_soak;`. Then verify that `docker ps -a` and `pg_roles` no longer list either. | Met. |
@@ -214,7 +214,7 @@ The container runs the image **by digest**, so the soaked bytes are pinned from 
 
 | # | Requirement | Evidence | Status |
 |---|---|---|---|
-| 1 | **Deploys the exact soaked digest** | `deploy.sh` runs `dc pull backend` by **tag** and checks only that the running container uses that tag name. A tag re-pushed between the soak and the switch would deploy different bytes, unnoticed. | **GAP.** Correction: PR #72 (§2b.4 b). |
+| 1 | **Deploys the exact soaked digest** | `deploy.sh` runs `dc pull backend` by **tag** and checks only that the running container uses that tag name. A tag re-pushed between the soak and the switch would deploy different bytes, unnoticed. | **GAP, correction in PR #72** (§2b.4 b): pre-switch and post-switch digest checks; installed only after Stage 2. |
 | 2 | **No rebuild from moving `main`** | `deploy.sh` never builds; it pulls a tag. The tag is built once, on `release/product-<date>` at `4522d29`. The CD `deploy` job is not used. | Met. |
 | 3 | **Same health-gated checks as CD** | The CD deploy job pipes the bundle to the forced command `ci-entry.sh`, which runs `deploy.sh backend <tag>`. The manual path runs that same `deploy.sh`. On 2026-10-26 the installed `deploy.sh` (`626600d2…`), `ci-entry.sh` (`f4887bd5…`) and `rollback.sh` (`23d91c0d…`) were sha256-identical to the repo at `4522d29`. The one difference is the bundle: CD's comes from the checkout, the manual one from `git archive 4522d29`. Its three files must match the blobs in §0 before the run, because `deploy.sh` also reloads Caddy from that bundle. | Met (with the bundle blob check). |
 | 4 | **Rollback-pointer correctness** | `test_deploy_rollback_pointer.py` covers pointer movement on success, failure, rollback, a failed `PREVIOUS_GOOD`, and refusal of a `FAILED_SHAS` tag: 18 tests on `main`, 22 with #72, **22 passed** on 2026-10-26. Live pointers: `CURRENT_SHA=b8b706d33bab`, `PREVIOUS_GOOD_SHA=c6827ff0ff76`, `KNOWN_GOOD_SHAS=57f2ab6b864d 662cb38593ed c6827ff0ff76`, `FAILED_SHAS=190349e8a3db`. Expected after success: `CURRENT_SHA=<new>`, `PREVIOUS_GOOD_SHA=b8b706d33bab`, and `b8b706d33bab` appended to `KNOWN_GOOD_SHAS`. | Met. Verify after the switch. |
@@ -234,39 +234,58 @@ The container runs the image **by digest**, so the soaked bytes are pinned from 
 - **Incompatibility window:** only between `deploy.sh` turning healthy and `vercel promote`, about 1–2 minutes, supervised, daytime, no price load scheduled. The new frontend is null-safe in both directions.
 - **Combined rollback unchanged (§5):** frontend first, then backend, before 23:45 Jerusalem.
 
-### 2b.4 Smallest corrections (for owner review, none applied)
+### 2b.4 Owner decisions of 2026-10-27, and the evidence behind them
 
-**a. Read-only soak role.** A role change, not a migration. Applied by the operator as the bootstrap user, removed after the soak:
+Owner decisions: the read-only role is **approved for preparation and for setup after Stage 2, never before the cutover**; the cache warmer **may stay enabled if proven read-only and side-effect-free**; PR #72 is a **conditional GO to merge** once the safeguards below are verified; product deployment is **not approved**.
 
-```sql
-CREATE ROLE fl_release_soak LOGIN PASSWORD '<set by operator, stored only in /root/fl-release-soak.env>' CONNECTION LIMIT 6;
-ALTER ROLE fl_release_soak SET default_transaction_read_only = on;
-GRANT CONNECT ON DATABASE trading_production TO fl_release_soak;
-GRANT USAGE ON SCHEMA public TO fl_release_soak;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO fl_release_soak;
--- removal after the soak: DROP OWNED BY fl_release_soak; DROP ROLE fl_release_soak;
-```
+**a. Temporary read-only role `fl_release_soak`: prepared, tested on a throwaway database, NOT created in production.**
 
-The SELECT-only grant is the enforcement: Postgres refuses any write whatever the session settings. The read-only default is a second layer.
+Files (`deploy/db/soak/`): `release_soak_role_setup.sql`, `release_soak_role_verify.sql`, `release_soak_role_teardown.sql`. The password is a psql variable (`-v soak_pw=…`), never in a file.
 
-**b. PR #72 (draft): `EXPECTED_DIGEST` in `deploy.sh`.**
-- Optional and operator-only (`ci-entry.sh` cannot set it).
-- Validated as `sha256:<64 hex>`.
-- After the health gate, the running container's image digest must equal it; otherwise the rollout counts as failed and the previous release is restored automatically.
-- Install on the VPS **only after Stage 2 is COMPLETE** and with owner approval: `deploy.sh` is a deployment script, frozen for the Stage 2 window.
+Privilege design (`NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS`, `CONNECTION LIMIT 6`, member of no role, owns nothing):
+- `GRANT CONNECT`, `USAGE` on `public`, `SELECT` on all tables and views;
+- **`REVOKE ALL` on 17 credential, member and message tables** the data endpoints never read: `dashboard_users`, `dashboard_sessions`, `dashboard_login_challenges`, `dashboard_auth_audit`, `bot_access`, `bot_audit`, `bot_chart_cache`, `bot_invites`, `bot_requests`, `bot_settings`, `bot_tracked`, `bot_user_settings`, `bot_users`, `bot_watchlist`, `telegram_messages`, `telegram_control_audit`, `telegram_post_delivery`;
+- no INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER, CREATE, sequence, function or default-privilege grant;
+- `default_transaction_read_only=on`, `statement_timeout=60s` and an idle-in-transaction timeout as second layers only.
 
-**c. The prewarm thread.** Recommendation: **accept** it.
-- It is part of what is being soaked: the same thread runs in production.
-- Under the SELECT-only role it can only read, and it is removed with the container.
-- Disabling it would need a code change, so the soaked artifact would differ from the promoted one.
+Production facts that make the design sufficient (read-only queries, 2026-10-27):
+- No table has a PUBLIC grant, no row-level security, no default ACLs, one extension (`plpgsql`).
+- The five SECURITY DEFINER functions that take arguments (`research_maintenance_open/close/approve/begin`, `research_capture_set_state`) are executable only by their owner and `donchian_research_admin`. `research_guard_immutable` is a trigger function. So PUBLIC, and therefore the soak role, cannot reach a function that writes as its owner.
+- There is no privileged alternative login the soak could use: its env file holds only this role's credentials. `trading_user` (superuser), `donchian_app`, `donchian_owner` and the research logins are never given to it.
+- The soak also receives no production secret: a fresh random `JWT_SECRET` and no Telegram, SMTP, Alpaca or Tiingo values (§2b.1).
+
+Test on a throwaway Postgres 16 cluster (a separate port, deleted afterwards; the frozen Windows database was not touched), with a mirror of the schema: owners `trading_user` and `donchian_owner`, the credential tables, and a restricted SECURITY DEFINER function:
+- Catalog audit (`release_soak_role_verify.sql`): **9 / 9 PASS**, including "no write privilege on any table, via the role or PUBLIC", no CREATE on the schema or database, no privilege on the sensitive tables, no EXECUTE on any SECURITY DEFINER function with arguments.
+- Behaviour **as the role, with the session read-only default deliberately switched off**: INSERT, UPDATE, DELETE, TRUNCATE, CREATE TABLE, ALTER TABLE, DROP TABLE, CREATE INDEX, SELECT on `dashboard_users`, SELECT on `bot_users`, the definer function, `GRANT … TO PUBLIC` (no privileges granted) and CREATE ROLE **all failed** ("permission denied" / "must be owner" / "no privileges were granted"). Reads of `stock_prices` and a view succeeded.
+- Teardown (`DROP OWNED BY`, `DROP ROLE`): zero roles left.
+- **Known, harmless:** PUBLIC may create session-local TEMP tables. They vanish at disconnect and are visible to no other session.
+
+In production, after Stage 2 is COMPLETE and with the owner present: run the setup, then the verify script (every line must be PASS and every probe an ERROR), then start the soak. After the soak: the teardown script, delete the env file, and confirm `pg_roles` and `docker ps -a` no longer list the role or the container.
+
+**b. PR #72 (`EXPECTED_DIGEST` in `deploy.sh`), updated for the two required checks.**
+- Optional and operator-only (`ci-entry.sh` cannot set it), validated as `sha256:<64 hex>`.
+- **Before the switch:** the tag is pulled and its digest must equal the expected one. A missing image, an image with no digest, or a different digest aborts with exit 1. **Nothing is changed**: no compose file is activated, the running release is untouched, and no pointer or `FAILED_SHAS` entry is written.
+- **After the switch:** the digest of the image the running container was created from must equal it too (this covers a tag re-pushed between the two checks). A mismatch counts as a failed rollout and triggers the established health-gated restore of the previous release; the replaced tag is recorded in `FAILED_SHAS`, and the previous release keeps its place as `PREVIOUS_GOOD_SHA` / known-good.
+- Tests (`test_deploy_rollback_pointer.py`, 27 passed): correct digest; mismatch before the switch (production untouched); missing image; image with no digest; mismatch after the switch (restore); correct digest with a failed health check (restore); pointer integrity through a digest-verified deploy and a later rollback. Both checks were mutation-tested: disabling the pre-switch block fails 3 tests, disabling the post-switch block fails 1.
+- No new deployment path: it is the same `deploy.sh`, and the variable is read only from the operator's environment.
+- Install on the VPS **only after Stage 2 is COMPLETE**, with owner approval: the installed copy's sha256 must equal the repo file.
+
+**c. Cache warmer: audited, side-effect-free.** Call path: `lifespan` → `_main_page_prewarm_loop` → `_build_main_page_data` → (`_screener_movers` → `DiscoveryService.movers`) plus one summary query → `set_cached_data`.
+- **Database:** the engine runs every statement after `SET TRANSACTION READ ONLY` (`DiscoveryService._run`), enforced by Postgres. The summary query is a plain SELECT. Under the soak role no write is possible anyway.
+- **Cache:** `cache` and `cache_timestamps` are module-level dicts inside the process. There is no Redis or other shared store, and no cache file written on this path.
+- **External effects:** no HTTP client, no Telegram, no SMTP, no Alpaca call on this path.
+- **Other background activity:** the warmer is the only thread the lifespan starts. There are no schedulers or workers in the backend.
+- **Run-time proof (2026-10-27, candidate code run in memory inside the live backend container, read-only session, nothing written):** one full `_build_main_page_data()` built the cache (session 2026-10-26). The only statement type issued through the app's cursors was SELECT, no outbound socket was opened, and no new thread was started.
+- **Verdict:** it stays enabled in the soak.
 
 ### 2b.5 Remaining blockers before any product deployment
 
-1. Stage 2 COMPLETE, with the 23:45 Jerusalem run of 2026-10-27 verified.
-2. Owner approval of §2b.4 a (the soak role).
-3. Owner approval of PR #72; merge; install on the VPS after Stage 2, with its sha256 matching the repo.
-4. Owner decision on §2b.4 c.
-5. An explicit owner GO for the release window (Wed 2026-10-28, 13:00–15:00 Jerusalem, §1).
+1. Stage 2 COMPLETE: the Tuesday 2026-10-27 cutover succeeds, the first 23:45 Jerusalem pipeline run is checked and passes, and the final report says COMPLETE. PARTIAL or ROLLED BACK holds the product release.
+2. PR #72 reviewed, CI green, merged (conditional GO given); installed on the VPS after Stage 2, sha256 matching the repo.
+3. The read-only role created after Stage 2 and verified (§2b.4 a).
+4. Code release candidate re-verified on the day (§0).
+5. The isolated 30-minute soak passes; the frontend candidate is staged without changing the public domain.
+6. A **separate explicit owner GO** to switch the production backend and frontend (window Wed 2026-10-28, 13:00–15:00 Jerusalem, §1).
 
 ## 3. Backend release
 
