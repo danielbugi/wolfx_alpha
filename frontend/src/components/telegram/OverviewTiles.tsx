@@ -39,7 +39,7 @@ function ChannelCard({ t, timezone }: { t: TargetOverview; timezone: string }) {
       <CardBody className="p-4 pt-3">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Tile label="Posted today" value={t.sent_today} />
-          <Tile label="Live now" value={t.live} hint={`of ${t.recorded} recorded`} />
+          <Tile label="In the channel now" value={t.live} hint={`${t.live_current} current · ${t.live_old} old format`} />
           <Tile label="Edited" value={t.edited} />
           <Tile label="Deleted" value={t.deleted} />
         </div>

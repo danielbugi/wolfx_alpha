@@ -86,12 +86,16 @@ class PgLedger:
         return rows[0] if rows else None
 
     @staticmethod
-    def _where(target, kind, status, since, until, q) -> Tuple[str, tuple]:
+    def _where(target, kind, status, since, until, q, kinds_in=None, kinds_not_in=None) -> Tuple[str, tuple]:
         clauses, params = [], []
         if target:
             clauses.append("target = %s"); params.append(target)
         if kind:
             clauses.append("kind = %s"); params.append(kind)
+        if kinds_in:
+            clauses.append("kind = ANY(%s)"); params.append(list(kinds_in))
+        if kinds_not_in:
+            clauses.append("NOT (kind = ANY(%s))"); params.append(list(kinds_not_in))
         if status == "edited":
             clauses.append("status = 'sent' AND edit_count > 0")
         elif status:
@@ -104,9 +108,10 @@ class PgLedger:
             clauses.append("text ILIKE %s"); params.append("%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%")
         return (" WHERE " + " AND ".join(clauses)) if clauses else "", tuple(params)
 
-    def list(self, *, target=None, kind=None, status=None, since=None, until=None, q=None, limit=50, offset=0) -> Tuple[List[Dict], int]:
+    def list(self, *, target=None, kind=None, status=None, since=None, until=None, q=None, limit=50, offset=0,
+             kinds_in=None, kinds_not_in=None) -> Tuple[List[Dict], int]:
         limit, offset = _clamp_page(limit, offset)
-        where, params = self._where(target, kind, status, since, until, q)
+        where, params = self._where(target, kind, status, since, until, q, kinds_in, kinds_not_in)
         total = self.db.execute_dict_query(f"SELECT COUNT(*) AS n FROM telegram_messages{where}", params)[0]["n"]
         rows = self.db.execute_dict_query(
             f"SELECT * FROM telegram_messages{where} ORDER BY sent_at DESC, id DESC LIMIT %s OFFSET %s", params + (limit, offset))
@@ -123,8 +128,10 @@ class PgLedger:
 
     def kinds(self, target: Optional[str] = None) -> List[Dict[str, Any]]:
         where, params = self._where(target, None, None, None, None, None)
-        rows = self.db.execute_dict_query(f"SELECT kind, COUNT(*) AS n FROM telegram_messages{where} GROUP BY kind ORDER BY n DESC, kind", params)
-        return [{"kind": r["kind"], "count": int(r["n"])} for r in rows]
+        rows = self.db.execute_dict_query(
+            "SELECT kind, COUNT(*) AS n, COUNT(*) FILTER (WHERE status = 'sent') AS live, MAX(sent_at) AS last_sent "
+            f"FROM telegram_messages{where} GROUP BY kind ORDER BY n DESC, kind", params)
+        return [{"kind": r["kind"], "count": int(r["n"]), "live": int(r["live"]), "last_sent": r["last_sent"]} for r in rows]
 
     def audit_for(self, chat_id: str, message_id: int, limit: int = 20) -> List[Dict[str, Any]]:
         return self.db.execute_dict_query(
@@ -187,10 +194,14 @@ class MemoryLedger:
         r = self._find(chat_id, message_id)
         return dict(r) if r else None
 
-    def _match(self, r, target, kind, status, since, until, q) -> bool:
+    def _match(self, r, target, kind, status, since, until, q, kinds_in=None, kinds_not_in=None) -> bool:
         if target and r["target"] != target:
             return False
         if kind and r["kind"] != kind:
+            return False
+        if kinds_in and r["kind"] not in kinds_in:
+            return False
+        if kinds_not_in and r["kind"] in kinds_not_in:
             return False
         if status == "edited" and not (r["status"] == "sent" and r["edit_count"] > 0):
             return False
@@ -202,9 +213,10 @@ class MemoryLedger:
             return False
         return not q or q.lower() in r["text"].lower()
 
-    def list(self, *, target=None, kind=None, status=None, since=None, until=None, q=None, limit=50, offset=0):
+    def list(self, *, target=None, kind=None, status=None, since=None, until=None, q=None, limit=50, offset=0, kinds_in=None, kinds_not_in=None):
         limit, offset = _clamp_page(limit, offset)
-        hits = sorted((r for r in self.rows if self._match(r, target, kind, status, since, until, q)), key=lambda r: (r["sent_at"], r["id"]), reverse=True)
+        hits = sorted((r for r in self.rows if self._match(r, target, kind, status, since, until, q, kinds_in, kinds_not_in)),
+                      key=lambda r: (r["sent_at"], r["id"]), reverse=True)
         return [dict(r) for r in hits[offset:offset + limit]], len(hits)
 
     def counts(self, target, since):
@@ -214,11 +226,15 @@ class MemoryLedger:
                 "last_sent": max((r["sent_at"] for r in mine), default=None), "first_sent": min((r["sent_at"] for r in mine), default=None)}
 
     def kinds(self, target=None):
-        n: Dict[str, int] = {}
+        n: Dict[str, Dict[str, Any]] = {}
         for r in self.rows:
             if not target or r["target"] == target:
-                n[r["kind"]] = n.get(r["kind"], 0) + 1
-        return [{"kind": k, "count": c} for k, c in sorted(n.items(), key=lambda kv: (-kv[1], kv[0]))]
+                d = n.setdefault(r["kind"], {"count": 0, "live": 0, "last_sent": None})
+                d["count"] += 1
+                d["live"] += int(r["status"] == "sent")
+                d["last_sent"] = max([x for x in (d["last_sent"], r["sent_at"]) if x is not None])
+        return [{"kind": k, "count": d["count"], "live": d["live"], "last_sent": d["last_sent"]}
+                for k, d in sorted(n.items(), key=lambda kv: (-kv[1]["count"], kv[0]))]
 
     def audit_for(self, chat_id, message_id, limit=20):
         hits = [a for a in self.audit if a["chat_id"] == str(chat_id) and a["message_id"] == int(message_id)]

@@ -15,7 +15,7 @@ import os
 import time
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Path, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Path, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
@@ -100,11 +100,12 @@ def overview(control: ChannelControl = Depends(get_control)):
     return control.overview()
 
 
-@router.get("/schedule", dependencies=[Depends(require_read_access)])
-def schedule(target: str = Query(..., description="dev | prod"), control: ChannelControl = Depends(get_control)):
-    """What is configured to post today for `target`, and whether it already has (see mechanism/alerts/schedule.py)."""
+@router.get("/live", dependencies=[Depends(require_read_access)])
+def live(target: str = Query(..., description="dev | prod"), control: ChannelControl = Depends(get_control)):
+    """What the channel posts NOW, what is switched off (and whether anything switched off has started posting again), and how many old-format
+    posts are still sitting in the channel. Replaces the old "today's schedule", which was built from the previous Windows setup."""
     try:
-        return control.schedule(target)
+        return control.live_status(target)
     except ControlError as e:
         raise _refused(e)
 
@@ -115,13 +116,14 @@ def list_messages(
         kind: Optional[str] = Query(None, max_length=30),
         status: Optional[str] = Query(None, description="sent | edited | deleted"),
         day: Optional[str] = Query(None, description="YYYY-MM-DD in the configured timezone"),
+        format: Optional[str] = Query(None, description="current | old (old = a post type that was retired)"),
         q: Optional[str] = Query(None, max_length=100, description="text search"),
         limit: int = Query(50, ge=1, le=200),
         offset: int = Query(0, ge=0),
         control: ChannelControl = Depends(get_control),
 ):
     try:
-        return control.list_messages(target=target, kind=kind, status=status, day=day, q=q, limit=limit, offset=offset)
+        return control.list_messages(target=target, kind=kind, status=status, day=day, q=q, limit=limit, offset=offset, format=format)
     except ControlError as e:
         raise _refused(e)
 
@@ -131,6 +133,30 @@ def get_message(ledger_id: int = Path(..., ge=1), control: ChannelControl = Depe
     """One message with its full text, the text it was first sent with, its buttons and the audit trail of what this page did to it."""
     try:
         return control.get_message(ledger_id)
+    except ControlError as e:
+        raise _refused(e)
+
+
+@router.get("/messages/{ledger_id}/image", dependencies=[Depends(require_read_access)])
+async def message_image(ledger_id: int = Path(..., ge=1), control: ChannelControl = Depends(get_control)):
+    """The picture of a photo message that is still in the channel (fetched from Telegram and cached; the ledger never stored pictures)."""
+    try:
+        got = await run_in_threadpool(control.fetch_image, ledger_id)          # a Telegram round trip: off the event loop
+    except ControlError as e:
+        raise _refused(e)
+    return Response(content=got["data"], media_type=got["mime"], headers={"Cache-Control": "private, max-age=3600"})
+
+
+class DeleteOldRequest(BaseModel):
+    target: str = Field("prod", description="dev | prod")
+    dry_run: bool = Field(True, description="True = only count; False = really remove (at most 30 per call: call again for more)")
+
+
+@router.post("/messages/delete-old", dependencies=[Depends(require_control_token)])
+async def delete_old(body: DeleteOldRequest, control: ChannelControl = Depends(get_control)):
+    """Remove the old-format posts a bot may still delete (younger than 48 h, not pinned). Older ones can only be removed by hand in Telegram."""
+    try:
+        return await run_in_threadpool(control.delete_old, body.target, body.dry_run)
     except ControlError as e:
         raise _refused(e)
 

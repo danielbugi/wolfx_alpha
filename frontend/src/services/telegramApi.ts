@@ -29,6 +29,9 @@ export interface TargetOverview {
   edited: number;
   deleted: number;
   last_sent_at: string | null;
+  /** Live posts split by format: `live_old` = a post type that was retired (see LiveStatus). */
+  live_current: number;
+  live_old: number;
 }
 
 export interface ConfigItem {
@@ -39,9 +42,15 @@ export interface ConfigItem {
   note: string | null;
 }
 
+export type PostFormat = 'current' | 'old';
+
 export interface KindCount {
   kind: string;
   count: number;
+  /** How many of them are still in the channel (not deleted). */
+  live: number;
+  last_sent_at: string | null;
+  format: PostFormat;
   label: string;
 }
 
@@ -62,6 +71,10 @@ export interface MessageSummary {
   message_id: number;
   kind: string;
   kind_label: string;
+  /** `old` = a post type that has been retired (replaced by the daily market brief). */
+  format: PostFormat;
+  /** A photo message: its picture can be shown (fetched from Telegram on demand). */
+  has_image: boolean;
   content_type: 'text' | 'photo';
   status: 'sent' | 'deleted';
   preview: string;
@@ -109,20 +122,54 @@ export interface ComposeResult {
   message: MessageDetail | null;
 }
 
-export type ScheduleStatus = 'done' | 'pending' | 'overdue' | 'skipped';
-
-export interface ScheduleJobRow {
+export interface LiveCurrent {
   key: string;
   label: string;
-  local_time: string;
-  status: ScheduleStatus;
-  reason: string;
+  cadence: string;
+  last_sent_at: string | null;
+  /** posted = recent enough for its cadence · check = quiet longer than usual · never = nothing recorded. */
+  status: 'posted' | 'check' | 'never';
+  live_posts: number;
 }
 
-export interface ScheduleReport {
+export interface LivePaused {
+  key: string;
+  label: string;
+  reason: string;
+  restore: string;
+  last_sent_at: string | null;
+  live_posts: number;
+  /** True when this switched-off post type has posted AFTER the format change: something turned it back on. */
+  resumed: boolean;
+}
+
+export interface LiveStatus {
   target: ChannelTarget;
+  as_of: string;
   timezone: string;
-  jobs: ScheduleJobRow[];
+  format_changed_on: string;
+  current: LiveCurrent[];
+  paused: LivePaused[];
+  old_posts: {
+    live: number;
+    /** Old-format posts a bot may still delete (younger than 48 h, not pinned). */
+    removable_now: number;
+    too_old_for_a_bot: number;
+    pinned: number;
+    by_kind: { kind: string; label: string; live: number }[];
+  };
+}
+
+export interface DeleteOldResult {
+  target: ChannelTarget;
+  dry_run: boolean;
+  old_live: number;
+  removable_now: number;
+  too_old_for_a_bot: number;
+  pinned: number;
+  deleted: number;
+  failed: number;
+  remaining: number;
 }
 
 export interface MessageList {
@@ -137,6 +184,8 @@ export interface MessageFilters {
   target?: ChannelTarget;
   kind?: string;
   status?: StatusFilter;
+  /** current = only the post types the channel posts now; old = only retired ones. */
+  format?: PostFormat;
   /** YYYY-MM-DD in the configured timezone. */
   day?: string;
   q?: string;
@@ -177,6 +226,7 @@ function cleanParams(filters: MessageFilters): Record<string, string | number> {
   if (filters.target) params.target = filters.target;
   if (filters.kind) params.kind = filters.kind;
   if (filters.status) params.status = filters.status;
+  if (filters.format) params.format = filters.format;
   if (filters.day) params.day = filters.day;
   if (filters.q && filters.q.trim()) params.q = filters.q.trim();
   return params;
@@ -190,8 +240,14 @@ const mutationMultipart = (token: string) => ({ headers: { 'X-Control-Token': to
 export const telegramApi = {
   getOverview: async (): Promise<ControlOverview> => (await apiClient.get<ControlOverview>('/api/telegram/overview')).data,
 
-  getSchedule: async (target: ChannelTarget): Promise<ScheduleReport> =>
-    (await apiClient.get<ScheduleReport>('/api/telegram/schedule', { params: { target } })).data,
+  getLive: async (target: ChannelTarget): Promise<LiveStatus> => (await apiClient.get<LiveStatus>('/api/telegram/live', { params: { target } })).data,
+
+  /** The picture of a photo message (fetched from Telegram by the server, cached). A blob, because the request needs the sign-in header. */
+  getImage: async (id: number): Promise<Blob> =>
+    (await apiClient.get<Blob>(`/api/telegram/messages/${id}/image`, { responseType: 'blob', timeout: 60_000 })).data,
+
+  deleteOld: async (target: ChannelTarget, dryRun: boolean, token: string): Promise<DeleteOldResult> =>
+    (await apiClient.post<DeleteOldResult>('/api/telegram/messages/delete-old', { target, dry_run: dryRun }, mutation(token))).data,
 
   listMessages: async (filters: MessageFilters): Promise<MessageList> =>
     (await apiClient.get<MessageList>('/api/telegram/messages', { params: cleanParams(filters) })).data,

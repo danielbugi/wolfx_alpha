@@ -1,10 +1,12 @@
 // File: frontend/src/components/telegram/MessageFilters.tsx
 import React, { useEffect, useState } from 'react';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
-import type { ChannelTarget, KindCount, StatusFilter } from '@/services/telegramApi';
+import type { ChannelTarget, KindCount, PostFormat, StatusFilter } from '@/services/telegramApi';
 import { Btn } from '@/components/telegram/ui';
 
 export interface FilterState {
+  /** current = the post types the channel posts now · old = retired ones · '' = all. */
+  format: PostFormat | '';
   target: ChannelTarget | '';
   kind: string;
   status: StatusFilter | '';
@@ -12,7 +14,9 @@ export interface FilterState {
   q: string;
 }
 
-export const NO_FILTERS: FilterState = { target: '', kind: '', status: '', day: '', q: '' };
+export const NO_FILTERS: FilterState = { format: '', target: '', kind: '', status: '', day: '', q: '' };
+/** What the page opens with: only the current post types, so old posts do not look like what is live. */
+export const DEFAULT_FILTERS: FilterState = { ...NO_FILTERS, format: 'current' };
 
 const FIELD =
   'rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-300';
@@ -35,9 +39,26 @@ export default function MessageFilters({ value, kinds, onChange }: Props) {
 
   const set = <K extends keyof FilterState>(key: K, v: FilterState[K]) => onChange({ ...value, [key]: v });
   const active = Object.values(value).some((v) => v !== '');
+  // Counts for the format switch come from the kinds: live posts per format, for the channel(s) being looked at.
+  const liveOf = (f: PostFormat) => kinds.filter((k) => k.format === f).reduce((n, k) => n + k.live, 0);
+  const FORMATS: { id: FilterState['format']; label: string }[] = [
+    { id: 'current', label: `Current format (${liveOf('current')})` },
+    { id: 'old', label: `Old format (${liveOf('old')})` },
+    { id: '', label: 'All' },
+  ];
 
   return (
     <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-col gap-1 text-xs text-slate-500">
+        Show
+        <div className="flex gap-1 rounded-md bg-slate-100 p-0.5" role="group" aria-label="Post format">
+          {FORMATS.map((f) => (
+            <Btn key={f.label} size="sm" variant={value.format === f.id ? 'primary' : 'ghost'} aria-pressed={value.format === f.id} onClick={() => set('format', f.id)}>
+              {f.label}
+            </Btn>
+          ))}
+        </div>
+      </div>
       <label className="flex flex-col gap-1 text-xs text-slate-500">
         Channel
         <select className={FIELD} value={value.target} onChange={(e) => set('target', e.target.value as FilterState['target'])}>
@@ -84,8 +105,8 @@ export default function MessageFilters({ value, kinds, onChange }: Props) {
           />
         </span>
       </label>
-      <Btn variant="ghost" size="sm" disabled={!active} onClick={() => onChange(NO_FILTERS)}>
-        Clear filters
+      <Btn variant="ghost" size="sm" disabled={!active} onClick={() => onChange(DEFAULT_FILTERS)}>
+        Reset filters
       </Btn>
     </div>
   );

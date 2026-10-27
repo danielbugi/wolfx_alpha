@@ -10,6 +10,7 @@ import TelegramHtml from '@/lib/TelegramHtml';
 import Dialog from '@/components/common/Dialog';
 import { ChannelChip, StatusChip } from '@/components/telegram/StatusChips';
 import { Btn } from '@/components/telegram/ui';
+import MessageImage from '@/components/telegram/MessageImage';
 import type { RowMode } from '@/components/telegram/MessageTable';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 
@@ -23,6 +24,8 @@ interface Props {
   timezone: string;
   token: string | null;
   controlsEnabled: boolean;
+  /** Only the Owner account may edit or delete; a Collaborator sees everything read-only. */
+  isOwner: boolean;
   onClose: () => void;
   /** Called after a change reached Telegram, so the list and the counts refresh. */
   onChanged: () => void;
@@ -44,12 +47,7 @@ const OUTCOME_LABEL: Record<string, string> = {
 function Bubble({ detail, html }: { detail: MessageDetail; html: string }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-100 p-3">
-      {detail.content_type === 'photo' && (
-        <div className="mb-2 flex h-24 items-center justify-center gap-2 rounded bg-slate-200 text-xs text-slate-500">
-          <PhotoIcon className="h-5 w-5" aria-hidden />
-          Photo message. The image is not stored; only its caption can be edited.
-        </div>
-      )}
+      {detail.content_type === 'photo' && detail.status !== 'deleted' && <MessageImage id={detail.id} alt={`Picture of ${detail.kind_label}`} />}
       <div className="rounded-lg bg-white p-3 shadow-sm">
         <TelegramHtml html={html} />
         {detail.buttons.length > 0 && (
@@ -79,7 +77,7 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
-export default function MessageModal({ id, initialMode, timezone, token, controlsEnabled, onClose, onChanged, onBadToken }: Props) {
+export default function MessageModal({ id, initialMode, timezone, token, controlsEnabled, isOwner, onClose, onChanged, onBadToken }: Props) {
   const [detail, setDetail] = useState<MessageDetail | null>(null);
   const [loadError, setLoadError] = useState<ControlErrorInfo | null>(null);
   const [mode, setMode] = useState<LocalMode>('view');
@@ -241,9 +239,11 @@ export default function MessageModal({ id, initialMode, timezone, token, control
     );
 
   const untilLabel = detail ? timeUntil(detail.deletable_until, openedAt) : null;
-  const lockedHint = !controlsEnabled
-    ? 'This action is switched off on the server (no TELEGRAM_CONTROL_TOKEN).'
-    : token === null
+  const lockedHint = !isOwner
+    ? 'Only the Owner account can edit or delete posts. You are signed in with a different role: sign in with the Owner account.'
+    : !controlsEnabled
+      ? 'This action is switched off on the server (no TELEGRAM_CONTROL_TOKEN).'
+      : token === null
       ? 'Enter the control token at the top of the page to save changes.'
       : null;
   const backToView = () => {
