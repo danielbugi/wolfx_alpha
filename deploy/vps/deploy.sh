@@ -109,6 +109,11 @@ dc() {
     --env-file "$ENV_FILE" "$@"
 }
 
+# the first registry digest (sha256:...) recorded for an image reference or id; empty if none
+repo_digest() {
+  docker image inspect -f '{{range .RepoDigests}}{{println .}}{{end}}' "$1" 2>/dev/null | sed -n 's/.*@//p' | head -n 1
+}
+
 activate_config() {
   local rel="$BASE/releases/$1"
   install -m 644 "$rel/docker-compose.yml" "$rel/docker-compose.prod.yml" "$COMPOSE_DIR/"
@@ -144,7 +149,7 @@ rollout() {
   if [ -n "$EXPECTED_DIGEST" ] && [ "$T" = "$TAG" ]; then
     # the digest of the image the running container was created from (not of whatever the tag points to now)
     local have
-    have="$(docker image inspect -f '{{range .RepoDigests}}{{println .}}{{end}}'               "$(docker inspect -f '{{.Image}}' "$(dc ps -q backend)" 2>/dev/null)" 2>/dev/null | sed -n 's/.*@//p' | head -n 1)"
+    have="$(repo_digest "$(docker inspect -f '{{.Image}}' "$(dc ps -q backend)" 2>/dev/null)")"
     [ "$have" = "$EXPECTED_DIGEST" ] || { echo "running backend digest is '$have', expected '$EXPECTED_DIGEST'" >&2; return 1; }
   fi
   wait_healthy
@@ -155,6 +160,25 @@ publish_proxy() {
   # a changed Caddyfile is a bind mount Compose can't see; reload picks it up without dropping connections
   dc exec -T reverse-proxy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 }
+
+# Before ANYTHING is changed (no compose file, container, pointer or FAILED record): with EXPECTED_DIGEST set, the image
+# this tag resolves to now must be that digest. A missing image or a different digest aborts here, production untouched.
+# (Pulling only fills the local image cache; the post-switch check in rollout() still covers a tag re-pushed after this.)
+if [ -n "$EXPECTED_DIGEST" ]; then
+  ref="ghcr.io/danielbugi/wolfx_alpha-backend:$TAG"
+  if ! docker pull "$ref" >/dev/null; then
+    log "$MODE backend $TAG ABORTED before any change: image $ref could not be pulled"
+    echo "image $ref could not be pulled; nothing was changed" >&2
+    exit 1
+  fi
+  pre="$(repo_digest "$ref")"
+  if [ "$pre" != "$EXPECTED_DIGEST" ]; then
+    log "$MODE backend $TAG ABORTED before any change: $ref is '$pre', expected '$EXPECTED_DIGEST'"
+    echo "image digest is '$pre', expected '$EXPECTED_DIGEST'; nothing was changed" >&2
+    exit 1
+  fi
+  log "$MODE backend $TAG: pre-switch digest $EXPECTED_DIGEST verified"
+fi
 
 log "$MODE backend $TAG requested (current: ${PREV:-none})"
 if rollout "$TAG"; then
