@@ -36,6 +36,10 @@ Status: **plan for owner approval**, prepared 2026-10-26 and verified that day; 
 
 **The backend image built from `4522d29` therefore runs exactly the backend code reviewed at `f7059e0`.** The identity check below now uses `4522d29` in place of `f7059e0`.
 
+### Deliberately excluded: PR #74 and everything else merged after `4522d29`
+
+PR #74 (Telegram Control Center: pictures, what is live, edit-blocked reasons; merge `349b43e`, 2026-10-27 05:14Z) was merged after `4522d29`. **It is not in the frozen candidate and is excluded on purpose** (owner decision 2026-10-27). It changes `backend/routers/telegram_control.py`, the `/telegram` frontend and `mechanism/alerts` files, none of which the soak gates (B1–B6) or acceptance (F1/F2) cover. The same applies to any later commit: the release branch is created at exactly `4522d29`, so nothing merged to `main` afterwards can enter the image or the staged frontend. Including #74 would need a new candidate commit, a new CI run, a re-run of the backend tests and gates, and a revised manifest, all approved by the owner first.
+
 ### Release commit (`<RELEASE_SHA>`)
 
 The CD workflow builds and tags the backend image from the **head of `main`** at dispatch: the tag is the first 12 characters of that commit, and only `main` may deploy to production. So `<RELEASE_SHA>` is `main`'s head on the day. It is acceptable **only if it is code-identical to `4522d29`**. Under Option A (§2a), the release branch points exactly at `4522d29`, so the check is trivially empty. Before dispatch:
