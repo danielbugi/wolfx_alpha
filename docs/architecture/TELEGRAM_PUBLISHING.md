@@ -9,6 +9,23 @@
 > plus automated tests including two independent real two-thread concurrency races (one within
 > `publish_post_market.py`, one across it and `send_channel_posts.py` — see §5b), full green in CI.
 
+## 0b. The Control Center: what is "live" (2026-10-27)
+
+The dashboard's `/telegram` page (Messages Hub) reads the message ledger (`telegram_messages`). Telegram has no notion of "live": every message a bot
+ever sent stays in the channel until deleted, so the page defines it itself:
+
+- **Current vs old format** — `mechanism/alerts/channel_kinds.py` is the registry (current: `market_report`, `report_card`, `assistant`, `start_here`,
+  manual posts; old: the retired kinds). Unknown kinds count as current, never hidden. The page opens on "Current format" and offers Old / All.
+- **What's live now** — `GET /api/telegram/live` shows what posts now, what is switched off, and old-format posts still in the channel. It compares the
+  registry with the ledger's own last-posted times, so a switched-off type that posts again is flagged `resumed`. It replaced the old "Today's
+  schedule" (built from the previous Windows setup's state files, which called everything overdue).
+- **Remove old posts** — `POST /api/telegram/messages/delete-old` (Owner + control token). A bot can only delete messages younger than 48 h; older ones
+  are counted and must be removed by hand in the Telegram app.
+- **Pictures** — the ledger never stored images and a bot cannot read a channel's history. `GET /api/telegram/messages/{id}/image` has the bot silently
+  forward the channel message to the owner's private chat (`BOT_OWNER_ID`), download its photo, and delete the copy (`telegram_media.py`); results are
+  cached in memory. Works for every past and future photo, with no schema change.
+- **Who can edit** — only the Owner account, plus the control token. A Collaborator sees everything read-only, and the pop-up now says so.
+
 ## 1. What this subsystem is, and is not
 
 **This document covers exactly four things, published together as "the post-market package":**

@@ -15,6 +15,8 @@ sys.path.insert(0, os.path.join(ROOT, "mechanism"))
 sys.path.insert(0, ROOT)
 
 from alerts import channel_control as cc  # noqa: E402
+from alerts import channel_kinds as ck  # noqa: E402
+from alerts import telegram_media as tm  # noqa: E402
 from alerts import message_ledger as ml  # noqa: E402
 from alerts import telegram_client as tc  # noqa: E402
 from test_channel_tools import BANNED, Resp, client  # noqa: E402
@@ -852,50 +854,212 @@ def test_compose_photo_sends_and_validates_like_compose_but_for_a_caption():
     assert refused(control.compose_photo, "prod", b"png", caption="c").code == "locked"
 
 
-# ================================================================== phase 2: today's schedule
-def test_schedule_rejects_an_unknown_target_and_otherwise_delegates_to_the_schedule_module(monkeypatch):
-    control, *_ = make()
-    assert refused(control.schedule, "owner").code == "bad_filter"
-    called = {}
-
-    def fake_today_schedule(target, tz, now):
-        called.update(target=target, tz=tz.key, now=now)
-        return [{"key": "digest", "label": "Daily digest", "local_time": "06:00", "status": "done", "reason": "ok"}]
-    monkeypatch.setattr(cc.sched, "today_schedule", fake_today_schedule)
-    out = control.schedule("dev")
-    assert out == {"target": "dev", "timezone": "Asia/Jerusalem", "jobs": [{"key": "digest", "label": "Daily digest", "local_time": "06:00", "status": "done", "reason": "ok"}]}
-    assert called == {"target": "dev", "tz": "Asia/Jerusalem", "now": NOW}
+# ================================================================== what is live now, old-format cleanup and channel pictures (2026-10-27)
+LIVE_NOW = datetime(2026, 10, 28, 12, 0, tzinfo=UTC)            # after the one-brief format went live (2026-10-26 18:00 UTC)
+PROD_ON = {"PROD_SENDING_ENABLED": "1"}
 
 
-def test_schedule_key_formats_match_the_senders_that_own_them():
-    """schedule.py copies these key formats rather than importing the senders (see its own docstring); this pins both sides so a change on
-    either one is caught, not silently drifted."""
-    notices_src = open(os.path.join(ROOT, "mechanism", "alerts", "send_channel_notices.py"), encoding="utf-8").read()
-    earnings_src = open(os.path.join(ROOT, "mechanism", "alerts", "send_earnings_today.py"), encoding="utf-8").read()
-    assert 'return f"{target}:{day.isoformat()}:{slot}"' in notices_src
-    assert 'return f"{target}:{day.isoformat()}"' in earnings_src
-    assert 'datetime.now(tz).astimezone(ZoneInfo("America/New_York")).date()' in earnings_src     # earnings keys by the NY date, not local
-    schedule_src = open(os.path.join(ROOT, "mechanism", "alerts", "schedule.py"), encoding="utf-8").read()
-    assert '{target}:{today_local.isoformat()}:{slot}' in schedule_src
-    assert '{target}:{ny_today.isoformat()}' in schedule_src
+def put_prod(ledger, mid, kind, hours_ago, *, ctype="text", pinned=False, chat=None):
+    ledger.record_sent(target="prod", chat_id=chat or ENV["TELEGRAM_CHAT_ID"], message_id=mid, kind=kind, content_type=ctype, text=f"{kind} {mid}",
+                       reply_markup=None, silent=True, disable_preview=True, sent_at=LIVE_NOW - timedelta(hours=hours_ago))
+    if pinned:
+        ledger.record_pinned(chat_id=chat or ENV["TELEGRAM_CHAT_ID"], message_id=mid)
+    return ledger.rows[-1]["id"]
 
 
-def test_earnings_schedule_status_keys_by_the_ny_date_not_the_owner_local_date(monkeypatch, tmp_path):
-    """Behavioural, not just a source-string check: constructs a `now` where Israel's calendar date and NY's genuinely differ, and proves the
-    lookup uses NY's - a mutant that swapped in the local date would report 'pending'/'overdue' here although the real sender already ran."""
-    tz = ZoneInfo("Asia/Jerusalem")
-    now = datetime(2026, 9, 22, 3, 0, tzinfo=UTC)              # = 06:00 Israel on 22 Sep, but still 21 Sep 23:00 in NY (UTC-4 in September)
-    assert now.astimezone(tz).date().isoformat() == "2026-09-22"
-    assert now.astimezone(cc.sched.NY).date().isoformat() == "2026-09-21"
-    state = tmp_path / "earnings_today_state.json"
-    state.write_text(json.dumps({"dev:2026-09-21": "2026-09-21T11:00:00"}), encoding="utf-8")     # keyed by the NY date
-    monkeypatch.setattr(cc.sched, "EARNINGS_STATE", state)
-    monkeypatch.setattr(cc.sched.mc, "is_trading_day", lambda day: True)
-    rows = {r["key"]: r for r in cc.sched.today_schedule("dev", tz, now)}
-    assert rows["earnings"]["status"] == "done"                                                   # found it under the NY date
-    monkeypatch.setattr(cc.sched, "EARNINGS_STATE", tmp_path / "different_file.json")              # a key under Israel's date would miss
-    rows = {r["key"]: r for r in cc.sched.today_schedule("dev", tz, now)}
-    assert rows["earnings"]["status"] in ("pending", "overdue")
+def test_the_kind_registry_marks_retired_kinds_old_and_everything_else_current():
+    assert ck.format_of("digest_card") == ck.format_of("top_gainers") == ck.format_of("disclaimer") == ck.format_of("earnings_today") == "old"
+    assert ck.format_of("market_report") == ck.format_of("assistant") == ck.format_of("start_here") == ck.format_of("manual") == "current"
+    assert ck.format_of("a_kind_we_have_not_seen_yet") == "current"                      # a new kind is never hidden as 'old'
+    assert not set(ck.OLD_KINDS) & set(ck.CURRENT_KINDS)
+    for kind in ("market_report", "report_card", "top_gainers", "earnings_today"):
+        assert cc.KIND_LABELS[kind] != kind                                              # every kind the channel has posted has a readable label
+
+
+def test_overview_splits_live_posts_into_current_and_old_format_and_labels_every_kind():
+    control, ledger, *_ = make(env=PROD_ON, now=LIVE_NOW)
+    put_prod(ledger, 1, "market_report", 2)
+    put_prod(ledger, 2, "assistant", 5)
+    put_prod(ledger, 3, "digest_card", 60)
+    put_prod(ledger, 4, "top_gainers", 61)
+    ledger.record_deleted(chat_id=ENV["TELEGRAM_CHAT_ID"], message_id=4)               # deleted: not live
+    prod = next(t for t in control.overview()["targets"] if t["target"] == "prod")
+    assert (prod["live"], prod["live_current"], prod["live_old"], prod["deleted"]) == (3, 2, 1, 1)
+    kinds = {k["kind"]: k for k in control.overview()["kinds"]}
+    assert kinds["digest_card"]["format"] == "old" and kinds["market_report"]["format"] == "current"
+    assert kinds["top_gainers"]["live"] == 0 and kinds["top_gainers"]["count"] == 1 and kinds["market_report"]["last_sent_at"]
+    assert kinds["market_report"]["label"] == "Daily market brief"
+
+
+def test_the_format_filter_lists_only_old_or_only_current_posts():
+    control, ledger, *_ = make(env=PROD_ON, now=LIVE_NOW)
+    put_prod(ledger, 1, "market_report", 2)
+    put_prod(ledger, 2, "digest_list", 50)
+    put_prod(ledger, 3, "disclaimer", 70)
+    old = control.list_messages(target="prod", format="old")
+    cur = control.list_messages(target="prod", format="current")
+    assert sorted(i["message_id"] for i in old["items"]) == [2, 3] and all(i["format"] == "old" for i in old["items"])
+    assert [i["message_id"] for i in cur["items"]] == [1] and cur["items"][0]["format"] == "current"
+    assert control.list_messages(target="prod")["total"] == 3
+    assert refused(control.list_messages, target="prod", format="stale").code == "bad_filter"
+
+
+def test_live_status_shows_what_posts_now_what_is_paused_and_flags_a_retired_kind_that_resumed():
+    control, ledger, *_ = make(env=PROD_ON, now=LIVE_NOW)
+    put_prod(ledger, 1, "market_report", 14)
+    put_prod(ledger, 2, "report_card", 14, ctype="photo")
+    put_prod(ledger, 3, "assistant", 40)                                                   # older than its 36 h cadence: 'check'
+    put_prod(ledger, 4, "digest_card", 100)                                                # retired, last posted BEFORE the change: fine
+    put_prod(ledger, 5, "earnings_today", 3)                                               # retired, posted AFTER the change: resumed
+    out = control.live_status("prod")
+    cur = {c["key"]: c for c in out["current"]}
+    assert cur["brief"]["status"] == "posted" and cur["brief"]["live_posts"] == 2
+    assert cur["assistant"]["status"] == "check" and cur["start_here"]["status"] == "never"
+    paused = {p["key"]: p for p in out["paused"]}
+    assert paused["old_format"]["resumed"] is False and paused["old_format"]["live_posts"] == 1
+    assert paused["earnings_post"]["resumed"] is True and paused["midday_notice"]["last_sent_at"] is None
+    assert out["format_changed_on"] == "2026-10-26" and out["old_posts"]["live"] == 2
+    assert refused(control.live_status, "owner").code == "bad_filter"
+
+
+def test_delete_old_removes_only_old_format_posts_a_bot_may_still_delete_and_counts_the_rest():
+    control, ledger, fake, built = make(env=PROD_ON, now=LIVE_NOW)
+    keep = [put_prod(ledger, 1, "market_report", 2), put_prod(ledger, 2, "assistant", 3), put_prod(ledger, 3, "start_here", 90, pinned=True)]
+    old_new = [put_prod(ledger, 10, "digest_card", 5), put_prod(ledger, 11, "top_gainers", 20)]       # < 48 h: removable
+    too_old = put_prod(ledger, 12, "momentum_board", 100)                                              # > 48 h: only by hand
+    pinned_old = put_prod(ledger, 13, "disclaimer", 10, pinned=True)                                   # pinned: never auto-removed
+    dry = control.delete_old("prod", dry_run=True)
+    assert (dry["old_live"], dry["removable_now"], dry["too_old_for_a_bot"], dry["pinned"], dry["deleted"]) == (4, 2, 1, 1, 0)
+    assert fake.calls == [] and built == []                                                            # a dry run touches nothing
+    done = control.delete_old("prod", dry_run=False)
+    assert (done["deleted"], done["failed"], done["remaining"]) == (2, 0, 0)
+    status = {r["id"]: r["status"] for r in ledger.rows}
+    assert all(status[i] == "deleted" for i in old_new) and all(status[i] == "sent" for i in keep + [too_old, pinned_old])
+    assert sorted(c[1] for c in fake.calls if c[0] == "delete") == [10, 11]                                  # exactly those two reached Telegram
+    assert control.delete_old("prod", dry_run=True)["removable_now"] == 0                              # nothing left to remove
+
+
+def test_delete_old_is_refused_for_real_while_production_is_locked():
+    control, ledger, fake, built = make(now=LIVE_NOW)                                                  # PROD_SENDING_ENABLED = 0
+    put_prod(ledger, 10, "digest_card", 5)
+    assert refused(control.delete_old, "prod", dry_run=False).code == "locked"
+    assert control.delete_old("prod", dry_run=True)["removable_now"] == 0                              # locked: nothing is removable
+    assert built == [] and fake.calls == []
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+
+
+def test_fetch_image_returns_a_photos_picture_caches_it_and_refuses_text_deleted_and_wrong_chat_rows(monkeypatch):
+    tm.CACHE = tm.ImageCache()
+    calls = []
+    monkeypatch.setattr(tm, "fetch_photo_via_forward", lambda token, chat, mid, owner, **kw: (calls.append((chat, mid, owner)) or (PNG, "image/png")))
+    control, ledger, *_ = make(env=PROD_ON, now=LIVE_NOW)
+    photo = put_prod(ledger, 1, "report_card", 2, ctype="photo")
+    text = put_prod(ledger, 2, "market_report", 2)
+    gone = put_prod(ledger, 3, "assistant", 2, ctype="photo")
+    ledger.record_deleted(chat_id=ENV["TELEGRAM_CHAT_ID"], message_id=3)
+    stale = put_prod(ledger, 4, "assistant", 2, ctype="photo", chat="-100999")
+    first = control.fetch_image(photo)
+    assert first == {"data": PNG, "mime": "image/png", "cached": False} and calls == [(ENV["TELEGRAM_CHAT_ID"], 1, "4242")]
+    assert control.fetch_image(photo)["cached"] is True and len(calls) == 1                         # second view costs nothing
+    assert refused(control.fetch_image, text).code == "not_photo"
+    assert refused(control.fetch_image, gone).code == "deleted"
+    assert refused(control.fetch_image, stale).code == "wrong_chat"
+    assert refused(control.fetch_image, 99999).code == "not_found"
+
+
+def test_fetch_image_needs_the_owners_chat_id_and_maps_a_vanished_message_to_not_found(monkeypatch):
+    tm.CACHE = tm.ImageCache()
+    control, ledger, *_ = make(env={**PROD_ON, "BOT_OWNER_ID": ""}, now=LIVE_NOW)
+    pid = put_prod(ledger, 1, "report_card", 2, ctype="photo")
+    assert refused(control.fetch_image, pid).code == "not_configured"
+
+    def vanished(*a, **k):
+        raise tm.MediaError("gone", "Telegram no longer has this message")
+    monkeypatch.setattr(tm, "fetch_photo_via_forward", vanished)
+    control, ledger, *_ = make(env=PROD_ON, now=LIVE_NOW)
+    pid = put_prod(ledger, 1, "report_card", 2, ctype="photo")
+    assert refused(control.fetch_image, pid).code == "not_found"
+
+
+class FakeHttp:
+    """Telegram's HTTP API for telegram_media.fetch_photo_via_forward: scripted answers, every call recorded."""
+
+    def __init__(self, forward=None, get_file=None, data=PNG):
+        self.calls, self.forward, self.get_file, self.data = [], forward, get_file, data
+
+    class _R:
+        def __init__(self, body=None, content=b""):
+            self._b, self.content = body, content
+
+        def json(self):
+            return self._b
+
+    def post(self, url, json=None, timeout=None):
+        method = url.rsplit("/", 1)[-1]
+        self.calls.append((method, json))
+        if method == "forwardMessage":
+            return self._R(self.forward if self.forward is not None else {"ok": True, "result": {"message_id": 777, "photo": [{"file_id": "small"}, {"file_id": "big"}]}})
+        if method == "getFile":
+            return self._R(self.get_file if self.get_file is not None else {"ok": True, "result": {"file_path": "photos/p.png"}})
+        return self._R({"ok": True, "result": True})
+
+    def get(self, url, timeout=None):
+        self.calls.append(("download", url))
+        return self._R(content=self.data)
+
+
+def _media(http, **kw):
+    return tm.fetch_photo_via_forward("123:TOKENVALUE", "-100111", 55, "4242", http=http, sleep=lambda s: None, clock=lambda: 1e9, **kw)
+
+
+def test_media_fetch_forwards_silently_downloads_the_largest_size_and_deletes_the_copy():
+    http = FakeHttp()
+    data, mime = _media(http)
+    assert (data, mime) == (PNG, "image/png")
+    methods = [c[0] for c in http.calls]
+    assert methods == ["forwardMessage", "getFile", "download", "deleteMessage"]
+    fwd = http.calls[0][1]
+    assert fwd == {"chat_id": "4242", "from_chat_id": "-100111", "message_id": 55, "disable_notification": True}
+    assert http.calls[1][1] == {"file_id": "big"} and http.calls[3][1] == {"chat_id": "4242", "message_id": 777}
+
+
+def test_media_fetch_deletes_the_copy_even_when_the_download_fails_and_never_leaks_the_token():
+    http = FakeHttp(get_file={"ok": False, "description": "bad request 123:TOKENVALUE"})
+    with pytest.raises(tm.MediaError) as e:
+        _media(http)
+    assert e.value.code == "telegram" and "TOKENVALUE" not in e.value.message
+    assert [c[0] for c in http.calls][-1] == "deleteMessage"
+    http = FakeHttp(forward={"ok": False, "description": "Bad Request: message to forward not found"})
+    with pytest.raises(tm.MediaError) as e:
+        _media(http)
+    assert e.value.code == "gone" and [c[0] for c in http.calls] == ["forwardMessage"]                 # nothing was forwarded: nothing to delete
+    http = FakeHttp(forward={"ok": True, "result": {"message_id": 5, "text": "no photo here"}})
+    with pytest.raises(tm.MediaError) as e:
+        _media(http)
+    assert e.value.code == "no_photo" and [c[0] for c in http.calls][-1] == "deleteMessage"
+    with pytest.raises(tm.MediaError) as e:
+        tm.fetch_photo_via_forward("", "-100111", 55, "4242", http=FakeHttp())
+    assert e.value.code == "not_configured"
+
+
+def test_the_image_cache_is_bounded_and_evicts_the_least_recently_used():
+    cache = tm.ImageCache(max_bytes=100)
+    cache.put("a", (b"x" * 60, "image/png"))
+    cache.put("b", (b"y" * 60, "image/png"))                                                           # over the limit: 'a' goes
+    assert cache.get("a") is None and cache.get("b")[0][:1] == b"y"
+    cache.put("c", (b"z" * 30, "image/png"))
+    assert cache.get("b") and cache.get("c")
+
+
+def test_the_new_endpoints_are_gated_like_the_old_ones():
+    router = _router()
+    deps = {(r.path, tuple(sorted(r.methods))): [d.dependency.__name__ for d in r.dependencies] for r in router.router.routes if hasattr(r, "methods")}
+    assert deps[("/api/telegram/live", ("GET",))] == ["require_read_access"]
+    assert deps[("/api/telegram/messages/{ledger_id}/image", ("GET",))] == ["require_read_access"]
+    assert deps[("/api/telegram/messages/delete-old", ("POST",))] == ["require_control_token"]          # owner + token, like every change
+    assert not any(path.endswith("/schedule") for path, _m in deps)                                    # the stale Windows-era schedule is gone
 
 
 # ================================================================== phase 2: dev == prod (the channel promotion)
@@ -947,7 +1111,7 @@ def test_require_read_access_only_checks_the_token_when_the_toggle_is_on(monkeyp
 # ================================================================== structure: the control layer belongs to the channel side
 def test_control_modules_stay_on_the_channel_side_and_reach_telegram_only_through_from_env():
     import ast
-    for name in ("channel_control.py", "message_ledger.py", "schedule.py"):
+    for name in ("channel_control.py", "message_ledger.py", "channel_kinds.py", "telegram_media.py"):
         src = open(os.path.join(ROOT, "mechanism", "alerts", name), encoding="utf-8").read()
         imported = set()
         for node in ast.walk(ast.parse(src)):

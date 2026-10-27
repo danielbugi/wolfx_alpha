@@ -91,6 +91,11 @@ export default function MessageTable({ data, loading, filtered, trackingSince, o
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-slate-800">{m.kind_label}</span>
                       <TypeLabel type={m.content_type} />
+                      {m.format === 'old' && (
+                        <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600" title="A post type that is no longer posted: the channel now carries the daily market brief">
+                          Old format
+                        </span>
+                      )}
                       {m.pinned && <span className="text-[10px] uppercase tracking-wide text-slate-400">pinned</span>}
                     </div>
                     <p className={`truncate text-xs ${m.status === 'deleted' ? 'text-slate-400 line-through' : 'text-slate-500'}`} title={m.preview}>

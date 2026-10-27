@@ -27,8 +27,9 @@ from zoneinfo import ZoneInfo
 
 from dotenv import dotenv_values
 
-from alerts import schedule as sched
+from alerts import channel_kinds as ck
 from alerts import telegram_client as tc
+from alerts import telegram_media as tm
 from alerts.message_ledger import MAX_PAGE as PAGE_MAX
 from alerts.message_ledger import STATUSES, TARGETS
 
@@ -50,7 +51,9 @@ KIND_LABELS = {
     "near_highs": "Near highs", "aligned": "Longer-timeframe breakouts", "base_rate": "Base rates", "recap": "Weekly recap",
     "news": "News", "market_environment": "Market environment", "scoreboard": "List scoreboard", "promo": "Assistant promotion", "assistant": "Assistant notice",
     "disclaimer": "Disclaimer notice", "start_here": "Start here (pinned)", "alert_header": "Legacy alerts - header",
-    "alert_card": "Legacy alerts - card", "manual": "Manual post", "other": "Other"}
+    "alert_card": "Legacy alerts - card", "manual": "Manual post", "other": "Other",
+    # the one-brief format (2026-10-26) and kinds that had no label
+    "market_report": "Daily market brief", "report_card": "Daily market brief - card", "top_gainers": "Top gainers", "earnings_today": "Who reports today"}
 
 # The project's wording guard (advice-style words are banned in every channel text). Kept identical to the pattern the test-suite enforces on the
 # copy itself (test_channel_control.py asserts they cannot drift) so a hand-edit cannot smuggle in what the generated posts are forbidden to say.
@@ -61,7 +64,7 @@ ADVICE_WORDS = re.compile(r"\b(buy\w*|sell\w*|targets?|stops?|entry|entries|reco
 class ControlError(Exception):
     """A refused action. `code` is stable (the UI branches on it), `http` is the status the API adapter answers with."""
     HTTP = {"not_found": 404, "locked": 423, "wrong_chat": 409, "deleted": 409, "too_old": 409, "not_configured": 409,
-            "bad_filter": 422, "empty": 422, "too_long": 422, "unchanged": 422, "wording": 422, "telegram": 502}
+            "bad_filter": 422, "empty": 422, "too_long": 422, "unchanged": 422, "wording": 422, "telegram": 502, "not_photo": 422}
 
     def __init__(self, code: str, message: str, warnings: Optional[List[str]] = None):
         super().__init__(message)
@@ -230,8 +233,11 @@ class ChannelControl:
             c = self.ledger.counts(t, since)
             first_seen += [c["first_sent"]] if c["first_sent"] else []
             state = self.target_state(t)
+            by_kind = self.ledger.kinds(t)
+            live_old = sum(int(k.get("live", 0)) for k in by_kind if ck.format_of(k["kind"]) == "old")
             targets.append({**state, "sent_today": c["since_count"], "recorded": c["total"], "live": c["live"], "edited": c["edited"],
-                            "deleted": c["deleted"], "last_sent_at": _iso(c["last_sent"])})
+                            "deleted": c["deleted"], "last_sent_at": _iso(c["last_sent"]),
+                            "live_current": c["live"] - live_old, "live_old": live_old})
             if not state["configured"]:
                 warnings.append(f"{state['label']} is not configured in .env.")
         if not _is_set(self._env.get("TELEGRAM_BOT_TOKEN")):
@@ -244,7 +250,9 @@ class ChannelControl:
                             "audience too, and the dev channel is no longer a safe place to test.")
         return {"generated_at": _iso(now), "timezone": self.tz.key, "tracking_since": _iso(min(first_seen)) if first_seen else None,
                 "controls_enabled": self.controls_enabled(), "targets": targets, "config": self.config_items(),
-                "kinds": [{**k, "label": KIND_LABELS.get(k["kind"], k["kind"])} for k in self.ledger.kinds()], "warnings": warnings}
+                "kinds": [{"kind": k["kind"], "count": k["count"], "live": k.get("live", 0), "last_sent_at": _iso(k.get("last_sent")),
+                           "format": ck.format_of(k["kind"]), "label": KIND_LABELS.get(k["kind"], k["kind"])} for k in self.ledger.kinds()],
+                "warnings": warnings}
 
     # ------------------------------------------------------------------ rules
     def can_edit(self, row: Dict[str, Any]) -> Decision:
@@ -286,6 +294,7 @@ class ChannelControl:
         out = {
             "id": row["id"], "target": row["target"], "message_id": row["message_id"], "kind": row["kind"],
             "kind_label": KIND_LABELS.get(row["kind"], row["kind"]), "content_type": row["content_type"], "status": row["status"],
+            "format": ck.format_of(row["kind"]), "has_image": row["content_type"] == "photo",
             "preview": preview_line(row["text"]), "text_length": tc.text_length(row["text"]), "silent": row["silent"], "pinned": row["pinned"],
             "edit_count": row["edit_count"], "sent_at": _iso(row["sent_at"]), "edited_at": _iso(row["edited_at"]), "deleted_at": _iso(row["deleted_at"]),
             "deletable_until": _iso(row["sent_at"] + DELETE_WINDOW) if row["status"] == "sent" else None,
@@ -297,9 +306,12 @@ class ChannelControl:
                        limit=tc.CAPTION_MAX if row["content_type"] == "photo" else tc.TEXT_MAX)
         return out
 
-    def list_messages(self, *, target=None, kind=None, status=None, day: Optional[str] = None, q=None, limit=50, offset=0) -> Dict[str, Any]:
+    def list_messages(self, *, target=None, kind=None, status=None, day: Optional[str] = None, q=None, limit=50, offset=0,
+                      format: Optional[str] = None) -> Dict[str, Any]:
         if target and target not in TARGETS:
             raise ControlError("bad_filter", f"unknown target {target!r}: use dev or prod")
+        if format and format not in ("current", "old"):
+            raise ControlError("bad_filter", f"unknown format {format!r}: use current or old")
         if status and status not in STATUSES:
             raise ControlError("bad_filter", f"unknown status {status!r}: use sent, edited or deleted")
         since = until = None
@@ -310,7 +322,8 @@ class ChannelControl:
                 raise ControlError("bad_filter", f"the day must be YYYY-MM-DD, got {day!r}") from None
             since, until = local.astimezone(timezone.utc), (local + timedelta(days=1)).astimezone(timezone.utc)
         rows, total = self.ledger.list(target=target, kind=kind or None, status=status or None, since=since, until=until,
-                                       q=(q or "").strip() or None, limit=limit, offset=offset)
+                                       q=(q or "").strip() or None, limit=limit, offset=offset,
+                                       kinds_in=ck.OLD_KINDS if format == "old" else None, kinds_not_in=ck.OLD_KINDS if format == "current" else None)
         return {"total": total, "limit": max(1, min(int(limit), PAGE_MAX)), "offset": max(0, int(offset)), "timezone": self.tz.key,
                 "items": [self._public(r) for r in rows]}
 
@@ -514,11 +527,86 @@ class ChannelControl:
             return {"result": "sent", "target": target, "message_id": message_id, "message": None}
         return {"result": "sent", "target": target, "message_id": message_id, "message": self._public(row, detail=True)}
 
-    # ------------------------------------------------------------------ today's schedule (read-only; see schedule.py)
-    def schedule(self, target: str) -> Dict[str, Any]:
+    # ------------------------------------------------------------------ what is live now (read-only)
+    def live_status(self, target: str) -> Dict[str, Any]:
+        """What the channel posts NOW, what is switched off, and which old-format posts are still sitting in the channel. Built from the kind
+        registry (channel_kinds.py: what we intend) next to the ledger's own last-posted times (what actually happened), so a retired kind that
+        starts posting again is flagged `resumed` instead of being trusted."""
         if target not in TARGETS:
             raise ControlError("bad_filter", f"unknown target {target!r}: use dev or prod")
-        return {"target": target, "timezone": self.tz.key, "jobs": sched.today_schedule(target, self.tz, self._now())}
+        now = self._now()
+        by_kind = {k["kind"]: k for k in self.ledger.kinds(target)}
+        current = []
+        for p in ck.CURRENT_POSTS:
+            last = ck.last_sent_for(p["kinds"], by_kind)
+            current.append({"key": p["key"], "label": p["label"], "cadence": p["cadence"], "last_sent_at": _iso(last),
+                            "status": ck.current_status(last, p["max_quiet_hours"], now), "live_posts": ck.live_count_for(p["kinds"], by_kind)})
+        paused = []
+        for p in ck.PAUSED_POSTS:
+            last = ck.last_sent_for(p["kinds"], by_kind)
+            paused.append({"key": p["key"], "label": p["label"], "reason": p["reason"], "restore": p["restore"], "last_sent_at": _iso(last),
+                           "live_posts": ck.live_count_for(p["kinds"], by_kind), "resumed": bool(last and last > ck.FORMAT_CHANGED_AT)})
+        old = self._old_live_rows(target)
+        return {"target": target, "as_of": _iso(now), "timezone": "UTC", "format_changed_on": ck.FORMAT_CHANGED_ON, "current": current, "paused": paused,
+                "old_posts": {"live": old["live"], "removable_now": len(old["removable"]), "too_old_for_a_bot": old["too_old"], "pinned": old["pinned"],
+                              "by_kind": [{"kind": k, "label": KIND_LABELS.get(k, k), "live": n} for k, n in sorted(old["by_kind"].items(), key=lambda kv: -kv[1])]}}
+
+    def _old_live_rows(self, target: str) -> Dict[str, Any]:
+        """Old-format posts still in the channel (not deleted): how many, which a bot can still remove (<48 h, not pinned, channel unlocked)."""
+        rows, total = self.ledger.list(target=target, status="sent", kinds_in=ck.OLD_KINDS, limit=PAGE_MAX)
+        removable, pinned, by_kind = [], 0, {}
+        for r in rows:
+            by_kind[r["kind"]] = by_kind.get(r["kind"], 0) + 1
+            if r["pinned"]:
+                pinned += 1
+            elif self.can_delete(r).ok:
+                removable.append(r)
+        return {"live": total, "removable": removable, "pinned": pinned, "too_old": max(0, total - len(removable) - pinned), "by_kind": by_kind}
+
+    def delete_old(self, target: str, dry_run: bool = True, limit: int = 30) -> Dict[str, Any]:
+        """Remove old-format posts a bot may still delete (younger than 48 h, not pinned). `dry_run` only counts. Posts older than 48 h cannot be
+        deleted by a bot at all (Telegram's rule): they are counted so the owner knows to remove them by hand in the Telegram app."""
+        if target not in TARGETS:
+            raise ControlError("bad_filter", f"unknown target {target!r}: use dev or prod")
+        if not dry_run:
+            self._check_target_postable(target)
+        old = self._old_live_rows(target)
+        batch = old["removable"][: max(1, min(int(limit), 40))]
+        out = {"target": target, "dry_run": bool(dry_run), "old_live": old["live"], "removable_now": len(old["removable"]),
+               "too_old_for_a_bot": old["too_old"], "pinned": old["pinned"], "deleted": 0, "failed": 0, "remaining": len(old["removable"])}
+        if dry_run:
+            return out
+        for r in batch:
+            try:
+                self.delete(r["id"])
+                out["deleted"] += 1
+            except ControlError:
+                out["failed"] += 1
+        out["remaining"] = max(0, len(old["removable"]) - out["deleted"])
+        return out
+
+    # ------------------------------------------------------------------ the picture of a photo message
+    def fetch_image(self, ledger_id: int) -> Dict[str, Any]:
+        """The picture of a photo message that is still in the channel, as {"data", "mime"}. Cached; see telegram_media.py for how it is fetched."""
+        row = self._row(ledger_id)
+        if row["content_type"] != "photo":
+            raise ControlError("not_photo", "This is a text message; it has no picture.")
+        if row["status"] == "deleted":
+            raise ControlError("deleted", "This message was deleted from the channel, so its picture is gone.")
+        chat = self._chat_id(row["target"])
+        if chat is None or chat != row["chat_id"]:
+            raise ControlError("wrong_chat", "This message belongs to a channel that is no longer the configured one.")
+        key = (row["id"], row.get("edit_count", 0), str(row.get("edited_at")))
+        hit = tm.CACHE.get(key)
+        if hit:
+            return {"data": hit[0], "mime": hit[1], "cached": True}
+        token, owner = self._env.get("TELEGRAM_BOT_TOKEN"), (self._env.get("BOT_OWNER_ID") or "").strip()
+        try:
+            data, mime = tm.fetch_photo_via_forward(token if _is_set(token) else "", chat, row["message_id"], owner)
+        except tm.MediaError as e:
+            raise ControlError({"gone": "not_found", "no_photo": "not_photo", "not_configured": "not_configured"}.get(e.code, "telegram"), e.message) from e
+        tm.CACHE.put(key, (data, mime))
+        return {"data": data, "mime": mime, "cached": False}
 
     def _client(self, action: str, row: Dict[str, Any]):
         """The Telegram client for a row's channel. Building it can fail (missing / placeholder token or chat id, the production lock): that is a

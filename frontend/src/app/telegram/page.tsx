@@ -12,13 +12,13 @@ import ErrorAlert from '@/components/common/ErrorAlert';
 import OverviewTiles from '@/components/telegram/OverviewTiles';
 import ConfigPanel from '@/components/telegram/ConfigPanel';
 import ControlTokenBar from '@/components/telegram/ControlTokenBar';
-import MessageFilters, { NO_FILTERS } from '@/components/telegram/MessageFilters';
+import MessageFilters, { DEFAULT_FILTERS, NO_FILTERS } from '@/components/telegram/MessageFilters';
 import type { FilterState } from '@/components/telegram/MessageFilters';
 import MessageTable from '@/components/telegram/MessageTable';
 import type { RowMode } from '@/components/telegram/MessageTable';
 import MessageModal from '@/components/telegram/MessageModal';
 import ComposeModal from '@/components/telegram/ComposeModal';
-import ScheduleView from '@/components/telegram/ScheduleView';
+import LiveNowPanel from '@/components/telegram/LiveNowPanel';
 import AccessPanel from '@/components/telegram/AccessPanel';
 import { SideTabs } from '@/components/telegram/SideTabs';
 import type { SideTab } from '@/components/telegram/SideTabs';
@@ -47,6 +47,7 @@ function toApiFilters(f: FilterState, offset: number): ApiFilters {
     target: f.target || undefined,
     kind: f.kind || undefined,
     status: f.status || undefined,
+    format: f.format || undefined,
     day: f.day || undefined,
     q: f.q || undefined,
     limit: PAGE_SIZE,
@@ -69,7 +70,8 @@ export default function TelegramControlPage() {
   const [overviewError, setOverviewError] = useState<ControlErrorInfo | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(true);
 
-  const [filters, setFilters] = useState<FilterState>(NO_FILTERS);
+  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
+  const [reloadKey, setReloadKey] = useState(0);        // bumped by Refresh so the "What's live now" panel reloads too
   const [offset, setOffset] = useState(0);
   const [list, setList] = useState<MessageList | null>(null);
   const [listError, setListError] = useState<ControlErrorInfo | null>(null);
@@ -124,6 +126,7 @@ export default function TelegramControlPage() {
   const refreshAll = useCallback(() => {
     loadOverview();
     loadList();
+    setReloadKey((n) => n + 1);
   }, [loadOverview, loadList]);
 
   const handleRefresh = useCallback(() => {
@@ -140,7 +143,7 @@ export default function TelegramControlPage() {
 
   const closeModal = useCallback(() => setOpen(null), []);
   const timezone = overview?.timezone ?? list?.timezone ?? 'UTC';
-  const filtered = Object.values(filters).some((v) => v !== '');
+  const filtered = (Object.keys(NO_FILTERS) as (keyof FilterState)[]).some((k) => k !== 'format' && filters[k] !== '') || filters.format === 'old';
   const everythingFailed = overviewError !== null && listError !== null && overview === null && list === null;
   const copy = TAB_COPY[tab];
 
@@ -211,7 +214,21 @@ export default function TelegramControlPage() {
 
                 {overview && <OverviewTiles targets={overview.targets} timezone={timezone} />}
 
-                {overview && <ScheduleView targets={overview.targets.map((t) => t.target)} />}
+                {overview && (
+                  <LiveNowPanel
+                    target="prod"
+                    timezone={timezone}
+                    isOwner={isOwner}
+                    token={token}
+                    controlsEnabled={overview.controls_enabled}
+                    reloadKey={reloadKey}
+                    onChanged={() => {
+                      loadOverview();
+                      loadList();
+                    }}
+                    onBadToken={clearToken}
+                  />
+                )}
 
                 {overview && (
                   <p className="flex items-start gap-2 text-xs text-slate-500">
@@ -260,7 +277,8 @@ export default function TelegramControlPage() {
         initialMode={open?.mode ?? 'view'}
         timezone={timezone}
         token={token}
-        controlsEnabled={isOwner && (overview?.controls_enabled ?? false)}
+        controlsEnabled={overview?.controls_enabled ?? false}
+        isOwner={isOwner}
         onClose={closeModal}
         onChanged={refreshAll}
         onBadToken={clearToken}
