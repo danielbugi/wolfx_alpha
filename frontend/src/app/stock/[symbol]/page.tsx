@@ -41,6 +41,8 @@ import { positionPct } from '@/lib/priceMath';
 import { gradeColor } from '@/lib/uiColors';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import DataStamp from '@/components/common/DataStamp';
+import LatestReportCard from '@/components/stock/LatestReportCard';
+import OwnerOrderTicket from '@/components/stock/OwnerOrderTicket';
 import SearchBox from '@/components/layout/SearchBox';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 
@@ -650,6 +652,16 @@ export default function StockDetailPage() {
             </div>
           )}
         </Card>
+
+        {/* The latest report with results and the price action since: on the page, not in a tab. */}
+        {earnings.some((e) => e.eps_actual != null) && (
+          <Section>
+            <LatestReportCard earnings={earnings} bars={bars} latestStatementQuarter={detail.quarterly_financials[0]?.quarter ?? null} />
+          </Section>
+        )}
+
+        {/* Owner accounts only (renders nothing for anyone else). */}
+        <OwnerOrderTicket detail={detail} />
 
         {/* Stock context: the Screener's metrics for this stock (same session and provenance), explained */}
         <StockContextPanel symbol={detail.symbol} chartDate={bars.length ? bars[bars.length - 1].date : null} state={context} showStrength={false} />

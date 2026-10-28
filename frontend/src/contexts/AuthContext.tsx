@@ -124,3 +124,8 @@ export function useAuth(): AuthContextValue {
   if (!ctx) throw new Error('useAuth must be used inside an AuthProvider');
   return ctx;
 }
+
+/** Like useAuth, but null instead of throwing when there is no AuthProvider (a component that only adds owner-only extras). */
+export function useOptionalAuth(): AuthContextValue | null {
+  return useContext(AuthContext);
+}
