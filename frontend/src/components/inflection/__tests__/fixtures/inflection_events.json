@@ -1,0 +1,306 @@
+{
+ "method_version": "inflection_v1",
+ "notice": "Research signals, not recommendations. Rule-based and explainable; whether inflections predict returns is tested separately in the Quant Lab and is not established. Statements come from the stored quarterly fundamentals; the date each was public is the earnings report date when known, otherwise an assumed lag (shown).",
+ "total": 1235,
+ "count": 6,
+ "offset": 0,
+ "events": [
+  {
+   "id": 923,
+   "symbol": "OSIS",
+   "company_name": null,
+   "sector": "Technology",
+   "event_type": "fcf_turnaround",
+   "label": "Free cash flow turnaround",
+   "strength": 100.0,
+   "severity": "high",
+   "score": 20.0,
+   "fiscal_year": 2026,
+   "fiscal_quarter": 2,
+   "quarter_end": "2026-06-30",
+   "available_at": "2026-10-29",
+   "freshness_days": 1,
+   "availability_basis": "earnings_calendar",
+   "source": "quarterly_fundamentals",
+   "data_quality": "ok",
+   "revision_count": 0,
+   "method_version": "inflection_v1",
+   "explanation": [
+    "Free cash flow turned positive: $168.5M this quarter versus -$9.7M a year earlier (margin +36.7 percentage points)."
+   ],
+   "key_metrics": [
+    {
+     "label": "Free cash flow",
+     "current": 168535000.0,
+     "previous": -9705000.0,
+     "unit": "money"
+    },
+    {
+     "label": "FCF margin",
+     "current": 0.34817108693586307,
+     "previous": null,
+     "unit": "pct"
+    }
+   ],
+   "reaction_2d": -0.0061294662879353146,
+   "excess_vs_sector_since_publication": null,
+   "market_cap": 3136823552.0,
+   "valuation": {
+    "ps_ratio": 1.76,
+    "pe_ratio": 22.28,
+    "ps_percentile_own_history": 0.6551724137931034,
+    "ps_vs_sector_median": 0.45012787723785164,
+    "ps_ratio_at_publication": 1.83,
+    "snapshot_date": "2026-10-30"
+   }
+  },
+  {
+   "id": 1063,
+   "symbol": "ROST",
+   "company_name": null,
+   "sector": "Consumer Cyclical",
+   "event_type": "operating_leverage_inflection",
+   "label": "Operating leverage inflection",
+   "strength": 100.0,
+   "severity": "high",
+   "score": 34.4,
+   "fiscal_year": 2026,
+   "fiscal_quarter": 3,
+   "quarter_end": "2026-07-31",
+   "available_at": "2026-10-14",
+   "freshness_days": 16,
+   "availability_basis": "assumed_lag_75d",
+   "source": "quarterly_fundamentals",
+   "data_quality": "ok",
+   "revision_count": 0,
+   "method_version": "inflection_v1",
+   "explanation": [
+    "Operating income grew 5.5 times as fast as revenue (revenue +13.3% year over year).",
+    "Costs are growing more slowly than sales."
+   ],
+   "key_metrics": [
+    {
+     "label": "Operating leverage (x)",
+     "current": 5.479042480196766,
+     "previous": null,
+     "unit": "ratio"
+    },
+    {
+     "label": "Revenue growth YoY",
+     "current": 0.13306452779739097,
+     "previous": null,
+     "unit": "pct"
+    }
+   ],
+   "reaction_2d": 0.04054413328606876,
+   "excess_vs_sector_since_publication": -0.06893911906213634,
+   "market_cap": 72924758016.0,
+   "valuation": {
+    "ps_ratio": 2.98,
+    "pe_ratio": 27.6,
+    "ps_percentile_own_history": 0.4857142857142857,
+    "ps_vs_sector_median": 3.0253807106598987,
+    "ps_ratio_at_publication": 3.0,
+    "snapshot_date": "2026-10-30"
+   }
+  },
+  {
+   "id": 246,
+   "symbol": "CHRN",
+   "company_name": null,
+   "sector": "Technology",
+   "event_type": "fcf_turnaround",
+   "label": "Free cash flow turnaround",
+   "strength": 100.0,
+   "severity": "high",
+   "score": 15.0,
+   "fiscal_year": 2026,
+   "fiscal_quarter": 3,
+   "quarter_end": "2026-08-31",
+   "available_at": "2026-10-14",
+   "freshness_days": 16,
+   "availability_basis": "earnings_calendar",
+   "source": "quarterly_fundamentals",
+   "data_quality": "ok",
+   "revision_count": 0,
+   "method_version": "inflection_v1",
+   "explanation": [
+    "Free cash flow turned positive: $11.6M this quarter versus -$882K a year earlier (margin +33.1 percentage points)."
+   ],
+   "key_metrics": [
+    {
+     "label": "Free cash flow",
+     "current": 11562000.0,
+     "previous": -882000.0,
+     "unit": "money"
+    },
+    {
+     "label": "FCF margin",
+     "current": 0.2787233016730148,
+     "previous": null,
+     "unit": "pct"
+    }
+   ],
+   "reaction_2d": -0.01594114040465955,
+   "excess_vs_sector_since_publication": -0.06946127554022719,
+   "market_cap": 2088189312.0,
+   "valuation": {
+    "ps_ratio": 21.67,
+    "pe_ratio": null,
+    "ps_percentile_own_history": 0.034482758620689655,
+    "ps_vs_sector_median": 5.542199488491049,
+    "ps_ratio_at_publication": 30.18,
+    "snapshot_date": "2026-10-30"
+   }
+  },
+  {
+   "id": 1045,
+   "symbol": "REX",
+   "company_name": null,
+   "sector": "Basic Materials",
+   "event_type": "margin_expansion",
+   "label": "Margin expansion",
+   "strength": 100.0,
+   "severity": "high",
+   "score": 39.1,
+   "fiscal_year": 2026,
+   "fiscal_quarter": 3,
+   "quarter_end": "2026-07-31",
+   "available_at": "2026-10-14",
+   "freshness_days": 16,
+   "availability_basis": "assumed_lag_75d",
+   "source": "quarterly_fundamentals",
+   "data_quality": "ok",
+   "revision_count": 0,
+   "method_version": "inflection_v1",
+   "explanation": [
+    "Operating margin rose to 22.4% from 5.1% a year earlier (+1724 basis points).",
+    "Operating income $37.7M on revenue $168.5M."
+   ],
+   "key_metrics": [
+    {
+     "label": "Operating margin",
+     "current": 0.2236175983572018,
+     "previous": 0.051197315893367304,
+     "unit": "pct"
+    },
+    {
+     "label": "Change (bps)",
+     "current": 1724.202824638345,
+     "previous": null,
+     "unit": "bps"
+    }
+   ],
+   "reaction_2d": -0.021057557323350462,
+   "excess_vs_sector_since_publication": -0.056769686106350026,
+   "market_cap": 1301812224.0,
+   "valuation": {
+    "ps_ratio": 1.98,
+    "pe_ratio": 10.75,
+    "ps_percentile_own_history": 0.13793103448275862,
+    "ps_vs_sector_median": 1.2260061919504641,
+    "ps_ratio_at_publication": 2.1,
+    "snapshot_date": "2026-10-30"
+   }
+  },
+  {
+   "id": 17,
+   "symbol": "ADI",
+   "company_name": null,
+   "sector": "Technology",
+   "event_type": "margin_expansion",
+   "label": "Margin expansion",
+   "strength": 100.0,
+   "severity": "high",
+   "score": 33.4,
+   "fiscal_year": 2026,
+   "fiscal_quarter": 3,
+   "quarter_end": "2026-07-31",
+   "available_at": "2026-10-13",
+   "freshness_days": 17,
+   "availability_basis": "first_seen",
+   "source": "quarterly_fundamentals",
+   "data_quality": "ok",
+   "revision_count": 0,
+   "method_version": "inflection_v1",
+   "explanation": [
+    "Operating margin rose to 39.5% from 28.6% a year earlier (+1095 basis points).",
+    "Operating income $1.59B on revenue $4.02B."
+   ],
+   "key_metrics": [
+    {
+     "label": "Operating margin",
+     "current": 0.3950255836857166,
+     "previous": 0.28551272276822104,
+     "unit": "pct"
+    },
+    {
+     "label": "Change (bps)",
+     "current": 1095.1286091749557,
+     "previous": null,
+     "unit": "bps"
+    }
+   ],
+   "reaction_2d": -0.0065846964270329655,
+   "excess_vs_sector_since_publication": 0.05169214170491121,
+   "market_cap": 202117103616.0,
+   "valuation": {
+    "ps_ratio": 14.56,
+    "pe_ratio": 49.54,
+    "ps_percentile_own_history": 0.8571428571428571,
+    "ps_vs_sector_median": 3.7237851662404093,
+    "ps_ratio_at_publication": 14.48,
+    "snapshot_date": "2026-10-30"
+   }
+  },
+  {
+   "id": 474,
+   "symbol": "FPS",
+   "company_name": null,
+   "sector": "Industrials",
+   "event_type": "fcf_turnaround",
+   "label": "Free cash flow turnaround",
+   "strength": 100.0,
+   "severity": "high",
+   "score": 60.0,
+   "fiscal_year": 2026,
+   "fiscal_quarter": 2,
+   "quarter_end": "2026-06-30",
+   "available_at": "2026-09-15",
+   "freshness_days": 45,
+   "availability_basis": "earnings_calendar",
+   "source": "quarterly_fundamentals",
+   "data_quality": "ok",
+   "revision_count": 0,
+   "method_version": "inflection_v1",
+   "explanation": [
+    "Free cash flow turned positive: $42.6M this quarter versus -$48.2M a year earlier (margin +29.5 percentage points)."
+   ],
+   "key_metrics": [
+    {
+     "label": "Free cash flow",
+     "current": 42600000.0,
+     "previous": -48236000.0,
+     "unit": "money"
+    },
+    {
+     "label": "FCF margin",
+     "current": 0.09227330225788005,
+     "previous": null,
+     "unit": "pct"
+    }
+   ],
+   "reaction_2d": 0.21648044692737445,
+   "excess_vs_sector_since_publication": -0.27874935482141383,
+   "market_cap": 8232997376.0,
+   "valuation": {
+    "ps_ratio": 5.8,
+    "pe_ratio": 86.03,
+    "ps_percentile_own_history": 0.13793103448275862,
+    "ps_vs_sector_median": 2.9896907216494846,
+    "ps_ratio_at_publication": null,
+    "snapshot_date": "2026-10-30"
+   }
+  }
+ ]
+}

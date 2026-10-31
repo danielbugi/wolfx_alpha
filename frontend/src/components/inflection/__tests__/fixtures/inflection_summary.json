@@ -1,0 +1,67 @@
+{
+ "method_version": "inflection_v1",
+ "notice": "Research signals, not recommendations. Rule-based and explainable; whether inflections predict returns is tested separately in the Quant Lab and is not established. Statements come from the stored quarterly fundamentals; the date each was public is the earnings report date when known, otherwise an assumed lag (shown).",
+ "window_days": 120,
+ "available": true,
+ "features": 15896,
+ "events": 1319,
+ "newest_event": "2026-10-29",
+ "by_type": [
+  {
+   "event_type": "fcf_turnaround",
+   "label": "Free cash flow turnaround",
+   "high": 137,
+   "medium": 31,
+   "low": 5,
+   "total": 173
+  },
+  {
+   "event_type": "improvement_with_limited_repricing",
+   "label": "Fundamental improvement with limited price repricing",
+   "high": 12,
+   "medium": 62,
+   "low": 0,
+   "total": 74
+  },
+  {
+   "event_type": "margin_expansion",
+   "label": "Margin expansion",
+   "high": 237,
+   "medium": 139,
+   "low": 58,
+   "total": 434
+  },
+  {
+   "event_type": "operating_leverage_inflection",
+   "label": "Operating leverage inflection",
+   "high": 178,
+   "medium": 89,
+   "low": 36,
+   "total": 303
+  },
+  {
+   "event_type": "profitability_turnaround",
+   "label": "Profitability turnaround",
+   "high": 152,
+   "medium": 21,
+   "low": 10,
+   "total": 183
+  },
+  {
+   "event_type": "revenue_acceleration",
+   "label": "Revenue acceleration",
+   "high": 10,
+   "medium": 4,
+   "low": 4,
+   "total": 18
+  }
+ ],
+ "last_run": {
+  "status": "ok",
+  "finished_at": "2026-10-31T12:34:03.510415+02:00",
+  "asof": "2026-10-30",
+  "symbols_processed": 3001,
+  "events_new": 0,
+  "errors": 0
+ }
+}

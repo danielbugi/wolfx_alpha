@@ -43,6 +43,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner';
 import DataStamp from '@/components/common/DataStamp';
 import LatestReportCard from '@/components/stock/LatestReportCard';
 import OwnerOrderTicket from '@/components/stock/OwnerOrderTicket';
+import OwnerInflection from '@/components/inflection/OwnerInflection';
 import SearchBox from '@/components/layout/SearchBox';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 
@@ -662,6 +663,9 @@ export default function StockDetailPage() {
 
         {/* Owner accounts only (renders nothing for anyone else). */}
         <OwnerOrderTicket detail={detail} price={snap.current_price ?? null} atr={timeframes.daily.atr ?? null} />
+
+        {/* Owner accounts only (renders nothing for anyone else): how the business is changing next to the price. */}
+        <OwnerInflection symbol={detail.symbol} />
 
         {/* Stock context: the Screener's metrics for this stock (same session and provenance), explained */}
         <StockContextPanel symbol={detail.symbol} chartDate={bars.length ? bars[bars.length - 1].date : null} state={context} showStrength={false} />
