@@ -43,7 +43,7 @@ earnings or fundamentals beyond 30 symbols. This is a coverage fact, not a wirin
    result is captured, and logs `EARNINGS_FRESHNESS` counts. The page shows what the database holds with its date, never a guess.
 3. **Quarterly statements: SEC EDGAR is the right primary for US filers** (official, free, available the day the 10-Q is filed,
    no scraping risk), with yfinance as the fallback. The repo already contains the pure XBRL parser
-   (`mechanism/market_intelligence/sec_financials.py`) and a rate-limited, circuit-broken transport (`sec_transport.py`).
+   (`mechanism/market_intelligence/sec_financials.py`) and a rate-limited, circuit-broken transport for the research feed.
    **Blocked on one input: SEC requires a declared User-Agent with a real operator contact, and none is configured**
    (`SEC_USER_AGENT` is absent on the server; the research code deliberately never invents one or uses a personal address).
 4. **Consensus estimates and surprise history:** no free source exists. yfinance is the only supply we have; a paid estimates
@@ -60,3 +60,19 @@ earnings or fundamentals beyond 30 symbols. This is a coverage fact, not a wirin
 * A provider call has a timeout, a rate limit and a failure that leaves the previous data in place.
 * Each nightly updater logs a one-line freshness summary (`EARNINGS_FRESHNESS ...` is the first); stale or incomplete runs are
   visible without reading the whole log.
+
+## 5. SEC EDGAR fundamentals pipeline (built 2026-10-31; not yet running in production)
+
+`mechanism/data_updaters/sec_fundamentals_updater.py` + `sec_statements.py`, tables in migration 38.
+
+* **What it stores:** revenue, gross profit, operating income, net income, diluted EPS, operating cash flow, capex (and free cash flow = OCF − capex),
+  total assets / liabilities / equity, cash. Each quarter says how it was obtained (`reported`, `ytd_difference` for cash flow, `annual_less_quarters` for Q4,
+  `instant`, `computed`), which filing it came from, when that filing was filed and accepted, and how many times it has been restated.
+* **Point in time:** `sec_fact` keeps every value from every filing; `normalize(facts, asof=D)` rebuilds exactly what was public on D. EPS is never derived.
+* **Incremental:** per company one small `submissions` request; the large `companyfacts` document only when a periodic filing we have not ingested exists.
+  Who is checked: never checked; an earnings report (from `earnings_calendar`) newer than the newest filing on file, at most every 12 hours; everyone weekly (amendments).
+* **Safe:** ≤ 5 requests/s, backoff, circuit breaker (`data_updaters/sec_client.py`, its own copy of the research feed's rules: the research package is isolated from the pipeline by guard tests); upserts keyed on the filing (a second run changes nothing).
+* **Needs an owner-supplied `SEC_USER_AGENT`** (operator name + real contact email, e.g. `First Light Research ops@yourdomain.tld`). Without it the run skips with a clear line.
+* **Before anything is displayed from it:** `--reconcile` compares SEC quarters with `quarterly_fundamentals` (0.5% on amounts, 2 cents on EPS) and lists the quarters
+  SEC has that yfinance does not yet. The API/UI then shows the source of each quarter; nothing is silently substituted.
+* **Scope limits:** US-GAAP 10-Q/10-K filers. Foreign private issuers (20-F/40-F, IFRS) and companies without XBRL are recorded as `no_xbrl` / `not_found`, never filled.
