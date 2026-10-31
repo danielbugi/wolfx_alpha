@@ -83,3 +83,12 @@ CREATE TABLE IF NOT EXISTS sec_fundamentals_state (
     facts_fetched_at          TIMESTAMPTZ,
     last_error                TEXT
 );
+
+-- donchian_app is the role the pipeline (the SEC updater WRITES these tables) and the API (reads) run as. Tables created by a manual apply do not inherit the default privileges the older
+-- tables have (found with migration 40 in production, 2026-10-31), so the grant is explicit. No DELETE: the updater upserts, nothing deletes. No sequences in these tables.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'donchian_app') THEN
+        GRANT SELECT, INSERT, UPDATE ON sec_symbol_cik, sec_filing, sec_fact, sec_quarter, sec_fundamentals_state TO donchian_app;
+    END IF;
+END $$;

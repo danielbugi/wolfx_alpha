@@ -260,6 +260,10 @@ run_optional_step "8b" "fundamental inflection updater" 900 mechanism/inflection
 # Nothing is sent unless INFLECTION_ALERTS_ENABLED=1 (otherwise it logs what it WOULD send); every alert is claimed exactly once in inflection_alert_delivery.
 run_optional_step "8c" "inflection owner alerts" 300 mechanism/inflection/alerts.py --send --telegram --daily-digest --weekly-on-friday
 
+# Step 8d: SEC EDGAR fundamentals (OPTIONAL; migration 38). Point-in-time filings into the sec_* tables only; no later step reads them yet. Without SEC_USER_AGENT (the SEC requires a declared
+# operator and contact) the updater logs a clear line and exits 0 without a single request. --max-seconds keeps it inside its hard limit; unreached companies stay due for the next night.
+run_optional_step "8d" "SEC EDGAR fundamentals updater" 1800 mechanism/data_updaters/sec_fundamentals_updater.py --max-seconds 1500
+
 # Step 9: Multi-timeframe Screening
 run_step 9 "multi-timeframe screener" mechanism/screeners/multi_timeframe_screener.py "${SESSION_ARGS[@]}"
 
