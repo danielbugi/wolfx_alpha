@@ -91,6 +91,7 @@ services:
       - ./mechanism/add_catalyst_ingest_tables.sql:/docker-entrypoint-initdb.d/37_add_catalyst_ingest_tables.sql:ro
       - ./mechanism/add_sec_fundamentals_tables.sql:/docker-entrypoint-initdb.d/38_add_sec_fundamentals_tables.sql:ro
       - ./mechanism/add_research_strategy_ledger.sql:/docker-entrypoint-initdb.d/39_add_research_strategy_ledger.sql:ro
+      - ./mechanism/add_fundamental_inflection_tables.sql:/docker-entrypoint-initdb.d/40_add_fundamental_inflection_tables.sql:ro
     networks: [app_net]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_BOOTSTRAP_USER:-${DB_USER:-trading_user}} -d ${DB_NAME:-donchian_docker_dev}"]

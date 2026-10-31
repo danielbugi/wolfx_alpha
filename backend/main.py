@@ -447,6 +447,18 @@ except ImportError as e:
 except Exception as e:
     logger.error(f"❌ Error including momentum board router: {e}")
 
+# Import and include the Fundamental Inflection router (read-only research signals stored by
+# mechanism/inflection; see services/inflection_service.py)
+try:
+    from routers.inflection import inflection_router
+
+    app.include_router(inflection_router)
+    logger.info("✅ Inflection router included successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  Inflection router not available: {e}")
+except Exception as e:
+    logger.error(f"❌ Error including inflection router: {e}")
+
 # Import and include the Momentum Leaders router (who's still moving after making an
 # earlier Momentum Board list — see services/momentum_leaders_service.py)
 try:
