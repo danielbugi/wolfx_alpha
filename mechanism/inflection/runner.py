@@ -27,6 +27,7 @@ class Inputs:
     sector_of: Dict[str, str]
     valuation: Optional[X.ValuationStore] = None
     meta: Mapping[str, Any] = field(default_factory=dict)
+    surprises: Dict[str, List[Tuple[date, float]]] = field(default_factory=dict)       # (report date, surprise %), research only
 
 
 def run_universe(inp: Inputs, asof: date, symbols: Optional[Sequence[str]] = None, sector_index: Optional[X.SectorIndex] = None) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -78,6 +79,7 @@ def load_inputs(prices_dir: str, fundamentals_dir: str) -> Inputs:
     from research.strategy_lab.data import load_extract
     panel = load_extract(prices_dir)
     quarterly, valuation, sector_of, fmeta = load_fundamentals_extract(fundamentals_dir)
-    prices = {s: X.Prices(b.dates, b.c) for s, b in panel.bars.items()}
+    prices = {s: X.Prices(b.dates, b.c, b.o, b.v) for s, b in panel.bars.items()}
+    surprises = {s: [(r.report_date, r.surprise_pct) for r in rs if r.surprise_pct is not None] for s, rs in panel.reports.items()}
     reports = {s: [r.report_date for r in rs if r.eps_actual is not None] for s, rs in panel.reports.items()}
-    return Inputs(quarterly, reports, prices, sector_of, X.ValuationStore(valuation), {"prices_data_hash": panel.data_hash, "fundamentals_meta": dict(fmeta)})
+    return Inputs(quarterly, reports, prices, sector_of, X.ValuationStore(valuation), {"prices_data_hash": panel.data_hash, "fundamentals_meta": dict(fmeta)}, surprises)

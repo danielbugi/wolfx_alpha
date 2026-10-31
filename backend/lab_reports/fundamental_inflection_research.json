@@ -1,0 +1,1589 @@
+{
+ "caveats": [
+  "The fundamentals are yfinance statements (not point-in-time) and cover 5-6 quarters, so the events fall in about two reporting seasons: intervals are clustered by week and rest on few independent blocks.",
+  "The declared decision rule is applied to one primary cell; every other cell is context with widened intervals. A pass would authorise a forward shadow run only.",
+  "Follow-up hypotheses are registered for forward evaluation: the test period has been looked at and is not reused as confirmation.",
+  "Fills are modelled (next open, 20 bps round trip); the sector benchmark includes the stock itself."
+ ],
+ "code_ref": "42dac6087f4ca85cd5eced5994f799490b1ac8c5",
+ "data": {
+  "cells": {
+   "earnings_surprise|test|h120": {
+    "n": 0
+   },
+   "earnings_surprise|test|h20": {
+    "blocks": 11,
+    "ci95": [
+     -0.02522,
+     0.02217
+    ],
+    "mean": -0.00782,
+    "median": -0.01799,
+    "n": 1048,
+    "win_rate": 0.4036
+   },
+   "earnings_surprise|test|h5": {
+    "blocks": 14,
+    "ci95": [
+     -0.01185,
+     0.00697
+    ],
+    "mean": -0.00568,
+    "median": -0.00824,
+    "n": 1128,
+    "win_rate": 0.4246
+   },
+   "earnings_surprise|test|h60": {
+    "blocks": 3,
+    "ci95": [
+     0.00112,
+     0.01646
+    ],
+    "mean": 0.0097,
+    "median": 0.00028,
+    "n": 664,
+    "win_rate": 0.5015
+   },
+   "earnings_surprise|train|h120": {
+    "blocks": 80,
+    "ci95": [
+     -0.01365,
+     0.04066
+    ],
+    "mean": 0.01117,
+    "median": -0.04556,
+    "n": 6908,
+    "win_rate": 0.4275
+   },
+   "earnings_surprise|train|h20": {
+    "blocks": 85,
+    "ci95": [
+     -0.00912,
+     0.0061
+    ],
+    "mean": -0.00183,
+    "median": -0.01092,
+    "n": 7127,
+    "win_rate": 0.4491
+   },
+   "earnings_surprise|train|h5": {
+    "blocks": 85,
+    "ci95": [
+     -0.00593,
+     0.00449
+    ],
+    "mean": -0.00104,
+    "median": -0.00347,
+    "n": 7127,
+    "win_rate": 0.472
+   },
+   "earnings_surprise|train|h60": {
+    "blocks": 85,
+    "ci95": [
+     -0.01159,
+     0.02598
+    ],
+    "mean": 0.00249,
+    "median": -0.02623,
+    "n": 7127,
+    "win_rate": 0.4386
+   },
+   "earnings_surprise|validation|h120": {
+    "n": 0
+   },
+   "earnings_surprise|validation|h20": {
+    "blocks": 6,
+    "ci95": [
+     -0.09665,
+     0.01263
+    ],
+    "mean": -0.01626,
+    "median": -0.01278,
+    "n": 95,
+    "win_rate": 0.4211
+   },
+   "earnings_surprise|validation|h5": {
+    "blocks": 6,
+    "ci95": [
+     -0.05536,
+     0.01068
+    ],
+    "mean": -0.00321,
+    "median": 0.00254,
+    "n": 95,
+    "win_rate": 0.5053
+   },
+   "earnings_surprise|validation|h60": {
+    "blocks": 6,
+    "ci95": [
+     -0.12062,
+     0.0836
+    ],
+    "mean": -0.00621,
+    "median": 0.00273,
+    "n": 95,
+    "win_rate": 0.5053
+   },
+   "fcf_turnaround|test|h120": {
+    "n": 0
+   },
+   "fcf_turnaround|test|h20": {
+    "blocks": 8,
+    "ci95": [
+     -0.04201,
+     0.05032
+    ],
+    "mean": -0.01179,
+    "median": -0.01707,
+    "n": 159,
+    "win_rate": 0.3836
+   },
+   "fcf_turnaround|test|h5": {
+    "blocks": 9,
+    "ci95": [
+     -0.02495,
+     0.02416
+    ],
+    "mean": -0.01525,
+    "median": -0.01769,
+    "n": 161,
+    "win_rate": 0.3975
+   },
+   "fcf_turnaround|test|h60": {
+    "blocks": 3,
+    "ci95": [
+     0.00152,
+     0.01185
+    ],
+    "mean": 0.00751,
+    "median": 0.01615,
+    "n": 88,
+    "win_rate": 0.5227
+   },
+   "fcf_turnaround|train|h120": {
+    "blocks": 10,
+    "ci95": [
+     -0.1063,
+     0.3598
+    ],
+    "mean": 0.10221,
+    "median": 0.07714,
+    "n": 19,
+    "win_rate": 0.5263
+   },
+   "fcf_turnaround|train|h20": {
+    "blocks": 11,
+    "ci95": [
+     -0.08482,
+     0.06606
+    ],
+    "mean": -0.00708,
+    "median": 0.02162,
+    "n": 20,
+    "win_rate": 0.55
+   },
+   "fcf_turnaround|train|h5": {
+    "blocks": 11,
+    "ci95": [
+     -0.01499,
+     0.02911
+    ],
+    "mean": 0.00651,
+    "median": 0.00577,
+    "n": 20,
+    "win_rate": 0.65
+   },
+   "fcf_turnaround|train|h60": {
+    "blocks": 11,
+    "ci95": [
+     -0.03951,
+     0.23231
+    ],
+    "mean": 0.05521,
+    "median": 0.04903,
+    "n": 20,
+    "win_rate": 0.65
+   },
+   "fcf_turnaround|validation|h120": {
+    "n": 0
+   },
+   "fcf_turnaround|validation|h20": {
+    "blocks": 2,
+    "ci95": [
+     -0.11013,
+     -0.02221
+    ],
+    "mean": -0.07716,
+    "median": -0.03914,
+    "n": 8,
+    "win_rate": 0.25
+   },
+   "fcf_turnaround|validation|h5": {
+    "blocks": 2,
+    "ci95": [
+     -0.04188,
+     -0.0371
+    ],
+    "mean": -0.04009,
+    "median": -0.01189,
+    "n": 8,
+    "win_rate": 0.5
+   },
+   "fcf_turnaround|validation|h60": {
+    "blocks": 2,
+    "ci95": [
+     -0.07245,
+     -0.03651
+    ],
+    "mean": -0.05897,
+    "median": -0.05243,
+    "n": 8,
+    "win_rate": 0.5
+   },
+   "improvement_with_limited_repricing|test|h120": {
+    "n": 0
+   },
+   "improvement_with_limited_repricing|test|h20": {
+    "blocks": 8,
+    "ci95": [
+     -0.0843,
+     0.01769
+    ],
+    "mean": -0.00408,
+    "median": -0.00309,
+    "n": 74,
+    "win_rate": 0.4865
+   },
+   "improvement_with_limited_repricing|test|h5": {
+    "blocks": 8,
+    "ci95": [
+     -0.02188,
+     0.01171
+    ],
+    "mean": -0.00237,
+    "median": 0.00105,
+    "n": 74,
+    "win_rate": 0.5
+   },
+   "improvement_with_limited_repricing|test|h60": {
+    "blocks": 1,
+    "ci95": [
+     -0.04044,
+     -0.04044
+    ],
+    "mean": -0.04044,
+    "median": -0.04044,
+    "n": 2,
+    "win_rate": 0.5
+   },
+   "improvement_with_limited_repricing|train|h120": {
+    "blocks": 4,
+    "ci95": [
+     -0.17659,
+     1.67357
+    ],
+    "mean": 0.40888,
+    "median": 0.06926,
+    "n": 4,
+    "win_rate": 0.75
+   },
+   "improvement_with_limited_repricing|train|h20": {
+    "blocks": 6,
+    "ci95": [
+     -0.13434,
+     0.13061
+    ],
+    "mean": -0.02915,
+    "median": -0.05041,
+    "n": 9,
+    "win_rate": 0.3333
+   },
+   "improvement_with_limited_repricing|train|h5": {
+    "blocks": 6,
+    "ci95": [
+     -0.08052,
+     0.02647
+    ],
+    "mean": -0.02057,
+    "median": -0.01333,
+    "n": 9,
+    "win_rate": 0.3333
+   },
+   "improvement_with_limited_repricing|train|h60": {
+    "blocks": 6,
+    "ci95": [
+     -0.00894,
+     0.31363
+    ],
+    "mean": 0.1567,
+    "median": 0.21904,
+    "n": 9,
+    "win_rate": 0.7778
+   },
+   "improvement_with_limited_repricing|validation|h120": {
+    "n": 0
+   },
+   "improvement_with_limited_repricing|validation|h20": {
+    "blocks": 1,
+    "ci95": [
+     -0.00525,
+     -0.00525
+    ],
+    "mean": -0.00525,
+    "median": -0.00525,
+    "n": 1,
+    "win_rate": 0.0
+   },
+   "improvement_with_limited_repricing|validation|h5": {
+    "blocks": 1,
+    "ci95": [
+     -0.0399,
+     -0.0399
+    ],
+    "mean": -0.0399,
+    "median": -0.0399,
+    "n": 1,
+    "win_rate": 0.0
+   },
+   "improvement_with_limited_repricing|validation|h60": {
+    "blocks": 1,
+    "ci95": [
+     -0.16258,
+     -0.16258
+    ],
+    "mean": -0.16258,
+    "median": -0.16258,
+    "n": 1,
+    "win_rate": 0.0
+   },
+   "margin_expansion|test|h120": {
+    "n": 0
+   },
+   "margin_expansion|test|h20": {
+    "blocks": 9,
+    "ci95": [
+     -0.03173,
+     0.03478
+    ],
+    "mean": -0.00699,
+    "median": -0.012,
+    "n": 396,
+    "win_rate": 0.4318
+   },
+   "margin_expansion|test|h5": {
+    "blocks": 10,
+    "ci95": [
+     -0.01976,
+     0.01579
+    ],
+    "mean": -0.00811,
+    "median": -0.00885,
+    "n": 402,
+    "win_rate": 0.4303
+   },
+   "margin_expansion|test|h60": {
+    "blocks": 3,
+    "ci95": [
+     0.02794,
+     0.09462
+    ],
+    "mean": 0.03369,
+    "median": 0.02909,
+    "n": 229,
+    "win_rate": 0.5677
+   },
+   "margin_expansion|train|h120": {
+    "blocks": 17,
+    "ci95": [
+     -0.12223,
+     0.18147
+    ],
+    "mean": 0.03569,
+    "median": 0.03552,
+    "n": 34,
+    "win_rate": 0.5588
+   },
+   "margin_expansion|train|h20": {
+    "blocks": 18,
+    "ci95": [
+     -0.08534,
+     0.07174
+    ],
+    "mean": -0.01361,
+    "median": -0.00468,
+    "n": 37,
+    "win_rate": 0.4595
+   },
+   "margin_expansion|train|h5": {
+    "blocks": 18,
+    "ci95": [
+     -0.01467,
+     0.02854
+    ],
+    "mean": 0.00274,
+    "median": 0.01014,
+    "n": 37,
+    "win_rate": 0.6216
+   },
+   "margin_expansion|train|h60": {
+    "blocks": 18,
+    "ci95": [
+     -0.05555,
+     0.09334
+    ],
+    "mean": 0.02284,
+    "median": 0.03565,
+    "n": 37,
+    "win_rate": 0.6757
+   },
+   "margin_expansion|validation|h120": {
+    "n": 0
+   },
+   "margin_expansion|validation|h20": {
+    "blocks": 4,
+    "ci95": [
+     -0.19687,
+     0.10767
+    ],
+    "mean": -0.04691,
+    "median": -0.02333,
+    "n": 19,
+    "win_rate": 0.4737
+   },
+   "margin_expansion|validation|h5": {
+    "blocks": 4,
+    "ci95": [
+     -0.05558,
+     0.00747
+    ],
+    "mean": -0.00523,
+    "median": -0.00216,
+    "n": 19,
+    "win_rate": 0.4737
+   },
+   "margin_expansion|validation|h60": {
+    "blocks": 4,
+    "ci95": [
+     -0.1995,
+     0.11123
+    ],
+    "mean": 0.00946,
+    "median": 0.00487,
+    "n": 19,
+    "win_rate": 0.5263
+   },
+   "operating_leverage_inflection|test|h120": {
+    "n": 0
+   },
+   "operating_leverage_inflection|test|h20": {
+    "blocks": 8,
+    "ci95": [
+     -0.03849,
+     0.06848
+    ],
+    "mean": -0.00501,
+    "median": -0.02123,
+    "n": 272,
+    "win_rate": 0.4191
+   },
+   "operating_leverage_inflection|test|h5": {
+    "blocks": 9,
+    "ci95": [
+     -0.02472,
+     0.02022
+    ],
+    "mean": -0.01321,
+    "median": -0.01628,
+    "n": 275,
+    "win_rate": 0.4
+   },
+   "operating_leverage_inflection|test|h60": {
+    "blocks": 3,
+    "ci95": [
+     0.00476,
+     0.06715
+    ],
+    "mean": 0.01631,
+    "median": 0.00812,
+    "n": 169,
+    "win_rate": 0.5266
+   },
+   "operating_leverage_inflection|train|h120": {
+    "blocks": 13,
+    "ci95": [
+     -0.26457,
+     0.09261
+    ],
+    "mean": -0.07672,
+    "median": -0.09873,
+    "n": 19,
+    "win_rate": 0.3684
+   },
+   "operating_leverage_inflection|train|h20": {
+    "blocks": 16,
+    "ci95": [
+     -0.09771,
+     0.06115
+    ],
+    "mean": -0.01578,
+    "median": 0.00391,
+    "n": 23,
+    "win_rate": 0.5217
+   },
+   "operating_leverage_inflection|train|h5": {
+    "blocks": 16,
+    "ci95": [
+     -0.02814,
+     0.03073
+    ],
+    "mean": 0.00704,
+    "median": 0.00352,
+    "n": 23,
+    "win_rate": 0.6087
+   },
+   "operating_leverage_inflection|train|h60": {
+    "blocks": 16,
+    "ci95": [
+     -0.09229,
+     0.07813
+    ],
+    "mean": -0.018,
+    "median": 0.02416,
+    "n": 23,
+    "win_rate": 0.5217
+   },
+   "operating_leverage_inflection|validation|h120": {
+    "n": 0
+   },
+   "operating_leverage_inflection|validation|h20": {
+    "blocks": 4,
+    "ci95": [
+     -0.19551,
+     0.10767
+    ],
+    "mean": -0.04665,
+    "median": -0.00579,
+    "n": 17,
+    "win_rate": 0.4706
+   },
+   "operating_leverage_inflection|validation|h5": {
+    "blocks": 4,
+    "ci95": [
+     -0.05164,
+     0.00048
+    ],
+    "mean": -0.0072,
+    "median": -0.00964,
+    "n": 17,
+    "win_rate": 0.4118
+   },
+   "operating_leverage_inflection|validation|h60": {
+    "blocks": 4,
+    "ci95": [
+     -0.25581,
+     0.0505
+    ],
+    "mean": -0.03034,
+    "median": -0.02432,
+    "n": 17,
+    "win_rate": 0.4118
+   },
+   "price_momentum|test|h120": {
+    "n": 0
+   },
+   "price_momentum|test|h20": {
+    "blocks": 5,
+    "ci95": [
+     -0.02023,
+     0.04157
+    ],
+    "mean": 0.0056,
+    "median": 0.00306,
+    "n": 1368,
+    "win_rate": 0.5095
+   },
+   "price_momentum|test|h5": {
+    "blocks": 7,
+    "ci95": [
+     -0.00235,
+     0.0127
+    ],
+    "mean": 0.00625,
+    "median": 0.00356,
+    "n": 1921,
+    "win_rate": 0.52
+   },
+   "price_momentum|test|h60": {
+    "blocks": 1,
+    "ci95": [
+     -0.02175,
+     -0.02175
+    ],
+    "mean": -0.02175,
+    "median": -0.0383,
+    "n": 273,
+    "win_rate": 0.4176
+   },
+   "price_momentum|train|h120": {
+    "blocks": 39,
+    "ci95": [
+     0.04664,
+     0.16203
+    ],
+    "mean": 0.10757,
+    "median": -0.0685,
+    "n": 10317,
+    "win_rate": 0.4327
+   },
+   "price_momentum|train|h20": {
+    "blocks": 42,
+    "ci95": [
+     -0.00438,
+     0.03635
+    ],
+    "mean": 0.01651,
+    "median": -0.0137,
+    "n": 11134,
+    "win_rate": 0.4635
+   },
+   "price_momentum|train|h5": {
+    "blocks": 42,
+    "ci95": [
+     -0.01184,
+     0.01273
+    ],
+    "mean": 0.00115,
+    "median": -0.00712,
+    "n": 11134,
+    "win_rate": 0.457
+   },
+   "price_momentum|train|h60": {
+    "blocks": 42,
+    "ci95": [
+     -0.00274,
+     0.08764
+    ],
+    "mean": 0.04265,
+    "median": -0.04273,
+    "n": 11134,
+    "win_rate": 0.4389
+   },
+   "price_momentum|validation|h120": {
+    "n": 0
+   },
+   "price_momentum|validation|h20": {
+    "blocks": 2,
+    "ci95": [
+     -0.10252,
+     -0.07947
+    ],
+    "mean": -0.09099,
+    "median": -0.09821,
+    "n": 546,
+    "win_rate": 0.2747
+   },
+   "price_momentum|validation|h5": {
+    "blocks": 2,
+    "ci95": [
+     -0.05267,
+     -0.03238
+    ],
+    "mean": -0.04252,
+    "median": -0.0398,
+    "n": 546,
+    "win_rate": 0.2967
+   },
+   "price_momentum|validation|h60": {
+    "blocks": 2,
+    "ci95": [
+     -0.13107,
+     -0.0507
+    ],
+    "mean": -0.09088,
+    "median": -0.11658,
+    "n": 546,
+    "win_rate": 0.3077
+   },
+   "profitability_turnaround|test|h120": {
+    "n": 0
+   },
+   "profitability_turnaround|test|h20": {
+    "blocks": 8,
+    "ci95": [
+     -0.02868,
+     0.02876
+    ],
+    "mean": 0.00514,
+    "median": -0.00949,
+    "n": 163,
+    "win_rate": 0.4356
+   },
+   "profitability_turnaround|test|h5": {
+    "blocks": 8,
+    "ci95": [
+     -0.01995,
+     0.02235
+    ],
+    "mean": -0.00254,
+    "median": -0.00072,
+    "n": 163,
+    "win_rate": 0.4908
+   },
+   "profitability_turnaround|test|h60": {
+    "blocks": 3,
+    "ci95": [
+     0.0362,
+     0.09968
+    ],
+    "mean": 0.05626,
+    "median": 0.05148,
+    "n": 94,
+    "win_rate": 0.5745
+   },
+   "profitability_turnaround|train|h120": {
+    "blocks": 10,
+    "ci95": [
+     -0.30529,
+     0.25642
+    ],
+    "mean": 0.06011,
+    "median": 0.03513,
+    "n": 17,
+    "win_rate": 0.5882
+   },
+   "profitability_turnaround|train|h20": {
+    "blocks": 11,
+    "ci95": [
+     -0.15729,
+     0.06819
+    ],
+    "mean": -0.0452,
+    "median": -0.01048,
+    "n": 19,
+    "win_rate": 0.4211
+   },
+   "profitability_turnaround|train|h5": {
+    "blocks": 11,
+    "ci95": [
+     -0.05267,
+     0.0296
+    ],
+    "mean": -0.00757,
+    "median": 0.00346,
+    "n": 19,
+    "win_rate": 0.5263
+   },
+   "profitability_turnaround|train|h60": {
+    "blocks": 11,
+    "ci95": [
+     -0.14717,
+     0.15367
+    ],
+    "mean": 0.03446,
+    "median": 0.05088,
+    "n": 19,
+    "win_rate": 0.6842
+   },
+   "profitability_turnaround|validation|h120": {
+    "n": 0
+   },
+   "profitability_turnaround|validation|h20": {
+    "blocks": 5,
+    "ci95": [
+     -0.02319,
+     0.04932
+    ],
+    "mean": 0.0175,
+    "median": 0.02872,
+    "n": 15,
+    "win_rate": 0.5333
+   },
+   "profitability_turnaround|validation|h5": {
+    "blocks": 5,
+    "ci95": [
+     -0.02184,
+     0.01262
+    ],
+    "mean": 0.00426,
+    "median": 0.01078,
+    "n": 15,
+    "win_rate": 0.6
+   },
+   "profitability_turnaround|validation|h60": {
+    "blocks": 5,
+    "ci95": [
+     -0.09342,
+     0.04194
+    ],
+    "mean": 0.00754,
+    "median": 0.01187,
+    "n": 15,
+    "win_rate": 0.6
+   },
+   "relative_strength|test|h120": {
+    "n": 0
+   },
+   "relative_strength|test|h20": {
+    "blocks": 5,
+    "ci95": [
+     -0.01334,
+     0.02972
+    ],
+    "mean": 0.00075,
+    "median": -0.00253,
+    "n": 2742,
+    "win_rate": 0.4916
+   },
+   "relative_strength|test|h5": {
+    "blocks": 7,
+    "ci95": [
+     -0.00862,
+     0.01549
+    ],
+    "mean": 0.00316,
+    "median": 0.00098,
+    "n": 3847,
+    "win_rate": 0.5074
+   },
+   "relative_strength|test|h60": {
+    "blocks": 1,
+    "ci95": [
+     0.02157,
+     0.02157
+    ],
+    "mean": 0.02157,
+    "median": 0.00701,
+    "n": 545,
+    "win_rate": 0.5248
+   },
+   "relative_strength|train|h120": {
+    "blocks": 39,
+    "ci95": [
+     0.01581,
+     0.10412
+    ],
+    "mean": 0.0626,
+    "median": -0.05671,
+    "n": 20653,
+    "win_rate": 0.428
+   },
+   "relative_strength|train|h20": {
+    "blocks": 42,
+    "ci95": [
+     -0.00437,
+     0.01972
+    ],
+    "mean": 0.00906,
+    "median": -0.0124,
+    "n": 22292,
+    "win_rate": 0.4546
+   },
+   "relative_strength|train|h5": {
+    "blocks": 42,
+    "ci95": [
+     -0.00816,
+     0.00599
+    ],
+    "mean": -0.00088,
+    "median": -0.0064,
+    "n": 22292,
+    "win_rate": 0.4479
+   },
+   "relative_strength|train|h60": {
+    "blocks": 42,
+    "ci95": [
+     -0.00324,
+     0.04981
+    ],
+    "mean": 0.02452,
+    "median": -0.03297,
+    "n": 22292,
+    "win_rate": 0.4381
+   },
+   "relative_strength|validation|h120": {
+    "n": 0
+   },
+   "relative_strength|validation|h20": {
+    "blocks": 2,
+    "ci95": [
+     -0.06293,
+     -0.03593
+    ],
+    "mean": -0.04943,
+    "median": -0.04207,
+    "n": 1094,
+    "win_rate": 0.3592
+   },
+   "relative_strength|validation|h5": {
+    "blocks": 2,
+    "ci95": [
+     -0.03087,
+     -0.00805
+    ],
+    "mean": -0.01946,
+    "median": -0.01413,
+    "n": 1094,
+    "win_rate": 0.3967
+   },
+   "relative_strength|validation|h60": {
+    "blocks": 2,
+    "ci95": [
+     -0.07014,
+     -0.00082
+    ],
+    "mean": -0.03551,
+    "median": -0.05257,
+    "n": 1093,
+    "win_rate": 0.4007
+   },
+   "revenue_acceleration|test|h120": {
+    "n": 0
+   },
+   "revenue_acceleration|test|h20": {
+    "blocks": 5,
+    "ci95": [
+     -0.056,
+     0.00719
+    ],
+    "mean": -0.02359,
+    "median": -0.00569,
+    "n": 14,
+    "win_rate": 0.5
+   },
+   "revenue_acceleration|test|h5": {
+    "blocks": 5,
+    "ci95": [
+     -0.04603,
+     0.01763
+    ],
+    "mean": -0.01667,
+    "median": -0.02142,
+    "n": 14,
+    "win_rate": 0.4286
+   },
+   "revenue_acceleration|test|h60": {
+    "blocks": 3,
+    "ci95": [
+     0.02541,
+     0.08689
+    ],
+    "mean": 0.05282,
+    "median": 0.09393,
+    "n": 7,
+    "win_rate": 0.7143
+   },
+   "revenue_acceleration|train|h120": {
+    "blocks": 8,
+    "ci95": [
+     -0.0995,
+     0.13652
+    ],
+    "mean": 0.02271,
+    "median": 0.06505,
+    "n": 10,
+    "win_rate": 0.6
+   },
+   "revenue_acceleration|train|h20": {
+    "blocks": 8,
+    "ci95": [
+     0.00904,
+     0.09749
+    ],
+    "mean": 0.03552,
+    "median": 0.02697,
+    "n": 10,
+    "win_rate": 0.8
+   },
+   "revenue_acceleration|train|h5": {
+    "blocks": 8,
+    "ci95": [
+     -0.01093,
+     0.02547
+    ],
+    "mean": 0.01166,
+    "median": 0.00723,
+    "n": 10,
+    "win_rate": 0.6
+   },
+   "revenue_acceleration|train|h60": {
+    "blocks": 8,
+    "ci95": [
+     -0.05547,
+     0.11126
+    ],
+    "mean": 0.0287,
+    "median": 0.02981,
+    "n": 10,
+    "win_rate": 0.6
+   },
+   "revenue_acceleration|validation|h120": {
+    "n": 0
+   },
+   "revenue_acceleration|validation|h20": {
+    "blocks": 1,
+    "ci95": [
+     -0.06137,
+     -0.06137
+    ],
+    "mean": -0.06137,
+    "median": -0.06137,
+    "n": 2,
+    "win_rate": 0.5
+   },
+   "revenue_acceleration|validation|h5": {
+    "blocks": 1,
+    "ci95": [
+     -0.01822,
+     -0.01822
+    ],
+    "mean": -0.01822,
+    "median": -0.01822,
+    "n": 2,
+    "win_rate": 0.5
+   },
+   "revenue_acceleration|validation|h60": {
+    "blocks": 1,
+    "ci95": [
+     -0.12119,
+     -0.12119
+    ],
+    "mean": -0.12119,
+    "median": -0.12119,
+    "n": 2,
+    "win_rate": 0.0
+   },
+   "union|test|h120": {
+    "n": 0,
+    "without_top_1pct": null
+   },
+   "union|test|h20": {
+    "blocks": 9,
+    "ci95": [
+     -0.02814,
+     0.02094
+    ],
+    "mean": -0.00753,
+    "median": -0.01528,
+    "n": 614,
+    "win_rate": 0.4153,
+    "without_top_1pct": -0.01225
+   },
+   "union|test|h5": {
+    "blocks": 10,
+    "ci95": [
+     -0.02503,
+     0.01478
+    ],
+    "mean": -0.01133,
+    "median": -0.01219,
+    "n": 621,
+    "win_rate": 0.4155,
+    "without_top_1pct": -0.01319
+   },
+   "union|test|h60": {
+    "blocks": 3,
+    "ci95": [
+     0.00748,
+     0.05931
+    ],
+    "mean": 0.02331,
+    "median": 0.01725,
+    "n": 354,
+    "win_rate": 0.5367,
+    "without_top_1pct": 0.01826
+   },
+   "union|train|h120": {
+    "blocks": 29,
+    "ci95": [
+     -0.08499,
+     0.1304
+    ],
+    "mean": 0.02254,
+    "median": 0.03513,
+    "n": 65,
+    "win_rate": 0.5538,
+    "without_top_1pct": 0.00837
+   },
+   "union|train|h20": {
+    "blocks": 32,
+    "ci95": [
+     -0.0514,
+     0.05153
+    ],
+    "mean": -0.00668,
+    "median": 0.01255,
+    "n": 71,
+    "win_rate": 0.5352,
+    "without_top_1pct": -0.00941
+   },
+   "union|train|h5": {
+    "blocks": 32,
+    "ci95": [
+     -0.00802,
+     0.02269
+    ],
+    "mean": 0.00346,
+    "median": 0.00476,
+    "n": 71,
+    "win_rate": 0.6056,
+    "without_top_1pct": 0.00202
+   },
+   "union|train|h60": {
+    "blocks": 32,
+    "ci95": [
+     -0.02893,
+     0.0825
+    ],
+    "mean": 0.02185,
+    "median": 0.04266,
+    "n": 71,
+    "win_rate": 0.6479,
+    "without_top_1pct": 0.01609
+   },
+   "union|validation|h120": {
+    "n": 0,
+    "without_top_1pct": null
+   },
+   "union|validation|h20": {
+    "blocks": 5,
+    "ci95": [
+     -0.14159,
+     0.0444
+    ],
+    "mean": -0.01956,
+    "median": -0.00084,
+    "n": 43,
+    "win_rate": 0.4884,
+    "without_top_1pct": -0.0246
+   },
+   "union|validation|h5": {
+    "blocks": 5,
+    "ci95": [
+     -0.03566,
+     0.00547
+    ],
+    "mean": -0.00235,
+    "median": -0.00216,
+    "n": 43,
+    "win_rate": 0.4884,
+    "without_top_1pct": -0.00716
+   },
+   "union|validation|h60": {
+    "blocks": 5,
+    "ci95": [
+     -0.1709,
+     0.02137
+    ],
+    "mean": -0.0021,
+    "median": 0.00273,
+    "n": 43,
+    "win_rate": 0.5581,
+    "without_top_1pct": -0.0108
+   }
+  },
+  "checks": [
+   {
+    "check": "n_test >= 150",
+    "ok": true,
+    "value": 614
+   },
+   {
+    "check": "test mean net excess return, 95% interval entirely above 0",
+    "ok": false,
+    "value": [
+     -0.02814,
+     0.02094
+    ]
+   },
+   {
+    "check": "minus the matched non-event control, 95% interval entirely above 0",
+    "ok": false,
+    "value": [
+     -0.00691,
+     0.0577
+    ]
+   },
+   {
+    "check": "same sign on the train period (when it has at least 30 events)",
+    "ok": false,
+    "value": -0.00668
+   },
+   {
+    "check": "test mean without the top 1% of events > 0",
+    "ok": false,
+    "value": -0.01225
+   }
+  ],
+  "counts": {
+   "baseline_sizes": {
+    "earnings_surprise": 8367,
+    "price_momentum": 13601,
+    "relative_strength": 27234
+   },
+   "by_period": {
+    "test": 623,
+    "train": 71,
+    "validation": 43
+   },
+   "by_type": {
+    "fcf_turnaround": 190,
+    "improvement_with_limited_repricing": 84,
+    "margin_expansion": 459,
+    "operating_leverage_inflection": 316,
+    "profitability_turnaround": 197,
+    "revenue_acceleration": 26
+   },
+   "company_quarters_with_a_base_event": 737,
+   "events": 1318,
+   "features": 15896,
+   "last_price_date": "2026-10-30",
+   "matched_non_event_pool": 14180,
+   "public_dates": [
+    "2024-10-22",
+    "2026-10-26"
+   ]
+  },
+  "decision_rule": {
+   "multiple_testing": "29 cells are reported (6 types plus the union, 4 horizons, 3 periods looked at separately); only the primary cell decides and the others carry Bonferroni-widened intervals.",
+   "otherwise": "NO_EDGE_DEMONSTRATED, or INSUFFICIENT_DATA when the primary cell has fewer than 150 events or the horizon cannot be completed. A PASS authorises a forward shadow run only.",
+   "pass_for_forward_shadow_requires_all": [
+    "n_test >= 150 company-quarters",
+    "mean net excess return > 0 with the week-block bootstrap 95% interval entirely above 0",
+    "mean excess minus the matched non-event control > 0 with its 95% interval entirely above 0",
+    "the same sign on the train period when it has at least 30 events",
+    "mean excess without the top 1% of events > 0"
+   ],
+   "primary_cell": "test period, union of base events, 20 sessions, net sector-adjusted excess return"
+  },
+  "diffs": {
+   "test|h20|union_minus_matched": {
+    "blocks": 9,
+    "ci95": [
+     -0.00691,
+     0.0577
+    ],
+    "mean": 0.00992,
+    "median": 0.00116,
+    "n": 613,
+    "n_matched": 613,
+    "win_rate": 0.5024
+   },
+   "test|h5|union_minus_matched": {
+    "blocks": 10,
+    "ci95": [
+     -0.01612,
+     0.0178
+    ],
+    "mean": -0.0074,
+    "median": -0.00484,
+    "n": 616,
+    "n_matched": 616,
+    "win_rate": 0.4659
+   },
+   "test|h60|union_minus_matched": {
+    "blocks": 3,
+    "ci95": [
+     0.00434,
+     0.05783
+    ],
+    "mean": 0.02508,
+    "median": 0.03178,
+    "n": 252,
+    "n_matched": 252,
+    "win_rate": 0.5476
+   },
+   "train|h120|union_minus_matched": {
+    "blocks": 25,
+    "ci95": [
+     -0.14371,
+     0.25583
+    ],
+    "mean": 0.05075,
+    "median": 0.07506,
+    "n": 57,
+    "n_matched": 57,
+    "win_rate": 0.5965
+   },
+   "train|h20|union_minus_matched": {
+    "blocks": 28,
+    "ci95": [
+     -0.06543,
+     0.04791
+    ],
+    "mean": -0.01719,
+    "median": 0.00168,
+    "n": 64,
+    "n_matched": 64,
+    "win_rate": 0.5156
+   },
+   "train|h5|union_minus_matched": {
+    "blocks": 28,
+    "ci95": [
+     -0.03671,
+     0.01827
+    ],
+    "mean": -0.0095,
+    "median": -0.00619,
+    "n": 64,
+    "n_matched": 64,
+    "win_rate": 0.4531
+   },
+   "train|h60|union_minus_matched": {
+    "blocks": 28,
+    "ci95": [
+     -0.06685,
+     0.169
+    ],
+    "mean": 0.04265,
+    "median": 0.08012,
+    "n": 64,
+    "n_matched": 64,
+    "win_rate": 0.6406
+   },
+   "validation|h20|union_minus_matched": {
+    "blocks": 5,
+    "ci95": [
+     -0.17064,
+     0.16631
+    ],
+    "mean": 0.01888,
+    "median": 0.04703,
+    "n": 43,
+    "n_matched": 43,
+    "win_rate": 0.6279
+   },
+   "validation|h5|union_minus_matched": {
+    "blocks": 5,
+    "ci95": [
+     -0.06452,
+     0.07238
+    ],
+    "mean": 0.02102,
+    "median": 0.01404,
+    "n": 43,
+    "n_matched": 43,
+    "win_rate": 0.5349
+   },
+   "validation|h60|union_minus_matched": {
+    "blocks": 5,
+    "ci95": [
+     -0.1086,
+     0.12089
+    ],
+    "mean": 0.02999,
+    "median": 0.01841,
+    "n": 43,
+    "n_matched": 43,
+    "win_rate": 0.5581
+   }
+  },
+  "feasibility": {
+   "120": {
+    "events_with_complete_window": 65,
+    "latest_public_date_complete": "2026-05-07"
+   },
+   "20": {
+    "events_with_complete_window": 728,
+    "latest_public_date_complete": "2026-09-15"
+   },
+   "5": {
+    "events_with_complete_window": 735,
+    "latest_public_date_complete": "2026-10-14"
+   },
+   "60": {
+    "events_with_complete_window": 468,
+    "latest_public_date_complete": "2026-08-05"
+   }
+  },
+  "followups": [
+   {
+    "exploratory_train_validation_h20": {
+     "n": 0
+    },
+    "key": "fundamental_inflection_profitability_plus_revenue",
+    "label": "Profitability Turnaround + Revenue Acceleration",
+    "n_by_period": {
+     "test": 2,
+     "train": 0,
+     "validation": 0
+    },
+    "n_company_quarters": 2,
+    "note": "exploratory only (not confirmatory): the test period is not used; confirmation needs events public after the registration date and at least 150 of them",
+    "status": "registered_forward_only",
+    "version": "v1"
+   },
+   {
+    "exploratory_train_validation_h20": {
+     "blocks": 6,
+     "ci95": [
+      -0.19664,
+      0.00853
+     ],
+     "mean": -0.11802,
+     "median": -0.07745,
+     "n": 12,
+     "win_rate": 0.25
+    },
+    "key": "fundamental_inflection_margin_plus_relative_strength",
+    "label": "Margin Expansion + Relative Strength (top quintile of 60-session strength versus the sector)",
+    "n_by_period": {
+     "test": 143,
+     "train": 4,
+     "validation": 8
+    },
+    "n_company_quarters": 155,
+    "note": "exploratory only (not confirmatory): the test period is not used; confirmation needs events public after the registration date and at least 150 of them",
+    "status": "registered_forward_only",
+    "version": "v1"
+   },
+   {
+    "exploratory_train_validation_h20": {
+     "blocks": 3,
+     "ci95": [
+      -0.08877,
+      0.08846
+     ],
+     "mean": 0.00981,
+     "median": 0.02972,
+     "n": 3,
+     "win_rate": 0.6667
+    },
+    "key": "fundamental_inflection_revenue_plus_volume",
+    "label": "Revenue Acceleration + Volume Confirmation (reaction-day volume at least 2x normal)",
+    "n_by_period": {
+     "test": 6,
+     "train": 3,
+     "validation": 0
+    },
+    "n_company_quarters": 9,
+    "note": "exploratory only (not confirmatory): the test period is not used; confirmation needs events public after the registration date and at least 150 of them",
+    "status": "registered_forward_only",
+    "version": "v1"
+   },
+   {
+    "exploratory_train_validation_h20": {
+     "blocks": 5,
+     "ci95": [
+      -0.07087,
+      0.06352
+     ],
+     "mean": 0.01244,
+     "median": 0.03782,
+     "n": 6,
+     "win_rate": 0.6667
+    },
+    "key": "fundamental_inflection_fcf_plus_valuation_compression",
+    "label": "FCF Turnaround + Valuation Compression (price/sales in the lower third of its own history or below 0.8x the sector)",
+    "n_by_period": {
+     "test": 22,
+     "train": 6,
+     "validation": 0
+    },
+    "n_company_quarters": 28,
+    "note": "exploratory only (not confirmatory): the test period is not used; confirmation needs events public after the registration date and at least 150 of them",
+    "status": "registered_forward_only",
+    "version": "v1"
+   }
+  ],
+  "horizon_followups": [
+   {
+    "blocks": 3,
+    "cell": "fcf_turnaround|test|h60",
+    "ci95": [
+     0.00152,
+     0.01185
+    ],
+    "mean": 0.00751,
+    "n": 88,
+    "statement": "fcf turnaround events outperform their sector over 60 sessions (seen in the test period: mean +0.8% net, interval [+0.2%, +1.2%], 3 weekly blocks); registered for forward evaluation only."
+   },
+   {
+    "blocks": 3,
+    "cell": "margin_expansion|test|h60",
+    "ci95": [
+     0.02794,
+     0.09462
+    ],
+    "mean": 0.03369,
+    "n": 229,
+    "statement": "margin expansion events outperform their sector over 60 sessions (seen in the test period: mean +3.4% net, interval [+2.8%, +9.5%], 3 weekly blocks); registered for forward evaluation only."
+   },
+   {
+    "blocks": 3,
+    "cell": "operating_leverage_inflection|test|h60",
+    "ci95": [
+     0.00476,
+     0.06715
+    ],
+    "mean": 0.01631,
+    "n": 169,
+    "statement": "operating leverage inflection events outperform their sector over 60 sessions (seen in the test period: mean +1.6% net, interval [+0.5%, +6.7%], 3 weekly blocks); registered for forward evaluation only."
+   },
+   {
+    "blocks": 3,
+    "cell": "profitability_turnaround|test|h60",
+    "ci95": [
+     0.0362,
+     0.09968
+    ],
+    "mean": 0.05626,
+    "n": 94,
+    "statement": "profitability turnaround events outperform their sector over 60 sessions (seen in the test period: mean +5.6% net, interval [+3.6%, +10.0%], 3 weekly blocks); registered for forward evaluation only."
+   },
+   {
+    "blocks": 3,
+    "cell": "union|test|h60",
+    "ci95": [
+     0.00748,
+     0.05931
+    ],
+    "mean": 0.02331,
+    "n": 354,
+    "statement": "union events outperform their sector over 60 sessions (seen in the test period: mean +2.3% net, interval [+0.7%, +5.9%], 3 weekly blocks); registered for forward evaluation only."
+   }
+  ],
+  "horizons": [
+   5,
+   20,
+   60,
+   120
+  ],
+  "hypothesis": "A company whose fundamentals just inflected (turned profitable, accelerated revenue, widened margins, gained operating leverage or turned free-cash-flow positive) outperforms its sector over the following weeks and months by more than costs, at least while the market has not repriced it.",
+  "primary_cell": {
+   "group": "union",
+   "horizon": 20,
+   "period": "test"
+  },
+  "split": {
+   "basis": "date the figures were public",
+   "reason": "the stored history holds essentially two reporting seasons; the cut points are the two natural gaps between them",
+   "test_start_inclusive": "2026-07-23",
+   "train_end_exclusive": "2026-06-15",
+   "validation": "between the two; looked at, never used to decide"
+  },
+  "verdict": "NO_EDGE_DEMONSTRATED"
+ },
+ "generated_at": "2026-10-31",
+ "headline": "no edge demonstrated: 20-session net excess return in the test period -0.8% [-2.8%, +2.1%] on 614 company-quarters.",
+ "id": "fundamental_inflection_research",
+ "kind": "strategy_lab",
+ "provenance": {
+  "data_sha256": "776a515f641d65d98ee6c808ad9b9c98c3c3c3c80fb7c2f9145257b0048a321c",
+  "extract": {
+   "quarterly_rows": 15896,
+   "quarterly_sha256": "2895362caf09242504b1702cba404d26364e7bd2f205c24d73977e72992a1170",
+   "schema": "inflection_extract_v1",
+   "start": "2023-07-01",
+   "valuation_rows": 594021,
+   "valuation_sha256": "c95536a50847a5450e46432b37ee7acf8c5619cf9659a776fb8ed368c2e82a73"
+  },
+  "report_sha256": "2c6918309786d4028dda59f0983d336e0b2221284a086ff2adb7ae71e3036409",
+  "run_hash": "62960aafa3df99aaa431522b48857edf6a8420cafa41056a95c09783fa43c446",
+  "source": "mechanism/research/strategy_lab/inflection_study (reproducible: spec, data and code hashes below)",
+  "spec_sha256": "a10602648fe189f39a829aefe56935dc79dd8cd943003376ea501a05d1dbd09b"
+ },
+ "schema": "lab_report_v1",
+ "status": "research_only",
+ "title": "Fundamental inflection: forward sector-adjusted returns after an event",
+ "use": "Tests whether the inflection engine's events precede sector-adjusted excess returns, against matched non-event companies and simple baselines. Not signals, not advice."
+}

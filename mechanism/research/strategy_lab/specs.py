@@ -93,11 +93,26 @@ EARNINGS_CONFLUENCE_V1 = child_spec(
 SPECS: Mapping[str, Mapping[str, Mapping[str, Any]]] = {"earnings_drift": {"v1": EARNINGS_DRIFT_V1}, "earnings_confluence": {"v1": EARNINGS_CONFLUENCE_V1}}
 
 
+def _register_study_specs() -> None:
+    try:
+        from research.strategy_lab.inflection_study import SPEC as _S
+    except Exception:  # noqa: BLE001 - the inflection package may be absent in a minimal install
+        return
+    SPECS = globals()["SPECS"]
+    SPECS = dict(SPECS)
+    SPECS["fundamental_inflection"] = {"v1": _S}
+    globals()["SPECS"] = SPECS
+
+
+
 class SpecError(ValueError):
     pass
 
 
 def get_spec(key: str, version: str) -> Dict[str, Any]:
+    if (key, version) == ("fundamental_inflection", "v1"):                  # the event study's spec lives with the study (lazy import: it imports this module)
+        from research.strategy_lab.inflection_study import SPEC
+        return copy.deepcopy(dict(SPEC))
     try:
         return copy.deepcopy(dict(SPECS[key][version]))
     except KeyError as e:

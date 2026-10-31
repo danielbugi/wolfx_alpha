@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import bisect
 import math
+import warnings
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
@@ -23,6 +24,8 @@ MIN_HISTORY_SNAPSHOTS = 8
 class Prices:
     dates: List[date]
     close: np.ndarray
+    open: Optional[np.ndarray] = None      # research only: lets a study enter at the next session's open
+    volume: Optional[np.ndarray] = None    # research only: volume confirmation features
 
 
 def first_session_on_or_after(dates: Sequence[date], d: date) -> Optional[int]:
@@ -63,7 +66,8 @@ class SectorIndex:
             with np.errstate(invalid="ignore", divide="ignore"):
                 ret = mat[:, 1:] / mat[:, :-1] - 1.0
             ret = np.where(np.isfinite(ret) & (np.abs(ret) < 1.0), ret, np.nan)       # a +-100% day is a data artifact, not a sector move
-            with np.errstate(invalid="ignore"):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)       # a day with no returns in a small sector
                 mean = np.nanmean(ret, axis=0)
             mean = np.where(np.isfinite(mean), mean, 0.0)
             self.levels[sec] = np.r_[1.0, np.cumprod(1.0 + mean)]
