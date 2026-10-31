@@ -100,7 +100,10 @@ CREATE TABLE IF NOT EXISTS inflection_run_log (
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'donchian_app') THEN
-        GRANT SELECT ON fundamental_feature, fundamental_inflection_event, inflection_alert_delivery, inflection_run_log TO donchian_app;
+        -- donchian_app is the role the pipeline runs as (updater + owner alerts WRITE these tables) and the API runs as (READS): tables created by a manual apply do not inherit the
+        -- default privileges the older tables have, so the grant must be explicit. No DELETE: nothing deletes. (Found in production 2026-10-31, applied there by hand.)
+        GRANT SELECT, INSERT, UPDATE ON fundamental_feature, fundamental_inflection_event, inflection_alert_delivery, inflection_run_log TO donchian_app;
+        GRANT USAGE, SELECT ON SEQUENCE fundamental_inflection_event_id_seq, inflection_alert_delivery_id_seq, inflection_run_log_id_seq TO donchian_app;
     END IF;
 END;
 $$;
