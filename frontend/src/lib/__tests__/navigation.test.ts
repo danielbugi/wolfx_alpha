@@ -39,6 +39,11 @@ describe('navigation groups', () => {
     expect(product.items.some((i) => /alert/i.test(i.name))).toBe(false);
     const dv = internal.items.find((i) => i.href === '/alerts');
     expect(dv?.roles).toEqual(['owner']);
+    const infl = internal.items.find((i) => i.href === '/inflection');
+    expect(infl?.roles).toEqual(['owner']);
+    expect(isProductRoute('/inflection')).toBe(false);
+    expect(navGroupsForRole('collaborator').flatMap((g) => g.items.map((i) => i.href))).not.toContain('/inflection');
+    expect(navGroupsForRole('owner').flatMap((g) => g.items.map((i) => i.href))).toContain('/inflection');
     expect(isProductRoute('/alerts')).toBe(false);
     expect(navGroupsForRole('collaborator').flatMap((g) => g.items.map((i) => i.href))).not.toContain('/alerts');
     expect(navGroupsForRole('owner').flatMap((g) => g.items.map((i) => i.href))).toContain('/alerts');
