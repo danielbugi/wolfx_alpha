@@ -136,6 +136,10 @@ CHAIN_DIRS = ["mechanism/screeners", "ml_training/data_preparation", "ml_trainin
               "mechanism/forward_collection", "mechanism/alerts", "mechanism/research", "mechanism/market_intelligence"]
 
 
+# Manual, read-only research CLI (never called by automation_pipeline.sh or any timer): it dumps the table to a hashed extract for studies, so a stale table cannot break a pipeline step.
+MANUAL_RESEARCH_READERS = {"mechanism/research/strategy_lab/extract_fundamentals.py"}
+
+
 def test_nothing_in_the_steps_after_the_quarterly_updater_reads_quarterly_fundamentals():
     """Step 8 is optional only because steps 9-13 (screener, ML dataset, both ML trainings, post-market package) and the capture / collector / ledger code never read its table. If this fails,
     someone added a dependency: step 8 must stop being optional (or the new reader must tolerate stale data) before this guard is edited."""
@@ -150,7 +154,7 @@ def test_nothing_in_the_steps_after_the_quarterly_updater_reads_quarterly_fundam
                     with open(path, encoding="utf-8", errors="ignore") as fh:
                         if "quarterly_fundamentals" in fh.read():
                             hits.append(os.path.relpath(path, ROOT).replace("\\", "/"))
-    assert hits == [], hits
+    assert [h for h in hits if h not in MANUAL_RESEARCH_READERS] == [], hits
 
 
 def test_step_order_keeps_the_critical_steps_after_the_optional_one_and_unconditional():

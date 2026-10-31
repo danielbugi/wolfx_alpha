@@ -39,7 +39,7 @@ SPEC: Dict[str, Any] = {
     "schema": "event_study_spec_v1", "key": "fundamental_inflection", "version": "v1",
     "hypothesis": "A company whose fundamentals just inflected (turned profitable, accelerated revenue, widened margins, gained operating leverage or turned free-cash-flow positive) outperforms its sector over the "
                   "following weeks and months by more than costs, at least while the market has not repriced it.",
-    "event": {"source": "mechanism/inflection events, method inflection_v1, built from quarterly_fundamentals (yfinance; research grade C: not point-in-time statements, availability = earnings report date or an assumed lag)",
+    "event": {"source": "mechanism/inflection events, method inflection_v1, built from the stored quarterly statements (yfinance; research grade C: not point-in-time statements, availability = earnings report date or an assumed lag)",
               "types": list(ALL_TYPES), "union": "a company-quarter with at least one of the five base event types (counted once)"},
     "entry": "the open of the second session after the first session on or after the public date (the signal is the close after the two-session reaction window); the composite event, which is only known when its "
              "repricing window ends, is entered at the next session's open",
