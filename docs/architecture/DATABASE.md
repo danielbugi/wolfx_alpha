@@ -61,6 +61,13 @@ trading day, no staleness filter, since these are price-derived) · `quarterly_f
 **no migration shows anything writing to it and no FK references it**; likely unused, not confirmed
 dead, do not assume it matters without checking a live row count first).
 
+**SEC EDGAR fundamentals (migration 38, `add_sec_fundamentals_tables.sql` — written and tested, NOT applied to production).**
+`sec_symbol_cik` (ticker → CIK from the SEC file) · `sec_filing` (10-Q/10-K and amendments, with filing date and acceptance instant) ·
+`sec_fact` (raw XBRL values, append-only: a restatement is a new row) · `sec_quarter` (normalized quarter per company/period/metric with
+`basis`, source filing, filing date, `revision_count`) · `sec_fundamentals_state` (incremental ingestion state). Filled by
+`mechanism/data_updaters/sec_fundamentals_updater.py` (needs `SEC_USER_AGENT`; not scheduled yet); read side-by-side with `quarterly_fundamentals`
+via `--reconcile` before anything is displayed from it. See [DATA_PROVIDERS.md](DATA_PROVIDERS.md).
+
 ### Screener / ML
 `breakouts`, `ml_training_data` (view) — **stale-basis, do not train from either**: the price series
 was restated in place by a vendor migration without recomputing these, so their labels/entry prices
