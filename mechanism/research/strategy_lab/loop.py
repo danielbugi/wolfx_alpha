@@ -57,12 +57,17 @@ def summarize(spec: Mapping[str, Any], result: Mapping[str, Any], *, spec_hash: 
             "spec_hash": spec_hash, "run_hash": run_hash, "report_sha256": report_sha}
 
 
-def next_steps(summaries: Sequence[Mapping[str, Any]], analysis: Mapping[str, Any]) -> List[Dict[str, str]]:
+def next_steps(summaries: Sequence[Mapping[str, Any]], analysis: Mapping[str, Any], derived: Optional[Mapping[str, Any]] = None) -> List[Dict[str, str]]:
     """Rule-based follow-ups from what the runs showed (never from the test period of an unrun hypothesis)."""
     out: List[Dict[str, str]] = []
     passed = [s for s in summaries if s["verdict"] == "PASS_FOR_FORWARD_SHADOW"]
     for s in passed:
         out.append({"status": "ready", "statement": f"Record {s['key']} {s['version']} signals forward as a shadow (no orders) and re-test on the new data once at least 150 new positions exist."})
+    looks = len(summaries)
+    if not passed and derived:
+        out.append({"status": "proposed", "statement":
+                    f"Forward holdout: record {derived['key']} {derived['version']} signals from the next session on as a shadow (no orders) and judge it once at least 150 new positions exist. "
+                    f"The test period has now been looked at by {looks} strategies, so it can no longer serve as confirmation for any further hypothesis; new evidence has to come from data dated after this run."})
     if not passed:
         pats = {p["pattern"] for p in analysis.get("failure_patterns", [])}
         if any(p.startswith("longs") or p.startswith("shorts") for p in pats):
@@ -100,7 +105,7 @@ def run_loop(panel: Panel, *, out_dir: str, code_ref: str, seed: int = 20261031,
         _write(os.path.join(d, "result.json"), json.dumps({"spec": sp, "spec_hash": sh, "data_hash": panel.data_hash, "code_ref": code_ref, "run_hash": rh, "seed": seed,
                                                            "report_sha256": rsha, "result": res}, indent=1, sort_keys=True, default=str))
         summaries.append(summarize(sp, res, spec_hash=sh, run_hash=rh, report_sha=rsha))
-    steps = next_steps(summaries, analysis)
+    steps = next_steps(summaries, analysis, {"key": derived["key"], "version": derived["version"]} if derived else None)
     loop = {"schema": "strategy_lab_loop_v1", "data_hash": panel.data_hash, "code_ref": code_ref, "seed": seed, "run_date": run_date, "parent": f"{parent[0]} {parent[1]}",
             "analysis": analysis, "experiments": summaries, "next_steps": steps,
             "derived_hypothesis": ({"key": derived["key"], "version": derived["version"], "statement": derived["hypothesis"], "conditions": derived["event"]["extra"],

@@ -70,6 +70,13 @@
    "kind": "strategy_lab",
    "title": "Research insights: what the evidence supports, and what it does not",
    "headline": "32 claims checked: 7 inconclusive, 13 not supported, 4 suggestive, 8 supported."
+  },
+  {
+   "id": "strategy_lab_loop",
+   "file": "strategy_lab_loop.json",
+   "kind": "strategy_lab",
+   "title": "Strategy research loop: experiments, post-mortem and next hypothesis",
+   "headline": "3 experiments on one data extract (earnings_drift v1: no edge demonstrated, earnings_confluence v1: no edge demonstrated, earnings_drift_refined a1f36cc3f: no edge demonstrated)."
   }
  ]
 }

@@ -1,0 +1,678 @@
+{
+ "caveats": [
+  "Earnings data come from yfinance: not point-in-time, and the time of day of a report is unknown (the reaction window spans two sessions).",
+  "Each strategy's thresholds were fixed before its test period was looked at; the loop's own post-mortem sees only the train period.",
+  "A pass authorises a forward shadow run only. It is not a trading claim; fills and costs are modelled.",
+  "Short interest is not used: no point-in-time source exists."
+ ],
+ "code_ref": "bac4bf5a1842859e8143efa58e4967e1e4dd22c8",
+ "data": {
+  "analysis": {
+   "by_year": {
+    "2021": {
+     "mean_r": 0.0601,
+     "n": 1595
+    },
+    "2022": {
+     "mean_r": -0.0779,
+     "n": 1759
+    },
+    "2023": {
+     "mean_r": 0.0145,
+     "n": 1670
+    }
+   },
+   "candidates_tested": 35,
+   "failure_patterns": [
+    {
+     "evidence": "negative years: 2022 (-0.078 R, n 1759)",
+     "pattern": "the result is not stable across years"
+    },
+    {
+     "evidence": "mean -0.003 R, 95% interval [-0.1548, 0.1444], n 5024",
+     "pattern": "the pool is indistinguishable from zero"
+    },
+    {
+     "evidence": "mean -0.054 R (pool -0.003), n 1675",
+     "pattern": "weak subgroup: pre_trend_20_dir top tercile"
+    },
+    {
+     "evidence": "mean -0.039 R (pool -0.003), n 1675",
+     "pattern": "weak subgroup: relvol_event top tercile"
+    }
+   ],
+   "n_passing": 0,
+   "n_rows": 5024,
+   "overall": {
+    "adjusted_ci": [
+     -0.1548,
+     0.1444
+    ],
+    "ci95": [
+     -0.1548,
+     0.1444
+    ],
+    "mean_r": -0.0034,
+    "n": 5024,
+    "win_rate": 0.4455
+   },
+   "selection_rule": "candidates: each feature in its top tercile, each feature in its bottom tercile, and every pair of features both in their top tercile (tercile edges from the TRAIN rows); a candidate needs n >= 300, a mean net R whose Bonferroni-adjusted 95% month-block interval lies above 0, and a positive mean in both halves of the train period; the candidate with the highest adjusted lower bound is registered as the next hypothesis whether or not it passes (labelled exploratory when it does not)",
+   "subgroups": [
+    {
+     "adjusted_ci": [
+      -0.2081,
+      0.3523
+     ],
+     "ci95": [
+      -0.1363,
+      0.2698
+     ],
+     "conditions": [
+      {
+       "feature": "pre_trend_20_dir",
+       "op": "<=",
+       "value": -3.3636
+      }
+     ],
+     "mean_first_half": -0.1013,
+     "mean_r": 0.0604,
+     "mean_second_half": 0.237,
+     "n": 1674,
+     "name": "pre_trend_20_dir bottom tercile",
+     "passes_selection": false,
+     "stable_across_halves": false,
+     "win_rate": 0.4671
+    },
+    {
+     "adjusted_ci": [
+      -0.2151,
+      0.2492
+     ],
+     "ci95": [
+      -0.1508,
+      0.1488
+     ],
+     "conditions": [
+      {
+       "feature": "direction",
+       "op": "<=",
+       "value": 1.0
+      }
+     ],
+     "mean_first_half": -0.0305,
+     "mean_r": -0.0034,
+     "mean_second_half": 0.0238,
+     "n": 5024,
+     "name": "direction bottom tercile",
+     "passes_selection": false,
+     "stable_across_halves": false,
+     "win_rate": 0.4455
+    },
+    {
+     "adjusted_ci": [
+      -0.2263,
+      0.277
+     ],
+     "ci95": [
+      -0.149,
+      0.1818
+     ],
+     "conditions": [
+      {
+       "feature": "reaction_dir",
+       "op": "<=",
+       "value": 5.7706
+      }
+     ],
+     "mean_first_half": 0.0491,
+     "mean_r": 0.0203,
+     "mean_second_half": -0.0128,
+     "n": 1675,
+     "name": "reaction_dir bottom tercile",
+     "passes_selection": false,
+     "stable_across_halves": false,
+     "win_rate": 0.4615
+    },
+    {
+     "adjusted_ci": [
+      -0.233,
+      0.2395
+     ],
+     "ci95": [
+      -0.1693,
+      0.1488
+     ],
+     "conditions": [
+      {
+       "feature": "surprise_abs",
+       "op": ">=",
+       "value": 49.51
+      }
+     ],
+     "mean_first_half": -0.0309,
+     "mean_r": -0.0057,
+     "mean_second_half": 0.0238,
+     "n": 1675,
+     "name": "surprise_abs top tercile",
+     "passes_selection": false,
+     "stable_across_halves": false,
+     "win_rate": 0.4442
+    },
+    {
+     "adjusted_ci": [
+      -0.2337,
+      0.2206
+     ],
+     "ci95": [
+      -0.1839,
+      0.1266
+     ],
+     "conditions": [
+      {
+       "feature": "relvol_event",
+       "op": ">=",
+       "value": 2.5066
+      }
+     ],
+     "mean_first_half": -0.0774,
+     "mean_r": -0.0386,
+     "mean_second_half": -0.0092,
+     "n": 1675,
+     "name": "relvol_event top tercile",
+     "passes_selection": false,
+     "stable_across_halves": false,
+     "win_rate": 0.4251
+    },
+    {
+     "adjusted_ci": [
+      -0.2363,
+      0.244
+     ],
+     "ci95": [
+      -0.1815,
+      0.1694
+     ],
+     "conditions": [
+      {
+       "feature": "relvol_event",
+       "op": ">=",
+       "value": 2.5066
+      },
+      {
+       "feature": "range_expansion",
+       "op": ">=",
+       "value": 2.4846
+      }
+     ],
+     "mean_first_half": -0.0811,
+     "mean_r": -0.0116,
+     "mean_second_half": 0.0296,
+     "n": 1046,
+     "name": "relvol_event + range_expansion top terciles",
+     "passes_selection": false,
+     "stable_across_halves": false,
+     "win_rate": 0.434
+    },
+    {
+     "adjusted_ci": [
+      -0.2365,
+      0.2034
+     ],
+     "ci95": [
+      -0.1737,
+      0.1304
+     ],
+     "conditions": [
+      {
+       "feature": "gap_dir",
+       "op": ">=",
+       "value": 1.7576
+      }
+     ],
+     "mean_first_half": -0.0844,
+     "mean_r": -0.0191,
+     "mean_second_half": 0.0393,
+     "n": 1675,
+     "name": "gap_dir top tercile",
+     "passes_selection": false,
+     "stable_across_halves": false,
+     "win_rate": 0.4478
+    },
+    {
+     "adjusted_ci": [
+      -0.2368,
+      0.1928
+     ],
+     "ci95": [
+      -0.1978,
+      0.0877
+     ],
+     "conditions": [
+      {
+       "feature": "pre_trend_20_dir",
+       "op": ">=",
+       "value": 4.8088
+      }
+     ],
+     "mean_first_half": 0.0226,
+     "mean_r": -0.0544,
+     "mean_second_half": -0.1265,
+     "n": 1675,
+     "name": "pre_trend_20_dir top tercile",
+     "passes_selection": false,
+     "stable_across_halves": false,
+     "win_rate": 0.4269
+    },
+    {
+     "adjusted_ci": [
+      -0.2382,
+      0.2956
+     ],
+     "ci95": [
+      -0.1512,
+      0.2022
+     ],
+     "conditions": [
+      {
+       "feature": "range_expansion",
+       "op": ">=",
+       "value": 2.4846
+      }
+     ],
+     "mean_first_half": -0.0207,
+     "mean_r": 0.0176,
+     "mean_second_half": 0.0406,
+     "n": 1675,
+     "name": "range_expansion top tercile",
+     "passes_selection": false,
+     "stable_across_halves": false,
+     "win_rate": 0.4478
+    },
+    {
+     "adjusted_ci": [
+      -0.2397,
+      0.208
+     ],
+     "ci95": [
+      -0.1845,
+      0.1392
+     ],
+     "conditions": [
+      {
+       "feature": "reaction_dir",
+       "op": ">=",
+       "value": 10.3759
+      }
+     ],
+     "mean_first_half": -0.0739,
+     "mean_r": -0.0098,
+     "mean_second_half": 0.0427,
+     "n": 1675,
+     "name": "reaction_dir top tercile",
+     "passes_selection": false,
+     "stable_across_halves": false,
+     "win_rate": 0.4418
+    },
+    {
+     "adjusted_ci": [
+      -0.2407,
+      0.2378
+     ],
+     "ci95": [
+      -0.1729,
+      0.1381
+     ],
+     "conditions": [
+      {
+       "feature": "reaction_dir",
+       "op": ">=",
+       "value": 10.3759
+      },
+      {
+       "feature": "relvol_event",
+       "op": ">=",
+       "value": 2.5066
+      }
+     ],
+     "mean_first_half": -0.0735,
+     "mean_r": -0.015,
+     "mean_second_half": 0.0274,
+     "n": 995,
+     "name": "reaction_dir + relvol_event top terciles",
+     "passes_selection": false,
+     "stable_across_halves": false,
+     "win_rate": 0.4322
+    },
+    {
+     "adjusted_ci": [
+      -0.2433,
+      0.2792
+     ],
+     "ci95": [
+      -0.1334,
+      0.1823
+     ],
+     "conditions": [
+      {
+       "feature": "relvol_event",
+       "op": "<=",
+       "value": 1.7054
+      }
+     ],
+     "mean_first_half": 0.0092,
+     "mean_r": 0.0025,
+     "mean_second_half": -0.0081,
+     "n": 1675,
+     "name": "relvol_event bottom tercile",
+     "passes_selection": false,
+     "stable_across_halves": false,
+     "win_rate": 0.4639
+    }
+   ]
+  },
+  "derived_hypothesis": {
+   "conditions": [
+    {
+     "feature": "pre_trend_20_dir",
+     "op": "<=",
+     "value": -3.3636
+    }
+   ],
+   "key": "earnings_drift_refined",
+   "selection_strength": "exploratory",
+   "statement": "Within earnings_drift v1 signals, those with the 20-session trend into the report at most -3.3636 keep drifting by more than the parent's other signals (chosen on the train period only: n 1674, mean +0.060 R; EXPLORATORY: did not pass the multiple-testing selection rule).",
+   "version": "a1f36cc3f"
+  },
+  "experiments": [
+   {
+    "checks": [
+     {
+      "check": "n_test >= 150",
+      "ok": true,
+      "value": 5189
+     },
+     {
+      "check": "test net expectancy 95% interval entirely above 0",
+      "ok": false,
+      "value": [
+       -0.12252,
+       0.16372
+      ]
+     },
+     {
+      "check": "signal minus random-date control, 95% interval entirely above 0",
+      "ok": false,
+      "value": [
+       -0.2148,
+       0.2409
+      ]
+     },
+     {
+      "check": "train net expectancy > 0",
+      "ok": false,
+      "value": -0.0034
+     },
+     {
+      "check": "test expectancy without the top 1% of winners > 0",
+      "ok": false,
+      "value": -0.00773
+     }
+    ],
+    "derived_from": null,
+    "hypothesis": "After an earnings report whose surprise and first price reaction agree, the stock keeps drifting in that direction over the following weeks by more than costs.",
+    "key": "earnings_drift",
+    "n_test": 5189,
+    "n_train": 5024,
+    "parent": null,
+    "report_sha256": "5d752dd5ad1c28e0f1609ff2515424eecfef097609d7fbd4e929b3d77a840691",
+    "run_hash": "4db8ecb05abbcd04cca70ff668fa7719d39d0ad155303628a6466b49fc59c8ff",
+    "spec_hash": "1af275757e075dcf9980507756580b6ab7973f20dd46b9ef4338806b558f07de",
+    "test_ci95": [
+     -0.12252,
+     0.16372
+    ],
+    "test_expectancy_r": 0.023,
+    "test_long_r": 0.0833,
+    "test_short_r": -0.1289,
+    "train_expectancy_r": -0.0034,
+    "verdict": "NO_EDGE_DEMONSTRATED",
+    "version": "v1",
+    "vs_all_reports": {
+     "ci95": [
+      -0.02043,
+      0.06021
+     ],
+     "diff": 0.01948,
+     "n_a": 5189,
+     "n_b": 20644
+    },
+    "vs_parent": null,
+    "vs_random": {
+     "ci95": [
+      -0.2148,
+      0.2409
+     ],
+     "diff": 0.01895,
+     "n_a": 5189,
+     "n_b": 4680
+    }
+   },
+   {
+    "checks": [
+     {
+      "check": "n_test >= 150",
+      "ok": true,
+      "value": 3054
+     },
+     {
+      "check": "test net expectancy 95% interval entirely above 0",
+      "ok": false,
+      "value": [
+       -0.13554,
+       0.16089
+      ]
+     },
+     {
+      "check": "signal minus random-date control, 95% interval entirely above 0",
+      "ok": false,
+      "value": [
+       -0.22547,
+       0.20863
+      ]
+     },
+     {
+      "check": "train net expectancy > 0",
+      "ok": false,
+      "value": -0.0027
+     },
+     {
+      "check": "test expectancy without the top 1% of winners > 0",
+      "ok": false,
+      "value": -0.01851
+     },
+     {
+      "check": "signal minus its parent strategy (the added conditions must improve on it), 95% interval entirely above 0",
+      "ok": false,
+      "value": [
+       -0.05064,
+       0.01943
+      ]
+     }
+    ],
+    "derived_from": "owner hypothesis, a priori",
+    "hypothesis": "The drift after an earnings surprise exists only when the reaction comes with unusual participation (volume at least twice normal) and a range expansion (true range at least 1.5 times the ATR known before the report); weaker reactions are noise.",
+    "key": "earnings_confluence",
+    "n_test": 3054,
+    "n_train": 2505,
+    "parent": "earnings_drift v1",
+    "report_sha256": "3d2aa36779a14c4895f833ee5be0abf475d0418cdf785e991e9dc3e7095a0de9",
+    "run_hash": "06a5ba210a6f99469836c57ad4cb540dd35ddf029e1c1ecd23d41ff27e754518",
+    "spec_hash": "ee57cd6fa52f60781747e3acd9e8c27e5e4a7c7075aa04b6d12fed5b4d6dde40",
+    "test_ci95": [
+     -0.13554,
+     0.16089
+    ],
+    "test_expectancy_r": 0.0122,
+    "test_long_r": 0.0684,
+    "test_short_r": -0.1356,
+    "train_expectancy_r": -0.0027,
+    "verdict": "NO_EDGE_DEMONSTRATED",
+    "version": "v1",
+    "vs_all_reports": {
+     "ci95": [
+      -0.04274,
+      0.05679
+     ],
+     "diff": 0.00863,
+     "n_a": 3054,
+     "n_b": 20644
+    },
+    "vs_parent": {
+     "ci95": [
+      -0.05064,
+      0.01943
+     ],
+     "diff": -0.01084,
+     "n_a": 3054,
+     "n_b": 5189
+    },
+    "vs_random": {
+     "ci95": [
+      -0.22547,
+      0.20863
+     ],
+     "diff": -0.00173,
+     "n_a": 3054,
+     "n_b": 2556
+    }
+   },
+   {
+    "checks": [
+     {
+      "check": "n_test >= 150",
+      "ok": true,
+      "value": 1728
+     },
+     {
+      "check": "test net expectancy 95% interval entirely above 0",
+      "ok": false,
+      "value": [
+       -0.12534,
+       0.17551
+      ]
+     },
+     {
+      "check": "signal minus random-date control, 95% interval entirely above 0",
+      "ok": false,
+      "value": [
+       -0.15586,
+       0.27055
+      ]
+     },
+     {
+      "check": "train net expectancy > 0",
+      "ok": true,
+      "value": 0.0604
+     },
+     {
+      "check": "test expectancy without the top 1% of winners > 0",
+      "ok": false,
+      "value": -0.00372
+     },
+     {
+      "check": "signal minus its parent strategy (the added conditions must improve on it), 95% interval entirely above 0",
+      "ok": false,
+      "value": [
+       -0.07417,
+       0.08089
+      ]
+     }
+    ],
+    "derived_from": "train-only subgroup analysis",
+    "hypothesis": "Within earnings_drift v1 signals, those with the 20-session trend into the report at most -3.3636 keep drifting by more than the parent's other signals (chosen on the train period only: n 1674, mean +0.060 R; EXPLORATORY: did not pass the multiple-testing selection rule).",
+    "key": "earnings_drift_refined",
+    "n_test": 1728,
+    "n_train": 1674,
+    "parent": "earnings_drift v1",
+    "report_sha256": "9aa73613e72485b0058b705beafd47e89c2b661fc4a9dd9202ae7359fd329f76",
+    "run_hash": "0fcdc785f27ca33c46a8bf40b95fdf1add418b3cc2ef75cd2ef92c5fef3eea4c",
+    "spec_hash": "78e56e6113ca175fc642eccaff3755b727404c789524e430e42300f1991eabd1",
+    "test_ci95": [
+     -0.12534,
+     0.17551
+    ],
+    "test_expectancy_r": 0.0268,
+    "test_long_r": 0.0901,
+    "test_short_r": -0.0819,
+    "train_expectancy_r": 0.0604,
+    "verdict": "NO_EDGE_DEMONSTRATED",
+    "version": "a1f36cc3f",
+    "vs_all_reports": {
+     "ci95": [
+      -0.07194,
+      0.11742
+     ],
+     "diff": 0.02323,
+     "n_a": 1728,
+     "n_b": 20644
+    },
+    "vs_parent": {
+     "ci95": [
+      -0.07417,
+      0.08089
+     ],
+     "diff": 0.00375,
+     "n_a": 1728,
+     "n_b": 5189
+    },
+    "vs_random": {
+     "ci95": [
+      -0.15586,
+      0.27055
+     ],
+     "diff": 0.06927,
+     "n_a": 1728,
+     "n_b": 1601
+    }
+   }
+  ],
+  "next_steps": [
+   {
+    "statement": "Replace yfinance report dates with SEC filing acceptance times (8-K item 2.02) so the reaction window is anchored to when the report was public, then rerun the parent. Needs the SEC contact identity; the pipeline is built and dormant (PR #78).",
+    "status": "blocked on data"
+   },
+   {
+    "statement": "Short interest as a feature: no point-in-time source exists today (only the current value), so it cannot be tested without leaking the future. Needs a dated vendor feed.",
+    "status": "blocked on data"
+   }
+  ]
+ },
+ "generated_at": "2026-10-31",
+ "headline": "3 experiments on one data extract (earnings_drift v1: no edge demonstrated, earnings_confluence v1: no edge demonstrated, earnings_drift_refined a1f36cc3f: no edge demonstrated).",
+ "id": "strategy_lab_loop",
+ "kind": "strategy_lab",
+ "provenance": {
+  "data_sha256": "b27523d0f35bdde74c9d11b7cce40f97d235c61250834940eacacf55cc56f0b6",
+  "extract": {
+   "earnings_rows": 59426,
+   "earnings_sha256": "6a704315df9836a5eca81203f023d4fd4ab029c3a44a1d18b7402c9c746b6958",
+   "prices_max_date": "2026-10-30",
+   "prices_min_date": "2020-09-01",
+   "prices_rows": 3963910,
+   "prices_sha256": "7f2023e2a4e370175ad7a6f3bbd35311d36bf9311182ba37aed3370b042159e1",
+   "prices_symbols": 2823,
+   "schema": "strategy_lab_extract_v1",
+   "start": "2020-09-01"
+  },
+  "run_hashes": {
+   "earnings_confluence_v1": "06a5ba210a6f99469836c57ad4cb540dd35ddf029e1c1ecd23d41ff27e754518",
+   "earnings_drift_refined_a1f36cc3f": "0fcdc785f27ca33c46a8bf40b95fdf1add418b3cc2ef75cd2ef92c5fef3eea4c",
+   "earnings_drift_v1": "4db8ecb05abbcd04cca70ff668fa7719d39d0ad155303628a6466b49fc59c8ff"
+  },
+  "source": "mechanism/research/strategy_lab (reproducible: spec, data and code hashes below)"
+ },
+ "schema": "lab_report_v1",
+ "status": "research_only",
+ "title": "Strategy research loop: experiments, post-mortem and next hypothesis",
+ "use": "Shows what each registered strategy version did out of sample, against which baselines, why it failed or passed, and what was registered next. Not signals, not advice."
+}
