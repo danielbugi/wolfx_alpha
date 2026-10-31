@@ -52,6 +52,20 @@ def cmd_signals(a) -> int:
     return 0
 
 
+def cmd_loop(a) -> int:
+    from research.strategy_lab import loop
+    from research.strategy_lab.data import load_extract
+    panel = load_extract(a.data)
+    code = _code_ref(a.code_ref)
+    result = loop.run_loop(panel, out_dir=a.out, code_ref=code, seed=a.seed, n_boot=a.boot, run_date=a.run_date)
+    if a.publish_dir:
+        print("published:", loop.publish(result, extract_meta=panel.meta, directory=a.publish_dir))
+    for e in result["experiments"]:
+        print(f"STRATEGY_LAB {e['key']} {e['version']} verdict={e['verdict']} n_test={e['n_test']} test_r={e['test_expectancy_r']}")
+    print(f"STRATEGY_LAB loop next_steps={len(result['next_steps'])} derived={'yes' if result['derived_hypothesis'] else 'no'}")
+    return 0
+
+
 def cmd_record(a) -> int:
     import psycopg2
     from research.strategy_lab import ledger
@@ -61,13 +75,20 @@ def cmd_record(a) -> int:
     if a.confirm_database != a.dbname:
         print("refused: --confirm-database must equal --dbname", file=sys.stderr)
         return 2
-    doc = json.load(open(os.path.join(a.out, "result.json"), encoding="utf-8"))
+    files = sorted(os.path.join(root, f) for root, _, names in os.walk(a.out) for f in names if f == "result.json")
+    if not files:
+        print("no result.json under --out", file=sys.stderr)
+        return 2
     conn = psycopg2.connect(host=a.host, port=a.port, dbname=a.dbname, user=a.user, password=os.environ.get(a.password_env, "") if a.password_env else None)
     try:
+        # parents before children: a child's spec row references nothing, but the order keeps the ledger readable
+        docs = [json.load(open(f, encoding="utf-8")) for f in files]
+        docs.sort(key=lambda d: (1 if d["spec"].get("parent") else 0, d["spec"]["key"], d["spec"]["version"]))
         with conn, conn.cursor() as cur:
-            out = ledger.record_run(cur, doc["spec"], data_hash=doc["data_hash"], code_ref=doc["code_ref"], run_hash=doc["run_hash"], seed=doc["seed"],
-                                    result=doc["result"], report_sha256=doc["report_sha256"])
-        print(json.dumps(out))
+            for doc in docs:
+                out = ledger.record_run(cur, doc["spec"], data_hash=doc["data_hash"], code_ref=doc["code_ref"], run_hash=doc["run_hash"], seed=doc["seed"],
+                                        result=doc["result"], report_sha256=doc["report_sha256"])
+                print(json.dumps({"strategy": f"{doc['spec']['key']} {doc['spec']['version']}", "verdict": doc["result"]["verdict"], "created": out["created"]}))
     finally:
         conn.close()
     return 0
@@ -83,11 +104,14 @@ def main(argv=None) -> int:
     s = sub.add_parser("signals")
     s.add_argument("--data", required=True); s.add_argument("--sessions", type=int, default=3)
     s.add_argument("--spec", default="earnings_drift"); s.add_argument("--version", default="v1")
+    lp = sub.add_parser("loop")
+    lp.add_argument("--data", required=True); lp.add_argument("--out", required=True); lp.add_argument("--code-ref"); lp.add_argument("--seed", type=int, default=20261031)
+    lp.add_argument("--boot", type=int, default=1000); lp.add_argument("--run-date", default=""); lp.add_argument("--publish-dir")
     c = sub.add_parser("record")
     c.add_argument("--out", required=True); c.add_argument("--host", required=True); c.add_argument("--dbname", required=True); c.add_argument("--user", required=True)
     c.add_argument("--port", default="5432"); c.add_argument("--password-env"); c.add_argument("--apply", action="store_true"); c.add_argument("--confirm-database")
     a = p.parse_args(argv)
-    return {"run": cmd_run, "signals": cmd_signals, "record": cmd_record}[a.cmd](a)
+    return {"run": cmd_run, "signals": cmd_signals, "loop": cmd_loop, "record": cmd_record}[a.cmd](a)
 
 
 if __name__ == "__main__":
