@@ -38,6 +38,7 @@ Full picture, diagrams, and the 5 independent execution paths:
 | [docs/architecture/SYSTEM_OVERVIEW.md](docs/architecture/SYSTEM_OVERVIEW.md) | The primary technical map — production architecture, the 5 execution paths, component ownership, **"where should new work go."** Start here. |
 | [docs/architecture/DATABASE.md](docs/architecture/DATABASE.md) | Schema by functional domain, migration model, `telegram_post_delivery` in depth. |
 | [docs/architecture/TELEGRAM_PUBLISHING.md](docs/architecture/TELEGRAM_PUBLISHING.md) | The post-market package flow, idempotency contract, and how it differs from earnings/notices/the bot. |
+| [docs/architecture/DATA_PROVIDERS.md](docs/architecture/DATA_PROVIDERS.md) | Which provider supplies what (verified live 2026-10-31): Tiingo/Alpaca/SEC/yfinance capability matrix, what each production feature depends on, and why earnings + non-Dow-30 statements are still yfinance. |
 | [docs/architecture/SCHEDULING.md](docs/architecture/SCHEDULING.md) | Every production systemd timer, verified against tracked unit files. |
 | [docs/architecture/CI_CD.md](docs/architecture/CI_CD.md) | Commit → CI → manual CD → running container, for backend/mechanism/frontend. |
 | [docs/architecture/STRATEGY_INTELLIGENCE.md](docs/architecture/STRATEGY_INTELLIGENCE.md) | The canonical signal-ledger analytics layer (`mechanism/strategy_analytics`), its definitions (win, R, held, stale…), `/api/strategies` endpoints, data health. |
