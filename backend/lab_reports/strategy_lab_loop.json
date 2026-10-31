@@ -5,7 +5,7 @@
   "A pass authorises a forward shadow run only. It is not a trading claim; fills and costs are modelled.",
   "Short interest is not used: no point-in-time source exists."
  ],
- "code_ref": "bac4bf5a1842859e8143efa58e4967e1e4dd22c8",
+ "code_ref": "b922bcfb134594eb26cad0350ebacc40e5ff4282",
  "data": {
   "analysis": {
    "by_year": {
@@ -424,8 +424,8 @@
     "n_test": 5189,
     "n_train": 5024,
     "parent": null,
-    "report_sha256": "5d752dd5ad1c28e0f1609ff2515424eecfef097609d7fbd4e929b3d77a840691",
-    "run_hash": "4db8ecb05abbcd04cca70ff668fa7719d39d0ad155303628a6466b49fc59c8ff",
+    "report_sha256": "d9d32a6be7507fd102cb35beb306af95194c091119bdc32dc2a940a016b9c044",
+    "run_hash": "819114d9cc1a3f164ddfe4259ac6525af02b53c1e4970a9d8dbdf52ddb583412",
     "spec_hash": "1af275757e075dcf9980507756580b6ab7973f20dd46b9ef4338806b558f07de",
     "test_ci95": [
      -0.12252,
@@ -505,8 +505,8 @@
     "n_test": 3054,
     "n_train": 2505,
     "parent": "earnings_drift v1",
-    "report_sha256": "3d2aa36779a14c4895f833ee5be0abf475d0418cdf785e991e9dc3e7095a0de9",
-    "run_hash": "06a5ba210a6f99469836c57ad4cb540dd35ddf029e1c1ecd23d41ff27e754518",
+    "report_sha256": "14ad1227d0d83d71b520a54362545be75979667a1f7f5cf026a2c5385f12d270",
+    "run_hash": "f6d893605b0a5f206a6ba92aa7f7983bd155f8bf55aa68c9d946780987dd9260",
     "spec_hash": "ee57cd6fa52f60781747e3acd9e8c27e5e4a7c7075aa04b6d12fed5b4d6dde40",
     "test_ci95": [
      -0.13554,
@@ -594,8 +594,8 @@
     "n_test": 1728,
     "n_train": 1674,
     "parent": "earnings_drift v1",
-    "report_sha256": "9aa73613e72485b0058b705beafd47e89c2b661fc4a9dd9202ae7359fd329f76",
-    "run_hash": "0fcdc785f27ca33c46a8bf40b95fdf1add418b3cc2ef75cd2ef92c5fef3eea4c",
+    "report_sha256": "23033124f2d7dee00b49f1add62ebda1e6592573532301d1859e995013ac15be",
+    "run_hash": "a0c4330e84956e9d0bcaeae8afcb2efe1831619f639272f741c5d13a65edfcef",
     "spec_hash": "78e56e6113ca175fc642eccaff3755b727404c789524e430e42300f1991eabd1",
     "test_ci95": [
      -0.12534,
@@ -638,6 +638,10 @@
   ],
   "next_steps": [
    {
+    "statement": "Forward holdout: record earnings_drift_refined a1f36cc3f signals from the next session on as a shadow (no orders) and judge it once at least 150 new positions exist. The test period has now been looked at by 3 strategies, so it can no longer serve as confirmation for any further hypothesis; new evidence has to come from data dated after this run.",
+    "status": "proposed"
+   },
+   {
     "statement": "Replace yfinance report dates with SEC filing acceptance times (8-K item 2.02) so the reaction window is anchored to when the report was public, then rerun the parent. Needs the SEC contact identity; the pipeline is built and dormant (PR #78).",
     "status": "blocked on data"
    },
@@ -665,9 +669,9 @@
    "start": "2020-09-01"
   },
   "run_hashes": {
-   "earnings_confluence_v1": "06a5ba210a6f99469836c57ad4cb540dd35ddf029e1c1ecd23d41ff27e754518",
-   "earnings_drift_refined_a1f36cc3f": "0fcdc785f27ca33c46a8bf40b95fdf1add418b3cc2ef75cd2ef92c5fef3eea4c",
-   "earnings_drift_v1": "4db8ecb05abbcd04cca70ff668fa7719d39d0ad155303628a6466b49fc59c8ff"
+   "earnings_confluence_v1": "f6d893605b0a5f206a6ba92aa7f7983bd155f8bf55aa68c9d946780987dd9260",
+   "earnings_drift_refined_a1f36cc3f": "a0c4330e84956e9d0bcaeae8afcb2efe1831619f639272f741c5d13a65edfcef",
+   "earnings_drift_v1": "819114d9cc1a3f164ddfe4259ac6525af02b53c1e4970a9d8dbdf52ddb583412"
   },
   "source": "mechanism/research/strategy_lab (reproducible: spec, data and code hashes below)"
  },
