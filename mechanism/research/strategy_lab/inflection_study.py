@@ -332,6 +332,8 @@ COMBOS = [
     ("profitability_plus_revenue", "Profitability Turnaround + Revenue Acceleration", lambda u: {IC.PROFITABILITY_TURNAROUND, IC.REVENUE_ACCELERATION} <= u["types"]),
     ("margin_plus_relative_strength", "Margin Expansion + Relative Strength (top quintile of 60-session strength versus the sector)", lambda u: IC.MARGIN_EXPANSION in u["types"] and (u.get("rs60") or -9) >= 0.10),
     ("revenue_plus_volume", "Revenue Acceleration + Volume Confirmation (reaction-day volume at least 2x normal)", lambda u: IC.REVENUE_ACCELERATION in u["types"] and (u.get("relvol") or 0) >= 2.0),
+    ("acceleration_plus_leverage", "Revenue Acceleration + Operating Leverage Inflection (growth speeding up while operating profit grows faster than revenue)", lambda u: {IC.REVENUE_ACCELERATION, IC.OPERATING_LEVERAGE} <= u["types"]),
+    ("delayed_reaction", "Two or more improvement events with a muted first reaction (two-session price reaction at or below +2%): does the repricing arrive later?", lambda u: len(u["types"]) >= 2 and (u["context"].get("reaction") or {}).get("ret_2d") is not None and u["context"]["reaction"]["ret_2d"] <= 0.02),
     ("fcf_plus_valuation_compression", "FCF Turnaround + Valuation Compression (price/sales in the lower third of its own history or below 0.8x the sector)", lambda u: IC.FCF_TURNAROUND in u["types"] and (((u["valuation"].get("ps_percentile_own_history")) is not None and u["valuation"]["ps_percentile_own_history"] <= 0.34) or ((u["valuation"].get("ps_vs_sector_median")) is not None and u["valuation"]["ps_vs_sector_median"] <= 0.8))),
 ]
 
