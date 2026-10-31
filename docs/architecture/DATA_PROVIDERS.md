@@ -76,3 +76,25 @@ earnings or fundamentals beyond 30 symbols. This is a coverage fact, not a wirin
 * **Before anything is displayed from it:** `--reconcile` compares SEC quarters with `quarterly_fundamentals` (0.5% on amounts, 2 cents on EPS) and lists the quarters
   SEC has that yfinance does not yet. The API/UI then shows the source of each quarter; nothing is silently substituted.
 * **Scope limits:** US-GAAP 10-Q/10-K filers. Foreign private issuers (20-F/40-F, IFRS) and companies without XBRL are recorded as `no_xbrl` / `not_found`, never filled.
+
+## 6. Licensing: who may see vendor data (found 2026-10-31; treated as UNCONFIRMED redistribution rights)
+
+**What the vendors' own pages say** (read 2026-10-31; not legal advice):
+
+* **Tiingo** pricing page: the Starter and Power plans are licensed "Internal Use Only", defined as "you may only use the data for your own personal use" and "you may not display or share the data with another person or organization". A business plan exists for internal commercial use ($50/month); "for redistribution use, our pricing is explicit and predictable on our Product pages". The Fundamentals add-on has "individual and commercial tiers"; its price is not public.
+* **Alpaca** support page: as of November 2022 Alpaca API data cannot be redistributed; the free plan's data is IEX's, whose own agreement limits it to personal, non-commercial use by a non-professional. Alpaca's full market-data agreement was not read.
+* **SEC EDGAR** is public domain (fair-access rules only), but carries no prices.
+* **yfinance / Yahoo** gives no redistribution rights (unofficial scraper).
+
+**What is exposed today (read-only checks, 2026-10-31):** one active collaborator dashboard account besides the owner; real sends to the public channel are enabled (`PROD_SENDING_ENABLED=1`; 5 market reports in the last 14 days, the latest on 2026-10-31, and 5 each of the older digest, market-health, momentum-board and top-gainers posts up to 2026-10-24); 7 private-assistant members.
+All of these carry or derive from Tiingo-sourced prices.
+
+**Decision (owner, 2026-10-31):** treat redistribution rights as unconfirmed; do not expose Tiingo-derived prices to collaborators or Telegram recipients unless the licence permits it.
+* Safe-direction pause of real channel sends: set `PROD_SENDING_ENABLED=0` in `/opt/donchian/env/.env` (the sender reads it on every run; the Control Center re-locks at once). Re-enable by setting it back to 1.
+* Still to be decided by the owner because they affect real people: the collaborator login and the private assistant's price screens.
+
+**Compliant paths to evaluate (none verified yet; each needs a written answer on display/derived-data rights):**
+1. **Tiingo redistribution licence** (same integration, no migration): ask Product/Sales for the price and whether derived metrics (percent changes, rankings) are covered.
+2. **Tiingo Business plan** only covers internal commercial use; it does not by itself allow showing data to collaborators or a public channel.
+3. **A market-data vendor with a display/redistribution licence** (candidates to verify, not recommendations: Polygon/Massive, Databento, Intrinio, Financial Modeling Prep, Nasdaq Data Link): compare price, whether derived data is covered, history depth and symbol coverage.
+4. **Restructure what is shown**: owner-only price data, collaborators and channel limited to content not derived from vendor prices. Needs a legal answer on whether derived figures count as the data.
