@@ -30,7 +30,7 @@ def register_spec(cur, spec: Mapping[str, Any]) -> Dict[str, Any]:
 
 def record_run(cur, spec: Mapping[str, Any], *, data_hash: str, code_ref: str, run_hash: str, seed: int, result: Mapping[str, Any], report_sha256: str) -> Dict[str, Any]:
     reg = register_spec(cur, spec)
-    metrics = {"cells": result["cells"], "controls_diff": result["controls_diff"], "by_year": result["by_year"], "decision_checks": result["decision_checks"],
+    metrics = result.get("ledger_metrics") or {"cells": result["cells"], "controls_diff": result["controls_diff"], "by_year": result["by_year"], "decision_checks": result["decision_checks"],
                "event_accounting": result["event_accounting"], "n_positions_by_kind_split": result["n_positions_by_kind_split"]}
     cur.execute("SELECT id FROM research_strategy_run WHERE run_hash = %s", (run_hash,))
     row = cur.fetchone()

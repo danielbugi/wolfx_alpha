@@ -1,0 +1,167 @@
+{
+ "symbol": "OSIS",
+ "method_version": "inflection_v1",
+ "notice": "Research signals, not recommendations. Rule-based and explainable; whether inflections predict returns is tested separately in the Quant Lab and is not established. Statements come from the stored quarterly fundamentals; the date each was public is the earnings report date when known, otherwise an assumed lag (shown).",
+ "available": true,
+ "latest_score": 20.0,
+ "latest_quarter_end": "2026-06-30",
+ "events": [
+  {
+   "id": 923,
+   "symbol": "OSIS",
+   "company_name": null,
+   "sector": null,
+   "event_type": "fcf_turnaround",
+   "label": "Free cash flow turnaround",
+   "strength": 100.0,
+   "severity": "high",
+   "score": 20.0,
+   "fiscal_year": 2026,
+   "fiscal_quarter": 2,
+   "quarter_end": "2026-06-30",
+   "available_at": "2026-10-29",
+   "freshness_days": 1,
+   "availability_basis": "earnings_calendar",
+   "source": "quarterly_fundamentals",
+   "data_quality": "ok",
+   "revision_count": 0,
+   "method_version": "inflection_v1",
+   "explanation": [
+    "Free cash flow turned positive: $168.5M this quarter versus -$9.7M a year earlier (margin +36.7 percentage points)."
+   ],
+   "key_metrics": [
+    {
+     "label": "Free cash flow",
+     "current": 168535000.0,
+     "previous": -9705000.0,
+     "unit": "money"
+    },
+    {
+     "label": "FCF margin",
+     "current": 0.34817108693586307,
+     "previous": null,
+     "unit": "pct"
+    }
+   ],
+   "reaction_2d": -0.0061294662879353146,
+   "excess_vs_sector_since_publication": null,
+   "market_cap": 3136823552.0,
+   "valuation": {
+    "ps_ratio": 1.76,
+    "pe_ratio": 22.28,
+    "ps_percentile_own_history": 0.6551724137931034,
+    "ps_vs_sector_median": 0.45012787723785164,
+    "ps_ratio_at_publication": 1.83,
+    "snapshot_date": "2026-10-30"
+   }
+  }
+ ],
+ "trend": [
+  {
+   "quarter_end": "2025-06-30",
+   "fiscal_year": 2025,
+   "fiscal_quarter": 2,
+   "available_at": "2025-08-21",
+   "availability_basis": "earnings_calendar",
+   "revenue": 504985000.0,
+   "operating_income": 74709000.0,
+   "net_income": 52748000.0,
+   "free_cash_flow": -9705000.0,
+   "op_margin": 0.1479430082081646,
+   "rev_yoy": null,
+   "rev_accel_pp": null,
+   "cash_conversion": 0.010654432395541064,
+   "score": 0.0,
+   "data_quality": "partial",
+   "notes": [
+    "no_prior_year_quarter",
+    "no_previous_quarter"
+   ]
+  },
+  {
+   "quarter_end": "2025-09-30",
+   "fiscal_year": 2025,
+   "fiscal_quarter": 3,
+   "available_at": "2025-10-30",
+   "availability_basis": "earnings_calendar",
+   "revenue": 384623000.0,
+   "operating_income": 35803000.0,
+   "net_income": 20556000.0,
+   "free_cash_flow": 5700000.0,
+   "op_margin": 0.09308595689805342,
+   "rev_yoy": null,
+   "rev_accel_pp": null,
+   "cash_conversion": 0.8336738665109944,
+   "score": 0.0,
+   "data_quality": "partial",
+   "notes": [
+    "no_prior_year_quarter"
+   ]
+  },
+  {
+   "quarter_end": "2025-12-31",
+   "fiscal_year": 2025,
+   "fiscal_quarter": 4,
+   "available_at": "2026-01-29",
+   "availability_basis": "earnings_calendar",
+   "revenue": 464057000.0,
+   "operating_income": 61669000.0,
+   "net_income": 38699000.0,
+   "free_cash_flow": 50643000.0,
+   "op_margin": 0.13289100261390302,
+   "rev_yoy": null,
+   "rev_accel_pp": null,
+   "cash_conversion": 1.6072766738158608,
+   "score": 0.0,
+   "data_quality": "partial",
+   "notes": [
+    "no_prior_year_quarter"
+   ]
+  },
+  {
+   "quarter_end": "2026-03-31",
+   "fiscal_year": 2026,
+   "fiscal_quarter": 1,
+   "available_at": "2026-05-04",
+   "availability_basis": "earnings_calendar",
+   "revenue": 453246000.0,
+   "operating_income": 59382000.0,
+   "net_income": 40216000.0,
+   "free_cash_flow": 2476000.0,
+   "op_margin": 0.1310149455262705,
+   "rev_yoy": null,
+   "rev_accel_pp": null,
+   "cash_conversion": 0.35948378754724486,
+   "score": 0.0,
+   "data_quality": "partial",
+   "notes": [
+    "no_prior_year_quarter"
+   ]
+  },
+  {
+   "quarter_end": "2026-06-30",
+   "fiscal_year": 2026,
+   "fiscal_quarter": 2,
+   "available_at": "2026-10-29",
+   "availability_basis": "earnings_calendar",
+   "revenue": 484058000.0,
+   "operating_income": 78707000.0,
+   "net_income": 55240000.0,
+   "free_cash_flow": 168535000.0,
+   "op_margin": 0.16259828367674947,
+   "rev_yoy": -0.04144083487628347,
+   "rev_accel_pp": null,
+   "cash_conversion": 3.2967052860246198,
+   "score": 20.0,
+   "data_quality": "ok",
+   "notes": [
+    "no_growth_history_for_acceleration"
+   ]
+  }
+ ],
+ "data_status": {
+  "quarters": 5,
+  "partial_quarters": 4,
+  "source": "quarterly_fundamentals"
+ }
+}

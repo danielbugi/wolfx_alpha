@@ -252,6 +252,14 @@ run_step 7 "earnings calendar updater" mechanism/data_updaters/earnings_calendar
 # --time-budget-seconds (the unreached symbols stay due, stalest first, and are worked off on the following nights) and `timeout` is the backstop.
 run_optional_step 8 "quarterly fundamentals updater" 3300 mechanism/data_updaters/quarterly_fundamentals_updater.py --time-budget-seconds 2700
 
+# Step 8b: Fundamental Inflection Engine (OPTIONAL: research signals read only by the dashboard and the owner alerts; no later step reads them). Incremental and idempotent;
+# it skips cleanly with a log line until migration 40 is applied. Hard limit 15 minutes.
+run_optional_step "8b" "fundamental inflection updater" 900 mechanism/inflection/updater.py
+
+# Step 8c: owner alerts for the inflection events (OPTIONAL). A private Telegram message per new high-severity event, a daily email digest and, on Fridays, the weekly research report.
+# Nothing is sent unless INFLECTION_ALERTS_ENABLED=1 (otherwise it logs what it WOULD send); every alert is claimed exactly once in inflection_alert_delivery.
+run_optional_step "8c" "inflection owner alerts" 300 mechanism/inflection/alerts.py --send --telegram --daily-digest --weekly-on-friday
+
 # Step 9: Multi-timeframe Screening
 run_step 9 "multi-timeframe screener" mechanism/screeners/multi_timeframe_screener.py "${SESSION_ARGS[@]}"
 

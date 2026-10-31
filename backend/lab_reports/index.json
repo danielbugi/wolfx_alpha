@@ -77,6 +77,13 @@
    "kind": "strategy_lab",
    "title": "Strategy research loop: experiments, post-mortem and next hypothesis",
    "headline": "3 experiments on one data extract (earnings_drift v1: no edge demonstrated, earnings_confluence v1: no edge demonstrated, earnings_drift_refined a1f36cc3f: no edge demonstrated)."
+  },
+  {
+   "id": "fundamental_inflection_research",
+   "file": "fundamental_inflection_research.json",
+   "kind": "strategy_lab",
+   "title": "Fundamental inflection: forward sector-adjusted returns after an event",
+   "headline": "no edge demonstrated: 20-session net excess return in the test period -0.8% [-2.8%, +2.1%] on 614 company-quarters."
   }
  ]
 }
