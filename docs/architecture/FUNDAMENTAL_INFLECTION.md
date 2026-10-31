@@ -43,3 +43,17 @@ over a long history. The SEC EDGAR pipeline (migration 38, built, waiting for th
 `python mechanism/inflection/updater.py` (incremental), `--full`, `--symbols A B`, `--asof YYYY-MM-DD`, `--dry-run`, `--audit`. Pipeline step 8b runs it nightly after the quarterly fundamentals
 step as an OPTIONAL step (hard limit 15 minutes; a failure is a warning, not a pipeline failure) and skips cleanly until migration 40 is applied. One log line per run (`INFLECTION ...`) and a row in
 `inflection_run_log`.
+
+## Alerts (owner only)
+
+`mechanism/inflection/alerts.py`, pipeline step 8c (optional). **Off until `INFLECTION_ALERTS_ENABLED=1`**; without it the run logs what it would send and sends nothing.
+
+* **Telegram**: one private message per new event of severity `high` (strength >= 75, or composite score >= 60) made public in the last 3 days, strongest first, at most 10 per run (the rest in one summary
+  message). Sent to the owner's private chat with the bot (`BOT_OWNER_ID`), never a channel. Each says RESEARCH SIGNAL, not an order recommendation, with the numbers, why it may matter, the public date and
+  how it was determined, price reaction, valuation and the stock link.
+* **Email**: a daily digest (events detected in the last 26 hours, medium and high) and, on the Friday run, a weekly research report (the week's events, the Quant Lab experiments and their verdicts,
+  failure patterns, newly registered hypotheses, what is blocked on data, data-quality and coverage gaps). HTML with a plain-text alternative. The recipient is `INFLECTION_EMAIL_TO` (an address, or `owner`
+  for the owner's own login address); unset = no email is prepared. No address is invented.
+* **Exactly once**: every alert claims a row in `inflection_alert_delivery` (UNIQUE `dedupe_key`: symbol + quarter + event type for Telegram, date or ISO week for email) before sending; a restated event does not
+  alert again; a failed send is retried on a later run, at most 3 attempts, and stays visible as `failed`. Observability: the table itself plus the `INFLECTION_ALERTS` log line of each run.
+* Other settings: `INFLECTION_TELEGRAM_MIN_SEVERITY` (default high), `INFLECTION_TELEGRAM_MAX_PER_RUN` (10), `INFLECTION_FRESH_DAYS` (3), `INFLECTION_BASE_URL`, `LAB_REPORTS_DIR` (the weekly research section).
