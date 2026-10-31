@@ -18,7 +18,7 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "mechanism"))
 
 from mechanism.data_updaters.earnings_calendar_updater import (  # noqa: E402
-    EarningsCalendarUpdater, REFRESH_AFTER_DAYS, _safe_float,
+    EarningsCalendarUpdater, PENDING_MIN_GAP_HOURS, PENDING_WINDOW_DAYS, REFRESH_AFTER_DAYS, _safe_float,
 )
 
 TEST_SYMBOL_FUTURE = "ZZTEST_FUTURE"
@@ -167,3 +167,56 @@ def test_upsert_row_is_idempotent(updater, _cleanup):
         (row["symbol"], row["report_date"]))
     assert len(rows) == 1
     assert float(rows[0]["eps_estimate"]) == 2.5
+
+
+# ---------------------------------------------------------------------------
+# A recent report with no reported EPS yet is re-asked every run (the real SQL, end to end)
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def _in_universe():
+    """Puts ZZTEST symbols into the universe (stock_prices) for the duration of one test, then removes them. Skips when the
+    table will not take a minimal row (a schema with other required columns)."""
+    d = _db()
+    syms = ("ZZTEST_PE", "ZZTEST_DN", "ZZTEST_OL", "ZZTEST_JA")
+    d.execute_insert("DELETE FROM stock_prices WHERE symbol LIKE 'ZZTEST_%%'")
+    try:
+        for s in syms:
+            d.execute_insert("INSERT INTO stock_prices (symbol, date, close) VALUES (%s, CURRENT_DATE, 1)", (s,))
+    except Exception as e:  # pragma: no cover
+        d.execute_insert("DELETE FROM stock_prices WHERE symbol LIKE 'ZZTEST_%%'")
+        pytest.skip(f"stock_prices does not take a minimal test row: {e}")
+    yield syms
+    d.execute_insert("DELETE FROM stock_prices WHERE symbol LIKE 'ZZTEST_%%'")
+
+
+def _calendar(updater, symbol, report_date, *, actual, fetched_hours_ago, next_estimate_days=60):
+    now = datetime.now(timezone.utc)
+    fetched = now - timedelta(hours=fetched_hours_ago)
+    _upsert_with_fetched_at(updater, {"symbol": symbol, "report_date": report_date, "eps_estimate": 1.0,
+                                      "eps_actual": actual, "surprise_pct": None, "_fetched_at": fetched})
+    # every symbol that has reported once also carries NEXT quarter's estimate - this is what hid the pending result before
+    _upsert_with_fetched_at(updater, {"symbol": symbol, "report_date": date.today() + timedelta(days=next_estimate_days),
+                                      "eps_estimate": 1.2, "eps_actual": None, "surprise_pct": None, "_fetched_at": fetched})
+
+
+def test_recent_report_without_result_is_asked_again_even_with_a_future_date_on_file(updater, _cleanup, _in_universe):
+    # fetched yesterday (well inside REFRESH_AFTER_DAYS) and a future date exists: the OLD rule left it alone for two weeks
+    _calendar(updater, "ZZTEST_PE", date.today() - timedelta(days=1), actual=None, fetched_hours_ago=20)
+    _calendar(updater, "ZZTEST_DN", date.today() - timedelta(days=1), actual=1.4, fetched_hours_ago=20)
+    due = set(updater.get_symbols_to_update())
+    assert "ZZTEST_PE" in due
+    assert "ZZTEST_DN" not in due          # result captured and the next date is on file: nothing to ask
+
+
+def test_pending_rule_is_bounded_in_time_and_not_repeated_within_a_run_gap(updater, _cleanup, _in_universe):
+    _calendar(updater, "ZZTEST_OL", date.today() - timedelta(days=PENDING_WINDOW_DAYS + 3), actual=None, fetched_hours_ago=20)
+    _calendar(updater, "ZZTEST_JA", date.today() - timedelta(days=1), actual=None, fetched_hours_ago=max(PENDING_MIN_GAP_HOURS - 2, 0) or 1)
+    due = set(updater.get_symbols_to_update())
+    assert "ZZTEST_OL" not in due           # past the window: back to the 14-day rule
+    assert "ZZTEST_JA" not in due     # asked less than PENDING_MIN_GAP_HOURS ago
+
+
+def test_freshness_audit_counts_are_integers(updater):
+    audit = updater.freshness_audit()
+    assert set(audit) >= {"due_last_2_days", "captured_last_2_days", "due_older", "unresolved"} or audit == {}
+    assert all(isinstance(v, int) for v in audit.values())

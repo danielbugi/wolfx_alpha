@@ -38,3 +38,7 @@ COPY mechanism/alerts/send_channel_posts.py /app/mechanism/alerts/send_channel_p
 COPY mechanism/alerts/send_daily_digest.py /app/mechanism/alerts/send_daily_digest.py
 COPY mechanism/alerts/tests/test_market_report.py /app/mechanism/alerts/tests/test_market_report.py
 COPY mechanism/alerts/tests/test_notices.py /app/mechanism/alerts/tests/test_notices.py
+# Earnings freshness (PR #75, 2026-10-31 engineering directive): the calendar updater re-asks a symbol every run while a report date within the last 7 days has no reported EPS.
+# At the pinned commit 5c51189 earnings_calendar_updater.py is byte-identical to main before PR #75 (verified 2026-10-31), so the delta is exactly that change. Used only by pipeline step 7.
+COPY mechanism/data_updaters/earnings_calendar_updater.py /app/mechanism/data_updaters/earnings_calendar_updater.py
+COPY mechanism/data_updaters/tests/test_earnings_calendar_updater.py /app/mechanism/data_updaters/tests/test_earnings_calendar_updater.py

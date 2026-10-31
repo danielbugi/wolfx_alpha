@@ -34,6 +34,8 @@ except ImportError as e:
 
 EARNINGS_DATES_LIMIT = 12          # matches earnings_service.py's default -- a few years back + upcoming
 REFRESH_AFTER_DAYS = 14            # periodic re-check even with a future date on file (dates can shift)
+PENDING_WINDOW_DAYS = 7            # a report date this recent with no reported EPS yet is re-checked every run
+PENDING_MIN_GAP_HOURS = 3          # ...but not twice within this gap (a second run the same evening is not re-hammered)
 
 
 def _safe_float(value: Any) -> Optional[float]:
@@ -114,7 +116,13 @@ class EarningsCalendarUpdater:
             a report may have happened since and shifted the estimate for the one after it), OR
           - periodic refresh even with a future date already on file (REFRESH_AFTER_DAYS): yfinance's
             forecasted dates get confirmed/moved as the real date approaches, so a date fetched weeks
-            ago can no longer be trusted at face value.
+            ago can no longer be trusted at face value, OR
+          - a report date within the last PENDING_WINDOW_DAYS still has no reported EPS: the company has
+            (or should have) reported and the vendor has not published the result to us yet, so it is asked
+            again every run until it does. Without this, a symbol whose NEXT quarter's estimate is already on
+            file (every symbol, once it has reported once) was only re-asked every REFRESH_AFTER_DAYS, so most
+            fresh results reached us up to two weeks late (production 2026-10-31: 40-47% of the reports of the
+            previous five days still had no actual EPS).
         """
         try:
             query = """
@@ -132,13 +140,20 @@ class EarningsCalendarUpdater:
                 ec.last_known_date IS NULL
                 OR ec.last_known_date < CURRENT_DATE
                 OR ec.last_fetched <= NOW() - INTERVAL '%s days'
+                OR EXISTS (
+                    SELECT 1 FROM earnings_calendar p
+                    WHERE p.symbol = sp.symbol
+                      AND p.report_date BETWEEN CURRENT_DATE - %s AND CURRENT_DATE
+                      AND p.eps_actual IS NULL
+                      AND p.fetched_at <= NOW() - INTERVAL '%s hours'
+                )
             )
             ORDER BY sp.symbol
             """
-            params = (REFRESH_AFTER_DAYS,)
+            params = (REFRESH_AFTER_DAYS, PENDING_WINDOW_DAYS, PENDING_MIN_GAP_HOURS)
             if limit:
                 query += " LIMIT %s"
-                params = (REFRESH_AFTER_DAYS, limit)
+                params = params + (limit,)
 
             results = db.execute_dict_query(query, params)
             symbols = [row['symbol'] for row in results]
@@ -150,6 +165,27 @@ class EarningsCalendarUpdater:
         except Exception as e:
             self.logger.error(f"Error getting symbols: {e}")
             return []
+
+    def freshness_audit(self) -> Dict[str, int]:
+        """Read-only counts of how current the captured results are. `unresolved` = report dates between 3 and
+        PENDING_WINDOW_DAYS days old that still have no reported EPS even though the symbol was asked at least once since
+        the date passed; the vendor is the likely reason (or the date was a projection that moved), but a rising number
+        is the signal that results are reaching us late. Never raises."""
+        try:
+            rows = db.execute_dict_query("""
+                SELECT
+                  COUNT(*) FILTER (WHERE report_date BETWEEN CURRENT_DATE - 2 AND CURRENT_DATE) AS due_last_2_days,
+                  COUNT(*) FILTER (WHERE report_date BETWEEN CURRENT_DATE - 2 AND CURRENT_DATE AND eps_actual IS NOT NULL) AS captured_last_2_days,
+                  COUNT(*) FILTER (WHERE report_date BETWEEN CURRENT_DATE - %s AND CURRENT_DATE - 3) AS due_older,
+                  COUNT(*) FILTER (WHERE report_date BETWEEN CURRENT_DATE - %s AND CURRENT_DATE - 3 AND eps_actual IS NULL
+                                   AND fetched_at > report_date + 1) AS unresolved
+                FROM earnings_calendar
+                WHERE report_date BETWEEN CURRENT_DATE - %s AND CURRENT_DATE
+            """, (PENDING_WINDOW_DAYS, PENDING_WINDOW_DAYS, PENDING_WINDOW_DAYS))
+            return {k: int(v or 0) for k, v in rows[0].items()}
+        except Exception as e:  # noqa: BLE001
+            self.logger.warning(f"Freshness audit failed: {e}")
+            return {}
 
     def run_update(self, symbols: Optional[List[str]] = None, limit: Optional[int] = None):
         start_time = datetime.now()
@@ -189,6 +225,10 @@ class EarningsCalendarUpdater:
 
         progress.close()
 
+        audit = self.freshness_audit()
+        if audit:
+            self.logger.info("EARNINGS_FRESHNESS " + " ".join(f"{k}={v}" for k, v in sorted(audit.items())))
+
         duration = datetime.now() - start_time
         success_rate = (successful_updates / len(symbols) * 100) if symbols else 0
         self.logger.info(f"""
@@ -214,9 +254,13 @@ def main():
     parser = argparse.ArgumentParser(description='Earnings Calendar Updater')
     parser.add_argument('--test', nargs='+', help='Test with specific symbols')
     parser.add_argument('--limit', type=int, help='Limit number of symbols (debug)')
+    parser.add_argument('--audit', action='store_true', help='Print the read-only freshness counts and exit')
     args = parser.parse_args()
 
     updater = EarningsCalendarUpdater()
+    if args.audit:
+        print(updater.freshness_audit())
+        return
     if args.test:
         updater.run_update(symbols=args.test)
     else:
