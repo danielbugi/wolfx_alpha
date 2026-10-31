@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 import zlib
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -25,7 +25,8 @@ from research.strategy_lab.specs import spec_hash
 
 ATR_N = 14
 FULL_WINDOW = 60                  # sessions after the signal a random control needs, so that the same controls serve every hold cap
-SIGNAL, ALL_REPORTS, RANDOM = "signal", "all_reports", "random_date"
+SIGNAL, ALL_REPORTS, RANDOM, PARENT = "signal", "all_reports", "random_date", "parent_signal"
+FEATURES = ("direction", "surprise_abs", "reaction_dir", "relvol_event", "range_expansion", "gap_dir", "pre_trend_20_dir")
 
 
 def atr14(h: np.ndarray, l: np.ndarray, c: np.ndarray) -> np.ndarray:
@@ -52,6 +53,53 @@ class Signal:
     report_date: Optional[date]
     surprise_pct: Optional[float]
     reaction_pct: Optional[float]
+    features: Mapping[str, float] = field(default_factory=dict)      # signal-time features (bars up to the signal bar only); see event_features
+
+
+def true_range(h: np.ndarray, l: np.ndarray, c: np.ndarray) -> np.ndarray:
+    tr = np.empty(len(c))
+    tr[0] = h[0] - l[0]
+    tr[1:] = np.maximum.reduce([h[1:] - l[1:], np.abs(h[1:] - c[:-1]), np.abs(l[1:] - c[:-1])])
+    return tr
+
+
+def event_features(bars: Bars, atr: np.ndarray, D: int, direction: int, surprise_pct: float, reaction_pct: float) -> Dict[str, float]:
+    """Features of one report event, from bars <= D+1 (the signal bar) only. All are stated in the trade's direction where a sign matters.
+      direction          +1 long (a beat), -1 short (a miss)
+      surprise_abs       |reported surprise| in percent
+      reaction_dir       the two-session reaction in percent, signed so that positive = in the trade's direction
+      relvol_event       mean volume of the two reaction sessions / mean volume of the 20 sessions before the report
+      range_expansion    mean true range of the two reaction sessions / ATR14 known before the report (D-1)
+      gap_dir            the report session's open versus the previous close, in percent, in the trade's direction
+      pre_trend_20_dir   the 20 sessions before the report, in percent, in the trade's direction
+    NaN when the history or a denominator does not allow it (never filled)."""
+    c, o, v = bars.c, bars.o, bars.v
+    nan = float("nan")
+    base_v = float(np.mean(v[D - 20:D]))
+    tr = true_range(bars.h, bars.l, bars.c)
+    a_prev = float(atr[D - 1]) if D - 1 >= 0 else nan
+    return {
+        "direction": float(direction),
+        "surprise_abs": abs(float(surprise_pct)),
+        "reaction_dir": float(reaction_pct) * direction,
+        "relvol_event": float(np.mean(v[D:D + 2]) / base_v) if base_v > 0 else nan,
+        "range_expansion": float(np.mean(tr[D:D + 2]) / a_prev) if math.isfinite(a_prev) and a_prev > 0 else nan,
+        "gap_dir": float((o[D] / c[D - 1] - 1.0) * 100.0 * direction) if c[D - 1] > 0 else nan,
+        "pre_trend_20_dir": float((c[D - 1] / c[D - 21] - 1.0) * 100.0 * direction) if D >= 21 and c[D - 21] > 0 else nan,
+    }
+
+
+def _extra_ok(extra: Sequence[Mapping[str, Any]], feats: Mapping[str, float]) -> bool:
+    """Every extra condition holds (a NaN feature never satisfies one: missing data is not a pass)."""
+    for cnd in extra:
+        x = feats.get(cnd["feature"], float("nan"))
+        if not math.isfinite(x):
+            return False
+        if cnd["op"] == ">=" and not x >= cnd["value"]:
+            return False
+        if cnd["op"] == "<=" and not x <= cnd["value"]:
+            return False
+    return True
 
 
 def _report_session(dates: Sequence[date], d: date, max_gap: int) -> Optional[int]:
@@ -77,10 +125,15 @@ def _guard_ok(c: np.ndarray, d_idx: int, limit_pct: float) -> bool:
     return bool(np.all(np.abs(c[j] / c[j - 1] - 1.0) * 100.0 <= limit_pct))
 
 
-def detect(spec: Mapping[str, Any], symbol: str, bars: Bars, reports: Sequence[Report], counts: Counter) -> List[Signal]:
-    """Signals and the all-reports control for one symbol. `counts` records why events were dropped (nothing is dropped silently)."""
+def detect(spec: Mapping[str, Any], symbol: str, bars: Bars, reports: Sequence[Report], counts: Counter, atr: Optional[np.ndarray] = None) -> List[Signal]:
+    """Signals and the all-reports control for one symbol. `counts` records why events were dropped (nothing is dropped silently).
+    When the spec carries `event.extra` (extra conditions on signal-time features), the events that meet the base conditions are also emitted as the PARENT control
+    and only those that also meet every extra condition are signals."""
     ev, liq, g = spec["event"], spec["liquidity_at_signal"], spec["data_guard"]
     rx = ev["reaction"]
+    extra = ev.get("extra") or []
+    if atr is None:
+        atr = atr14(bars.h, bars.l, bars.c)
     dates, c, v = bars.dates, bars.c, bars.v
     n = len(c)
     out: List[Signal] = []
@@ -108,7 +161,8 @@ def detect(spec: Mapping[str, Any], symbol: str, bars: Bars, reports: Sequence[R
             continue
         direction = 1 if r.surprise_pct > 0 else -1
         reaction = (c[D + 1] / c[D - 1] - 1.0) * 100.0
-        out.append(Signal(symbol, ALL_REPORTS, s, direction, r.report_date, r.surprise_pct, float(reaction)))
+        feats = event_features(bars, atr, D, direction, r.surprise_pct, float(reaction))
+        out.append(Signal(symbol, ALL_REPORTS, s, direction, r.report_date, r.surprise_pct, float(reaction), feats))
         if abs(r.surprise_pct) < ev["min_abs_surprise_pct"]:
             counts["not_signal_surprise_below_threshold"] += 1
             continue
@@ -121,7 +175,13 @@ def detect(spec: Mapping[str, Any], symbol: str, bars: Bars, reports: Sequence[R
         if rx["must_agree_with_surprise_sign"] and (reaction > 0) != (direction > 0):
             counts["not_signal_reaction_disagrees_with_surprise"] += 1
             continue
-        out.append(Signal(symbol, SIGNAL, s, direction, r.report_date, r.surprise_pct, float(reaction)))
+        if extra:
+            out.append(Signal(symbol, PARENT, s, direction, r.report_date, r.surprise_pct, float(reaction), feats))
+            counts["parent_signals"] += 1
+            if not _extra_ok(extra, feats):
+                counts["not_signal_extra_condition_failed"] += 1
+                continue
+        out.append(Signal(symbol, SIGNAL, s, direction, r.report_date, r.surprise_pct, float(reaction), feats))
         counts["signals"] += 1
     return out
 
@@ -202,8 +262,10 @@ def _variant(spec: Mapping[str, Any]) -> ER.Variant:
     return ER.Variant(spec["key"], spec["version"], spec_hash(spec), e["policy"], int(e["primary_max_hold_bars"]))
 
 
-def run_backtest(spec: Mapping[str, Any], panel: Panel, *, seed: int = 20261031, n_boot: int = 1000, symbols: Optional[Sequence[str]] = None) -> Dict[str, Any]:
-    """Run the spec over the panel. Returns a JSON-able result (no clock, no randomness beyond `seed`)."""
+def run_backtest(spec: Mapping[str, Any], panel: Panel, *, seed: int = 20261031, n_boot: int = 1000, symbols: Optional[Sequence[str]] = None,
+                 rows_out: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """Run the spec over the panel. Returns a JSON-able result (no clock, no randomness beyond `seed`).
+    `rows_out`, when given, receives one plain dict per accounted position (kind, split, direction, features, net R at the primary cost, ...) for the analysis step."""
     sp = spec["split"]
     train_start = date.fromisoformat(sp["train_start"])
     train_end, test_start = date.fromisoformat(sp["train_end_exclusive"]), date.fromisoformat(sp["test_start_inclusive"])
@@ -212,6 +274,8 @@ def run_backtest(spec: Mapping[str, Any], panel: Panel, *, seed: int = 20261031,
     primary_bps = float(spec["costs_bps_round_trip"]["primary"])
     variant = _variant(spec)
     counts: Counter = Counter()
+    has_parent = bool(spec["event"].get("extra"))
+    KINDS_RUN = (SIGNAL, PARENT, ALL_REPORTS, RANDOM) if has_parent else (SIGNAL, ALL_REPORTS, RANDOM)
     rows: List[Dict[str, Any]] = []          # one per accounted position: kind, direction, cap, split, signal_date, exit month, trade
     syms = sorted(symbols) if symbols is not None else sorted(panel.bars)
     for sym in syms:
@@ -221,13 +285,14 @@ def run_backtest(spec: Mapping[str, Any], panel: Panel, *, seed: int = 20261031,
             continue
         counts["symbols_with_reports"] += 1
         atr = atr14(bars.h, bars.l, bars.c)
-        sigs = detect(spec, sym, bars, reps, counts)
+        sigs = detect(spec, sym, bars, reps, counts, atr)
         rep_idx = [i for i in (_report_session(bars.dates, r.report_date, spec["event"]["report_session_max_gap_days"]) for r in reps) if i is not None]
         sigs += random_controls(spec, sym, bars, rep_idx, sigs, seed)
-        for kind in (SIGNAL, ALL_REPORTS, RANDOM):
+        for kind in KINDS_RUN:
             ks = [s for s in sigs if s.kind == kind and math.isfinite(float(atr[s.signal_idx])) and atr[s.signal_idx] > 0]
             if not ks:
                 continue
+            by_key = {(s.signal_idx, s.direction): s for s in ks}
             for cap in caps:
                 for direction in (1, -1):
                     ds = [(s.signal_idx, s.direction) for s in ks if s.direction == direction]
@@ -238,8 +303,9 @@ def run_backtest(spec: Mapping[str, Any], panel: Panel, *, seed: int = 20261031,
                         if p.signal_date < train_start:
                             continue
                         split = ER.assign_split(p.signal_date, p.exit_date, train_end, test_start)
-                        rows.append({"kind": kind, "direction": direction, "cap": cap, "split": split, "censored": p.censored, "pos": p,
-                                     "month": p.exit_date.strftime("%Y-%m"), "year": p.signal_date.year})
+                        rows.append({"kind": kind, "direction": direction, "cap": cap, "split": split, "censored": p.censored, "pos": p, "symbol": sym,
+                                     "month": p.exit_date.strftime("%Y-%m"), "year": p.signal_date.year, "signal_date": p.signal_date,
+                                     "features": by_key[(p.signal_idx, p.direction)].features})
 
     def pick(kind, split, cap, direction=None):
         return [r for r in rows if r["kind"] == kind and r["split"] == split and r["cap"] == cap and (direction is None or r["direction"] == direction)]
@@ -254,7 +320,7 @@ def run_backtest(spec: Mapping[str, Any], panel: Panel, *, seed: int = 20261031,
         return s, vals, months
 
     results: Dict[str, Any] = {"cells": {}, "by_year": {}, "controls_diff": {}}
-    for kind in (SIGNAL, ALL_REPORTS, RANDOM):
+    for kind in KINDS_RUN:
         for split in ("train", "test"):
             for cap in caps:
                 for dname, d in (("both", None), ("long", 1), ("short", -1)):
@@ -269,6 +335,9 @@ def run_backtest(spec: Mapping[str, Any], panel: Panel, *, seed: int = 20261031,
             av, am = ER.series([r["pos"] for r in pick(ALL_REPORTS, split, cap)], "std", primary_bps)
             results["controls_diff"][f"{split}|hold{cap}|signal_minus_random"] = block_diff_ci(sv, sm, rv, rm, n_boot, seed + 2)
             results["controls_diff"][f"{split}|hold{cap}|signal_minus_all_reports"] = block_diff_ci(sv, sm, av, am, n_boot, seed + 3)
+            if has_parent:
+                pv, pm = ER.series([r["pos"] for r in pick(PARENT, split, cap)], "std", primary_bps)
+                results["controls_diff"][f"{split}|hold{cap}|signal_minus_parent"] = block_diff_ci(sv, sm, pv, pm, n_boot, seed + 4)
     prim_cap = caps[0]
     by_year: Dict[int, List[float]] = {}
     for r in pick(SIGNAL, "train", prim_cap) + pick(SIGNAL, "test", prim_cap):
@@ -278,8 +347,16 @@ def run_backtest(spec: Mapping[str, Any], panel: Panel, *, seed: int = 20261031,
         if math.isfinite(v):
             by_year.setdefault(r["year"], []).append(v)
     results["by_year"] = {str(y): {"n": len(v), "expectancy_r": round(float(np.mean(v)), 4)} for y, v in sorted(by_year.items())}
+    if rows_out is not None:
+        for r in rows:
+            if r["censored"] or r["cap"] != prim_cap:
+                continue
+            v = ER.net_r(r["pos"].trade, "std", primary_bps)
+            if math.isfinite(v):
+                rows_out.append({"kind": r["kind"], "split": r["split"], "direction": r["direction"], "symbol": r["symbol"], "signal_date": r["signal_date"], "month": r["month"],
+                                 "year": r["year"], "features": dict(r["features"]), "net_r": float(v)})
     results["event_accounting"] = dict(sorted(counts.items()))
-    results["n_positions_by_kind_split"] = {f"{k}|{s}": len(pick(k, s, prim_cap)) for k in (SIGNAL, ALL_REPORTS, RANDOM) for s in ("train", "test", "embargo", "purged")}
+    results["n_positions_by_kind_split"] = {f"{k}|{s}": len(pick(k, s, prim_cap)) for k in KINDS_RUN for s in ("train", "test", "embargo", "purged")}
     results["verdict"], results["decision_checks"] = decide(spec, results, primary_bps, prim_cap)
     return results
 
@@ -290,6 +367,7 @@ def decide(spec: Mapping[str, Any], results: Mapping[str, Any], primary_bps: flo
     test = cells.get(f"signal|test|hold{cap}|both|{int(primary_bps)}bps", {})
     train = cells.get(f"signal|train|hold{cap}|both|{int(primary_bps)}bps", {})
     diff = cd.get(f"test|hold{cap}|signal_minus_random", {})
+    pdiff = cd.get(f"test|hold{cap}|signal_minus_parent", {})
     n_test = int(test.get("n", 0))
     if n_test < 150:
         return "INSUFFICIENT_DATA", [{"check": "n_test >= 150", "value": n_test, "ok": False}]
@@ -302,6 +380,9 @@ def decide(spec: Mapping[str, Any], results: Mapping[str, Any], primary_bps: flo
         {"check": "test expectancy without the top 1% of winners > 0", "value": test.get("expectancy_without_top_1pct"),
          "ok": bool(test.get("expectancy_without_top_1pct") is not None and test["expectancy_without_top_1pct"] > 0)},
     ]
+    if spec["event"].get("extra"):
+        checks.append({"check": "signal minus its parent strategy (the added conditions must improve on it), 95% interval entirely above 0", "value": pdiff.get("ci95"),
+                       "ok": bool(pdiff.get("ci95") and pdiff["ci95"][0] > 0)})
     return ("PASS_FOR_FORWARD_SHADOW" if all(c["ok"] for c in checks) else "NO_EDGE_DEMONSTRATED"), checks
 
 

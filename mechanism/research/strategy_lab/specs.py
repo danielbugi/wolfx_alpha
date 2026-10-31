@@ -58,7 +58,39 @@ EARNINGS_DRIFT_V1: Dict[str, Any] = {
     },
 }
 
-SPECS: Mapping[str, Mapping[str, Mapping[str, Any]]] = {"earnings_drift": {"v1": EARNINGS_DRIFT_V1}}
+
+
+def child_spec(parent: Mapping[str, Any], *, key: str, version: str, hypothesis: str, extra: Any, derived_from: Any = None, excluded_inputs: Any = None) -> Dict[str, Any]:
+    """A refinement of `parent`: the same event, liquidity, exit, split, costs and controls, plus extra conditions on signal-time features. The parent's own signals are a
+    control (the added conditions must beat them out of sample). The definition is complete and declared before any result of the child exists; `derived_from` records how the
+    conditions were chosen (a train-only analysis, or the owner's a-priori hypothesis)."""
+    c = copy.deepcopy(dict(parent))
+    c["key"], c["version"], c["hypothesis"] = key, version, hypothesis
+    c["parent"] = {"key": parent["key"], "version": parent["version"], "spec_hash": canonical_hash(parent)}
+    c["event"]["extra"] = [dict(x) for x in extra]
+    if derived_from is not None:
+        c["derived_from"] = derived_from
+    if excluded_inputs is not None:
+        c["excluded_inputs"] = excluded_inputs
+    rule = c["decision_rule"]
+    rule["pass_for_forward_shadow_requires_all"] = list(rule["pass_for_forward_shadow_requires_all"]) + [
+        "signal minus its parent strategy (the added conditions must improve on it) > 0 with its 95% interval entirely above 0"]
+    rule["multiple_testing"] = ("Registered with the thresholds fixed beforehand and run ONCE on the test period; the test period played no part in choosing them. "
+                                + rule["multiple_testing"])
+    return c
+
+
+# The owner's a-priori hypothesis (2026-10-31): the drift is real only when the surprise comes with unusual participation and a range expansion. The thresholds are round numbers
+# fixed beforehand, not tuned. Short interest was requested too: there is no point-in-time source for it (yfinance exposes only today's value), so it is NOT used and nothing stands in for it.
+EARNINGS_CONFLUENCE_V1 = child_spec(
+    EARNINGS_DRIFT_V1, key="earnings_confluence", version="v1",
+    hypothesis="The drift after an earnings surprise exists only when the reaction comes with unusual participation (volume at least twice normal) and a range expansion "
+               "(true range at least 1.5 times the ATR known before the report); weaker reactions are noise.",
+    extra=[{"feature": "relvol_event", "op": ">=", "value": 2.0}, {"feature": "range_expansion", "op": ">=", "value": 1.5}],
+    derived_from={"kind": "owner hypothesis, a priori", "note": "thresholds fixed before any result of this strategy existed"},
+    excluded_inputs={"short_interest": "no point-in-time source: yfinance exposes only the current value, which would leak the future into every historical event"})
+
+SPECS: Mapping[str, Mapping[str, Mapping[str, Any]]] = {"earnings_drift": {"v1": EARNINGS_DRIFT_V1}, "earnings_confluence": {"v1": EARNINGS_CONFLUENCE_V1}}
 
 
 class SpecError(ValueError):

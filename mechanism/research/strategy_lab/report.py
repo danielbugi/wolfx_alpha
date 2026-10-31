@@ -49,6 +49,14 @@ def render(spec: Mapping[str, Any], result: Mapping[str, Any], *, spec_hash: str
     a("## What was tested (declared before any result was looked at)")
     a(f"- Hypothesis: {spec['hypothesis']}")
     ev = spec["event"]
+    if spec.get("parent"):
+        a(f"- Refines {spec['parent']['key']} {spec['parent']['version']} (spec `{spec['parent']['spec_hash'][:12]}`): the same event, exit, split and costs, plus extra conditions on signal-time features. "
+          f"The parent's own signals are a control.")
+        a("- Extra conditions: " + "; ".join(f"{c['feature']} {c['op']} {c['value']:g}" for c in spec["event"]["extra"]))
+        df = spec.get("derived_from") or {}
+        a(f"- How the conditions were chosen: {df.get('kind', 'n/a')}" + (f" ({df['candidates_tested']} candidates looked at on the TRAIN period only)" if df.get("candidates_tested") else ""))
+        if spec.get("excluded_inputs"):
+            a("- Left out on purpose: " + "; ".join(f"{k}: {v}" for k, v in spec["excluded_inputs"].items()))
     a(f"- Event: a report whose surprise is at least {ev['min_abs_surprise_pct']:g}% in size and whose first price reaction ({ev['reaction']['min_abs_return_pct']:g}% to "
       f"{ev['reaction']['max_abs_return_pct']:g}%) points the same way. Long after a beat, short after a miss.")
     a(f"- Entry: next session's open after the reaction window. Exit: {spec['exit']['initial_risk']} stop, {spec['exit']['target']} target, "
@@ -69,7 +77,7 @@ def render(spec: Mapping[str, Any], result: Mapping[str, Any], *, spec_hash: str
     a("")
     a("| Strategy | Period | Direction | Positions | Net expectancy R | 95% interval | Win rate | Profit factor | Without top 1% of winners |")
     a("|---|---|---|---|---|---|---|---|---|")
-    for kind, label in (("signal", "Earnings drift signal"), ("all_reports", "Control: all reports"), ("random_date", "Control: random date")):
+    for kind, label in (("signal", "Signal"), ("parent_signal", "Control: parent strategy"), ("all_reports", "Control: all reports"), ("random_date", "Control: random date")):
         for split in ("train", "test"):
             for d in ("both", "long", "short"):
                 c = cells.get(f"{kind}|{split}|hold{cap}|{d}|{bps}bps")
@@ -80,7 +88,7 @@ def render(spec: Mapping[str, Any], result: Mapping[str, Any], *, spec_hash: str
     a("### Signal minus controls (same costs and exit, month-block bootstrap)")
     for split in ("train", "test"):
         for cp in sorted({int(spec["exit"]["primary_max_hold_bars"]), int(spec["exit"]["sensitivity_max_hold_bars"])}):
-            for name in ("signal_minus_random", "signal_minus_all_reports"):
+            for name in ("signal_minus_random", "signal_minus_all_reports", "signal_minus_parent"):
                 c = cd.get(f"{split}|hold{cp}|{name}", {})
                 if "diff" in c:
                     a(f"- {split}, {cp}-session hold, {name.replace('_', ' ')}: {c['diff']:+.4f} R, 95% interval [{c['ci95'][0]:+.4f}, {c['ci95'][1]:+.4f}] (n {c['n_a']} vs {c['n_b']})")

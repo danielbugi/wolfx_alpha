@@ -422,12 +422,113 @@ function Attribution({ d }: { d: any }) {
   );
 }
 
+const VERDICT_STYLE: Record<string, string> = {
+  PASS_FOR_FORWARD_SHADOW: 'bg-emerald-100 text-emerald-800',
+  NO_EDGE_DEMONSTRATED: 'bg-slate-200 text-slate-700',
+  INSUFFICIENT_DATA: 'bg-amber-100 text-amber-800',
+};
+const VERDICT_LABEL: Record<string, string> = {
+  PASS_FOR_FORWARD_SHADOW: 'Pass: forward shadow only',
+  NO_EDGE_DEMONSTRATED: 'No edge demonstrated',
+  INSUFFICIENT_DATA: 'Insufficient data',
+};
+const STEP_STYLE: Record<string, string> = { ready: 'bg-emerald-100 text-emerald-800', proposed: 'bg-cyan-100 text-cyan-800', 'blocked on data': 'bg-amber-100 text-amber-800' };
+
+function Delta({ label, v }: { label: string; v: any }) {
+  return (
+    <div className="rounded-lg bg-slate-50 px-2.5 py-2">
+      <p className="text-[11px] text-slate-500">{label}</p>
+      <p className="text-sm font-semibold tabular-nums text-slate-800">{v && v.diff != null ? fmtR(v.diff) : '—'}</p>
+      <p className="text-[11px] tabular-nums"><Sig ci={v?.ci95} /></p>
+    </div>
+  );
+}
+
+function StrategyLabLoop({ d }: { d: any }) {
+  const a = d.analysis;
+  return (
+    <div className="space-y-5">
+      <div className="space-y-3">
+        {d.experiments.map((e: any) => (
+          <div key={`${e.key}-${e.version}`} className="rounded-lg border border-slate-200 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-slate-800">{e.key} {e.version}</span>
+              <span className={`rounded px-2 py-0.5 text-[11px] font-semibold ${VERDICT_STYLE[e.verdict] ?? VERDICT_STYLE.NO_EDGE_DEMONSTRATED}`}>{VERDICT_LABEL[e.verdict] ?? e.verdict}</span>
+              <span className="text-[11px] text-slate-500">{e.parent ? `refines ${e.parent}` : 'parent strategy'} · {e.derived_from ?? 'registered by hand'}</span>
+            </div>
+            <p className="mt-1 text-xs text-slate-600">{e.hypothesis}</p>
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="rounded-lg bg-slate-50 px-2.5 py-2">
+                <p className="text-[11px] text-slate-500">Test net R ({fmtInt(e.n_test)} positions)</p>
+                <p className="text-sm font-semibold tabular-nums text-slate-800">{fmtR(e.test_expectancy_r)}</p>
+                <p className="text-[11px] tabular-nums"><Sig ci={e.test_ci95} /></p>
+              </div>
+              <Delta label="vs random date" v={e.vs_random} />
+              <Delta label="vs all reports" v={e.vs_all_reports} />
+              {e.vs_parent ? <Delta label="vs parent" v={e.vs_parent} /> : (
+                <div className="rounded-lg bg-slate-50 px-2.5 py-2">
+                  <p className="text-[11px] text-slate-500">Train net R ({fmtInt(e.n_train)})</p>
+                  <p className="text-sm font-semibold tabular-nums text-slate-800">{fmtR(e.train_expectancy_r)}</p>
+                </div>
+              )}
+            </div>
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs text-slate-500">Decision checks (declared before the run)</summary>
+              <ul className="mt-1 space-y-0.5">
+                {e.checks.map((c: any) => (
+                  <li key={c.check} className="text-xs text-slate-700"><span className={c.ok ? 'text-emerald-700 font-semibold' : 'text-red-700 font-semibold'}>{c.ok ? 'PASS' : 'FAIL'}</span> {c.check}</li>
+                ))}
+              </ul>
+              <p className="mt-1 text-[11px] text-slate-400">spec {String(e.spec_hash).slice(0, 12)} · run {String(e.run_hash).slice(0, 12)} · report {String(e.report_sha256).slice(0, 12)}</p>
+            </details>
+          </div>
+        ))}
+      </div>
+
+      <div>
+        <h3 className="text-sm font-semibold text-slate-700">Why the parent failed (train period only)</h3>
+        <ul className="mt-1 list-disc ml-5 space-y-0.5">
+          {a.failure_patterns.length === 0 ? <li className="text-xs text-slate-500">No pattern found.</li> : a.failure_patterns.map((p: any) => (
+            <li key={p.pattern} className="text-xs text-slate-700"><span className="font-medium">{p.pattern}</span>: {p.evidence}</li>
+          ))}
+        </ul>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-semibold text-slate-700">Subgroups looked at ({a.candidates_tested} candidates, intervals widened for that; {a.n_passing} passed)</h3>
+        <Table head={['Candidate', 'n', 'Mean net R', 'Adjusted interval', 'Halves']} rows={a.subgroups.slice(0, 8).map((s: any) => [
+          s.name.replace(/_/g, ' '), fmtInt(s.n), fmtR(s.mean_r), <Sig key="c" ci={s.adjusted_ci} />, `${fmtR(s.mean_first_half, 2)} / ${fmtR(s.mean_second_half, 2)}`])} />
+      </div>
+
+      {d.derived_hypothesis && (
+        <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-3">
+          <p className="text-xs font-semibold text-cyan-900">Next hypothesis registered by the loop ({String(d.derived_hypothesis.selection_strength).replace('_', ' ')})</p>
+          <p className="mt-1 text-xs text-cyan-900">{d.derived_hypothesis.statement}</p>
+        </div>
+      )}
+
+      <div>
+        <h3 className="text-sm font-semibold text-slate-700">What to do next</h3>
+        <ul className="mt-1 space-y-1.5">
+          {d.next_steps.map((n: any) => (
+            <li key={n.statement} className="flex items-start gap-2">
+              <span className={`shrink-0 rounded px-2 py-0.5 text-[11px] font-semibold ${STEP_STYLE[n.status] ?? STEP_STYLE.proposed}`}>{n.status}</span>
+              <span className="text-xs text-slate-700">{n.statement}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 export default function LabReportView({ report }: { report: LabReport }) {
   const body = (() => {
     switch (report.id) {
       case 'research_insights': return <Insights d={report.data} />;
       case 'catalyst_sec_earnings': return <SecEarnings d={report.data} />;
       case 'strategy_experiments': return <StrategyExperiments d={report.data} />;
+      case 'strategy_lab_loop': return <StrategyLabLoop d={report.data} />;
       case 'performance_attribution': return <Attribution d={report.data} />;
       case 'strategy_baseline': return <StrategyBaseline d={report.data} />;
       case 'ranker_stability': return <RankerStability d={report.data} />;
