@@ -57,7 +57,7 @@ export default function InfoTip({ label, text }: { label: string; text: string }
         aria-label={`About ${label}`}
         aria-expanded={pos != null}
         aria-describedby={pos ? id : undefined}
-        className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full align-middle text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full align-middle text-slate-400 after:absolute after:-inset-2.5 after:content-[''] hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         data-testid="info-tip"
       >
         <InformationCircleIcon className="h-3.5 w-3.5" aria-hidden="true" />

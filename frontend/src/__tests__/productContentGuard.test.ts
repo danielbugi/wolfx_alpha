@@ -37,6 +37,8 @@ const PRODUCT_FILES = [
   'hooks/useMomentumToday.ts',
   'components/dashboard/MomentumTopCard.tsx',
   'components/stock/StockStrengthCard.tsx',
+  'components/stock/LatestReportCard.tsx',
+  'lib/latestReport.ts',
   'hooks/useStockContext.ts',
   'lib/strength.ts',
   'app/watchlist/page.tsx',

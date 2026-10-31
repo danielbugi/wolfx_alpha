@@ -49,3 +49,12 @@ describe('InfoTip', () => {
     expect(screen.queryByRole('tooltip')).toBeNull();
   });
 });
+
+describe('tap targets', () => {
+  it('the info button keeps a thumb-sized hit area around its 16 px icon without changing the layout', () => {
+    render(<InfoTip label="RS percentile" text="Rank." />);
+    const cls = screen.getByRole('button', { name: 'About RS percentile' }).className;
+    expect(cls).toContain('h-4 w-4');                 // the visible size, so no row grows
+    expect(cls).toMatch(/after:-inset-2\.5/);         // 16 + 2 x 10 = 36 px
+  });
+});
