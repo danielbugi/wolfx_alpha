@@ -9,7 +9,7 @@ Incremental, rate-limited, idempotent:
     filing on file (checked at most every 12 hours); and everyone once a week (catches amendments). Nobody else costs a request.
   * what is fetched: the company's `submissions` document (one request) tells whether a periodic report we have not ingested exists; only then is the
     (large) `companyfacts` document fetched. Nothing new -> nothing written but the check time.
-  * how: the shared SecTransport (declared User-Agent with a real contact, <= 5 requests/s by default, backoff, circuit breaker). Writes are upserts
+  * how: `sec_client` (declared User-Agent with a real contact, <= 5 requests/s by default, backoff, circuit breaker). Writes are upserts
     keyed on the filing, so a second run changes nothing; a restated value updates sec_quarter (revision_count + 1) while the earlier value stays in sec_fact.
   * no User-Agent contact configured (SEC_USER_AGENT) -> the run is skipped with a clear line and exit 0; the SEC requires the contact and none is invented.
 
@@ -28,8 +28,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from data_updaters import sec_statements as S  # noqa: E402
-from market_intelligence.edgar_collector import EdgarConfig, EdgarError  # noqa: E402
-from market_intelligence.sec_transport import SecFetchError, SecNotFound, SecTransport  # noqa: E402
+from data_updaters.sec_client import SecCircuitOpen, SecClient, SecError, SecNotFound, UserAgentError, validate_user_agent  # noqa: E402
 from shared import db, setup_logging  # noqa: E402
 
 DATA_URL = "https://data.sec.gov"
@@ -105,26 +104,26 @@ def compare_value(metric: str, sec_value: float, other: float) -> bool:
 
 
 class SecFundamentalsUpdater:
-    def __init__(self, transport: Optional[SecTransport] = None, logger=None, clock=time.monotonic):
+    def __init__(self, transport: Optional[SecClient] = None, logger=None, clock=time.monotonic):
         self.logger = logger or setup_logging(__name__)
         self._transport = transport
         self._clock = clock
 
     # ------------------------------------------------------------------ transport / config
     @staticmethod
-    def config_from_env() -> Optional[EdgarConfig]:
+    def config_from_env() -> Optional[str]:
         ua = os.environ.get("SEC_USER_AGENT", "").strip()
         if not ua:
             return None
-        return EdgarConfig(user_agent=ua)          # validates operator + real contact; refuses a placeholder
+        return validate_user_agent(ua)             # operator + real contact email; a placeholder is refused
 
     @property
-    def transport(self) -> SecTransport:
+    def transport(self) -> SecClient:
         if self._transport is None:
-            cfg = self.config_from_env()
-            if cfg is None:
-                raise EdgarError("SEC_USER_AGENT is not set")
-            self._transport = SecTransport(cfg)
+            ua = self.config_from_env()
+            if ua is None:
+                raise UserAgentError("SEC_USER_AGENT is not set")
+            self._transport = SecClient(ua)
         return self._transport
 
     def _get_json(self, url: str) -> Any:
@@ -199,9 +198,9 @@ class SecFundamentalsUpdater:
             filings = parse_recent_periodic(subs, cik)
         except SecNotFound:
             res["status"] = "not_found"
-        except (SecFetchError, ValueError, S.SecStatementError) as e:
+        except (SecError, ValueError, S.SecStatementError) as e:
             res.update(status="error", error=str(e)[:300])
-            if isinstance(e, SecFetchError) and "circuit open" in str(e):
+            if isinstance(e, SecCircuitOpen) or getattr(self._transport, "circuit_open", False):
                 res["circuit_open"] = True
         if res["status"] != "ok":
             if not dry_run:
@@ -225,9 +224,9 @@ class SecFundamentalsUpdater:
         except SecNotFound:
             res["status"] = "no_xbrl"
             facts = []
-        except (SecFetchError, ValueError, S.SecStatementError) as e:
+        except (SecError, ValueError, S.SecStatementError) as e:
             res.update(status="error", error=str(e)[:300])
-            if isinstance(e, SecFetchError) and "circuit open" in str(e):
+            if isinstance(e, SecCircuitOpen) or getattr(self._transport, "circuit_open", False):
                 res["circuit_open"] = True
             if not dry_run:
                 self._write_state(cik, symbol, "error", None, False, res["error"])
@@ -379,7 +378,7 @@ def main() -> int:
         return 0
     try:
         stats = u.run(limit=a.limit, max_seconds=a.max_seconds, dry_run=a.dry_run, symbols=a.symbols)
-    except EdgarError as e:
+    except UserAgentError as e:
         print(f"SEC_FUNDAMENTALS refused: {e}", file=sys.stderr)
         return 2
     return 1 if stats.get("circuit_open") else 0

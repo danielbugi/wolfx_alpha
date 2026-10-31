@@ -18,7 +18,7 @@ sys.path.insert(0, ROOT)
 
 from data_updaters import sec_fundamentals_updater as U  # noqa: E402
 from data_updaters import sec_statements as S  # noqa: E402
-from market_intelligence.sec_transport import SecNotFound  # noqa: E402
+from data_updaters.sec_client import SecNotFound, UserAgentError  # noqa: E402
 
 CIK_A, CIK_B = 9990001, 9990002
 SYM_A, SYM_B = "ZZSECA", "ZZSECB"
@@ -100,7 +100,7 @@ def test_missing_contact_skips_the_run_without_touching_anything(monkeypatch):
 
 def test_a_placeholder_contact_is_refused(monkeypatch):
     monkeypatch.setenv("SEC_USER_AGENT", "Your Name you@example.com")
-    with pytest.raises(Exception):
+    with pytest.raises(UserAgentError):
         U.SecFundamentalsUpdater.config_from_env()
 
 
