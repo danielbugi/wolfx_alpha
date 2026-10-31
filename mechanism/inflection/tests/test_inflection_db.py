@@ -150,3 +150,13 @@ def test_every_run_is_logged_with_its_counts(dbx):
     r = dbx.execute_dict_query("SELECT * FROM inflection_run_log ORDER BY id DESC LIMIT 1")[0]
     assert r["status"] == "ok" and r["symbols_processed"] == 1 and r["events_new"] > 0 and r["finished_at"] is not None and r["method_version"] == C.METHOD_VERSION
     assert _u().audit()["events"] >= r["events_new"]
+
+
+def test_the_latest_stored_sector_label_wins_whatever_the_physical_row_order(dbx):
+    """Regression (found in production 2026-10-31): an unordered daily_fundamentals scan let a relabelled symbol's sector flip between runs and revised borderline composite events."""
+    from inflection import store as S
+    peer = PEERS[0]
+    dbx.execute_insert("INSERT INTO daily_fundamentals (symbol, date, sector, ps_ratio, pe_ratio, market_cap) VALUES (%s,%s,'Energy',3.0,20,1000000000)", (peer, D("2026-04-20")))     # OLDER, different label
+    dbx.execute_insert("UPDATE daily_fundamentals SET ps_ratio = 3.1 WHERE symbol = %s AND date = %s", (peer, D("2026-04-20")))                                                      # moves the old row physically after the newer one
+    for _ in range(3):
+        assert S.load_inputs(ASOF, [TARGET]).sector_of[peer] == "Technology"
