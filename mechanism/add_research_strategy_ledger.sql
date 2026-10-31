@@ -58,6 +58,9 @@ BEGIN
         IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = t || '_truncate_guard' AND tgrelid = t::regclass) THEN
             EXECUTE format('CREATE TRIGGER %I BEFORE TRUNCATE ON %I FOR EACH STATEMENT EXECUTE FUNCTION research_strategy_ledger_guard()', t || '_truncate_guard', t);
         END IF;
+        -- ENABLE ALWAYS: the guards also hold under session_replication_role = replica (the repo's research-trigger rule).
+        EXECUTE format('ALTER TABLE %I ENABLE ALWAYS TRIGGER %I', t, t || '_row_guard');
+        EXECUTE format('ALTER TABLE %I ENABLE ALWAYS TRIGGER %I', t, t || '_truncate_guard');
     END LOOP;
 END;
 $$;
