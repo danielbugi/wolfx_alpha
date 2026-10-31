@@ -28,7 +28,7 @@ export default function SortHeader({
       onClick={onClick}
       title={`Sort by ${label.toLowerCase()}`}
       className={clsx(
-        'group/sort inline-flex items-center gap-0.5 uppercase tracking-[0.02em] hover:text-slate-800',
+        `group/sort relative inline-flex items-center gap-0.5 uppercase tracking-[0.02em] hover:text-slate-800 after:absolute after:-inset-y-2 after:inset-x-0 after:content-['']`,
         align === 'end' && 'flex-row-reverse',
         active && 'text-slate-800',
       )}
