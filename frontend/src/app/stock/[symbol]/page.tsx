@@ -661,7 +661,7 @@ export default function StockDetailPage() {
         )}
 
         {/* Owner accounts only (renders nothing for anyone else). */}
-        <OwnerOrderTicket detail={detail} />
+        <OwnerOrderTicket detail={detail} price={snap.current_price ?? null} atr={timeframes.daily.atr ?? null} />
 
         {/* Stock context: the Screener's metrics for this stock (same session and provenance), explained */}
         <StockContextPanel symbol={detail.symbol} chartDate={bars.length ? bars[bars.length - 1].date : null} state={context} showStrength={false} />
