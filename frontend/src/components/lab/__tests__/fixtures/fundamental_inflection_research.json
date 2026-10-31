@@ -5,7 +5,7 @@
   "Follow-up hypotheses are registered for forward evaluation: the test period has been looked at and is not reused as confirmation.",
   "Fills are modelled (next open, 20 bps round trip); the sector benchmark includes the stock itself."
  ],
- "code_ref": "42dac6087f4ca85cd5eced5994f799490b1ac8c5",
+ "code_ref": "6fad12d7b2a26f2763487aa373311e0cdb938209",
  "data": {
   "cells": {
    "earnings_surprise|test|h120": {
@@ -1577,10 +1577,10 @@
    "valuation_rows": 594021,
    "valuation_sha256": "c95536a50847a5450e46432b37ee7acf8c5619cf9659a776fb8ed368c2e82a73"
   },
-  "report_sha256": "2c6918309786d4028dda59f0983d336e0b2221284a086ff2adb7ae71e3036409",
-  "run_hash": "62960aafa3df99aaa431522b48857edf6a8420cafa41056a95c09783fa43c446",
+  "report_sha256": "32f68801d8966a6877da4668720a2377e8722439a10fbb75a7a8fc93db6f7e14",
+  "run_hash": "46acdb6a3f525aa8e8b982ada0df02626f1efd427ccc4f8450757b90e19a0119",
   "source": "mechanism/research/strategy_lab/inflection_study (reproducible: spec, data and code hashes below)",
-  "spec_sha256": "a10602648fe189f39a829aefe56935dc79dd8cd943003376ea501a05d1dbd09b"
+  "spec_sha256": "9afcb01c10ee4a1f5ad1becac006322f0515145b98f9159b2e2fbacf06ac4280"
  },
  "schema": "lab_report_v1",
  "status": "research_only",
