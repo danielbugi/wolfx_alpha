@@ -522,6 +522,64 @@ function StrategyLabLoop({ d }: { d: any }) {
   );
 }
 
+function InflectionResearch({ d }: { d: any }) {
+  const cell = (k: string) => d.cells?.[k] ?? {};
+  const H = d.horizons as number[];
+  const rows: React.ReactNode[][] = [];
+  for (const h of H) {
+    for (const period of ['train', 'validation', 'test']) {
+      const c = cell(`union|${period}|h${h}`);
+      rows.push([`${h}`, period, c.n ? fmtInt(c.n) : '0', c.n ? fmtPct(c.mean, 1) : 'not testable', c.n ? <Sig key={`${h}${period}`} ci={c.ci95} /> : '—', c.n ? `${fmtInt(c.blocks)} weeks` : '—']);
+    }
+  }
+  const base = [['union', 'Inflection events'], ['earnings_surprise', 'Earnings surprise ≥ +10%'], ['price_momentum', 'Price momentum (top decile)'], ['relative_strength', 'Relative strength (top quintile)']];
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`rounded px-2 py-0.5 text-[11px] font-semibold ${VERDICT_STYLE[d.verdict] ?? VERDICT_STYLE.NO_EDGE_DEMONSTRATED}`}>{VERDICT_LABEL[d.verdict] ?? d.verdict}</span>
+        <span className="text-[11px] text-slate-500">research only · a pass would authorise a forward shadow run, not trading</span>
+      </div>
+      <p className="text-xs text-slate-600">{d.hypothesis}</p>
+      <div>
+        <h3 className="text-sm font-semibold text-slate-700">Decision checks (primary cell: all events, 20 sessions, test period)</h3>
+        <ul className="mt-1 space-y-0.5">
+          {d.checks.map((c: any) => (
+            <li key={c.check} className="text-xs text-slate-700"><span className={c.ok ? 'text-emerald-700 font-semibold' : 'text-red-700 font-semibold'}>{c.ok ? 'PASS' : 'FAIL'}</span> {c.check}</li>
+          ))}
+        </ul>
+      </div>
+      <div>
+        <h3 className="text-sm font-semibold text-slate-700">Net sector-adjusted excess return by horizon</h3>
+        <Table head={['Sessions', 'Period', 'Events', 'Mean', '95% interval', 'Independent blocks']} rows={rows} />
+      </div>
+      <div>
+        <h3 className="text-sm font-semibold text-slate-700">Against simple baselines (test period)</h3>
+        <Table head={['Group', '20 sessions', '60 sessions']} rows={base.map(([g, label]) => {
+          const a = cell(`${g}|test|h20`), b = cell(`${g}|test|h60`);
+          return [label, a.n ? `${fmtPct(a.mean, 1)} (n ${fmtInt(a.n)})` : '—', b.n ? `${fmtPct(b.mean, 1)} (n ${fmtInt(b.n)})` : '—'];
+        })} />
+      </div>
+      <div>
+        <h3 className="text-sm font-semibold text-slate-700">What the data can show yet</h3>
+        <ul className="mt-1 list-disc ml-5 space-y-0.5">
+          {H.map((h) => (
+            <li key={h} className="text-xs text-slate-700">{h} sessions: {fmtInt(d.feasibility?.[String(h)]?.events_with_complete_window)} company-quarters have a complete window.</li>
+          ))}
+        </ul>
+      </div>
+      <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-3">
+        <p className="text-xs font-semibold text-cyan-900">Follow-up hypotheses registered (forward evaluation only)</p>
+        <ul className="mt-1 space-y-1">
+          {d.followups.map((f: any) => (
+            <li key={f.label} className="text-xs text-cyan-900"><span className="font-medium">{f.label}</span>: {fmtInt(f.n_company_quarters)} company-quarters so far (train {fmtInt(f.n_by_period?.train)}, validation {fmtInt(f.n_by_period?.validation)}, test {fmtInt(f.n_by_period?.test)}).</li>
+          ))}
+          {(d.horizon_followups ?? []).map((f: any) => <li key={f.cell} className="text-xs text-cyan-900"><span className="font-medium">Horizon lead</span>: {f.statement}</li>)}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 export default function LabReportView({ report }: { report: LabReport }) {
   const body = (() => {
     switch (report.id) {
@@ -529,6 +587,7 @@ export default function LabReportView({ report }: { report: LabReport }) {
       case 'catalyst_sec_earnings': return <SecEarnings d={report.data} />;
       case 'strategy_experiments': return <StrategyExperiments d={report.data} />;
       case 'strategy_lab_loop': return <StrategyLabLoop d={report.data} />;
+      case 'fundamental_inflection_research': return <InflectionResearch d={report.data} />;
       case 'performance_attribution': return <Attribution d={report.data} />;
       case 'strategy_baseline': return <StrategyBaseline d={report.data} />;
       case 'ranker_stability': return <RankerStability d={report.data} />;
