@@ -46,3 +46,9 @@ COPY mechanism/data_updaters/tests/test_earnings_calendar_updater.py /app/mechan
 # (migration 40). Both steps are OPTIONAL (run_optional_step) and nothing later reads their output. automation_pipeline.sh at main differs from this branch's only by those two steps.
 COPY mechanism/inflection /app/mechanism/inflection
 COPY mechanism/add_fundamental_inflection_tables.sql /app/mechanism/add_fundamental_inflection_tables.sql
+# Determinism fix + SEC EDGAR pipeline (PRs #85, #86, 2026-10-31): the inflection package now at main (ordered sector labels), the SEC client/normalizer/updater (pipeline step 8d, OPTIONAL: skips with
+# a log line and no request while SEC_USER_AGENT is unset), the migration files for reference, and automation_pipeline.sh (main differs from this branch's previous copy only by step 8d).
+COPY mechanism/data_updaters/sec_client.py /app/mechanism/data_updaters/sec_client.py
+COPY mechanism/data_updaters/sec_fundamentals_updater.py /app/mechanism/data_updaters/sec_fundamentals_updater.py
+COPY mechanism/data_updaters/sec_statements.py /app/mechanism/data_updaters/sec_statements.py
+COPY mechanism/add_sec_fundamentals_tables.sql /app/mechanism/add_sec_fundamentals_tables.sql

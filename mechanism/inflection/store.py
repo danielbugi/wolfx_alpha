@@ -131,8 +131,8 @@ def load_inputs(asof: date, symbols: Optional[Sequence[str]] = None, price_days:
         px[r["symbol"]][1].append(float(r["close"]))
     import numpy as np
     prices = {s: X.Prices(d, np.array(c)) for s, (d, c) in px.items() if len(d) >= 30}
-    val_rows = db.execute_dict_query("SELECT symbol, date, ps_ratio, pe_ratio, market_cap, sector FROM daily_fundamentals WHERE date >= '2023-07-01' AND date <= %s", (asof,))
-    sector_of: Dict[str, str] = {}
+    val_rows = db.execute_dict_query("SELECT symbol, date, ps_ratio, pe_ratio, market_cap, sector FROM daily_fundamentals WHERE date >= '2023-07-01' AND date <= %s ORDER BY symbol, date", (asof,))
+    sector_of: Dict[str, str] = {}      # the LATEST stored sector label wins: rows are ordered, because an unordered scan made a relabelled symbol flip between runs (found 2026-10-31)
     for r in val_rows:
         if r["sector"]:
             sector_of[r["symbol"]] = r["sector"]
