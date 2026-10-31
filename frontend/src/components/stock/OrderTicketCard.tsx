@@ -259,7 +259,7 @@ export default function OrderTicketCard({
                   type="button"
                   onClick={() => setRisk(r)}
                   aria-pressed={risk === r}
-                  className={clsx('h-11 rounded-lg text-[13px] font-semibold tabular-nums', risk === r ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700')}
+                  className={clsx('h-11 whitespace-nowrap rounded-lg px-0 text-[12px] font-semibold tabular-nums', risk === r ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700')}
                 >
                   {r}%
                 </button>
