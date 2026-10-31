@@ -6,6 +6,7 @@ import { inflectionApi, InflectionEvent, InflectionQuery, InflectionSummary } fr
 import { DASH, fmtMoney } from '@/lib/inflectionFormat';
 import EventCard from '@/components/inflection/EventCard';
 import { usePagePerf } from '@/hooks/usePagePerf';
+import { useOptionalAuth } from '@/contexts/AuthContext';
 
 const TYPES: { value: string; label: string }[] = [
   { value: 'profitability_turnaround', label: 'Profitability turnaround' },
@@ -25,7 +26,7 @@ const PAGE = 30;
 const sel = 'h-11 rounded-lg border border-slate-200 bg-white px-2 text-[15px] text-slate-800';
 const dayStr = (daysAgo: number) => new Date(Date.now() - daysAgo * 86_400_000).toISOString().slice(0, 10);
 
-export default function InflectionPage() {
+function InflectionScreener() {
   const { markLoaded } = usePagePerf('/inflection');
   const [types, setTypes] = useState<string[]>([]);
   const [sector, setSector] = useState('');
@@ -179,4 +180,13 @@ export default function InflectionPage() {
       )}
     </div>
   );
+}
+
+/** Owner accounts only: the page is a view-level gate (the API answers every signed-in role), so a collaborator who opens the address sees a short notice and nothing is requested. */
+export default function InflectionPage() {
+  const auth = useOptionalAuth();
+  if (auth?.user?.role !== 'owner') {
+    return <p className="mx-auto max-w-xl p-8 text-center text-sm text-slate-500">This research page is available to owner accounts only.</p>;
+  }
+  return <InflectionScreener />;
 }

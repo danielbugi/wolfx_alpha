@@ -81,6 +81,14 @@ describe('EventCard (a real stored event)', () => {
 });
 
 describe('Inflection screener page', () => {
+  it('is for owner accounts only: anyone else sees a notice and nothing is requested', () => {
+    auth.value = { user: { role: 'collaborator' } };
+    const { container } = render(<InflectionPage />);
+    expect(container.textContent).toMatch(/owner accounts only/);
+    expect(api.events).not.toHaveBeenCalled();
+    expect(api.summary).not.toHaveBeenCalled();
+  });
+
   it('lists real events with the summary, and every card links to its Stock Intelligence page', async () => {
     const { container } = render(<InflectionPage />);
     await waitFor(() => expect(screen.getAllByTestId('inflection-event').length).toBe(events.events.length));
