@@ -112,7 +112,7 @@ class SecFundamentalsUpdater:
     # ------------------------------------------------------------------ transport / config
     @staticmethod
     def config_from_env() -> Optional[str]:
-        ua = os.environ.get("SEC_USER_AGENT", "").strip()
+        ua = os.environ.get("SEC_USER_AGENT", "").strip().strip("\"'").strip()      # an env file passed straight to docker keeps its quotes
         if not ua:
             return None
         return validate_user_agent(ua)             # operator + real contact email; a placeholder is refused

@@ -227,3 +227,9 @@ def test_reconcile_against_quarterly_fundamentals(dbx):
     dbx.execute_insert("DELETE FROM quarterly_fundamentals WHERE symbol=%s AND quarter='2025-06-30'", (SYM_A,))
     r2 = updater(make_docs()).reconcile([SYM_A])
     assert r2["newer_than_yfinance_count"] == 1 and r2["newer_than_yfinance"] == [f"{SYM_A}:2025-06-30"]
+
+
+def test_user_agent_env_value_with_surrounding_quotes_is_cleaned(monkeypatch):
+    from data_updaters.sec_fundamentals_updater import SecFundamentalsUpdater as U
+    monkeypatch.setenv("SEC_USER_AGENT", '"WolfX Digital wolfxdigitalsol@gmail.com"')
+    assert U.config_from_env() == "WolfX Digital wolfxdigitalsol@gmail.com"
