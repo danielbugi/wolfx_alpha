@@ -67,8 +67,13 @@ def render_report(spec: Mapping[str, Any], result: Mapping[str, Any], *, spec_ha
     for h in HORIZONS:
         f = result["feasibility"][str(h)]
         L.append(f"- {h} sessions: {f['events_with_complete_window']} company-quarters have a complete window; the latest public date that does is {f['latest_public_date_complete'] or 'none'}.")
-    L += ["- The stored fundamentals cover 5-6 quarters per company, so the events fall in about two reporting seasons: the intervals are clustered by public week and rest on few independent blocks. "
-          "Every cell is one market regime. Longer history needs the SEC EDGAR pipeline (waiting for its operator contact).", "",
+    if spec["key"] == "fundamental_inflection_pit":
+        L += ["- Figures are SEC filings resolved per filing version (as published at each quarter's first-public date), so the history is long; the intervals are still clustered by public week, and "
+              "the periods fixed in the spec exclude every date already inspected.", "",
+              "## Follow-up hypotheses registered (forward evaluation only; the test period is not reused as confirmation)", ""]
+    else:
+        L += ["- The stored fundamentals cover 5-6 quarters per company, so the events fall in about two reporting seasons: the intervals are clustered by public week and rest on few independent blocks. "
+              "Every cell is one market regime. Longer history needs the SEC EDGAR pipeline (waiting for its operator contact).", "",
           "## Follow-up hypotheses registered (forward evaluation only; the test period is not reused as confirmation)", ""]
     for f in result["followups"]:
         e = f["exploratory_train_validation_h20"]
@@ -76,7 +81,9 @@ def render_report(spec: Mapping[str, Any], result: Mapping[str, Any], *, spec_ha
                  f"exploratory train+validation 20-session mean {_p(e.get('mean'))} (n {e.get('n', 0)}). {f['note']}.")
     for hf in result.get("horizon_followups", []):
         L.append(f"- **Horizon lead**: {hf['statement']}")
-    L += ["", "## Limits", "- Statements come from yfinance (restated, not point-in-time); the public date is the earnings report date or an assumed lag. Fills are modelled at the open; a flat 20 bps cost; "
+    source = ("Statements are SEC filings resolved per filing version (point in time); the public date is the filing's SEC acceptance date, which can follow the earnings release by days." if spec["key"] == "fundamental_inflection_pit"
+              else "Statements come from yfinance (restated, not point-in-time); the public date is the earnings report date or an assumed lag.")
+    L += ["", "## Limits", f"- {source} Fills are modelled at the open; a flat 20 bps cost; "
           "the sector benchmark includes the stock itself. A PASS would authorise a forward shadow run only.", ""]
     return "\n".join(L)
 

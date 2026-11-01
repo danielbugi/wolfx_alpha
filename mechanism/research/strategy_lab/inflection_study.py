@@ -62,6 +62,23 @@ SPEC: Dict[str, Any] = {
 }
 
 
+def pit_spec() -> Dict[str, Any]:
+    """The same event study on FILING-VERSION-AWARE SEC data (method inflection_v2_sec_pit), with a split fixed BEFORE any return is computed on it.
+
+    Public dates from 2025-04-01 onward are EXCLUDED: that is where the stored yfinance history (and so every earlier look at returns, in train, validation and test) lives, so no number from
+    it may serve as training or confirmation here. Train/validation/test below are older periods no return of this study has ever been computed on. Runnable only when the SEC extract covers
+    enough of the universe (the sample-size checks of the decision rule enforce it: INSUFFICIENT_DATA otherwise)."""
+    s = copy.deepcopy(SPEC)
+    s["key"], s["version"] = "fundamental_inflection_pit", "v1"
+    s["event"] = {**s["event"], "source": "mechanism/inflection events, method inflection_v2_sec_pit, built from SEC EDGAR raw facts resolved per filing version (research grade A for availability and figures: only filings "
+                                          "public at each quarter's first-public date; availability = SEC acceptance date)"}
+    s["split"] = {"basis": "date the figures were public", "train_end_exclusive": "2020-01-01", "test_start_inclusive": "2023-01-01", "excluded_from_inclusive": "2025-04-01",
+                  "validation": "2020-01-01 to 2022-12-31; looked at, never used to decide",
+                  "reason": "declared before any return was computed on this data; public dates from 2025-04-01 overlap periods already inspected by the yfinance-based study and are excluded entirely"}
+    s["parent"] = {"key": SPEC["key"], "version": SPEC["version"], "spec_hash": canonical_hash(SPEC)}
+    return s
+
+
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------ statistics
 def week_key(d: date) -> str:
     y, w, _ = d.isocalendar()
@@ -138,6 +155,8 @@ def excess(p: X.Prices, idx: Optional[X.SectorIndex], sector: Optional[str], ent
 
 def period_of(spec: Mapping[str, Any], d: date) -> str:
     sp = spec["split"]
+    if sp.get("excluded_from_inclusive") and d >= date.fromisoformat(sp["excluded_from_inclusive"]):
+        return "excluded"                      # inspected before this spec existed: counted nowhere, used as neither training nor confirmation
     if d < date.fromisoformat(sp["train_end_exclusive"]):
         return "train"
     return "test" if d >= date.fromisoformat(sp["test_start_inclusive"]) else "validation"

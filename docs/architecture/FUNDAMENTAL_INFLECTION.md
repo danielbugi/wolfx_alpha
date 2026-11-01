@@ -104,3 +104,10 @@ Found while building it: the PIT window had to reach ~506 days back (previous qu
 `GET /api/lab/data-quality` (read-only, cached 10 min; `backend/services/data_quality_service.py`) serves SEC coverage (`sec_fundamentals_updater.py --coverage`: by status, sector, reporting period, newest filing, missing fields, freshness vs yfinance,
 failures / retry backlog), the two reconciliations above, and which event families are exploratory vs confirmation-eligible. The six registered forward-only hypotheses are unaffected.
 Foreign issuers are not assumed to have equivalent coverage (20-F/40-F filers have no 10-Q): `no_xbrl` / `not_found` are reported separately, never as failures. 19 universe symbols had no CIK in the SEC ticker file at the last check (e.g. WBD, AVB, EQR, QRVO).
+
+### Confirmatory-ready study on the point-in-time family
+
+`research.strategy_lab` can now run the same event study on SEC data resolved per filing version: `extract_sec_facts.py --out DIR` (read-only; sha256-hashed facts + acceptance dates, one symbol per company) then
+`python -m research.strategy_lab inflection --sec DIR --data … --fundamentals … --out … --asof …` (spec `fundamental_inflection_pit v1`, declared before any return was computed on this data: train < 2020, validation 2020–2022,
+test 2023-01-01 to 2025-03-31, and public dates from 2025-04-01 **excluded** because that is where every earlier look at returns happened). It cannot pass on a small sample: the primary cell needs 150 events with a complete window, otherwise `INSUFFICIENT_DATA`.
+It should be run only when the Quant Lab "Data quality" tab shows the point-in-time family as confirmation-eligible (≥ 80% of mapped filers ingested). Also: `sec_symbols()` now returns one symbol per company (JPM and its preferred lines were each getting a copy of the events).

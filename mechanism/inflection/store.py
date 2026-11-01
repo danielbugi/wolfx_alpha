@@ -117,7 +117,15 @@ def due_symbols(asof: date, active_event_days: int = 120) -> List[str]:
 
 
 def sec_symbols() -> List[str]:
-    return [r["symbol"] for r in db.execute_dict_query("SELECT DISTINCT m.symbol FROM sec_symbol_cik m JOIN sec_quarter q ON q.cik = m.cik WHERE m.symbol IS NOT NULL ORDER BY 1")]
+    """One symbol per company: the universe symbol with the most price history (then the shortest), so preferred-share lines of the same CIK (JPM-PC, ...) do not each get a copy of the company's events.
+    Only symbols that have prices: an event without a tradable symbol has no use."""
+    return [r["symbol"] for r in db.execute_dict_query("""
+        SELECT symbol FROM (
+            SELECT DISTINCT ON (m.cik) m.symbol
+            FROM sec_symbol_cik m JOIN (SELECT DISTINCT cik FROM sec_quarter) q ON q.cik = m.cik
+                 JOIN (SELECT symbol, COUNT(*) AS n FROM stock_prices GROUP BY symbol) p ON p.symbol = m.symbol
+            ORDER BY m.cik, p.n DESC, LENGTH(m.symbol), m.symbol) x
+        ORDER BY 1""")]
 
 
 def load_inputs_sec(asof: date, symbols: Optional[Sequence[str]] = None, price_days: int = 520) -> Inputs:
