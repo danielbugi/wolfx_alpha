@@ -113,6 +113,9 @@ def get_spec(key: str, version: str) -> Dict[str, Any]:
     if (key, version) == ("fundamental_inflection", "v1"):                  # the event study's spec lives with the study (lazy import: it imports this module)
         from research.strategy_lab.inflection_study import SPEC
         return copy.deepcopy(dict(SPEC))
+    if (key, version) == ("fundamental_inflection_pit", "v1"):
+        from research.strategy_lab.inflection_study import pit_spec
+        return pit_spec()
     try:
         return copy.deepcopy(dict(SPECS[key][version]))
     except KeyError as e:

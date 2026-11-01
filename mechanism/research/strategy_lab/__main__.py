@@ -59,12 +59,15 @@ def cmd_inflection(a) -> int:
     from inflection import runner as IR
     from research.lab.manifest import canonical_hash
     from research.strategy_lab import engine, inflection_report as RP, inflection_study as ST, loop as LP, specs
-    inp = IR.load_inputs(a.data, a.fundamentals)
+    inp = IR.load_inputs(a.data, a.fundamentals, a.sec)
     asof = date.fromisoformat(a.asof)
     code = _code_ref(a.code_ref)
-    spec = specs.get_spec("fundamental_inflection", "v1")
+    spec = specs.get_spec("fundamental_inflection_pit" if a.sec else "fundamental_inflection", "v1")
     result = ST.run_study(spec, inp, asof, seed=a.seed, n_boot=a.boot)
-    data_hash = canonical_hash({"prices": inp.meta["prices_data_hash"], "fundamentals": {k: inp.meta["fundamentals_meta"][k] for k in ("quarterly_sha256", "valuation_sha256")}})
+    hashed = {"prices": inp.meta["prices_data_hash"], "fundamentals": {k: inp.meta["fundamentals_meta"][k] for k in ("quarterly_sha256", "valuation_sha256")}}
+    if a.sec:
+        hashed["sec"] = {k: inp.meta["sec_meta"][k] for k in ("facts_sha256", "filings_sha256")}
+    data_hash = canonical_hash(hashed)
     sh, rh = specs.spec_hash(spec), engine.run_hash(spec, data_hash, code, a.seed)
     text = RP.render_report(spec, result, spec_hash=sh, data_hash=data_hash, code_ref=code, run_hash=rh, seed=a.seed)
     rsha = hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -153,6 +156,7 @@ def main(argv=None) -> int:
     lp.add_argument("--boot", type=int, default=1000); lp.add_argument("--run-date", default=""); lp.add_argument("--publish-dir")
     ip = sub.add_parser("inflection")
     ip.add_argument("--data", required=True, help="strategy-lab price/earnings extract"); ip.add_argument("--fundamentals", required=True, help="fundamentals extract")
+    ip.add_argument("--sec", help="directory of an extract_sec_facts extract: run the filing-version-aware study (spec fundamental_inflection_pit) instead of the yfinance one")
     ip.add_argument("--out", required=True); ip.add_argument("--asof", required=True); ip.add_argument("--code-ref"); ip.add_argument("--seed", type=int, default=20261031)
     ip.add_argument("--boot", type=int, default=1000); ip.add_argument("--run-date", default=""); ip.add_argument("--publish-dir")
     c = sub.add_parser("record")

@@ -15,13 +15,14 @@ from __future__ import annotations
 
 import os
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Sequence
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from inflection import config as C  # noqa: E402
 from inflection import pipeline as P  # noqa: E402
+from inflection import pit as PIT  # noqa: E402
 from inflection import store as S  # noqa: E402
 from inflection import context as X  # noqa: E402
 from shared import db, setup_logging  # noqa: E402
@@ -33,10 +34,12 @@ class InflectionUpdater:
     def __init__(self, logger=None) -> None:
         self.logger = logger or setup_logging(__name__)
 
-    def run(self, asof: Optional[date] = None, symbols: Optional[Sequence[str]] = None, full: bool = False, dry_run: bool = False, limit: Optional[int] = None, source: str = "yfinance") -> Dict[str, Any]:
+    def run(self, asof: Optional[date] = None, symbols: Optional[Sequence[str]] = None, full: bool = False, dry_run: bool = False, limit: Optional[int] = None, source: str = "yfinance",
+            since: Optional[date] = None) -> Dict[str, Any]:
         asof = asof or date.today()
-        sec = source == "sec"
-        mv = C.METHOD_VERSION_SEC if sec else C.METHOD_VERSION
+        pit = source == "sec_pit"
+        sec = source == "sec" or pit
+        mv = C.METHOD_VERSION_SEC_PIT if pit else C.METHOD_VERSION_SEC if sec else C.METHOD_VERSION
         if not db.execute_dict_query("SELECT to_regclass('fundamental_inflection_event') AS t")[0]["t"]:
             self.logger.warning("INFLECTION skipped: migration 40 (fundamental inflection tables) is not applied")
             return {"skipped": True, "reason": "migration 40 not applied", "errors": 0}
@@ -52,14 +55,25 @@ class InflectionUpdater:
             return stats
         run_id = None if dry_run else S.start_run(asof, len(due), mv)
         try:
-            inputs = S.load_inputs_sec(asof, due) if sec else S.load_inputs(asof, None)                      # all fundamentals are small; the sector benchmark needs every symbol's prices
+            inputs = S.load_inputs_sec(asof, due) if source == "sec" else S.load_inputs(asof, None)          # all fundamentals are small; the sector benchmark needs every symbol's prices
             index = X.SectorIndex(inputs.prices, inputs.sector_of) if inputs.prices else None
             for i in range(0, len(due), BATCH):
                 batch = due[i:i + BATCH]
                 feats: List[Dict[str, Any]] = []
                 evs: List[Dict[str, Any]] = []
+                versions = S.load_sec_filing_versions(batch) if pit else {}
                 for sym in batch:
                     try:
+                        if pit:
+                            facts, accepted = versions.get(sym, ([], {}))
+                            items = PIT.pit_items(facts, accepted, inputs.sector_of.get(sym), since, PIT.known_quarters(PIT.with_availability(facts, accepted), asof))
+                            if not items:
+                                continue
+                            f, e = P.build_symbol_pit(sym, items, inputs.sector_of.get(sym), inputs.prices.get(sym), index, inputs.valuation, asof, mv)
+                            feats += f
+                            evs += e
+                            stats["processed"] += 1
+                            continue
                         rows = inputs.quarterly.get(sym) or []
                         if not rows:
                             continue
@@ -107,13 +121,15 @@ def main() -> int:
     import json
     p = argparse.ArgumentParser(description="Fundamental inflection updater")
     p.add_argument("--asof"); p.add_argument("--symbols", nargs="+"); p.add_argument("--full", action="store_true"); p.add_argument("--dry-run", action="store_true")
-    p.add_argument("--limit", type=int); p.add_argument("--audit", action="store_true"); p.add_argument("--source", choices=["yfinance", "sec"], default="yfinance")
+    p.add_argument("--limit", type=int); p.add_argument("--audit", action="store_true"); p.add_argument("--source", choices=["yfinance", "sec", "sec_pit"], default="yfinance")
+    p.add_argument("--since", help="sec_pit only: evaluate quarters first public on or after this date (default: the last 200 days)")
     a = p.parse_args()
     u = InflectionUpdater()
     if a.audit:
         print(json.dumps(u.audit(), indent=1))
         return 0
-    stats = u.run(asof=date.fromisoformat(a.asof) if a.asof else None, symbols=a.symbols, full=a.full, dry_run=a.dry_run, limit=a.limit, source=a.source)
+    stats = u.run(asof=date.fromisoformat(a.asof) if a.asof else None, symbols=a.symbols, full=a.full, dry_run=a.dry_run, limit=a.limit, source=a.source,
+                   since=(date.fromisoformat(a.since) if a.since else (date.today() - timedelta(days=200)) if a.source == "sec_pit" and not a.full else None))
     return 0 if stats["errors"] == 0 else 1
 
 

@@ -30,6 +30,7 @@ pillow>=10.1
 # Verified with matplotlib 3.8.3 + mplfinance 0.12.10b0 (mplfinance is a beta line; keep the pin loose but >= 0.12.10).
 matplotlib>=3.8
 mplfinance>=0.12.10b0
+six>=1.16                       # imported by mplfinance (from six.moves import zip) but not declared by it; a clean environment failed collecting backend/tests/test_bot_access_api.py without it
 
 # Optional alternate price provider (shared/alpaca_client.py). Inert unless
 # DATA_PROVIDER=alpaca is set in .env — see that file and MILESTONES.md.

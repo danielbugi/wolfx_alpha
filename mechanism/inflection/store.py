@@ -117,7 +117,15 @@ def due_symbols(asof: date, active_event_days: int = 120) -> List[str]:
 
 
 def sec_symbols() -> List[str]:
-    return [r["symbol"] for r in db.execute_dict_query("SELECT DISTINCT m.symbol FROM sec_symbol_cik m JOIN sec_quarter q ON q.cik = m.cik WHERE m.symbol IS NOT NULL ORDER BY 1")]
+    """One symbol per company: the universe symbol with the most price history (then the shortest), so preferred-share lines of the same CIK (JPM-PC, ...) do not each get a copy of the company's events.
+    Only symbols that have prices: an event without a tradable symbol has no use."""
+    return [r["symbol"] for r in db.execute_dict_query("""
+        SELECT symbol FROM (
+            SELECT DISTINCT ON (m.cik) m.symbol
+            FROM sec_symbol_cik m JOIN (SELECT DISTINCT cik FROM sec_quarter) q ON q.cik = m.cik
+                 JOIN (SELECT symbol, COUNT(*) AS n FROM stock_prices GROUP BY symbol) p ON p.symbol = m.symbol
+            ORDER BY m.cik, p.n DESC, LENGTH(m.symbol), m.symbol) x
+        ORDER BY 1""")]
 
 
 def load_inputs_sec(asof: date, symbols: Optional[Sequence[str]] = None, price_days: int = 520) -> Inputs:
@@ -157,6 +165,26 @@ def load_inputs_sec(asof: date, symbols: Optional[Sequence[str]] = None, price_d
     inp.quarterly = dict(qrows)
     inp.report_dates = {}
     return inp
+
+
+def load_sec_filing_versions(symbols: Sequence[str]) -> Dict[str, Tuple[List[Any], Dict[str, date]]]:
+    """Raw SEC facts (every filing's own values: sec_fact is append-only) and acceptance dates (US Eastern) per symbol, for the filing-version-aware (point-in-time) run."""
+    from data_updaters import sec_statements as SS
+    out: Dict[str, Tuple[List[Any], Dict[str, date]]] = {}
+    if not symbols:
+        return out
+    maps = db.execute_dict_query("SELECT symbol, cik FROM sec_symbol_cik WHERE symbol = ANY(%s)", (list(symbols),))
+    ciks = sorted({int(m["cik"]) for m in maps})
+    accepted: Dict[int, Dict[str, date]] = defaultdict(dict)
+    for r in db.execute_dict_query("SELECT cik, accession, (accepted_at AT TIME ZONE 'America/New_York')::date AS d FROM sec_filing WHERE cik = ANY(%s) AND accepted_at IS NOT NULL", (ciks,)):
+        accepted[int(r["cik"])][r["accession"]] = r["d"]
+    facts: Dict[int, List[Any]] = defaultdict(list)
+    for r in db.execute_dict_query("""SELECT cik, metric, tag, unit, value::float8 AS value, period_start, period_end, fy, fp, form, accession, filed_date FROM sec_fact WHERE cik = ANY(%s)
+                                       ORDER BY cik, metric, period_end, filed_date, accession""", (ciks,)):
+        facts[int(r["cik"])].append(SS.RawFact(r["metric"], r["tag"], r["unit"], r["value"], r["period_start"], r["period_end"], r["fy"], r["fp"], r["form"], r["accession"], r["filed_date"]))
+    for m in maps:
+        out[m["symbol"]] = (facts.get(int(m["cik"]), []), accepted.get(int(m["cik"]), {}))
+    return out
 
 
 def load_inputs(asof: date, symbols: Optional[Sequence[str]] = None, price_days: int = 520) -> Inputs:

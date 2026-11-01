@@ -218,3 +218,32 @@ def test_the_lab_report_meets_the_apps_validation(planted, tmp_path):
     except Exception:  # pragma: no cover
         pytest.skip("backend validator not importable here")
     assert validate(doc) == []
+
+
+# ------------------------------------------------------------------------------------------------------------------------------------------------------------ the filing-version-aware (SEC) variant
+def test_the_pit_spec_is_its_own_declared_identity_and_excludes_every_date_already_inspected():
+    p = SP.get_spec("fundamental_inflection_pit", "v1")
+    assert p["key"] == "fundamental_inflection_pit" and SP.spec_hash(p) != SP.spec_hash(SPEC)
+    assert p["parent"]["spec_hash"] == SP.spec_hash(SPEC) and "inflection_v2_sec_pit" in p["event"]["source"]
+    assert S.period_of(p, D("2019-12-31")) == "train" and S.period_of(p, D("2020-01-01")) == "validation"
+    assert S.period_of(p, D("2022-12-31")) == "validation" and S.period_of(p, D("2023-01-01")) == "test"
+    assert S.period_of(p, D("2025-03-31")) == "test" and S.period_of(p, D("2025-04-01")) == "excluded"        # the yfinance study's dates: neither training nor confirmation
+    assert S.period_of(p, D("2026-08-05")) == "excluded"
+    assert S.period_of(SPEC, D("2026-08-05")) == "test"                                                        # the original spec is unchanged
+
+
+def test_the_runner_uses_filing_version_items_instead_of_latest_quarters_when_given():
+    from inflection import pit as PIT
+    from data_updaters import sec_statements as SS
+    qe = [D("2025-03-31"), D("2025-06-30"), D("2025-09-30"), D("2025-12-31"), D("2026-03-31"), D("2026-06-30")]
+    facts = []
+    for i, e in enumerate(qe):
+        a, f = f"A{i}", e + timedelta(days=30)
+        for m, v in (("revenue", 100e6), ("operating_income", 25e6 if i >= 4 else 10e6), ("net_income", 5e6)):
+            facts.append(SS.RawFact(m, "t", "USD", v, e - timedelta(days=90), e, 2025, "Q1", "10-Q", a, f))
+    inp = make_inputs(0.0, n_event=1, n_control=0)
+    inp.quarterly = {}
+    inp.pit_items = {"S000": PIT.pit_items(facts, {}, "Technology")}
+    feats, events = R.run_universe(inp, D("2026-10-30"))
+    assert feats and all(f["method_version"] == IC.METHOD_VERSION_SEC_PIT and f["source"] == IC.SOURCE_SEC_PIT for f in feats)
+    assert any(e["event_type"] == IC.MARGIN_EXPANSION for e in events)

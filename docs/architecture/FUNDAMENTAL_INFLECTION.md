@@ -68,3 +68,46 @@ step as an OPTIONAL step (hard limit 15 minutes; a failure is a warning, not a p
 - **Figures** are the latest the SEC pipeline holds (a later restatement overwrites in place), so values are not as-originally-reported; only the availability date is point in time.
 - On a 20-company sample: median 35 days from quarter end to availability (90th percentile 59), none before quarter end, history back to 2007; a median 1 day after the yfinance-based availability on shared quarters.
 - Not scheduled: nothing in the pipeline runs `--source sec` yet. It needs the SEC updater to have covered the universe first.
+
+## Filing-version-aware (point-in-time) SEC run — `inflection_v2_sec_pit`
+
+`inflection_v1_sec` uses the latest value of every quarter (`sec_quarter`): the *availability date* is point in time, the *figures* are not, because a restatement filed years later overwrites the earlier value.
+That is fine for monitoring and **not valid for historical validation**. `inflection_v2_sec_pit` (module `mechanism/inflection/pit.py`, `updater.py --source sec_pit`, pipeline step 8e) fixes that:
+
+- Each company-quarter is evaluated with only the filings that were public at the quarter's own **first-public date** (SEC acceptance date, US Eastern; filing date when the filing row is missing; kind recorded).
+  The raw facts of every filing are kept (`sec_fact` is append-only), and the same `normalize()` that builds `sec_quarter` resolves, per period and metric, the newest filing *among those public by then*.
+- The prior-year and previous-quarter figures a feature compares against are likewise the ones public at that date (a restatement filed earlier is visible, one filed later is not).
+- Provenance on every feature (`quality_notes`): `pit_as_of:<date>`, `prov:q=`, `prov:py=`, `prov:pq=` (accession numbers). A later restatement of the quarter is flagged `restated_since:<metrics>` for information;
+  the stored feature and event are never rewritten, so a re-run on unchanged filings is a no-op and a restatement cannot move a historical event.
+- Availability is the 10-Q/10-K acceptance date, which can follow the earnings press release (8-K) by days: it is late, never early, relative to the true first-public moment (the safe direction for leakage).
+- Namespaces are separate rows (`method_version`), so nothing existing is overwritten: `inflection_v1` (yfinance, restated, not PIT), `inflection_v1_sec` (SEC latest values, **exploratory only**), `inflection_v2_sec_pit` (**confirmation-eligible** once ≥ 80% of mapped filers are ingested, and only on data the hypothesis was not found on).
+- First measurement (20-company sample, 1,831 quarters): 160 quarters (8.7%) were later restated in revenue, operating income or net income; 24 of 690 latest-value events (3.5%) differ from the as-published ones.
+
+## SEC vs yfinance event reconciliation (`inflection/reconcile.py`, `reconcile_db.py`)
+
+On the 124 company-quarters both sources cover: 35 events in both, 48 SEC-only, 6 yfinance-only. Every one-sided event gets exactly one cause; none is hidden and no threshold was changed:
+
+| Cause | Events | Meaning |
+|---|---|---|
+| history_coverage | 23 | yfinance holds 5–6 quarters, so the prior-year / previous-quarter an event compares against is absent there |
+| input_missing_in_other | 13 | an input exists in one source only (e.g. yfinance revenue or prior-year revenue null) |
+| input_differs | 9 | same input, > 1% apart: free cash flow definition (SEC capex = PP&E purchases only; yfinance subtracts a broader capex, e.g. CAT 5–10% lower), IPGP operating income |
+| composite_dependency | 9 | `improvement_with_limited_repricing` follows from the base events and prices |
+| unexplained | 0 | |
+
+Availability dates differ by construction (SEC acceptance vs earnings-report date): median +1 day, 90th percentile +20 days, SEC later in 76 of 124 (CAT's 10-Q follows its earnings release by a week or more).
+Found by it and fixed: SEC `capex` only mapped `PaymentsToAcquirePropertyPlantAndEquipment`, so Home Depot and Vishay (which report `PaymentsToAcquireProductiveAssets`) had no free cash flow; the fallback tag is now mapped.
+Found while building it: the PIT window had to reach ~506 days back (previous quarter *and its* prior year) or revenue acceleration silently lost its base.
+
+## Quant Lab: Data quality tab
+
+`GET /api/lab/data-quality` (read-only, cached 10 min; `backend/services/data_quality_service.py`) serves SEC coverage (`sec_fundamentals_updater.py --coverage`: by status, sector, reporting period, newest filing, missing fields, freshness vs yfinance,
+failures / retry backlog), the two reconciliations above, and which event families are exploratory vs confirmation-eligible. The six registered forward-only hypotheses are unaffected.
+Foreign issuers are not assumed to have equivalent coverage (20-F/40-F filers have no 10-Q): `no_xbrl` / `not_found` are reported separately, never as failures. 19 universe symbols had no CIK in the SEC ticker file at the last check (e.g. WBD, AVB, EQR, QRVO).
+
+### Confirmatory-ready study on the point-in-time family
+
+`research.strategy_lab` can now run the same event study on SEC data resolved per filing version: `extract_sec_facts.py --out DIR` (read-only; sha256-hashed facts + acceptance dates, one symbol per company) then
+`python -m research.strategy_lab inflection --sec DIR --data … --fundamentals … --out … --asof …` (spec `fundamental_inflection_pit v1`, declared before any return was computed on this data: train < 2020, validation 2020–2022,
+test 2023-01-01 to 2025-03-31, and public dates from 2025-04-01 **excluded** because that is where every earlier look at returns happened). It cannot pass on a small sample: the primary cell needs 150 events with a complete window, otherwise `INSUFFICIENT_DATA`.
+It should be run only when the Quant Lab "Data quality" tab shows the point-in-time family as confirmation-eligible (≥ 80% of mapped filers ingested). Also: `sec_symbols()` now returns one symbol per company (JPM and its preferred lines were each getting a copy of the events).
