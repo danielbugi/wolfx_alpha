@@ -93,3 +93,26 @@ def test_loader_returns_only_filings_accepted_by_asof_with_their_acceptance_date
         d.execute_insert("DELETE FROM sec_quarter WHERE cik = %s", (cik,))
         d.execute_insert("DELETE FROM sec_filing WHERE cik = %s", (cik,))
         d.execute_insert("DELETE FROM sec_symbol_cik WHERE cik = %s", (cik,))
+
+
+def test_filing_version_loader_returns_every_filings_own_values_and_eastern_acceptance_dates():
+    d = _db()
+    cik = 9_900_002
+    cleanup = ("sec_fact", "sec_filing", "sec_symbol_cik")
+    for t in cleanup:
+        d.execute_insert(f"DELETE FROM {t} WHERE cik = %s", (cik,))
+    try:
+        d.execute_insert("INSERT INTO sec_symbol_cik (symbol, cik) VALUES ('ZZPIT', %s)", (cik,))
+        d.execute_insert("INSERT INTO sec_filing (accession, cik, form, filed_date, accepted_at, period_end) VALUES ('0000000000-26-000010', %s, '10-Q', '2026-05-05', '2026-05-06 01:30+00', '2026-03-31')", (cik,))
+        for acc, filed, val in (("0000000000-26-000010", "2026-05-05", 100.0), ("0000000000-26-000011", "2026-09-01", 90.0)):       # the second filing restates the same period
+            d.execute_insert("INSERT INTO sec_fact (cik, accession, metric, tag, period_start, period_end, value, unit, fy, fp, form, filed_date) VALUES (%s,%s,'revenue','t','2026-01-01','2026-03-31',%s,'USD',2026,'Q1','10-Q',%s)",
+                             (cik, acc, val, filed))
+        from inflection import store as S
+        facts, accepted = S.load_sec_filing_versions(["ZZPIT"])["ZZPIT"]
+        assert sorted(f.value for f in facts) == [90.0, 100.0]                                  # both versions survive; the loader does not collapse them
+        assert accepted == {"0000000000-26-000010": D("2026-05-05")}                           # 01:30 UTC on the 6th is still the 5th in New York
+        from inflection import pit as P
+        assert P.availability_of("0000000000-26-000011", D("2026-09-01"), accepted) == (D("2026-09-01"), "sec_filed_date")
+    finally:
+        for t in cleanup:
+            d.execute_insert(f"DELETE FROM {t} WHERE cik = %s", (cik,))

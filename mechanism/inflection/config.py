@@ -8,6 +8,9 @@ SOURCE_QUARTERLY = "quarterly_fundamentals"
 SOURCE_SEC = "sec_edgar"                     # quarters from SEC filings: availability = the filing's acceptance date (point in time)
 METHOD_VERSION_SEC = "inflection_v1_sec"     # same method, own event set: SEC-sourced events never overwrite the yfinance-sourced ones
 
+SOURCE_SEC_PIT = "sec_edgar_pit"
+METHOD_VERSION_SEC_PIT = "inflection_v2_sec_pit"   # SEC quarters resolved per filing version: every figure is the one public at the quarter's first-public date (restatements cannot leak backwards)
+
 # Event types (stored as these strings).
 PROFITABILITY_TURNAROUND = "profitability_turnaround"
 REVENUE_ACCELERATION = "revenue_acceleration"
