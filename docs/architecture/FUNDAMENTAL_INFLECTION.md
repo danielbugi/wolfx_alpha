@@ -57,3 +57,14 @@ step as an OPTIONAL step (hard limit 15 minutes; a failure is a warning, not a p
 * **Exactly once**: every alert claims a row in `inflection_alert_delivery` (UNIQUE `dedupe_key`: symbol + quarter + event type for Telegram, date or ISO week for email) before sending; a restated event does not
   alert again; a failed send is retried on a later run, at most 3 attempts, and stays visible as `failed`. Observability: the table itself plus the `INFLECTION_ALERTS` log line of each run.
 * Other settings: `INFLECTION_TELEGRAM_MIN_SEVERITY` (default high), `INFLECTION_TELEGRAM_MAX_PER_RUN` (10), `INFLECTION_FRESH_DAYS` (3), `INFLECTION_BASE_URL`, `LAB_REPORTS_DIR` (the weekly research section).
+
+## SEC-sourced run (`inflection_v1_sec`)
+
+`python mechanism/inflection/updater.py --source sec` runs the SAME engine on quarters from the SEC pipeline (`sec_quarter`, migration 38) instead of `quarterly_fundamentals`. It writes its own event set
+(`method_version = inflection_v1_sec`, `source = sec_edgar`), so it never overwrites the yfinance-sourced events and the owner alerts (which read `inflection_v1`) are unaffected.
+
+- **Availability** is when the quarter FIRST became public: the earliest filing in `sec_fact` carrying its revenue, operating income or net income. The date is the SEC acceptance date when that filing is in
+  `sec_filing` (basis `sec_acceptance`, on the SEC's own US-Eastern clock, never the database session timezone), else the filing date (`sec_filed_date`). A quarter is unknown before that date.
+- **Figures** are the latest the SEC pipeline holds (a later restatement overwrites in place), so values are not as-originally-reported; only the availability date is point in time.
+- On a 20-company sample: median 35 days from quarter end to availability (90th percentile 59), none before quarter end, history back to 2007; a median 1 day after the yfinance-based availability on shared quarters.
+- Not scheduled: nothing in the pipeline runs `--source sec` yet. It needs the SEC updater to have covered the universe first.

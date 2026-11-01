@@ -48,20 +48,22 @@ def resolve_availability(quarter_end: date, report_dates: Sequence[date], update
 
 
 def build_symbol(symbol: str, qrows: Sequence[Mapping[str, Any]], report_dates: Sequence[date], sector: Optional[str], prices: Optional[X.Prices], sector_index: Optional[X.SectorIndex],
-                 valuation: Optional[X.ValuationStore], asof: date) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+                 valuation: Optional[X.ValuationStore], asof: date, method_version: str = C.METHOD_VERSION) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     quarters = [F.quarter_from_row(r) for r in qrows]
     feats = F.compute_features(quarters, sector)
     feature_records: List[Dict[str, Any]] = []
     event_records: List[Dict[str, Any]] = []
     for ft in feats:
         avail, basis = resolve_availability(ft["quarter"], report_dates, ft["updated_at"])
+        if ft.get("accepted_at") is not None:           # SEC-sourced quarter: the filing's acceptance date IS the point-in-time availability
+            avail, basis = ft["accepted_at"], ft.get("accepted_kind") or "sec_acceptance"
         if avail > asof:
             continue
         m = ft["metrics"]
         base = E.detect_base_events(m, sector)
         sc = E.score(base, m)
-        common = {"symbol": symbol, "quarter_end": ft["quarter"], "method_version": C.METHOD_VERSION, "fiscal_year": ft["fiscal_year"], "fiscal_quarter": ft["fiscal_quarter"],
-                  "source": C.SOURCE_QUARTERLY, "source_updated_at": ft["updated_at"], "data_quality": ft["quality"], "quality_notes": ft["notes"]}
+        common = {"symbol": symbol, "quarter_end": ft["quarter"], "method_version": method_version, "fiscal_year": ft["fiscal_year"], "fiscal_quarter": ft["fiscal_quarter"],
+                  "source": C.SOURCE_SEC if ft.get("accepted_at") is not None else C.SOURCE_QUARTERLY, "source_updated_at": ft["updated_at"], "data_quality": ft["quality"], "quality_notes": ft["notes"]}
         feature_records.append({**common, "available_at": avail, "availability_basis": basis, "metrics": m, "score": sc["score"], "components": sc["components"]})
 
         ctx: Dict[str, Any] = {}

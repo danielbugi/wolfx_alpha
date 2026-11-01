@@ -33,21 +33,26 @@ class InflectionUpdater:
     def __init__(self, logger=None) -> None:
         self.logger = logger or setup_logging(__name__)
 
-    def run(self, asof: Optional[date] = None, symbols: Optional[Sequence[str]] = None, full: bool = False, dry_run: bool = False, limit: Optional[int] = None) -> Dict[str, Any]:
+    def run(self, asof: Optional[date] = None, symbols: Optional[Sequence[str]] = None, full: bool = False, dry_run: bool = False, limit: Optional[int] = None, source: str = "yfinance") -> Dict[str, Any]:
         asof = asof or date.today()
+        sec = source == "sec"
+        mv = C.METHOD_VERSION_SEC if sec else C.METHOD_VERSION
         if not db.execute_dict_query("SELECT to_regclass('fundamental_inflection_event') AS t")[0]["t"]:
             self.logger.warning("INFLECTION skipped: migration 40 (fundamental inflection tables) is not applied")
             return {"skipped": True, "reason": "migration 40 not applied", "errors": 0}
-        due = list(symbols) if symbols else ([r["symbol"] for r in db.execute_dict_query("SELECT DISTINCT symbol FROM quarterly_fundamentals ORDER BY symbol")] if full else S.due_symbols(asof))
+        if sec and not db.execute_dict_query("SELECT to_regclass('sec_quarter') AS t")[0]["t"]:
+            self.logger.warning("INFLECTION skipped: migration 38 (SEC tables) is not applied")
+            return {"skipped": True, "reason": "migration 38 not applied", "errors": 0}
+        due = list(symbols) if symbols else (S.sec_symbols() if sec else [r["symbol"] for r in db.execute_dict_query("SELECT DISTINCT symbol FROM quarterly_fundamentals ORDER BY symbol")] if full else S.due_symbols(asof))
         if limit:
             due = due[:limit]
-        stats = {"due": len(due), "processed": 0, "features": 0, "events_new": 0, "events_revised": 0, "events_unchanged": 0, "errors": 0, "dry_run": dry_run, "asof": asof.isoformat()}
+        stats = {"due": len(due), "processed": 0, "features": 0, "events_new": 0, "events_revised": 0, "events_unchanged": 0, "errors": 0, "dry_run": dry_run, "asof": asof.isoformat(), "source": source}
         if not due:
             self.logger.info("INFLECTION nothing due")
             return stats
-        run_id = None if dry_run else S.start_run(asof, len(due))
+        run_id = None if dry_run else S.start_run(asof, len(due), mv)
         try:
-            inputs = S.load_inputs(asof, None)                      # all fundamentals are small; the sector benchmark needs every symbol's prices
+            inputs = S.load_inputs_sec(asof, due) if sec else S.load_inputs(asof, None)                      # all fundamentals are small; the sector benchmark needs every symbol's prices
             index = X.SectorIndex(inputs.prices, inputs.sector_of) if inputs.prices else None
             for i in range(0, len(due), BATCH):
                 batch = due[i:i + BATCH]
@@ -58,7 +63,7 @@ class InflectionUpdater:
                         rows = inputs.quarterly.get(sym) or []
                         if not rows:
                             continue
-                        f, e = P.build_symbol(sym, rows, inputs.report_dates.get(sym, []), inputs.sector_of.get(sym), inputs.prices.get(sym), index, inputs.valuation, asof)
+                        f, e = P.build_symbol(sym, rows, inputs.report_dates.get(sym, []), inputs.sector_of.get(sym), inputs.prices.get(sym), index, inputs.valuation, asof, mv)
                         feats += f
                         evs += e
                         stats["processed"] += 1
@@ -102,13 +107,13 @@ def main() -> int:
     import json
     p = argparse.ArgumentParser(description="Fundamental inflection updater")
     p.add_argument("--asof"); p.add_argument("--symbols", nargs="+"); p.add_argument("--full", action="store_true"); p.add_argument("--dry-run", action="store_true")
-    p.add_argument("--limit", type=int); p.add_argument("--audit", action="store_true")
+    p.add_argument("--limit", type=int); p.add_argument("--audit", action="store_true"); p.add_argument("--source", choices=["yfinance", "sec"], default="yfinance")
     a = p.parse_args()
     u = InflectionUpdater()
     if a.audit:
         print(json.dumps(u.audit(), indent=1))
         return 0
-    stats = u.run(asof=date.fromisoformat(a.asof) if a.asof else None, symbols=a.symbols, full=a.full, dry_run=a.dry_run, limit=a.limit)
+    stats = u.run(asof=date.fromisoformat(a.asof) if a.asof else None, symbols=a.symbols, full=a.full, dry_run=a.dry_run, limit=a.limit, source=a.source)
     return 0 if stats["errors"] == 0 else 1
 
 

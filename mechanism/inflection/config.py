@@ -5,6 +5,8 @@ from __future__ import annotations
 
 METHOD_VERSION = "inflection_v1"
 SOURCE_QUARTERLY = "quarterly_fundamentals"
+SOURCE_SEC = "sec_edgar"                     # quarters from SEC filings: availability = the filing's acceptance date (point in time)
+METHOD_VERSION_SEC = "inflection_v1_sec"     # same method, own event set: SEC-sourced events never overwrite the yfinance-sourced ones
 
 # Event types (stored as these strings).
 PROFITABILITY_TURNAROUND = "profitability_turnaround"
