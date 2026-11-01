@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from inflection import config as C
@@ -27,6 +27,8 @@ class QuarterData:
     operating_cash_flow: Optional[float]
     free_cash_flow: Optional[float]
     updated_at: Optional[str] = None
+    accepted_at: Optional[date] = None      # SEC acceptance date of the filing that FIRST published the quarter (None for yfinance rows)
+    accepted_kind: Optional[str] = None     # 'sec_acceptance' (SEC acceptance timestamp known) or 'sec_filed_date' (only the filing date)
 
 
 def _num(x: Any) -> Optional[float]:
@@ -39,10 +41,19 @@ def _num(x: Any) -> Optional[float]:
     return f if math.isfinite(f) else None
 
 
+def _as_date(x: Any) -> Optional[date]:
+    if x is None:
+        return None
+    if isinstance(x, datetime):
+        return x.date()
+    return x if isinstance(x, date) else date.fromisoformat(str(x)[:10])
+
+
 def quarter_from_row(r: Mapping[str, Any]) -> QuarterData:
     q = r["quarter"]
     return QuarterData(q if isinstance(q, date) else date.fromisoformat(str(q)[:10]), r.get("fiscal_year"), r.get("fiscal_quarter"), _num(r.get("revenue")), _num(r.get("operating_income")),
-                       _num(r.get("net_income")), _num(r.get("operating_cash_flow")), _num(r.get("free_cash_flow")), None if r.get("updated_at") is None else str(r["updated_at"]))
+                       _num(r.get("net_income")), _num(r.get("operating_cash_flow")), _num(r.get("free_cash_flow")), None if r.get("updated_at") is None else str(r["updated_at"]),
+                       _as_date(r.get("accepted_at")), r.get("accepted_kind"))
 
 
 def _near(rows: Sequence[QuarterData], idx: int, days: int, tol: int) -> Optional[QuarterData]:
@@ -153,6 +164,6 @@ def compute_features(rows: Sequence[QuarterData], sector: Optional[str] = None) 
         missing = [k for k in needed if m.get(k) is None]
         if missing:
             notes.append("missing:" + ",".join(missing))
-        out.append({"quarter": q.quarter, "fiscal_year": q.fiscal_year, "fiscal_quarter": q.fiscal_quarter, "updated_at": q.updated_at, "metrics": m,
+        out.append({"quarter": q.quarter, "fiscal_year": q.fiscal_year, "fiscal_quarter": q.fiscal_quarter, "updated_at": q.updated_at, "accepted_at": q.accepted_at, "accepted_kind": q.accepted_kind, "metrics": m,
                     "notes": notes, "quality": C.DATA_QUALITY_OK if not missing and py is not None else C.DATA_QUALITY_PARTIAL})
     return out

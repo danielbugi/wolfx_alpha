@@ -112,7 +112,7 @@ class SecFundamentalsUpdater:
     # ------------------------------------------------------------------ transport / config
     @staticmethod
     def config_from_env() -> Optional[str]:
-        ua = os.environ.get("SEC_USER_AGENT", "").strip()
+        ua = os.environ.get("SEC_USER_AGENT", "").strip().strip("\"'").strip()      # an env file passed straight to docker keeps its quotes
         if not ua:
             return None
         return validate_user_agent(ua)             # operator + real contact email; a placeholder is refused
@@ -368,8 +368,13 @@ def main() -> int:
     p.add_argument("--dry-run", action="store_true", help="fetch and normalize, write nothing")
     p.add_argument("--reconcile", action="store_true", help="read-only: compare SEC quarters with quarterly_fundamentals")
     p.add_argument("--audit", action="store_true", help="read-only: ingestion state counts")
+    p.add_argument("--coverage", action="store_true", help="read-only: coverage by sector / period, freshness vs yfinance, missing fields, failures (JSON)")
     a = p.parse_args()
     u = SecFundamentalsUpdater()
+    if a.coverage:
+        from data_updaters import sec_coverage
+        print(json.dumps(sec_coverage.coverage(db), indent=1, default=str))
+        return 0
     if a.audit:
         print(json.dumps(u.audit(), indent=1))
         return 0

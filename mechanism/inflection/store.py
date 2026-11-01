@@ -89,10 +89,10 @@ def upsert_events(records: Sequence[Mapping[str, Any]]) -> Dict[str, int]:
     return counts
 
 
-def start_run(asof: date, due: int) -> int:
+def start_run(asof: date, due: int, method_version: str = C.METHOD_VERSION) -> int:
     with db.get_sync_connection() as conn:           # execute_dict_query does not commit: an INSERT ... RETURNING needs its own commit
         cur = conn.cursor()
-        cur.execute("INSERT INTO inflection_run_log (method_version, asof, symbols_due) VALUES (%s, %s, %s) RETURNING id", (C.METHOD_VERSION, asof, due))
+        cur.execute("INSERT INTO inflection_run_log (method_version, asof, symbols_due) VALUES (%s, %s, %s) RETURNING id", (method_version, asof, due))
         run_id = cur.fetchone()[0]
         conn.commit()
         return run_id
@@ -114,6 +114,77 @@ def due_symbols(asof: date, active_event_days: int = 120) -> List[str]:
            OR s.symbol IN (SELECT symbol FROM fundamental_inflection_event WHERE method_version = %s AND available_at >= %s::date - %s)
         ORDER BY s.symbol""", (C.METHOD_VERSION, C.METHOD_VERSION, asof, active_event_days))
     return [r["symbol"] for r in rows]
+
+
+def sec_symbols() -> List[str]:
+    """One symbol per company: the universe symbol with the most price history (then the shortest), so preferred-share lines of the same CIK (JPM-PC, ...) do not each get a copy of the company's events.
+    Only symbols that have prices: an event without a tradable symbol has no use."""
+    return [r["symbol"] for r in db.execute_dict_query("""
+        SELECT symbol FROM (
+            SELECT DISTINCT ON (m.cik) m.symbol
+            FROM sec_symbol_cik m JOIN (SELECT DISTINCT cik FROM sec_quarter) q ON q.cik = m.cik
+                 JOIN (SELECT symbol, COUNT(*) AS n FROM stock_prices GROUP BY symbol) p ON p.symbol = m.symbol
+            ORDER BY m.cik, p.n DESC, LENGTH(m.symbol), m.symbol) x
+        ORDER BY 1""")]
+
+
+def load_inputs_sec(asof: date, symbols: Optional[Sequence[str]] = None, price_days: int = 520) -> Inputs:
+    """Same inputs as load_inputs, but the quarterly figures come from SEC filings (sec_quarter).
+
+    Availability is when the quarter FIRST became public: the earliest filing in sec_fact that carries its revenue, operating income or net income. Its date is the SEC ACCEPTANCE date when
+    the filing is in sec_filing (taken on the SEC's own clock, US Eastern, never the database session's timezone), otherwise the filing date (kind 'sec_filed_date'). A quarter is only
+    returned once that date is on or before `asof`. The FIGURES are the latest the SEC pipeline holds for the quarter (a later restatement overwrites in place), so values are not
+    as-originally-reported; the availability date is."""
+    inp = load_inputs(asof, [] if symbols is None else symbols, price_days)
+    sym_sql, params = ("", [asof])
+    if symbols:
+        sym_sql, params = ("AND m.symbol = ANY(%s)", [asof, list(symbols)])
+    rows = db.execute_dict_query(f"""
+        WITH firstpub AS (
+            SELECT DISTINCT ON (cik, period_end) cik, period_end, accession, filed_date
+            FROM sec_fact WHERE metric IN ('revenue', 'operating_income', 'net_income') ORDER BY cik, period_end, filed_date, accession)
+        SELECT m.symbol, q.period_end AS quarter, MAX(q.fiscal_year) AS fiscal_year, MAX(q.fiscal_quarter) AS fiscal_quarter,
+               MAX(CASE WHEN q.metric = 'revenue' THEN q.value END) AS revenue,
+               MAX(CASE WHEN q.metric = 'operating_income' THEN q.value END) AS operating_income,
+               MAX(CASE WHEN q.metric = 'net_income' THEN q.value END) AS net_income,
+               MAX(CASE WHEN q.metric = 'operating_cash_flow' THEN q.value END) AS operating_cash_flow,
+               MAX(CASE WHEN q.metric = 'free_cash_flow' THEN q.value END) AS free_cash_flow,
+               COALESCE((fa.accepted_at AT TIME ZONE 'America/New_York')::date, fp.filed_date) AS accepted_at,
+               CASE WHEN fa.accepted_at IS NOT NULL THEN 'sec_acceptance' WHEN fp.filed_date IS NOT NULL THEN 'sec_filed_date' END AS accepted_kind,
+               MAX(q.updated_at) AS updated_at
+        FROM sec_quarter q JOIN sec_symbol_cik m ON m.cik = q.cik
+             LEFT JOIN firstpub fp ON fp.cik = q.cik AND fp.period_end = q.period_end
+             LEFT JOIN sec_filing fa ON fa.accession = fp.accession
+        WHERE q.metric IN ('revenue', 'operating_income', 'net_income', 'operating_cash_flow', 'free_cash_flow')
+          AND COALESCE((fa.accepted_at AT TIME ZONE 'America/New_York')::date, fp.filed_date, q.filed_date) <= %s {sym_sql}
+        GROUP BY m.symbol, q.period_end, fa.accepted_at, fp.filed_date ORDER BY m.symbol, q.period_end""", params)
+    from collections import defaultdict
+    qrows = defaultdict(list)
+    for r in rows:
+        qrows[r["symbol"]].append(r)
+    inp.quarterly = dict(qrows)
+    inp.report_dates = {}
+    return inp
+
+
+def load_sec_filing_versions(symbols: Sequence[str]) -> Dict[str, Tuple[List[Any], Dict[str, date]]]:
+    """Raw SEC facts (every filing's own values: sec_fact is append-only) and acceptance dates (US Eastern) per symbol, for the filing-version-aware (point-in-time) run."""
+    from data_updaters import sec_statements as SS
+    out: Dict[str, Tuple[List[Any], Dict[str, date]]] = {}
+    if not symbols:
+        return out
+    maps = db.execute_dict_query("SELECT symbol, cik FROM sec_symbol_cik WHERE symbol = ANY(%s)", (list(symbols),))
+    ciks = sorted({int(m["cik"]) for m in maps})
+    accepted: Dict[int, Dict[str, date]] = defaultdict(dict)
+    for r in db.execute_dict_query("SELECT cik, accession, (accepted_at AT TIME ZONE 'America/New_York')::date AS d FROM sec_filing WHERE cik = ANY(%s) AND accepted_at IS NOT NULL", (ciks,)):
+        accepted[int(r["cik"])][r["accession"]] = r["d"]
+    facts: Dict[int, List[Any]] = defaultdict(list)
+    for r in db.execute_dict_query("""SELECT cik, metric, tag, unit, value::float8 AS value, period_start, period_end, fy, fp, form, accession, filed_date FROM sec_fact WHERE cik = ANY(%s)
+                                       ORDER BY cik, metric, period_end, filed_date, accession""", (ciks,)):
+        facts[int(r["cik"])].append(SS.RawFact(r["metric"], r["tag"], r["unit"], r["value"], r["period_start"], r["period_end"], r["fy"], r["fp"], r["form"], r["accession"], r["filed_date"]))
+    for m in maps:
+        out[m["symbol"]] = (facts.get(int(m["cik"]), []), accepted.get(int(m["cik"]), {}))
+    return out
 
 
 def load_inputs(asof: date, symbols: Optional[Sequence[str]] = None, price_days: int = 520) -> Inputs:

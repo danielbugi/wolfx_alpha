@@ -52,3 +52,5 @@ COPY mechanism/data_updaters/sec_client.py /app/mechanism/data_updaters/sec_clie
 COPY mechanism/data_updaters/sec_fundamentals_updater.py /app/mechanism/data_updaters/sec_fundamentals_updater.py
 COPY mechanism/data_updaters/sec_statements.py /app/mechanism/data_updaters/sec_statements.py
 COPY mechanism/add_sec_fundamentals_tables.sql /app/mechanism/add_sec_fundamentals_tables.sql
+# SEC point-in-time run (PR #88, 2026-11-01): coverage report module, the capex fallback in sec_statements, the filing-version-aware inflection family and pipeline step 8e (OPTIONAL).
+COPY mechanism/data_updaters/sec_coverage.py /app/mechanism/data_updaters/sec_coverage.py
