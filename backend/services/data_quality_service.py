@@ -21,6 +21,12 @@ if _MECHANISM not in sys.path:
 CACHE_SECONDS = 600.0
 CONFIRMATION_MIN_COVERAGE = 0.80          # share of mapped US-domestic filers whose SEC history must be ingested before a point-in-time family may back a confirmatory test
 
+# The confirmatory spec `fundamental_inflection_pit v1` (mechanism/research/strategy_lab): events public 2023-01-01..2025-03-31 are its test period; public dates from 2025-04-01 are excluded
+# because the yfinance-based studies already inspected them. The primary cell is the union of event types at 20 sessions.
+TEST_START, TEST_END_EXCLUSIVE = "2023-01-01", "2025-04-01"
+HORIZON_SESSIONS = 20
+MIN_EVENTS, MIN_COMPANIES, MIN_PUBLIC_WEEKS = 150, 100, 40
+
 NAMESPACES: List[Dict[str, Any]] = [
     {"method_version": "inflection_v1", "label": "yfinance statements", "source": "quarterly_fundamentals", "point_in_time": False,
      "availability": "earnings-report date, else an assumed 75-day lag", "figures": "restated (latest values)", "role": "exploratory",
@@ -49,6 +55,48 @@ class _ReadOnlyDb:
         return [dict(r) for r in self._cur.fetchall()]
 
 
+def pit_stats(db: Any, method_version: str = "inflection_v2_sec_pit") -> Dict[str, Any]:
+    """What the point-in-time family actually holds, for the confirmation gates. Read-only."""
+    f = db.execute_dict_query(
+        """SELECT COUNT(*) AS features,
+                  COUNT(*) FILTER (WHERE quality_notes::text LIKE '%%pit_as_of:%%' AND quality_notes::text LIKE '%%prov:q=%%') AS with_provenance
+           FROM fundamental_feature WHERE method_version = %s""", (method_version,))[0]
+    # an event's window is complete when at least HORIZON+1 sessions of the company's prices follow its public date (entry open next session, exit close HORIZON sessions later)
+    w = db.execute_dict_query(
+        """SELECT COUNT(*) AS events_in_test_period,
+                  COUNT(*) FILTER (WHERE n_after > %s) AS complete,
+                  COUNT(DISTINCT symbol) FILTER (WHERE n_after > %s) AS companies,
+                  COUNT(DISTINCT date_trunc('week', available_at)) FILTER (WHERE n_after > %s) AS weeks
+           FROM (SELECT e.symbol, e.available_at,
+                        (SELECT COUNT(*) FROM (SELECT 1 FROM stock_prices p WHERE p.symbol = e.symbol AND p.date > e.available_at LIMIT %s) x) AS n_after
+                 FROM fundamental_inflection_event e
+                 WHERE e.method_version = %s AND e.available_at >= %s::date AND e.available_at < %s::date) t""",
+        (HORIZON_SESSIONS, HORIZON_SESSIONS, HORIZON_SESSIONS, HORIZON_SESSIONS + 2, method_version, TEST_START, TEST_END_EXCLUSIVE))[0]
+    return {"features": int(f["features"] or 0), "features_with_provenance": int(f["with_provenance"] or 0),
+            "events_in_test_period": int(w["events_in_test_period"] or 0), "complete_window_events": int(w["complete"] or 0),
+            "companies": int(w["companies"] or 0), "public_weeks": int(w["weeks"] or 0)}
+
+
+def confirmation_gates(coverage_ratio: float, s: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Every gate a point-in-time family must pass before it may back a confirmatory test; coverage alone never qualifies. Order = the order the reasons are reported in."""
+    feats, prov = s.get("features", 0), s.get("features_with_provenance", 0)
+    return [
+        {"gate": "coverage", "ok": coverage_ratio >= CONFIRMATION_MIN_COVERAGE,
+         "detail": f"{coverage_ratio * 100:.1f}% of mapped filers ingested (needs {CONFIRMATION_MIN_COVERAGE * 100:.0f}%)"},
+        {"gate": "point_in_time_features", "ok": feats > 0 and prov == feats,
+         "detail": "no point-in-time features stored yet" if feats == 0 else f"{prov} of {feats} features carry filing-version provenance (all must)"},
+        {"gate": "complete_forward_windows", "ok": s.get("complete_window_events", 0) >= MIN_EVENTS,
+         "detail": f"{s.get('complete_window_events', 0)} events public {TEST_START} to {TEST_END_EXCLUSIVE} have a complete {HORIZON_SESSIONS}-session return window (needs {MIN_EVENTS}; "
+                   f"{s.get('events_in_test_period', 0)} stored in that period)"},
+        {"gate": "independent_companies", "ok": s.get("companies", 0) >= MIN_COMPANIES,
+         "detail": f"{s.get('companies', 0)} distinct companies among them (needs {MIN_COMPANIES})"},
+        {"gate": "independent_public_weeks", "ok": s.get("public_weeks", 0) >= MIN_PUBLIC_WEEKS,
+         "detail": f"{s.get('public_weeks', 0)} distinct public weeks among them (needs {MIN_PUBLIC_WEEKS})"},
+        {"gate": "untouched_holdout", "ok": True,
+         "detail": f"only events public {TEST_START} to {TEST_END_EXCLUSIVE} are counted; dates from {TEST_END_EXCLUSIVE} are excluded (already inspected) and the six forward-only hypotheses are never reused"},
+    ]
+
+
 def build_payload(db: Any) -> Dict[str, Any]:
     from data_updaters import sec_coverage
     from inflection import reconcile_db
@@ -66,10 +114,12 @@ def build_payload(db: Any) -> Dict[str, Any]:
         c = counts.get(ns["method_version"], {})
         row = {**ns, "features": int(c.get("features") or 0), "events": int(c.get("events") or 0), "symbols": int(c.get("symbols") or 0), "newest_available": c.get("newest_available")}
         if ns["role"] == "confirmation_eligible":
-            ok = coverage_ratio >= CONFIRMATION_MIN_COVERAGE and row["events"] > 0
-            row["role_now"] = "confirmation_eligible" if ok else "exploratory"
-            row["role_reason"] = (f"{coverage_ratio * 100:.0f}% of mapped filers ingested (needs {CONFIRMATION_MIN_COVERAGE * 100:.0f}%)" if coverage_ratio < CONFIRMATION_MIN_COVERAGE
-                                  else "no events stored yet" if row["events"] == 0 else "coverage sufficient")
+            stats = pit_stats(db, ns["method_version"])
+            gates = confirmation_gates(coverage_ratio, stats)
+            failing = [g for g in gates if not g["ok"]]
+            row["gates"], row["stats"] = gates, stats
+            row["role_now"] = "exploratory" if failing else "confirmation_eligible"
+            row["role_reason"] = ("INSUFFICIENT_DATA: " + "; ".join(g["detail"] for g in failing)) if failing else "all confirmation gates pass"
         else:
             row["role_now"] = ns["role"]
         namespaces.append(row)
