@@ -1,0 +1,663 @@
+{
+ "available": true,
+ "confirmation_min_coverage": 0.8,
+ "coverage": {
+  "by_reporting_period": [
+   {
+    "companies": 1,
+    "period": "2026Q4",
+    "rows": 1
+   },
+   {
+    "companies": 9,
+    "period": "2026Q3",
+    "rows": 9
+   },
+   {
+    "companies": 19,
+    "period": "2026Q2",
+    "rows": 19
+   },
+   {
+    "companies": 16,
+    "period": "2026Q1",
+    "rows": 16
+   },
+   {
+    "companies": 18,
+    "period": "2025Q4",
+    "rows": 18
+   },
+   {
+    "companies": 18,
+    "period": "2025Q3",
+    "rows": 18
+   },
+   {
+    "companies": 19,
+    "period": "2025Q2",
+    "rows": 19
+   },
+   {
+    "companies": 18,
+    "period": "2025Q1",
+    "rows": 18
+   },
+   {
+    "companies": 18,
+    "period": "2024Q4",
+    "rows": 18
+   },
+   {
+    "companies": 18,
+    "period": "2024Q3",
+    "rows": 18
+   },
+   {
+    "companies": 18,
+    "period": "2024Q2",
+    "rows": 18
+   },
+   {
+    "companies": 18,
+    "period": "2024Q1",
+    "rows": 18
+   },
+   {
+    "companies": 18,
+    "period": "2023Q4",
+    "rows": 18
+   }
+  ],
+  "by_sector": [
+   {
+    "pct": "0.2",
+    "sector": "Healthcare",
+    "symbols": 503,
+    "with_sec_quarters": 1
+   },
+   {
+    "pct": "0.2",
+    "sector": "Financial Services",
+    "symbols": 488,
+    "with_sec_quarters": 1
+   },
+   {
+    "pct": "2.9",
+    "sector": "Technology",
+    "symbols": 419,
+    "with_sec_quarters": 12
+   },
+   {
+    "pct": "0.2",
+    "sector": "Industrials",
+    "symbols": 411,
+    "with_sec_quarters": 1
+   },
+   {
+    "pct": "0.3",
+    "sector": "Consumer Cyclical",
+    "symbols": 303,
+    "with_sec_quarters": 1
+   },
+   {
+    "pct": "0.0",
+    "sector": "Real Estate",
+    "symbols": 169,
+    "with_sec_quarters": 0
+   },
+   {
+    "pct": "0.8",
+    "sector": "Energy",
+    "symbols": 119,
+    "with_sec_quarters": 1
+   },
+   {
+    "pct": "0.0",
+    "sector": "Basic Materials",
+    "symbols": 113,
+    "with_sec_quarters": 0
+   },
+   {
+    "pct": "1.8",
+    "sector": "Consumer Defensive",
+    "symbols": 112,
+    "with_sec_quarters": 2
+   },
+   {
+    "pct": "0.9",
+    "sector": "Communication Services",
+    "symbols": 109,
+    "with_sec_quarters": 1
+   },
+   {
+    "pct": "0.0",
+    "sector": "Utilities",
+    "symbols": 73,
+    "with_sec_quarters": 0
+   },
+   {
+    "pct": "0.0",
+    "sector": "Unknown",
+    "symbols": 4,
+    "with_sec_quarters": 0
+   }
+  ],
+  "failures": {
+   "error_symbols": 0,
+   "oldest_error_checked_at": null,
+   "top_errors": []
+  },
+  "freshness_vs_yfinance": {
+   "both_sources": 20,
+   "same_quarter": 13,
+   "sec_newer": 6,
+   "yfinance_newer": 1,
+   "yfinance_only": 2981
+  },
+  "generated_from": "database",
+  "latest_filing": {
+   "between_100_200d": 0,
+   "newest_filing_date": null,
+   "older_than_200d": 0,
+   "oldest_newest_filing": null,
+   "within_100d": 0
+  },
+  "missing_fields_recent_quarters": [
+   {
+    "metric": "free_cash_flow",
+    "missing": 19,
+    "of_company_quarters": 77,
+    "pct_missing": "24.7"
+   },
+   {
+    "metric": "gross_profit",
+    "missing": 19,
+    "of_company_quarters": 77,
+    "pct_missing": "24.7"
+   },
+   {
+    "metric": "eps_diluted",
+    "missing": 17,
+    "of_company_quarters": 77,
+    "pct_missing": "22.1"
+   },
+   {
+    "metric": "operating_cash_flow",
+    "missing": 6,
+    "of_company_quarters": 77,
+    "pct_missing": "7.8"
+   },
+   {
+    "metric": "operating_income",
+    "missing": 5,
+    "of_company_quarters": 77,
+    "pct_missing": "6.5"
+   },
+   {
+    "metric": "net_income",
+    "missing": 4,
+    "of_company_quarters": 77,
+    "pct_missing": "5.2"
+   }
+  ],
+  "no_cik_sample": [
+   "ACVA",
+   "ATKR",
+   "AVB",
+   "BLFS",
+   "BZH",
+   "CCO",
+   "DBRG",
+   "EQR",
+   "FRBA",
+   "GBTG",
+   "LBRDA",
+   "NBN",
+   "PINC",
+   "PSKY",
+   "QRVO",
+   "RCBC",
+   "SLP",
+   "TOWN",
+   "WBD"
+  ],
+  "schema": "sec_coverage_v1",
+  "universe": {
+   "checked": 0,
+   "never_checked": 2804,
+   "no_us_gaap_periodic_filings": 0,
+   "status_error": 0,
+   "status_ok": 0,
+   "symbols": 2823,
+   "with_cik": 2804,
+   "with_revenue_quarters": 20,
+   "without_cik": 19
+  }
+ },
+ "coverage_ratio": 0.0071,
+ "namespaces": [
+  {
+   "availability": "earnings-report date, else an assumed 75-day lag",
+   "events": 1319,
+   "features": 15896,
+   "figures": "restated (latest values)",
+   "label": "yfinance statements",
+   "method_version": "inflection_v1",
+   "newest_available": "2026-10-29",
+   "note": "Only 5-6 quarters per company. The 2026-10-31 study ran on it and its test period has been inspected: nothing here can confirm anything.",
+   "point_in_time": false,
+   "role": "exploratory",
+   "role_now": "exploratory",
+   "source": "quarterly_fundamentals",
+   "symbols": 3001
+  },
+  {
+   "availability": "SEC acceptance date (US Eastern) of the first filing",
+   "events": 682,
+   "features": 1831,
+   "figures": "latest values (a restatement overwrites)",
+   "label": "SEC, latest values",
+   "method_version": "inflection_v1_sec",
+   "newest_available": "2026-10-29",
+   "note": "Long history, but each figure is the latest the SEC holds, so a restatement filed years later leaks into the earlier quarter. Exploration only; not evidence of tradable alpha.",
+   "point_in_time": false,
+   "role": "exploratory",
+   "role_now": "exploratory",
+   "source": "sec_edgar",
+   "symbols": 28
+  },
+  {
+   "availability": "SEC acceptance date (US Eastern) of the first filing",
+   "events": 674,
+   "features": 1831,
+   "figures": "as published: only filings public at that date",
+   "label": "SEC, filing-version-aware",
+   "method_version": "inflection_v2_sec_pit",
+   "newest_available": "2026-10-29",
+   "note": "Every figure is the one public when the quarter was first published; a restatement is reported but never rewrites the stored feature. Eligible for confirmatory tests once coverage is sufficient, on data not previously inspected.",
+   "point_in_time": true,
+   "role": "confirmation_eligible",
+   "role_now": "exploratory",
+   "role_reason": "1% of mapped filers ingested (needs 80%)",
+   "source": "sec_edgar_pit",
+   "symbols": 28
+  }
+ ],
+ "reconciliation": {
+  "pit_vs_latest_values": {
+   "a": "inflection_v1_sec",
+   "agreement": 0.9652,
+   "availability_gap_days_a_minus_b": {
+    "a_earlier": 0,
+    "a_later": 0,
+    "max": 0,
+    "median": 0,
+    "min": 0,
+    "n": 1831,
+    "p10": 0,
+    "p90": 0,
+    "same_day": 1831
+   },
+   "b": "inflection_v2_sec_pit",
+   "boundary": 0.1,
+   "by_type": {
+    "fcf_turnaround": {
+     "a_only": 1,
+     "b_only": 0,
+     "both": 63,
+     "causes": {
+      "input_missing_in_other": 1
+     }
+    },
+    "improvement_with_limited_repricing": {
+     "a_only": 2,
+     "b_only": 1,
+     "both": 48,
+     "causes": {
+      "composite_dependency": 3
+     }
+    },
+    "margin_expansion": {
+     "a_only": 3,
+     "b_only": 5,
+     "both": 211,
+     "causes": {
+      "history_coverage": 1,
+      "history_differs": 1,
+      "input_differs": 6
+     }
+    },
+    "operating_leverage_inflection": {
+     "a_only": 4,
+     "b_only": 1,
+     "both": 169,
+     "causes": {
+      "input_differs": 5
+     }
+    },
+    "profitability_turnaround": {
+     "a_only": 2,
+     "b_only": 0,
+     "both": 38,
+     "causes": {
+      "input_missing_in_other": 1,
+      "unexplained": 1
+     }
+    },
+    "revenue_acceleration": {
+     "a_only": 4,
+     "b_only": 1,
+     "both": 137,
+     "causes": {
+      "history_differs": 1,
+      "input_differs": 4
+     }
+    }
+   },
+   "cause_totals": {
+    "composite_dependency": 3,
+    "history_coverage": 1,
+    "history_differs": 2,
+    "input_differs": 15,
+    "input_missing_in_other": 2,
+    "quarter_missing_in_other": 0,
+    "threshold_boundary": 0,
+    "unexplained": 1
+   },
+   "events_in_both": 666,
+   "events_only_in_a": 16,
+   "events_only_in_b": 8,
+   "examples": {
+    "composite_dependency": [
+     {
+      "detail": "composite event: depends on the base events and on prices after publication",
+      "event_type": "improvement_with_limited_repricing",
+      "present_in": "B",
+      "quarter_end": "2009-09-26",
+      "symbol": "AAPL"
+     },
+     {
+      "detail": "composite event: depends on the base events and on prices after publication",
+      "event_type": "improvement_with_limited_repricing",
+      "present_in": "A",
+      "quarter_end": "2009-12-26",
+      "symbol": "AAPL"
+     },
+     {
+      "detail": "composite event: depends on the base events and on prices after publication",
+      "event_type": "improvement_with_limited_repricing",
+      "present_in": "A",
+      "quarter_end": "2019-03-29",
+      "symbol": "KO"
+     }
+    ],
+    "history_coverage": [
+     {
+      "detail": "history present in only one source: op_margin_py",
+      "event_type": "margin_expansion",
+      "present_in": "B",
+      "quarter_end": "2011-07-31",
+      "symbol": "NVDA"
+     }
+    ],
+    "history_differs": [
+     {
+      "detail": "rev_yoy_prev: -0.0542341 vs 0.258077",
+      "event_type": "revenue_acceleration",
+      "present_in": "A",
+      "quarter_end": "2009-12-26",
+      "symbol": "AAPL"
+     },
+     {
+      "detail": "op_margin_py: 0.292232 vs 0.276414",
+      "event_type": "margin_expansion",
+      "present_in": "B",
+      "quarter_end": "2017-12-30",
+      "symbol": "INTC"
+     }
+    ],
+    "input_differs": [
+     {
+      "detail": "op_margin: 0.270392 vs 0.200552; operating_income: 2.632e+09 vs 1.672e+09; revenue: 9.734e+09 vs 8.337e+09",
+      "event_type": "margin_expansion",
+      "present_in": "A",
+      "quarter_end": "2009-06-27",
+      "symbol": "AAPL"
+     },
+     {
+      "detail": "operating_income: 2.632e+09 vs 1.672e+09; revenue: 9.734e+09 vs 8.337e+09; rev_yoy: 0.304126 vs 0.116961",
+      "event_type": "operating_leverage_inflection",
+      "present_in": "A",
+      "quarter_end": "2009-06-27",
+      "symbol": "AAPL"
+     },
+     {
+      "detail": "op_margin: 0.301794 vs 0.222188; operating_income: 3.684e+09 vs 2.193e+09; revenue: 1.2207e+10 vs 9.87e+09",
+      "event_type": "margin_expansion",
+      "present_in": "B",
+      "quarter_end": "2009-09-26",
+      "symbol": "AAPL"
+     }
+    ],
+    "input_missing_in_other": [
+     {
+      "detail": "present in only one source: net_income",
+      "event_type": "profitability_turnaround",
+      "present_in": "A",
+      "quarter_end": "2012-03-31",
+      "symbol": "PDFS"
+     },
+     {
+      "detail": "present in only one source: free_cash_flow",
+      "event_type": "fcf_turnaround",
+      "present_in": "A",
+      "quarter_end": "2015-12-31",
+      "symbol": "PDFS"
+     }
+    ],
+    "unexplained": [
+     {
+      "detail": "ni_swing_pct_rev: 0.15466827555000107 vs 0.15466827555000107",
+      "event_type": "profitability_turnaround",
+      "present_in": "A",
+      "quarter_end": "2024-09-30",
+      "symbol": "PDFS"
+     }
+    ]
+   },
+   "quarters_only_in_a": 0,
+   "quarters_only_in_b": 0,
+   "shared_company_quarters": 1831,
+   "tolerance": 0.01
+  },
+  "sec_vs_yfinance": {
+   "a": "inflection_v1_sec",
+   "agreement": 0.3933,
+   "availability_gap_days_a_minus_b": {
+    "a_earlier": 2,
+    "a_later": 76,
+    "max": 367,
+    "median": 1,
+    "min": -69,
+    "n": 124,
+    "p10": 0,
+    "p90": 20,
+    "same_day": 46
+   },
+   "b": "inflection_v1",
+   "boundary": 0.1,
+   "by_type": {
+    "fcf_turnaround": {
+     "a_only": 6,
+     "b_only": 0,
+     "both": 10,
+     "causes": {
+      "history_coverage": 3,
+      "input_differs": 3
+     }
+    },
+    "improvement_with_limited_repricing": {
+     "a_only": 7,
+     "b_only": 2,
+     "both": 5,
+     "causes": {
+      "composite_dependency": 9
+     }
+    },
+    "margin_expansion": {
+     "a_only": 17,
+     "b_only": 2,
+     "both": 9,
+     "causes": {
+      "history_coverage": 12,
+      "input_differs": 6,
+      "input_missing_in_other": 1
+     }
+    },
+    "operating_leverage_inflection": {
+     "a_only": 6,
+     "b_only": 1,
+     "both": 4,
+     "causes": {
+      "input_missing_in_other": 7
+     }
+    },
+    "profitability_turnaround": {
+     "a_only": 7,
+     "b_only": 0,
+     "both": 3,
+     "causes": {
+      "history_coverage": 7
+     }
+    },
+    "revenue_acceleration": {
+     "a_only": 5,
+     "b_only": 1,
+     "both": 4,
+     "causes": {
+      "history_coverage": 1,
+      "input_missing_in_other": 5
+     }
+    }
+   },
+   "cause_totals": {
+    "composite_dependency": 9,
+    "history_coverage": 23,
+    "history_differs": 0,
+    "input_differs": 9,
+    "input_missing_in_other": 13,
+    "quarter_missing_in_other": 0,
+    "threshold_boundary": 0,
+    "unexplained": 0
+   },
+   "events_in_both": 35,
+   "events_only_in_a": 48,
+   "events_only_in_b": 6,
+   "examples": {
+    "composite_dependency": [
+     {
+      "detail": "composite event: depends on the base events and on prices after publication",
+      "event_type": "improvement_with_limited_repricing",
+      "present_in": "A",
+      "quarter_end": "2023-12-30",
+      "symbol": "INTC"
+     },
+     {
+      "detail": "composite event: depends on the base events and on prices after publication",
+      "event_type": "improvement_with_limited_repricing",
+      "present_in": "A",
+      "quarter_end": "2025-09-30",
+      "symbol": "IPGP"
+     },
+     {
+      "detail": "composite event: depends on the base events and on prices after publication",
+      "event_type": "improvement_with_limited_repricing",
+      "present_in": "B",
+      "quarter_end": "2026-06-30",
+      "symbol": "IPGP"
+     }
+    ],
+    "history_coverage": [
+     {
+      "detail": "history present in only one source: op_margin_py",
+      "event_type": "margin_expansion",
+      "present_in": "A",
+      "quarter_end": "2023-12-30",
+      "symbol": "AAPL"
+     },
+     {
+      "detail": "history present in only one source: op_margin_py",
+      "event_type": "margin_expansion",
+      "present_in": "A",
+      "quarter_end": "2023-09-30",
+      "symbol": "CAT"
+     },
+     {
+      "detail": "history present in only one source: op_margin_py",
+      "event_type": "margin_expansion",
+      "present_in": "A",
+      "quarter_end": "2023-12-31",
+      "symbol": "CAT"
+     }
+    ],
+    "input_differs": [
+     {
+      "detail": "op_margin: 0.0313208 vs 0.0390124; operating_income: 7.855e+06 vs 9.784e+06",
+      "event_type": "margin_expansion",
+      "present_in": "A",
+      "quarter_end": "2025-09-30",
+      "symbol": "IPGP"
+     },
+     {
+      "detail": "op_margin: 0.0162646 vs 0.0759459; operating_income: 4.531e+06 vs 2.1157e+07",
+      "event_type": "margin_expansion",
+      "present_in": "B",
+      "quarter_end": "2026-06-30",
+      "symbol": "IPGP"
+     },
+     {
+      "detail": "free_cash_flow: 1.0109e+07 vs 5.7e+06",
+      "event_type": "fcf_turnaround",
+      "present_in": "A",
+      "quarter_end": "2025-09-30",
+      "symbol": "OSIS"
+     }
+    ],
+    "input_missing_in_other": [
+     {
+      "detail": "present in only one source: rev_yoy",
+      "event_type": "operating_leverage_inflection",
+      "present_in": "A",
+      "quarter_end": "2023-09-30",
+      "symbol": "CAT"
+     },
+     {
+      "detail": "present in only one source: rev_yoy",
+      "event_type": "revenue_acceleration",
+      "present_in": "A",
+      "quarter_end": "2025-12-31",
+      "symbol": "IPGP"
+     },
+     {
+      "detail": "present in only one source: revenue, rev_yoy",
+      "event_type": "revenue_acceleration",
+      "present_in": "B",
+      "quarter_end": "2026-06-30",
+      "symbol": "JPM"
+     }
+    ]
+   },
+   "quarters_only_in_a": 1707,
+   "quarters_only_in_b": 15772,
+   "shared_company_quarters": 124,
+   "tolerance": 0.01
+  }
+ },
+ "rules": [
+  "Exploratory analysis may use any event family; it is labelled exploratory and is never presented as out-of-sample evidence.",
+  "A confirmatory test needs a point-in-time family, sufficient coverage, and data the hypothesis was not found on (forward-only or an untouched holdout).",
+  "The six registered forward-only hypotheses are evaluated only on events public after 2026-10-31 with a complete window; nothing on this page changes that."
+ ],
+ "schema": "data_quality_v1"
+}

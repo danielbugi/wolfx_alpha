@@ -264,6 +264,10 @@ run_optional_step "8c" "inflection owner alerts" 300 mechanism/inflection/alerts
 # operator and contact) the updater logs a clear line and exits 0 without a single request. --max-seconds keeps it inside its hard limit; unreached companies stay due for the next night.
 run_optional_step "8d" "SEC EDGAR fundamentals updater" 1800 mechanism/data_updaters/sec_fundamentals_updater.py --max-seconds 1500
 
+# Step 8e: Fundamental Inflection Engine on the SEC filings, FILING-VERSION-AWARE (method inflection_v2_sec_pit; OPTIONAL). Every figure is the one public at the quarter's first-public date, so a later restatement
+# can never rewrite a stored event. Its own event set: no alert, API or page reads it except the Quant Lab data-quality view. Only quarters first public in the last 200 days are evaluated each night (idempotent).
+run_optional_step "8e" "inflection (SEC, filing-version-aware)" 1200 mechanism/inflection/updater.py --source sec_pit
+
 # Step 9: Multi-timeframe Screening
 run_step 9 "multi-timeframe screener" mechanism/screeners/multi_timeframe_screener.py "${SESSION_ARGS[@]}"
 

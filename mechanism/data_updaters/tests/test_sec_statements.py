@@ -157,3 +157,15 @@ def test_the_filings_highest_priority_revenue_tag_wins_for_a_period():
         "Revenues": {"units": {"USD": [filing(Q1, 100, "2024-01-01", "2024-03-31")]}},
     }}}
     assert rows(d)[("revenue", "2024-03-31")].value == 100
+
+
+def test_capex_falls_back_to_productive_assets_when_the_filing_has_no_ppe_tag():
+    """Home Depot and Vishay report capex as PaymentsToAcquireProductiveAssets only; without the fallback their free cash flow was missing for every quarter."""
+    d = {"cik": CIK, "facts": {"us-gaap": {
+        "NetCashProvidedByUsedInOperatingActivities": {"units": {"USD": [filing(Q1, 20, "2024-01-01", "2024-03-31")]}},
+        "PaymentsToAcquireProductiveAssets": {"units": {"USD": [filing(Q1, 5, "2024-01-01", "2024-03-31")]}},
+    }}}
+    r = rows(d)
+    assert r[("capex", "2024-03-31")].value == 5 and r[("free_cash_flow", "2024-03-31")].value == 15
+    both = {"cik": CIK, "facts": {"us-gaap": {**d["facts"]["us-gaap"], "PaymentsToAcquirePropertyPlantAndEquipment": {"units": {"USD": [filing(Q1, 7, "2024-01-01", "2024-03-31")]}}}}}
+    assert rows(both)[("capex", "2024-03-31")].value == 7                 # the primary tag still wins when a filing carries both

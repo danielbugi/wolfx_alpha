@@ -5,6 +5,7 @@ import { Spinner, Button } from '@nextui-org/react';
 import { labApi, LabReport, LabReportList } from '@/services/labApi';
 import LabReportView from '@/components/lab/LabReportView';
 import ForwardTracker from '@/components/lab/ForwardTracker';
+import DataQuality from '@/components/lab/DataQuality';
 import { usePagePerf } from '@/hooks/usePagePerf';
 
 const KIND_LABEL: Record<string, string> = { strategy_lab: 'Strategy Lab', ml: 'ML Intelligence', catalyst: 'Catalyst Intelligence' };
@@ -16,7 +17,7 @@ export default function LabPage() {
   const [report, setReport] = useState<LabReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<'reports' | 'forward'>('reports');
+  const [view, setView] = useState<'reports' | 'forward' | 'quality'>('reports');
 
   const load = useCallback(async () => {
     try {
@@ -56,10 +57,13 @@ export default function LabPage() {
         <div role="tablist" aria-label="Quant Lab views" className="flex gap-2">
           <button role="tab" aria-selected={view === 'reports'} onClick={() => setView('reports')} className={`px-3 py-1.5 rounded-md text-sm border ${view === 'reports' ? 'bg-white border-cyan-400 shadow-sm font-medium' : 'bg-white/60 border-slate-200'}`}>Research reports (historical)</button>
           <button role="tab" aria-selected={view === 'forward'} onClick={() => setView('forward')} className={`px-3 py-1.5 rounded-md text-sm border ${view === 'forward' ? 'bg-white border-cyan-400 shadow-sm font-medium' : 'bg-white/60 border-slate-200'}`}>Forward paper tracker (live)</button>
+          <button role="tab" aria-selected={view === 'quality'} onClick={() => setView('quality')} className={`px-3 py-1.5 rounded-md text-sm border ${view === 'quality' ? 'bg-white border-cyan-400 shadow-sm font-medium' : 'bg-white/60 border-slate-200'}`}>Data quality (live)</button>
         </div>
 
         {view === 'forward' ? (
           <ForwardTracker />
+        ) : view === 'quality' ? (
+          <DataQuality />
         ) : loading && !list ? (
           <div className="flex justify-center py-16"><Spinner color="primary" /></div>
         ) : error ? (

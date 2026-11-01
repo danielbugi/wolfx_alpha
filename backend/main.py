@@ -409,6 +409,17 @@ except ImportError as e:
 except Exception as e:
     logger.error(f"❌ Failed to include forward tracker router: {e}")
 
+# Import and include the Quant Lab data-quality router (READ-ONLY: SEC coverage, SEC-vs-yfinance reconciliation, point-in-time eligibility of the event families)
+try:
+    from routers.data_quality import data_quality_router
+
+    app.include_router(data_quality_router)
+    logger.info("✅ Data quality router included successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  Data quality router not available: {e}")
+except Exception as e:
+    logger.error(f"❌ Failed to include data quality router: {e}")
+
 # Import and include performance router (endpoint/DB/frontend-route latency
 # tracking and scoring — see services/performance_service.py)
 try:

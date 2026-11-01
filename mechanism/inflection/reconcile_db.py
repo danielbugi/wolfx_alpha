@@ -16,10 +16,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from inflection import config as C  # noqa: E402
 from inflection import reconcile as R  # noqa: E402
-from shared import db  # noqa: E402
 
 
-def load(method_version: str):
+def load(method_version: str, db):
     feats, avail, events = {}, {}, defaultdict(list)
     for r in db.execute_dict_query("SELECT symbol, quarter_end, metrics, available_at FROM fundamental_feature WHERE method_version = %s", (method_version,)):
         feats[(r["symbol"], r["quarter_end"])] = r["metrics"]
@@ -29,9 +28,13 @@ def load(method_version: str):
     return feats, avail, events
 
 
-def run(a: str, b: str, examples: int) -> Dict[str, Any]:
-    fa, aa, ea = load(a)
-    fb, ab, eb = load(b)
+def run(a: str, b: str, examples: int, db=None) -> Dict[str, Any]:
+    """`db` is anything with execute_dict_query(sql, params) -> list of dicts (default: the pipeline's shared.db)."""
+    if db is None:
+        from shared import db as _db
+        db = _db
+    fa, aa, ea = load(a, db)
+    fb, ab, eb = load(b, db)
     out = R.reconcile(fa, fb, ea, eb, examples)
     out["availability_gap_days_a_minus_b"] = R.availability_gap(aa, ab)
     out["a"], out["b"] = a, b

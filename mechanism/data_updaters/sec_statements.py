@@ -40,7 +40,7 @@ INCOME: Mapping[str, Tuple[str, ...]] = {          # first tag that a filing rep
 }
 CASHFLOW: Mapping[str, Tuple[str, ...]] = {
     "operating_cash_flow": ("NetCashProvidedByUsedInOperatingActivities",),
-    "capex": ("PaymentsToAcquirePropertyPlantAndEquipment",),
+    "capex": ("PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"),     # the second is what e.g. Home Depot and Vishay report (found 2026-11-01: free cash flow was missing for them)
 }
 INSTANT: Mapping[str, Tuple[str, ...]] = {
     "total_assets": ("Assets",),
