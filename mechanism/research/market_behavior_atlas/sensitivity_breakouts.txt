@@ -1,0 +1,109 @@
+=== Failure rate (closed back through the level) under alternative definitions ===
+        event  window  tolerance                       sample  events  pooled  month-equal             CI  months
+ 55d breakout       5       0.00                   all events  127088   0.567        0.590 [0.576, 0.609]     110
+ 55d breakout       5       0.00 independent (60-session gap)   37833   0.542        0.565 [0.549, 0.584]     110
+ 55d breakout       5       0.02                   all events  127088   0.300        0.329 [0.306, 0.355]     110
+ 55d breakout       5       0.02 independent (60-session gap)   37833   0.303        0.328 [0.304, 0.355]     110
+ 55d breakout       5       0.05                   all events  127088   0.120        0.141 [0.121, 0.164]     110
+ 55d breakout       5       0.05 independent (60-session gap)   37833   0.130        0.145 [0.127, 0.165]     110
+ 55d breakout      10       0.00                   all events  127088   0.673        0.694 [0.680, 0.714]     110
+ 55d breakout      10       0.00 independent (60-session gap)   37833   0.648        0.671 [0.655, 0.692]     110
+ 55d breakout      10       0.02                   all events  127088   0.442        0.474 [0.447, 0.506]     110
+ 55d breakout      10       0.02 independent (60-session gap)   37833   0.437        0.467 [0.440, 0.499]     110
+ 55d breakout      10       0.05                   all events  127088   0.229        0.259 [0.230, 0.292]     110
+ 55d breakout      10       0.05 independent (60-session gap)   37833   0.235        0.262 [0.234, 0.293]     110
+ 55d breakout      20       0.00                   all events  127088   0.760        0.776 [0.760, 0.796]     110
+ 55d breakout      20       0.00 independent (60-session gap)   37833   0.736        0.753 [0.736, 0.775]     110
+ 55d breakout      20       0.02                   all events  127088   0.578        0.604 [0.575, 0.640]     110
+ 55d breakout      20       0.02 independent (60-session gap)   37833   0.568        0.592 [0.564, 0.628]     110
+ 55d breakout      20       0.05                   all events  127088   0.370        0.399 [0.362, 0.443]     110
+ 55d breakout      20       0.05 independent (60-session gap)   37833   0.373        0.399 [0.364, 0.439]     110
+ 52w breakout       5       0.00                   all events   71245   0.571        0.595 [0.581, 0.614]     110
+ 52w breakout       5       0.00 independent (60-session gap)   20811   0.543        0.569 [0.552, 0.589]     110
+ 52w breakout       5       0.02                   all events   71245   0.292        0.322 [0.298, 0.350]     110
+ 52w breakout       5       0.02 independent (60-session gap)   20811   0.283        0.315 [0.291, 0.342]     110
+ 52w breakout       5       0.05                   all events   71245   0.112        0.133 [0.112, 0.158]     110
+ 52w breakout       5       0.05 independent (60-session gap)   20811   0.114        0.137 [0.114, 0.163]     110
+ 52w breakout      10       0.00                   all events   71245   0.678        0.698 [0.682, 0.718]     110
+ 52w breakout      10       0.00 independent (60-session gap)   20811   0.645        0.671 [0.653, 0.694]     110
+ 52w breakout      10       0.02                   all events   71245   0.435        0.467 [0.439, 0.501]     110
+ 52w breakout      10       0.02 independent (60-session gap)   20811   0.414        0.449 [0.421, 0.483]     110
+ 52w breakout      10       0.05                   all events   71245   0.219        0.248 [0.216, 0.283]     110
+ 52w breakout      10       0.05 independent (60-session gap)   20811   0.212        0.244 [0.214, 0.277]     110
+ 52w breakout      20       0.00                   all events   71245   0.766        0.779 [0.762, 0.800]     110
+ 52w breakout      20       0.00 independent (60-session gap)   20811   0.738        0.754 [0.735, 0.779]     110
+ 52w breakout      20       0.02                   all events   71245   0.574        0.597 [0.565, 0.636]     110
+ 52w breakout      20       0.02 independent (60-session gap)   20811   0.551        0.578 [0.546, 0.616]     110
+ 52w breakout      20       0.05                   all events   71245   0.358        0.387 [0.347, 0.434]     110
+ 52w breakout      20       0.05 independent (60-session gap)   20811   0.347        0.378 [0.339, 0.424]     110
+55d breakdown       5       0.00                   all events   82935   0.595        0.632 [0.614, 0.653]     110
+55d breakdown       5       0.00 independent (60-session gap)   29125   0.574        0.611 [0.591, 0.636]     110
+55d breakdown       5       0.02                   all events   82935   0.390        0.419 [0.395, 0.450]     110
+55d breakdown       5       0.02 independent (60-session gap)   29125   0.365        0.401 [0.375, 0.435]     110
+55d breakdown       5       0.05                   all events   82935   0.188        0.205 [0.181, 0.236]     110
+55d breakdown       5       0.05 independent (60-session gap)   29125   0.161        0.188 [0.164, 0.219]     110
+55d breakdown      10       0.00                   all events   82935   0.701        0.737 [0.719, 0.758]     110
+55d breakdown      10       0.00 independent (60-session gap)   29125   0.679        0.714 [0.695, 0.738]     110
+55d breakdown      10       0.02                   all events   82935   0.532        0.566 [0.542, 0.596]     110
+55d breakdown      10       0.02 independent (60-session gap)   29125   0.502        0.543 [0.518, 0.576]     110
+55d breakdown      10       0.05                   all events   82935   0.326        0.349 [0.320, 0.384]     110
+55d breakdown      10       0.05 independent (60-session gap)   29125   0.287        0.324 [0.293, 0.361]     110
+55d breakdown      20       0.00                   all events   82935   0.782        0.808 [0.792, 0.827]     110
+55d breakdown      20       0.00 independent (60-session gap)   29125   0.757        0.787 [0.769, 0.807]     110
+55d breakdown      20       0.02                   all events   82935   0.655        0.681 [0.658, 0.709]     110
+55d breakdown      20       0.02 independent (60-session gap)   29125   0.621        0.657 [0.632, 0.685]     110
+55d breakdown      20       0.05                   all events   82935   0.477        0.496 [0.466, 0.534]     110
+55d breakdown      20       0.05 independent (60-session gap)   29125   0.433        0.470 [0.441, 0.511]     110
+52w breakdown       5       0.00                   all events   30152   0.586        0.619 [0.598, 0.641]     110
+52w breakdown       5       0.00 independent (60-session gap)   10931   0.558        0.588 [0.564, 0.613]     109
+52w breakdown       5       0.02                   all events   30152   0.420        0.440 [0.416, 0.471]     110
+52w breakdown       5       0.02 independent (60-session gap)   10931   0.391        0.417 [0.391, 0.447]     109
+52w breakdown       5       0.05                   all events   30152   0.235        0.244 [0.215, 0.277]     110
+52w breakdown       5       0.05 independent (60-session gap)   10931   0.206        0.230 [0.200, 0.269]     109
+52w breakdown      10       0.00                   all events   30152   0.696        0.722 [0.697, 0.745]     110
+52w breakdown      10       0.00 independent (60-session gap)   10931   0.667        0.692 [0.665, 0.719]     109
+52w breakdown      10       0.02                   all events   30152   0.558        0.575 [0.550, 0.606]     110
+52w breakdown      10       0.02 independent (60-session gap)   10931   0.526        0.550 [0.522, 0.582]     109
+52w breakdown      10       0.05                   all events   30152   0.376        0.386 [0.359, 0.420]     110
+52w breakdown      10       0.05 independent (60-session gap)   10931   0.337        0.361 [0.331, 0.396]     109
+52w breakdown      20       0.00                   all events   30152   0.777        0.788 [0.762, 0.810]     110
+52w breakdown      20       0.00 independent (60-session gap)   10931   0.744        0.761 [0.736, 0.785]     109
+52w breakdown      20       0.02                   all events   30152   0.673        0.684 [0.657, 0.715]     110
+52w breakdown      20       0.02 independent (60-session gap)   10931   0.638        0.659 [0.628, 0.690]     109
+52w breakdown      20       0.05                   all events   30152   0.520        0.522 [0.490, 0.562]     110
+52w breakdown      20       0.05 independent (60-session gap)   10931   0.477        0.494 [0.464, 0.532]     109
+
+=== 60-session outcome by trend regime: vs the universe and vs a volatility-matched same-date baseline ===
+        event      sample     trend  events  months  spells  sustained60  mean x60 vs universe  mean x60 vs vol-matched month-equal vs vol-matched [CI]  recovered60
+ 55d breakout         all      Bull  103289      88      24        0.460                0.0162                   0.0031      +0.0016 [-0.0037, +0.0072]          NaN
+ 55d breakout         all      Bear    8583      19      10        0.380               -0.0143                  -0.0134      -0.0129 [-0.0215, +0.0045]          NaN
+ 55d breakout         all Weakening    2616      21      23        0.378                0.0118                   0.0041      +0.0199 [-0.0248, +0.0866]          NaN
+ 55d breakout         all  Recovery    4810      12      11        0.431                0.0111                   0.0071      +0.0063 [+0.0012, +0.0134]          NaN
+ 55d breakout independent      Bull   29340      88      24        0.454                0.0120                  -0.0011      -0.0016 [-0.0063, +0.0028]          NaN
+ 55d breakout independent      Bear    3654      19      10        0.400               -0.0067                  -0.0098      -0.0186 [-0.0309, -0.0010]          NaN
+ 55d breakout independent Weakening     859      20      23        0.385                0.0086                   0.0063      -0.0207 [-0.0544, +0.0151]          NaN
+ 55d breakout independent  Recovery    1695      12      11        0.457                0.0100                   0.0000      +0.0007 [-0.0068, +0.0114]          NaN
+ 52w breakout         all      Bull   60962      88      24        0.463                0.0180                   0.0068      +0.0053 [-0.0015, +0.0130]          NaN
+ 52w breakout         all      Bear    2562      19      10        0.368               -0.0172                  -0.0160      +0.0008 [-0.0238, +0.0413]          NaN
+ 52w breakout         all Weakening    1522      20      23        0.373                0.0149                   0.0045      +0.0071 [-0.0303, +0.0546]          NaN
+ 52w breakout         all  Recovery    1824      12      11        0.473                0.0190                   0.0151      +0.0097 [-0.0021, +0.0307]          NaN
+ 52w breakout independent      Bull   17410      88      24        0.461                0.0156                   0.0038      +0.0046 [-0.0018, +0.0121]          NaN
+ 52w breakout independent      Bear     995      18      10        0.394               -0.0095                  -0.0131      -0.0192 [-0.0396, +0.0085]          NaN
+ 52w breakout independent Weakening     466      18      23        0.391                0.0209                   0.0127      -0.0149 [-0.0549, +0.0345]          NaN
+ 52w breakout independent  Recovery     692      12      11        0.478                0.0161                   0.0091      +0.0181 [+0.0006, +0.0319]          NaN
+55d breakdown         all      Bull   47930      88      24          NaN                0.0089                  -0.0019      -0.0047 [-0.0135, +0.0026]        0.505
+55d breakdown         all      Bear   12353      19      10          NaN                0.0188                   0.0122      +0.0196 [-0.0020, +0.0509]        0.681
+55d breakdown         all Weakening   15178      21      23          NaN                0.0368                   0.0082      -0.0057 [-0.0199, +0.0070]        0.612
+55d breakdown         all  Recovery    1329      10      11          NaN                0.0092                   0.0009      -0.0090 [-0.0193, +0.0078]        0.453
+55d breakdown independent      Bull   18743      88      24          NaN                0.0100                   0.0004      +0.0029 [-0.0040, +0.0099]        0.496
+55d breakdown independent      Bear    3781      19      10          NaN                0.0045                   0.0043      +0.0090 [-0.0135, +0.0387]        0.631
+55d breakdown independent Weakening    3908      21      23          NaN                0.0157                   0.0037      -0.0096 [-0.0311, +0.0040]        0.548
+55d breakdown independent  Recovery     545       9      11          NaN                0.0165                   0.0074      -0.0021 [-0.0113, +0.0218]        0.428
+52w breakdown         all      Bull   13148      88      24          NaN               -0.0061                  -0.0147      -0.0260 [-0.0464, -0.0091]        0.460
+52w breakdown         all      Bear    7317      19      10          NaN                0.0252                   0.0143      +0.0224 [-0.0011, +0.0550]        0.694
+52w breakdown         all Weakening    7523      21      23          NaN                0.0352                  -0.0039      -0.0358 [-0.0623, -0.0049]        0.623
+52w breakdown         all  Recovery     414      10      11          NaN               -0.0123                  -0.0236      -0.0131 [-0.0479, +0.0210]        0.457
+52w breakdown independent      Bull    4985      88      24          NaN               -0.0070                  -0.0143      -0.0249 [-0.0471, -0.0075]        0.447
+52w breakdown independent      Bear    2428      18      10          NaN                0.0168                   0.0110      +0.0201 [-0.0027, +0.0535]        0.666
+52w breakdown independent Weakening    2732      21      23          NaN                0.0212                  -0.0028      -0.0457 [-0.1024, +0.0028]        0.589
+52w breakdown independent  Recovery     161       8      11          NaN               -0.0004                  -0.0129      -0.0574 [-0.1182, -0.0232]        0.435
