@@ -36,6 +36,7 @@ from shared import (
     config, db, setup_logging, retry_on_failure,
     performance_monitor, file_utils, ProgressBar
 )
+from shared import market_calendar, session_integrity
 
 
 CURRENT, FETCH, AHEAD, NEW_SYMBOL = "current", "fetch", "ahead_of_target", "new_symbol"
@@ -449,12 +450,35 @@ class EnhancedDailyDataUpdater:
             self.logger.error(f"Failed to get data for {symbol}: {e}")
             return None
 
+    def screen_bars(self, symbol: str, data: pd.DataFrame) -> pd.DataFrame:
+        """Drop bars that must never be stored (weekend / exchange holiday / impossible OHLC) before they reach stock_prices; every provider
+        (Alpaca, Tiingo, the yfinance fallback) and the Tiingo backfill write through here. Rejections are logged per symbol. Without a calendar
+        only weekends are checked (fail open)."""
+        dates = [session_integrity.to_date(d) for d in data['date']]
+        known = [d for d in dates if d is not None]
+        span = (min(known), max(known)) if known else None
+        sessions = market_calendar.sessions_between(*span) if span else None
+        rows = data.to_dict('records')
+        accepted, rejected, flat = session_integrity.screen_price_bars(rows, sessions, span)
+        if rejected:
+            self.stats['bars_rejected'] = self.stats.get('bars_rejected', 0) + len(rejected)
+            shown = ", ".join(f"{session_integrity.to_date(r.get('date'))} {why}" for r, why in rejected[:8])
+            self.logger.warning(f"{symbol}: {len(rejected)} bar(s) not stored: {shown}{', ...' if len(rejected) > 8 else ''}")
+        if flat:
+            self.stats['flat_zero_volume_bars'] = self.stats.get('flat_zero_volume_bars', 0) + flat
+        if sessions is None and span is not None:
+            self.stats['bars_screened_without_calendar'] = self.stats.get('bars_screened_without_calendar', 0) + len(rows)
+        return pd.DataFrame(accepted, columns=data.columns) if len(accepted) != len(rows) else data
+
     def bulk_update_stock_prices(self, symbol: str, data: pd.DataFrame) -> int:
         """
         ENHANCED: Bulk database operations for better performance
         FIX: Single bulk insert instead of individual record inserts
         """
         try:
+            if data.empty:
+                return 0
+            data = self.screen_bars(symbol, data)
             if data.empty:
                 return 0
 

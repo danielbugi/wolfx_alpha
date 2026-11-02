@@ -133,6 +133,27 @@ def get_sessions(today: Optional[date] = None) -> Tuple[Sessions, str]:
     return {d: _close_dt(d, "16:00") for d in days if d.weekday() < 5}, "weekday-fallback"
 
 
+_RANGE_CACHE: Dict[Tuple[date, date], frozenset] = {}
+
+
+def sessions_between(start: date, end: date) -> Optional[frozenset]:
+    """Every US session date in [start, end] from Alpaca's calendar (which covers any historical range), or None when it cannot be read.
+    For write-time validation of price bars (shared.session_integrity.screen_price_bars), including multi-year backfills that the 45-day
+    cache of get_sessions() does not reach. Cached per process by range; a covering range already fetched is reused. Never raises."""
+    for (a, b), s in _RANGE_CACHE.items():
+        if a <= start and end <= b:
+            return frozenset(d for d in s if start <= d <= end)
+    _load_env()
+    try:
+        raw = _fetch_alpaca(start, end)
+    except Exception as e:                                   # network, credentials, bad payload: the caller falls back to weekday checks
+        print(f"[market_calendar] range calendar fetch failed ({type(e).__name__}: {e})", file=sys.stderr)
+        return None
+    s = frozenset(date.fromisoformat(d) for d in raw)
+    _RANGE_CACHE[(start, end)] = s
+    return s
+
+
 def latest_completed(sessions: Sessions, now: Optional[datetime] = None) -> Optional[date]:
     """Newest session whose close + settle time has passed (so a vendor's end-of-day bar can exist)."""
     now = now or datetime.now(timezone.utc)
