@@ -87,6 +87,13 @@ export function DataQualityView({ data }: { data: DataQualityPayload }) {
             <div className="text-xs text-slate-700">Figures: {n.figures}. Availability: {n.availability}.</div>
             <div className="text-xs text-slate-700">{fmtInt(n.symbols)} companies · {fmtInt(n.features)} quarters · {fmtInt(n.events)} events{n.newest_available ? ` · newest ${n.newest_available}` : ''}</div>
             {n.role_reason && <div className="text-xs text-amber-800">{n.role_reason}</div>}
+            {Array.isArray(n.gates) && (
+              <ul className="space-y-0.5 pt-1" aria-label="Confirmation gates">
+                {n.gates.map((g: any) => (
+                  <li key={g.gate} className={`text-xs ${g.ok ? 'text-emerald-800' : 'text-red-700'}`}>{g.ok ? 'Met' : 'Not met'} · {pretty(g.gate)}: {g.detail}</li>
+                ))}
+              </ul>
+            )}
             <div className="text-xs text-slate-500">{n.note}</div>
           </div>
         ))}

@@ -104,6 +104,10 @@ def test_the_point_in_time_family_is_confirmation_eligible_only_with_enough_cove
             self.with_revenue, self.events = with_revenue, events
 
         def execute_dict_query(self, sql, params=()):
+            if "events_in_test_period" in sql:
+                return [{"events_in_test_period": 400, "complete": 400 if self.events else 0, "companies": 200, "weeks": 60}]
+            if "with_provenance" in sql:
+                return [{"features": 10, "with_provenance": 10}]
             return [{"method_version": "inflection_v2_sec_pit", "features": 10, "symbols": 3, "newest_available": "2026-10-30", "events": self.events}]
 
     import sys as _s
@@ -120,7 +124,7 @@ def test_the_point_in_time_family_is_confirmation_eligible_only_with_enough_cove
     try:
         low = svc.build_payload(Db(20, 5))
         pit = next(n for n in low["namespaces"] if n["method_version"] == "inflection_v2_sec_pit")
-        assert pit["role_now"] == "exploratory" and "20%" in pit["role_reason"]
+        assert pit["role_now"] == "exploratory" and "20.0%" in pit["role_reason"] and pit["role_reason"].startswith("INSUFFICIENT_DATA")
         high = svc.build_payload(Db(85, 5))
         assert next(n for n in high["namespaces"] if n["method_version"] == "inflection_v2_sec_pit")["role_now"] == "confirmation_eligible"
         none = svc.build_payload(Db(85, 0))
@@ -134,3 +138,14 @@ def test_the_point_in_time_family_is_confirmation_eligible_only_with_enough_cove
                 _s.modules.pop(k, None)
             else:
                 _s.modules[k] = v
+
+
+def test_coverage_alone_never_qualifies_and_the_reason_names_every_failing_gate():
+    ok = {"features": 50, "features_with_provenance": 50, "events_in_test_period": 300, "complete_window_events": 200, "companies": 120, "public_weeks": 50}
+    assert all(g["ok"] for g in svc.confirmation_gates(0.9, ok))
+    for bad, gate in (({"complete_window_events": 149}, "complete_forward_windows"), ({"companies": 99}, "independent_companies"),
+                      ({"public_weeks": 39}, "independent_public_weeks"), ({"features_with_provenance": 49}, "point_in_time_features"), ({"features": 0, "features_with_provenance": 0}, "point_in_time_features")):
+        failing = [g["gate"] for g in svc.confirmation_gates(0.9, {**ok, **bad}) if not g["ok"]]
+        assert failing == [gate]
+    assert [g["gate"] for g in svc.confirmation_gates(0.5, ok) if not g["ok"]] == ["coverage"]
+    assert next(g for g in svc.confirmation_gates(0.9, ok) if g["gate"] == "untouched_holdout")["ok"]

@@ -35,6 +35,17 @@ describe('Data quality view', () => {
     expect(screen.getAllByText('Eligible for confirmation').length).toBe(1);
   });
 
+  it('shows the exact reason for INSUFFICIENT_DATA and every gate', () => {
+    const d = structuredClone(payload) as any;
+    const pit = d.namespaces.find((n: any) => n.point_in_time);
+    pit.role_reason = 'INSUFFICIENT_DATA: 0.7% of mapped filers ingested (needs 80%)';
+    pit.gates = [{ gate: 'coverage', ok: false, detail: '0.7% of mapped filers ingested (needs 80%)' }, { gate: 'untouched_holdout', ok: true, detail: 'only untouched dates counted' }];
+    const { container } = render(<DataQualityView data={d} />);
+    expect(container.textContent).toContain('INSUFFICIENT_DATA: 0.7% of mapped filers ingested');
+    expect(container.textContent).toContain('Not met · coverage');
+    expect(container.textContent).toContain('Met · untouched holdout');
+  });
+
   it('renders an explicit message when the data is unavailable', () => {
     render(<DataQualityView data={{ schema: 'data_quality_v1', available: false, reason: 'the database is unavailable right now' }} />);
     expect(screen.getByText(/not available: the database is unavailable right now/)).toBeTruthy();
