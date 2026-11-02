@@ -31,7 +31,10 @@
   * After hold meetings, the 20- to 120-session drift is not distinguishable from an ordinary day.
 * **[A] CPI days were only about 1.08× as volatile as an ordinary day across 2016–2026** (119 releases inside the S&P 500 window). Splitting releases by the first-release month-on-month change against the previous month (hotter 57, cooler 51, about the same 11) produces **no group whose 20-session difference from ordinary drift excludes zero**.
   * That split is a naive benchmark, not a surprise: without consensus forecasts we cannot say what was *unexpected*.
-* JOBS_PLACEHOLDER
+* **[A] Jobs-report days were about 1.18× as volatile as an ordinary day** (120 reports in the S&P 500 window; release dates and first-release values from ALFRED, including the shutdown-delayed 2025-11-20 and 2025-12-16 reports).
+  * Days when first-release unemployment *rose* were the most volatile (1.42×).
+  * Splitting by payrolls above vs below their prior three-month average, or by unemployment up, flat or down, gives **no group whose day-0 or 20-session difference from ordinary drift excludes zero**.
+  * Payrolls above trend were followed by slightly better 120-session S&P 500 returns (+2.2% vs −2.0% relative to ordinary drift). These windows overlap heavily and are not evidence.
 * **[C] Rates, credit and liquidity states.**
   * Months after the 10-year yield had fallen more than 50 bp in 60 sessions were followed by stronger S&P 500 returns: +7.0% over the next 60 sessions vs +2.8% when yields were stable. That is only 6 separate spells, and they include the 2020 and 2023–24 rate collapses.
   * Months with **tighter** credit (Baa spread above its one-year median) were followed by *better* returns than looser months (S&P 500 +3.8% vs +2.7% over 60 sessions).
@@ -108,7 +111,7 @@
 6. **[A] 65–75% of breakouts close back below the level within 10 sessions, in every regime.** Breakouts in Bull markets beat the universe slightly over 60 sessions; in Bear markets they lag.
 7. **[A] 55-day and 52-week breakdowns in Bear and Weakening markets mostly recover:** 61–69% are back above the level after 60 sessions, with positive excess returns.
 8. **[A] Breakout density and net new highs measure the past, not the future:** ρ +0.42 with the trailing month, about −0.15 (including 0) with the next one.
-9. **[A] Macro event days:** FOMC days are 1.3× as volatile as normal (cuts 2.6×, with negative day-0 returns, a selection effect). CPI days are barely more volatile than normal over 2016–2026. No first-release split shows a forward return difference.
+9. **[A] Macro event days:** FOMC days are 1.3× as volatile as normal (cuts 2.6×, with negative day-0 returns, a selection effect). Jobs-report days are 1.18× (1.42× when unemployment rose). CPI days are barely more volatile than normal over 2016–2026 (1.08×). No first-release split of CPI or jobs data shows a forward return difference.
 10. **[A] A winner's path is brutal.** The median eligible stock suffers a −31% drawdown within a year. ≥ +100% is reached at some point in 7.8% of stock-years but held to the year-end in 4.5%.
 
 ### Surprising or counterintuitive
