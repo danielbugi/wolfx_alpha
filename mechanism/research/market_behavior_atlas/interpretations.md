@@ -108,8 +108,8 @@
 3. **[A] Exceptional winners are clustered in market episodes.** The ≥ +100% share was 15.4% for 2020 starts, 7.8% for 2025, and 1–4% in other years. With 2020 excluded, the regime differences in winner frequency disappear or reverse.
 4. **[A/C] Starts in Bear or weak-breadth months had higher *median* one-year returns even outside 2020** (Bear +9.6% vs Bull +1.4%), with fewer large losses. This rests on 4–5 episodes, and survivorship favours exactly these starts.
 5. **[A] Being near the 52-week high halves the chance of doubling and cuts the chance of halving to about a third.** "Near highs" lowers variance; it does not select winners.
-6. **[A] 65–75% of breakouts close back below the level within 10 sessions, in every regime.** Breakouts in Bull markets beat the universe slightly over 60 sessions; in Bear markets they lag.
-7. **[A] 55-day and 52-week breakdowns in Bear and Weakening markets mostly recover:** 61–69% are back above the level after 60 sessions, with positive excess returns.
+6. **[A, definition-sensitive — see Addendum A] 65–75% of breakouts close back below the level within 10 sessions, in every regime.** That rate depends heavily on the definition (26–78% across reasonable variants). Breakouts in Bull markets beat the universe slightly over 60 sessions (+1.6%), but only +0.3% against volatility-matched peers.
+7. **[A, downgraded — see Addendum A] 55-day and 52-week breakdowns in Bear and Weakening markets mostly recover** (61–69% back above the level after 60 sessions). Their positive excess over the universe is mostly a volatility effect: against volatility-matched peers it shrinks to an interval that includes 0 (Bear), or turns negative (Weakening).
 8. **[A] Breakout density and net new highs measure the past, not the future:** ρ +0.42 with the trailing month, about −0.15 (including 0) with the next one.
 9. **[A] Macro event days:** FOMC days are 1.3× as volatile as normal (cuts 2.6×, with negative day-0 returns, a selection effect). Jobs-report days are 1.18× (1.42× when unemployment rose). CPI days are barely more volatile than normal over 2016–2026 (1.08×). No first-release split of CPI or jobs data shows a forward return difference.
 10. **[A] A winner's path is brutal.** The median eligible stock suffers a −31% drawdown within a year. ≥ +100% is reached at some point in 7.8% of stock-years but held to the year-end in 4.5%.
@@ -153,10 +153,54 @@
 2. **Post-drawdown typical return.** After the market has been in a Bear or weak-breadth state, the typical stock's one-year return is higher than after Bull or strong-breadth states, with fewer large losses. This needs either more history (pre-2016, other markets) or a pre-registered forward record.
 3. **Breakdown reversal in weak markets.** 55-day and 52-week breakdowns that occur in Bear or Weakening regimes outperform volatility-matched peers over 60 sessions. This should be tested forward only, because this history has been looked at.
 
-### Recommended next data improvements
+### Recommended next data improvements (see also Addendum C)
 
 1. **Delisted-company price history** (the single biggest fix).
 2. **A longer price history,** at least back to 2000, to include 2000–02 and 2008–09.
 3. **Point-in-time market cap** from SEC filings (`dei:EntityCommonStockSharesOutstanding`) and point-in-time sector going forward (`sector_observation` is already recording).
 4. **Consensus macro forecasts,** if a licensable source exists, to turn §3 into a genuine surprise study.
 5. **ALFRED vintages for NFCI,** and a licensed long high-yield-spread history.
+
+<!-- addendum -->
+## Addendum (2026-11-02, after review): sensitivity checks and the volatility follow-up
+
+Two scripts, run on the same extract, with outputs committed next to the notebook: `sensitivity_breakouts.py` → `sensitivity_breakouts.txt`, and `volatility_tails.py` → `volatility_tails.txt`. Every variant was fixed before running; nothing was selected from them.
+
+**A. Breakout failure and breakdown reversal are definition-sensitive** (`sensitivity_breakouts.txt`)
+
+* **The failure rate depends mainly on the definition.** For 55-day breakouts:
+  * "Closed back below the level within 10 sessions": 69%.
+  * A close more than 2% below: 47%; more than 5% below: 26%.
+  * The 5-session and 20-session windows give 59% and 78%.
+
+  The 52-week and breakdown versions behave the same way. The §5 headline mostly counts small dips back through the level, not breakouts that genuinely failed.
+* **Overlap barely matters.** Keeping only independent events (the first per stock in any 60 sessions) cuts the event count by about 70% and lowers the rates by only 2–3 points. Month-equal and pooled rates differ by 2–3 points.
+* **Most of the 60-session excess return is volatility.** Measured against same-date stocks in the same volatility decile:
+  * Bull-market 55-day breakouts: +1.6% against the universe becomes +0.2% (month-equal, interval −0.4% to +0.7%).
+  * Weakening-market 52-week breakdowns: +3.5% becomes −3.6% (interval −6.2% to −0.5%).
+  * Bear-market breakdowns keep a positive point estimate (+2.0% to +2.2%), but the interval includes 0, and it rests on 19 months in 10 spells.
+
+  Finding 7 is therefore downgraded: what looked like reversal is mostly the rebound of high-volatility stocks.
+
+**B. Inside the high-volatility group** (`volatility_tails.txt`; the top within-date quintile of 60-day volatility)
+
+* **Outside 2020, high volatility is a net-negative lottery.** 8.6% of these stocks doubled and 16.1% halved; the median one-year return was −5.1%. And survivorship *flatters* this group.
+* **Price features improve the ratio of doublers to halvers by cutting halvers, not by adding doublers.** Ex-2020 doubled/halved ratios:
+  * near the 52-week high 0.80 vs far below it 0.40;
+  * high 6-month return 0.72 vs low 0.42;
+  * a recent 55-day high 0.65 vs none 0.49.
+
+  The doubling rate stays at 8–10% throughout.
+* **A low share price is the only feature that raises doublings** (11.1% vs 6.6%), and it is partly a size and volatility effect itself. The size proxy and the volume trend separate nothing.
+* **Stratified by volatility decile × size tercile × trend,** Bear-month starts show doubled/halved ratios of 1.1–6.2 vs 0.6–0.9 in Bull months. That is 13 months in 5 spells, including 2020: the regime is the dominant variable, and it is the least replicable one.
+* **[C] Why both tails rise with volatility.** A wide return distribution mechanically puts more mass in both tails. For a stock to double or halve within a year needs a large repricing, which happens where the outcome is uncertain: small or early-stage companies, binary events (trials, financing), leverage and high operating leverage. Volatile names also attract lottery demand, which is consistent with their poor median return.
+
+  Price data describes the *width* of the distribution well. It says much less about its *direction*. That has to come from information about the business: point-in-time fundamentals, filings and catalysts.
+
+**C. Controls every future right-tail study must use**
+
+* **Volatility:** compare within same-date volatility deciles (matching or stratification).
+* **Both tails:** report the doubling rate *and* the halving rate (and their ratio), plus the median, never one tail alone.
+* **Size:** use dollar-volume terciles as a proxy until point-in-time market cap exists (SEC shares outstanding × price).
+* **Regime:** stratify by trend state, report results without 2020 and leaving one episode out, and always state the number of spells.
+* **Inference:** month-block intervals, with the decision made on one pre-registered contrast.

@@ -560,6 +560,7 @@ interp("relationships")
 
 md("## 8. Conclusions")
 interp("conclusions")
+interp("addendum")
 
 nb = nbf.v4.new_notebook()
 nb["cells"] = CELLS
