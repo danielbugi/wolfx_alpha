@@ -32,8 +32,12 @@ LABELS = {
 YEAR_DAYS, YEAR_TOL = 365, 25
 QUARTER_DAYS, QUARTER_TOL = 91, 25
 
-# When statements became public. The earnings report (earnings_calendar, with a reported EPS) on or after quarter end + 5 days and within +130 days; otherwise a conservative assumed lag.
-AVAILABILITY_MIN_DAYS, AVAILABILITY_MAX_DAYS, ASSUMED_LAG_DAYS = 5, 130, 75
+# When statements became public. The earnings report (earnings_calendar, with a reported EPS) on or after quarter end + 5 days and within +104 days; otherwise a conservative assumed lag.
+# The window was +130 days until 2026-11-03: a quarter whose own report row has no EPS then claimed the NEXT quarter's report (NSSC Q 2026-06-30 was dated 2026-11-02; its 10-K was accepted
+# 2026-08-24). Checked against SEC 10-Q/10-K acceptance on production: of the stored report dates 105-130 days after quarter end, 76 of the 78 with an SEC filing came more than 20 days after it
+# (the next quarter's report); of those 90-103 days after, every one with a filing was within 7 days of it. Report rows WITHOUT an EPS are deliberately not a fallback: 14 of the 131 checked fell
+# more than 7 days BEFORE the filing (a rescheduled date), which would date figures public too early.
+AVAILABILITY_MIN_DAYS, AVAILABILITY_MAX_DAYS, ASSUMED_LAG_DAYS = 5, 104, 75
 
 # Detection thresholds (the event exists when the condition holds) and the value at which the event's strength reaches 100 (strength 50 at the threshold, linear in between and beyond, 0..100).
 THRESHOLDS = {

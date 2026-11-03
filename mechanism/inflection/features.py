@@ -76,7 +76,7 @@ def _ratio_growth(cur: Optional[float], base: Optional[float]) -> Optional[float
 
 
 def availability(quarter_end: date, report_dates: Sequence[date]) -> Tuple[date, str]:
-    """(date the figures were public, basis). The first earnings report in [quarter end + 5, + 130] days; otherwise quarter end + the assumed lag."""
+    """(date the figures were public, basis). The first earnings report in [quarter end + 5, + 104] days (later ones are the next quarter's, see config); otherwise quarter end + the assumed lag."""
     lo, hi = quarter_end + timedelta(days=C.AVAILABILITY_MIN_DAYS), quarter_end + timedelta(days=C.AVAILABILITY_MAX_DAYS)
     for d in sorted(report_dates):
         if lo <= d <= hi:
