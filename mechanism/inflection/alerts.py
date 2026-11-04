@@ -9,7 +9,7 @@ Safety rules (all enforced here and tested):
   * EXACTLY ONCE: every alert first claims a row in inflection_alert_delivery (UNIQUE dedupe_key) and sends only if it won the claim; a failed send is retried on a later run (at most 3
     attempts). Re-running, restating a quarter or processing the same event twice never alerts twice.
   * Flood guard: at most INFLECTION_TELEGRAM_MAX_PER_RUN (10) event messages per run; the rest are summarised in one message.
-  * FRESH ONLY: a Telegram alert needs an event public in the last INFLECTION_FRESH_DAYS AND first detected on or after that public date. An event that existed before its stated public
+  * FRESH ONLY: a Telegram alert needs an event public in the last INFLECTION_FRESH_DAYS AND first detected (UTC date) on or after that public date. An event that existed before its stated public
     date was RE-DATED by a revision (NSSC 2026-11-03: a quarter public 2026-08-24, detected 2026-10-31, re-dated to 2026-11-02 by a misattributed report) and is old news: never alerted.
   * ONE ALERT PER COMPANY-QUARTER-EVENT across method versions, and only the versions in ALERT_METHOD_VERSIONS are read at all.
   * SESSION DATED: `--asof` is the market session (the pipeline passes its gate's session); the digest, overflow and freshness keys use it, never the wall clock of the run.
@@ -273,8 +273,9 @@ def event_key(ev: Mapping[str, Any]) -> str:
 
 
 def is_fresh(ev: Mapping[str, Any], session: date, fresh_days: int) -> bool:
-    """Telegram eligibility: public within [session - fresh_days, session] AND first detected (US Eastern date) on or after that public date. A revision that moves an existing event's
-    public date forward into the window fails the second test: the figures were already known when the event was first detected."""
+    """Telegram eligibility: public within [session - fresh_days, session] AND first detected on or after that public date. A revision that moves an existing event's public date
+    forward into the window fails the second test: the figures were already known when the event was first detected. Detection is taken as a UTC date, which is never earlier than its
+    US Eastern date: a 'first_seen' public date is itself the UTC date of the data fetch (around UTC midnight), so an Eastern date could make a genuinely new event look detected early."""
     avail = date.fromisoformat(str(ev["available_at"])[:10])
     if not (session - timedelta(days=fresh_days) <= avail <= session):
         return False
@@ -364,7 +365,7 @@ def smtp_sender(to: str) -> Callable[[str, str, str], None]:
 def _events(db, where: str, params: Sequence[Any], limit: int = 200) -> List[Dict[str, Any]]:
     """Events shaped like the API (reusing its service would import the backend; this is the same SELECT, narrower)."""
     rows = db.execute_dict_query(f"""SELECT e.id, e.symbol, co.company_name, e.event_type, e.strength, e.severity, e.score, e.fiscal_year, e.fiscal_quarter, e.quarter_end, e.available_at, e.availability_basis,
-               e.data_quality, e.method_version, e.explanation, e.metrics, e.context, (e.first_detected_at AT TIME ZONE 'America/New_York')::date AS first_detected_on
+               e.data_quality, e.method_version, e.explanation, e.metrics, e.context, (e.first_detected_at AT TIME ZONE 'UTC')::date AS first_detected_on
         FROM fundamental_inflection_event e LEFT JOIN LATERAL (SELECT c.company_name FROM companies c WHERE c.symbol = e.symbol LIMIT 1) co ON true
         WHERE e.method_version = ANY(%s) AND {where} ORDER BY e.strength DESC, e.symbol LIMIT %s""", [list(ALERT_METHOD_VERSIONS)] + list(params) + [limit])
     out = []

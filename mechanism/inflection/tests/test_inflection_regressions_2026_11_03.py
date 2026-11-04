@@ -87,6 +87,16 @@ def test_freshness_needs_a_recent_public_date_and_a_detection_on_or_after_it():
     assert not A.is_fresh(ev(available_at="2026-11-02", first_detected_on=None), s, 3)              # unknown detection: not alerted
 
 
+def test_a_first_seen_event_fetched_after_utc_midnight_is_still_fresh():
+    # basis first_seen: public date = UTC date of the fetch (2026-11-03 00:20 UTC, i.e. 2026-11-02 19:20 ET); detected minutes later. Compared as UTC dates it is fresh.
+    assert A.is_fresh(ev(available_at="2026-11-03", availability_basis="first_seen", first_detected_on="2026-11-03"), D("2026-11-03"), 3)
+
+
+def test_detection_is_read_as_a_utc_date():
+    src = open(os.path.join(ROOT, "mechanism", "inflection", "alerts.py"), encoding="utf-8").read()
+    assert "(e.first_detected_at AT TIME ZONE 'UTC')::date AS first_detected_on" in src
+
+
 class _FakeDb:
     def execute_dict_query(self, sql, params=()):
         return [{"t": "inflection_alert_delivery"}]
