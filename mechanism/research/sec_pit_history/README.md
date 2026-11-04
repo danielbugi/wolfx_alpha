@@ -69,7 +69,7 @@
 |---|---|---|
 | Point-in-time correctness | **PASS** | 0 look-ahead violations; 1,968/1,968 identical to production |
 | Holdout untouched | **PASS** | Removed before prices are read (`exploration_events`, tested) |
-| Coverage ≥ 80% of mapped filers | **FAIL** | 55.4% |
+| Coverage ≥ 80% of mapped filers | **FAIL for this extract / PASS in production since 2026-11-04** | This extract (2026-11-03, 1,876 CIKs): 55.4%. After the 2026-11-04 crawl: 2,593 / 3,048 = 85.1% (`docs/research/SEC_COVERAGE_AND_SURVIVORSHIP_PLAN.md`); the reconstruction must be re-run on a fresh extract |
 | Holdout events with complete 20-session windows (≥ 150) | **PASS (data)** | Holdout has 5,444 timely events, 3,659 company-quarters, 1,225 companies and 110 public weeks; counts only, no outcomes. The live gate still reads 0 because production stores only the last 200 days. |
 | Independent companies ≥ 100 / public weeks ≥ 40 | **PASS (data)** | 1,225 / 110 (as above) |
 | Survivorship-free universe | **FAIL** | Only companies priced today |
@@ -79,6 +79,11 @@
 **Verdict.** A confirmatory "Fundamental Inflection vs Future Big Winners" test is **not ready**: coverage and survivorship fail. The point-in-time machinery is ready and verified.
 
 Given these exploratory results, the hypothesis worth pre-registering is the **left-tail** one (inflections, especially stacked ones, reduce the matched halving rate), not a big-winner one.
+
+## Decisions recorded (owner, 2026-11-04)
+- This stays an exploratory artifact. The reserved window stays closed until every data-quality gate passes and the owner approves.
+- **The negative big-winner result and the candidate downside-risk hypothesis** are written up in `HYPOTHESIS_CANDIDATE.md`. The hypothesis is a candidate only: not registered, and nothing is claimed as validated.
+- Coverage and survivorship plan: `docs/research/SEC_COVERAGE_AND_SURVIVORSHIP_PLAN.md`.
 
 ## Reproduce
 ```bash
