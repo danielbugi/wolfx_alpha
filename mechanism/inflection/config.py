@@ -10,6 +10,10 @@ METHOD_VERSION_SEC = "inflection_v1_sec"     # same method, own event set: SEC-s
 
 SOURCE_SEC_PIT = "sec_edgar_pit"
 METHOD_VERSION_SEC_PIT = "inflection_v2_sec_pit"   # SEC quarters resolved per filing version: every figure is the one public at the quarter's first-public date (restatements cannot leak backwards)
+# A quarter whose FIRST filing in our data came more than this many days after quarter end is not evaluated: it is almost always a comparative inside a later filing (after an IPO or a late
+# registration), so the "event" would be an old quarter announced as new. 10-K deadlines are 60-90 days (+15 with an NT extension). Found 2026-11-03: 4 such events in the first full
+# production run (DRVN 143 days, DIN 402, FUBO 403) and 162 of 31,039 in the full-history reconstruction.
+SEC_MAX_FIRST_PUBLIC_LAG_DAYS = 120
 
 # Event types (stored as these strings).
 PROFITABILITY_TURNAROUND = "profitability_turnaround"

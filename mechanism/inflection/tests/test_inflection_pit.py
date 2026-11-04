@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 
 from data_updaters import sec_statements as S
+from inflection import config as C
 from inflection import pit as P
 
 QENDS = [date(2023, 3, 31), date(2023, 6, 30), date(2023, 9, 30), date(2023, 12, 31), date(2024, 3, 31), date(2024, 6, 30), date(2024, 9, 30), date(2024, 12, 31)]
@@ -74,3 +75,35 @@ def test_window_reaches_far_enough_back_for_revenue_acceleration():
     facts = base_facts([100, 100, 100, 100, 100, 100, 100, 130])
     last = P.pit_items(facts, {})[-1]["feature"]["metrics"]
     assert last["rev_yoy"] is not None and last["rev_yoy_prev"] is not None and last["rev_accel_pp"] is not None
+
+
+# ------------------------------------------------------------------------------------------------------------------------------------------------------------ stale first appearances (2026-11-03)
+def _with_comparative():
+    """The base filings plus a 2022-12-31 quarter that first appears only as a comparative in the FY2023 10-K (filed 2024-01-30, 395 days after its quarter end)."""
+    q0, accn, filed = date(2022, 12, 31), "K23", date(2024, 1, 30)
+    return base_facts(REV) + [fact("revenue", q0, 90, accn, filed, "10-K"), fact("operating_income", q0, 9, accn, filed, "10-K"), fact("net_income", q0, 4.5, accn, filed, "10-K")]
+
+
+def test_a_quarter_first_seen_as_a_comparative_in_a_later_filing_is_not_evaluated():
+    items = {it["feature"]["quarter"]: it for it in P.pit_items(_with_comparative(), {})}
+    assert date(2022, 12, 31) not in items                                    # stale: would be an old quarter announced as new
+    assert set(QENDS) <= set(items)                                           # timely quarters are untouched
+    assert items[QENDS[3]]["feature"]["metrics"]["revenue_py"] == 90.0        # the stale quarter still serves as a later quarter's prior year
+
+
+def test_the_guard_is_120_days_and_can_be_switched_off():
+    q = QENDS[0]
+
+    def items_for(lag):
+        f = [fact(m, q, v, "L", q + timedelta(days=lag)) for m, v in (("revenue", 100), ("operating_income", 10), ("net_income", 5))]
+        return [it["feature"]["quarter"] for it in P.pit_items(f, {})]
+    assert C.SEC_MAX_FIRST_PUBLIC_LAG_DAYS == 120
+    assert items_for(120) == [q] and items_for(121) == []
+    assert [it["feature"]["quarter"] for it in P.pit_items(_with_comparative(), {}, max_lag_days=None)][0] == date(2022, 12, 31)
+
+
+def test_the_production_cases_are_skipped():
+    # DRVN 2025-12-27 first public 2026-05-19 (143 days); DIN 2025-06-29 -> 2026-08-05 (402); FUBO 2025-03-29 -> 2026-05-06 (403)
+    for qe, pub in ((date(2025, 12, 27), date(2026, 5, 19)), (date(2025, 6, 29), date(2026, 8, 5)), (date(2025, 3, 29), date(2026, 5, 6))):
+        f = [fact(m, qe, v, "X", pub, "10-K") for m, v in (("revenue", 100), ("operating_income", 10), ("net_income", 5))]
+        assert P.pit_items(f, {}) == []
