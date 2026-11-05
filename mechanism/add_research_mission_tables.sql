@@ -148,17 +148,26 @@ BEGIN
     RETURN NEW;
 END $$;
 
+-- Row triggers refuse UPDATE/DELETE, statement triggers refuse TRUNCATE; all are ENABLE ALWAYS, so session_replication_role = replica cannot
+-- switch them off (the repository-wide rule checked by ops/checkpoint/assert_forward_research.sql).
 DO $$
+DECLARE
+    t RECORD;
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'research_document_append_only') THEN
-        CREATE TRIGGER research_document_append_only BEFORE UPDATE OR DELETE ON research_document FOR EACH ROW EXECUTE FUNCTION research_mission_append_only();
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'research_evidence_append_only') THEN
-        CREATE TRIGGER research_evidence_append_only BEFORE UPDATE OR DELETE ON research_evidence FOR EACH ROW EXECUTE FUNCTION research_mission_append_only();
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'research_llm_usage_guard') THEN
-        CREATE TRIGGER research_llm_usage_guard BEFORE UPDATE OR DELETE ON research_llm_usage FOR EACH ROW EXECUTE FUNCTION research_llm_usage_guard();
-    END IF;
+    FOR t IN SELECT * FROM (VALUES
+            ('research_document',  'research_document_append_only',  'BEFORE UPDATE OR DELETE', 'ROW',       'research_mission_append_only'),
+            ('research_document',  'research_document_no_truncate',  'BEFORE TRUNCATE',         'STATEMENT', 'research_mission_append_only'),
+            ('research_evidence',  'research_evidence_append_only',  'BEFORE UPDATE OR DELETE', 'ROW',       'research_mission_append_only'),
+            ('research_evidence',  'research_evidence_no_truncate',  'BEFORE TRUNCATE',         'STATEMENT', 'research_mission_append_only'),
+            ('research_llm_usage', 'research_llm_usage_guard',       'BEFORE UPDATE OR DELETE', 'ROW',       'research_llm_usage_guard'),
+            ('research_llm_usage', 'research_llm_usage_no_truncate', 'BEFORE TRUNCATE',         'STATEMENT', 'research_mission_append_only')
+        ) AS v(tbl, trg, timing, lvl, fn)
+    LOOP
+        IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = t.trg AND tgrelid = t.tbl::regclass) THEN
+            EXECUTE format('CREATE TRIGGER %I %s ON %I FOR EACH %s EXECUTE FUNCTION %I()', t.trg, t.timing, t.tbl, t.lvl, t.fn);
+        END IF;
+        EXECUTE format('ALTER TABLE %I ENABLE ALWAYS TRIGGER %I', t.tbl, t.trg);
+    END LOOP;
 END $$;
 
 -- Runtime role (pipeline writes, API reads), as migration 40: explicit grants, no DELETE anywhere.
