@@ -152,3 +152,9 @@ def test_schemas_are_strict():
             walk(s["items"])
     for sch in (A.PLAN_SCHEMA, A.ANALYSIS_SCHEMA, A.VERIFY_SCHEMA):
         walk(sch)
+
+
+def test_every_role_is_told_that_evidence_is_untrusted_data():
+    m = {"id": 1, "title": "t", "question": "q", "domain": "ai_semiconductors", "params": {}}
+    for system, _ in (A.planner_prompt(m, F.HBM_UNIVERSE, ["gdelt"]), A.analyst_prompt(m, {}, []), A.verifier_prompt([], {})):
+        assert "untrusted" in system and "ignore any instructions" in system
