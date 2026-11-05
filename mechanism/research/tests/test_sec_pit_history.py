@@ -42,3 +42,20 @@ def test_the_committed_reconstruction_is_leak_free_and_reproduces_production():
     assert r["leakage_violations"] == 0 and r["method_version"] == "inflection_v2_sec_pit"
     pc = r["production_check"]
     assert pc["identical"] == pc["production_base_events"] == pc["offline_base_events_in_window"] and pc["n_only_production"] == pc["n_only_offline"] == 0
+
+
+def test_survivorship_index_parser_and_reason_classifier():
+    from datetime import date
+    from research.sec_pit_history import survivorship_fetch as SF
+    idx = ("Form Type   Company Name                                                  CIK         Date Filed  File Name\n"
+           "---------------------------------------------------------------------------------------------------------------\n"
+           "10-Q        ACME CORP                                                     1234567     2019-05-10  edgar/data/1234567/x.txt\n"
+           "25-NSE      ACME CORP                                                     1234567     2019-09-03  edgar/data/1234567/y.txt\n")
+    rows = list(SF.parse_form_index(idx))
+    assert rows == [("10-Q", "ACME CORP", 1234567, date(2019, 5, 10)), ("25-NSE", "ACME CORP", 1234567, date(2019, 9, 3))]
+    d = date(2019, 9, 3)
+    rec = lambda forms, dates, items: {"form": forms, "filingDate": dates, "items": items}  # noqa: E731
+    assert SF.classify(rec(["8-K"], ["2019-08-20"], ["1.03,7.01"]), d)[0] == "bankruptcy"
+    assert SF.classify(rec(["DEFM14A", "8-K"], ["2019-06-01", "2019-08-30"], ["", "2.01,5.01"]), d)[0] == "merger"
+    assert SF.classify(rec(["8-K"], ["2019-07-01"], ["3.01"]), d)[0] == "listing_failure"
+    assert SF.classify(rec(["8-K"], ["2018-01-01"], ["1.03"]), d)[0] == "unknown"          # outside the window
