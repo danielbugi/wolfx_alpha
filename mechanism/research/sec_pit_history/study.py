@@ -212,6 +212,7 @@ def main(argv=None):
     R["period"] = np.where(R["available_at"] < HOLDOUT[0], "pre-holdout", "post-holdout")
     R["month"] = R["entry"].dt.to_period("M")
     R["year"] = R["entry"].dt.year
+    R.to_csv(os.path.join(OUT, "study_rows.csv.gz"), index=False)                 # per company-quarter outcomes (input of survivorship_bounds.py)
     print(f"Company-quarters with an eligible, priced entry: {len(R):,} (pre-holdout {int((R.period == 'pre-holdout').sum()):,}, post-holdout {int((R.period == 'post-holdout').sum()):,})\n")
 
     def summarize(sub, H, label):
@@ -317,6 +318,7 @@ def main(argv=None):
         snaps.append(pd.DataFrame({"t": t, "r": r[ok], "vdec": vdec[ok], "event": flag[ok]}))
     SN = pd.concat(snaps)
     SN["dbl"], SN["hlv"] = SN["r"] >= 1, SN["r"] <= -0.5
+    SN.to_csv(os.path.join(OUT, "reverse_view_rows.csv.gz"), index=False)
     g = SN.groupby(["t", "vdec", "event"])[["dbl", "hlv"]].mean().unstack("event")
     cnt = SN.groupby(["t", "vdec", "event"]).size().unstack("event").fillna(0)
     valid = (cnt[True] >= 3) & (cnt[False] >= 3)

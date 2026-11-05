@@ -59,3 +59,23 @@ def test_survivorship_index_parser_and_reason_classifier():
     assert SF.classify(rec(["DEFM14A", "8-K"], ["2019-06-01", "2019-08-30"], ["", "2.01,5.01"]), d)[0] == "merger"
     assert SF.classify(rec(["8-K"], ["2019-07-01"], ["3.01"]), d)[0] == "listing_failure"
     assert SF.classify(rec(["8-K"], ["2018-01-01"], ["1.03"]), d)[0] == "unknown"          # outside the window
+
+
+def test_survivorship_bounds_arithmetic_on_a_synthetic_case():
+    from research.sec_pit_history import survivorship_bounds as SB
+    t0 = pd.Timestamp("2019-01-31")
+    rows = pd.DataFrame({"available_at": [t0] * 100, "n_types": [2] * 50 + [1] * 50, "hlv": [1.0] * 4 + [0.0] * 96, "hlv_exp": [0.06] * 100})
+    pool = pd.DataFrame({"t": [t0] * 1000, "hlv": [1.0] * 50 + [0.0] * 950})                      # base rate 5%
+    cands = pd.DataFrame({"cik": [1, 2], "delist_date": [t0 + pd.Timedelta(days=200)] * 2, "reason": ["bankruptcy", "merger"], "excluded": ["", ""],
+                          "first_periodic": [t0 - pd.Timedelta(days=900)] * 2})
+    events = pd.DataFrame({"cik": [1, 1], "quarter_end": [t0 - pd.Timedelta(days=40)] * 2, "event_type": ["margin_expansion", "revenue_acceleration"],
+                           "available_at": [t0 + pd.Timedelta(days=5)] * 2})
+    res = SB.compute(rows, pool, cands, events, pd.DataFrame(columns=["cik", "end", "filed", "value"]))
+    r = res[(res["eligibility"] == "any") & (res["cut"] == "2+ event types")].set_index("scenario")
+    assert r.loc["S1 mild (-30%, not halved)", "missing events (imputed)"] == 1
+    assert r.loc["S1 mild (-30%, not halved)", "corrected halved"] == f"{4 / 51 * 100:.2f}%"               # the bankrupt company's event is not halved at -30%
+    assert r.loc["S3 severe (-100%, halved)", "corrected halved"] == f"{5 / 51 * 100:.2f}%"
+    # controls: 2 missing company-months; S2 halves the bankrupt one, the merger never -> pool rate (50+1)/1002
+    assert r.loc["S2 Shumway (-55%, halved)", "corrected expected"] == f"{0.06 * ((50 + 1) / 1002) / 0.05 * 100:.2f}%"
+    # S4 halves the event side only
+    assert r.loc["S4 adversarial (events -100%, controls -30%)", "corrected expected"] == f"{0.06 * (50 / 1002) / 0.05 * 100:.2f}%"
