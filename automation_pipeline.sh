@@ -254,11 +254,14 @@ run_optional_step 8 "quarterly fundamentals updater" 3300 mechanism/data_updater
 
 # Step 8b: Fundamental Inflection Engine (OPTIONAL: research signals read only by the dashboard and the owner alerts; no later step reads them). Incremental and idempotent;
 # it skips cleanly with a log line until migration 40 is applied. Hard limit 15 minutes.
-run_optional_step "8b" "fundamental inflection updater" 900 mechanism/inflection/updater.py
+# The inflection steps (8b, 8c, 8e) are dated by the gate's session (--asof), never by the wall clock: the 2026-11-02 session ran these steps after UTC midnight and stamped them 2026-11-03.
+ASOF_ARGS=()
+if [ -n "$SESSION_DATE" ]; then ASOF_ARGS=(--asof "$SESSION_DATE"); fi
+run_optional_step "8b" "fundamental inflection updater" 900 mechanism/inflection/updater.py "${ASOF_ARGS[@]}"
 
 # Step 8c: owner alerts for the inflection events (OPTIONAL). A private Telegram message per new high-severity event, a daily email digest and, on Fridays, the weekly research report.
 # Nothing is sent unless INFLECTION_ALERTS_ENABLED=1 (otherwise it logs what it WOULD send); every alert is claimed exactly once in inflection_alert_delivery.
-run_optional_step "8c" "inflection owner alerts" 300 mechanism/inflection/alerts.py --send --telegram --daily-digest --weekly-on-friday
+run_optional_step "8c" "inflection owner alerts" 300 mechanism/inflection/alerts.py --send --telegram --daily-digest --weekly-on-friday "${ASOF_ARGS[@]}"
 
 # Step 8d: SEC EDGAR fundamentals (OPTIONAL; migration 38). Point-in-time filings into the sec_* tables only; no later step reads them yet. Without SEC_USER_AGENT (the SEC requires a declared
 # operator and contact) the updater logs a clear line and exits 0 without a single request. --max-seconds keeps it inside its hard limit; unreached companies stay due for the next night.
@@ -266,7 +269,7 @@ run_optional_step "8d" "SEC EDGAR fundamentals updater" 1800 mechanism/data_upda
 
 # Step 8e: Fundamental Inflection Engine on the SEC filings, FILING-VERSION-AWARE (method inflection_v2_sec_pit; OPTIONAL). Every figure is the one public at the quarter's first-public date, so a later restatement
 # can never rewrite a stored event. Its own event set: no alert, API or page reads it except the Quant Lab data-quality view. Only quarters first public in the last 200 days are evaluated each night (idempotent).
-run_optional_step "8e" "inflection (SEC, filing-version-aware)" 1200 mechanism/inflection/updater.py --source sec_pit
+run_optional_step "8e" "inflection (SEC, filing-version-aware)" 1200 mechanism/inflection/updater.py --source sec_pit "${ASOF_ARGS[@]}"
 
 # Step 9: Multi-timeframe Screening
 run_step 9 "multi-timeframe screener" mechanism/screeners/multi_timeframe_screener.py "${SESSION_ARGS[@]}"
