@@ -9,6 +9,10 @@ Safety rules (all enforced here and tested):
   * EXACTLY ONCE: every alert first claims a row in inflection_alert_delivery (UNIQUE dedupe_key) and sends only if it won the claim; a failed send is retried on a later run (at most 3
     attempts). Re-running, restating a quarter or processing the same event twice never alerts twice.
   * Flood guard: at most INFLECTION_TELEGRAM_MAX_PER_RUN (10) event messages per run; the rest are summarised in one message.
+  * FRESH ONLY: a Telegram alert needs an event public in the last INFLECTION_FRESH_DAYS AND first detected (UTC date) on or after that public date. An event that existed before its stated public
+    date was RE-DATED by a revision (NSSC 2026-11-03: a quarter public 2026-08-24, detected 2026-10-31, re-dated to 2026-11-02 by a misattributed report) and is old news: never alerted.
+  * ONE ALERT PER COMPANY-QUARTER-EVENT across method versions, and only the versions in ALERT_METHOD_VERSIONS are read at all.
+  * SESSION DATED: `--asof` is the market session (the pipeline passes its gate's session); the digest, overflow and freshness keys use it, never the wall clock of the run.
 
 Usage:  python mechanism/inflection/alerts.py [--send] [--telegram] [--daily-digest] [--weekly] [--weekly-on-friday] [--asof YYYY-MM-DD]
         (without --send nothing is sent, whatever the environment says)
@@ -31,6 +35,10 @@ from inflection import config as C  # noqa: E402
 BASE_URL_DEFAULT = "https://dashboard.first-light.finance"
 SEVERITY_RANK = {"low": 0, "medium": 1, "high": 2}
 MAX_ATTEMPTS = 3
+# The ONLY method versions any alert reads. inflection_v2_sec_pit is deliberately absent: its first full run (2026-11-03) wrote 2,116 events in one night. Adding a version here needs an
+# explicit owner decision; the freshness rule and the cross-version duplicate check below then keep its history from alerting.
+ALERT_METHOD_VERSIONS: Tuple[str, ...] = (C.METHOD_VERSION,)
+DIGEST_MAX_AGE_DAYS = 30            # newly computed events for quarters public longer ago than this (a backfill, a late data source) are counted in the digest, not listed
 DISCLAIMER = "RESEARCH SIGNAL, not an order recommendation. Rule-based and explainable; not shown to predict returns."
 
 
@@ -157,19 +165,25 @@ def quality_lines(q: Mapping[str, Any]) -> List[str]:
     return out
 
 
-def daily_digest(events: Sequence[Mapping[str, Any]], q: Mapping[str, Any], day: date, base_url: str = BASE_URL_DEFAULT) -> Tuple[str, str, str]:
-    """(subject, html, text) for the daily digest of new events."""
+def daily_digest(events: Sequence[Mapping[str, Any]], q: Mapping[str, Any], day: date, base_url: str = BASE_URL_DEFAULT, older: int = 0) -> Tuple[str, str, str]:
+    """(subject, html, text) for the daily digest of new events. `older`: newly computed events for quarters public long ago, counted but not listed."""
     n_high = sum(1 for e in events if e["severity"] == "high")
     subject = f"First Light: {len(events)} new fundamental inflection event(s), {n_high} high · {day.isoformat()}"
     shown = list(events)[:15]
     body = "".join(_card_html(e, base_url) for e in shown) or "<tr><td style=\"padding:12px 0;font-size:13px\">No new events since the last digest.</td></tr>"
     more = f"<tr><td style=\"font-size:12px;color:#64748b\">+ {len(events) - len(shown)} more in the screener.</td></tr>" if len(events) > len(shown) else ""
+    older_line = (f"{older} newly computed event(s) for quarters public more than {DIGEST_MAX_AGE_DAYS} days ago (a backfill or a late data source) are not listed; they are in the screener."
+                  if older else "")
+    if older_line:
+        more += f"<tr><td style=\"font-size:12px;color:#64748b\">{html.escape(older_line)}</td></tr>"
     dq = "".join(f"<li>{html.escape(l)}</li>" for l in quality_lines(q))
     body += more + f"<tr><td style=\"padding-top:12px\"><div style=\"font-size:13px;font-weight:700\">Data quality</div><ul style=\"margin:4px 0;padding-left:18px;font-size:12px;color:#475569\">{dq}</ul></td></tr>"
     text = [subject, DISCLAIMER, ""]
     for e in shown:
         text += [f"{e['symbol']} {e.get('company_name') or ''} - {e['label']} ({e['severity']}, strength {e['strength']:.0f}, score {e['score']:.0f})"] + [f"  - {l}" for l in key_metric_lines(e)] + [
             f"  public {e['available_at']} (from {basis_text(e['availability_basis'])}) {stock_url(base_url, e['symbol'])}", ""]
+    if older_line:
+        text += [older_line, ""]
     text += ["Data quality:"] + [f"  - {l}" for l in quality_lines(q)] + ["", f"{base_url.rstrip('/')}/inflection"]
     return subject, _shell("Fundamental inflection digest", f"Events detected since the last digest, as of {day.isoformat()}.", body, base_url), "\n".join(text)
 
@@ -212,6 +226,14 @@ class Delivery:
     def claim(self, dedupe_key: str, channel: str, recipient_ref: str, event_id: Optional[int]) -> bool: ...
     def mark(self, dedupe_key: str, ok: bool, error: Optional[str] = None) -> None: ...
 
+    def alerted_under_another_version(self, ev: Mapping[str, Any]) -> bool:
+        """True when the same company, quarter and event type was already claimed or sent under a different method version."""
+        return False
+
+    def last_sent_at(self, channel: str) -> Optional[datetime]:
+        """When the newest successfully sent message of this channel was claimed (None: never)."""
+        return None
+
 
 class DbDelivery(Delivery):
     def __init__(self, db) -> None:
@@ -230,6 +252,17 @@ class DbDelivery(Delivery):
             conn.commit()
             return won
 
+    def alerted_under_another_version(self, ev: Mapping[str, Any]) -> bool:
+        key = event_key(ev)
+        prefix = key.rsplit(":", 1)[0] + ":"
+        like = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        return bool(self.db.execute_dict_query("SELECT 1 AS x FROM inflection_alert_delivery WHERE dedupe_key LIKE %s AND dedupe_key <> %s AND status IN ('claimed', 'sent') LIMIT 1",
+                                               (like, key)))
+
+    def last_sent_at(self, channel: str) -> Optional[datetime]:
+        r = self.db.execute_dict_query("SELECT MAX(claimed_at) AS t FROM inflection_alert_delivery WHERE channel = %s AND status = 'sent'", (channel,))
+        return r[0]["t"] if r else None
+
     def mark(self, dedupe_key: str, ok: bool, error: Optional[str] = None) -> None:
         self.db.execute_insert("UPDATE inflection_alert_delivery SET status = %s, sent_at = CASE WHEN %s THEN NOW() ELSE NULL END, last_error = %s WHERE dedupe_key = %s",
                                ("sent" if ok else "failed", ok, None if ok else (error or "")[:500], dedupe_key))
@@ -239,8 +272,19 @@ def event_key(ev: Mapping[str, Any]) -> str:
     return f"telegram_owner:{ev['symbol']}:{ev['quarter_end']}:{ev['event_type']}:{ev.get('method_version') or C.METHOD_VERSION}"
 
 
+def is_fresh(ev: Mapping[str, Any], session: date, fresh_days: int) -> bool:
+    """Telegram eligibility: public within [session - fresh_days, session] AND first detected on or after that public date. A revision that moves an existing event's public date
+    forward into the window fails the second test: the figures were already known when the event was first detected. Detection is taken as a UTC date, which is never earlier than its
+    US Eastern date: a 'first_seen' public date is itself the UTC date of the data fetch (around UTC midnight), so an Eastern date could make a genuinely new event look detected early."""
+    avail = date.fromisoformat(str(ev["available_at"])[:10])
+    if not (session - timedelta(days=fresh_days) <= avail <= session):
+        return False
+    detected = ev.get("first_detected_on")
+    return detected is not None and date.fromisoformat(str(detected)[:10]) >= avail
+
+
 def send_event_alerts(events: Sequence[Mapping[str, Any]], delivery: Delivery, send_telegram: Callable[[str], None], *, min_severity: str = "high", max_per_run: int = 10,
-                      base_url: str = BASE_URL_DEFAULT, dry_run: bool = True, log: Callable[[str], None] = print) -> Dict[str, int]:
+                      base_url: str = BASE_URL_DEFAULT, dry_run: bool = True, log: Callable[[str], None] = print, day: Optional[date] = None) -> Dict[str, int]:
     """Telegram alerts for qualifying events, once each. Returns counts: sent, failed, skipped_duplicate, skipped_severity, overflow."""
     stats = {"sent": 0, "failed": 0, "skipped_duplicate": 0, "skipped_severity": 0, "overflow": 0, "would_send": 0}
     qualifying = [e for e in events if SEVERITY_RANK.get(e["severity"], 0) >= SEVERITY_RANK[min_severity]]
@@ -255,7 +299,7 @@ def send_event_alerts(events: Sequence[Mapping[str, Any]], delivery: Delivery, s
             stats["would_send"] += 1
             log(f"INFLECTION_ALERT dry-run would send {key}")
             continue
-        if not delivery.claim(key, "telegram_owner", "owner", ev.get("id")):
+        if delivery.alerted_under_another_version(ev) or not delivery.claim(key, "telegram_owner", "owner", ev.get("id")):
             stats["skipped_duplicate"] += 1
             continue
         try:
@@ -267,7 +311,7 @@ def send_event_alerts(events: Sequence[Mapping[str, Any]], delivery: Delivery, s
             stats["failed"] += 1
             log(f"INFLECTION_ALERT send failed for {key}: {type(exc).__name__}: {exc}")
     if stats["overflow"] and not dry_run:
-        okey = f"telegram_owner:overflow:{date.today().isoformat()}"
+        okey = f"telegram_owner:overflow:{(day or date.today()).isoformat()}"
         if delivery.claim(okey, "telegram_owner", "owner", None):
             try:
                 send_telegram(digest_overflow_text(stats["overflow"], base_url))
@@ -321,9 +365,9 @@ def smtp_sender(to: str) -> Callable[[str, str, str], None]:
 def _events(db, where: str, params: Sequence[Any], limit: int = 200) -> List[Dict[str, Any]]:
     """Events shaped like the API (reusing its service would import the backend; this is the same SELECT, narrower)."""
     rows = db.execute_dict_query(f"""SELECT e.id, e.symbol, co.company_name, e.event_type, e.strength, e.severity, e.score, e.fiscal_year, e.fiscal_quarter, e.quarter_end, e.available_at, e.availability_basis,
-               e.data_quality, e.method_version, e.explanation, e.metrics, e.context
+               e.data_quality, e.method_version, e.explanation, e.metrics, e.context, (e.first_detected_at AT TIME ZONE 'UTC')::date AS first_detected_on
         FROM fundamental_inflection_event e LEFT JOIN LATERAL (SELECT c.company_name FROM companies c WHERE c.symbol = e.symbol LIMIT 1) co ON true
-        WHERE e.method_version = %s AND {where} ORDER BY e.strength DESC, e.symbol LIMIT %s""", [C.METHOD_VERSION] + list(params) + [limit])
+        WHERE e.method_version = ANY(%s) AND {where} ORDER BY e.strength DESC, e.symbol LIMIT %s""", [list(ALERT_METHOD_VERSIONS)] + list(params) + [limit])
     out = []
     for r in rows:
         ctx = r.get("context") or {}
@@ -331,7 +375,8 @@ def _events(db, where: str, params: Sequence[Any], limit: int = 200) -> List[Dic
         out.append({**{k: r[k] for k in ("id", "symbol", "company_name", "event_type", "severity", "fiscal_year", "fiscal_quarter", "data_quality", "method_version", "explanation", "availability_basis")},
                     "label": C.LABELS.get(r["event_type"], r["event_type"]), "strength": float(r["strength"]), "score": float(r["score"]), "quarter_end": r["quarter_end"].isoformat(),
                     "available_at": r["available_at"].isoformat(), "key_metrics": key_metrics_for(r["event_type"], r["metrics"] or {}), "reaction_2d": (ctx.get("reaction") or {}).get("ret_2d"),
-                    "excess_vs_sector_since_publication": ctx.get("excess_vs_sector_since_publication"), "valuation": val})
+                    "excess_vs_sector_since_publication": ctx.get("excess_vs_sector_since_publication"), "valuation": val,
+                    "first_detected_on": r["first_detected_on"].isoformat() if r.get("first_detected_on") else None})
     return out
 
 
@@ -405,7 +450,10 @@ def run(asof: Optional[date] = None, *, send: bool = False, telegram: bool = Fal
     out: Dict[str, Any] = {"dry_run": dry_run}
     if telegram:
         fresh = int(os.environ.get("INFLECTION_FRESH_DAYS", "3"))
-        evs = _events(db, "e.available_at >= %s::date - %s AND e.available_at <= %s", (asof, fresh, asof))
+        window = _events(db, "e.available_at >= %s::date - %s AND e.available_at <= %s", (asof, fresh, asof))
+        evs = [e for e in window if is_fresh(e, asof, fresh)]
+        if len(evs) < len(window):
+            log(f"INFLECTION_ALERT {len(window) - len(evs)} event(s) public in the window were first detected before their public date (re-dated by a revision): not alerted")
         sender: Callable[[str], None]
         if dry_run:
             sender = lambda t: None  # noqa: E731
@@ -414,7 +462,7 @@ def run(asof: Optional[date] = None, *, send: bool = False, telegram: bool = Fal
             client = TelegramClient.from_env("owner", dry_run=False)
             sender = lambda t: client.send_message(t, kind="inflection_alert")  # noqa: E731
         out["telegram"] = send_event_alerts(evs, delivery, sender, min_severity=os.environ.get("INFLECTION_TELEGRAM_MIN_SEVERITY", "high"),
-                                            max_per_run=int(os.environ.get("INFLECTION_TELEGRAM_MAX_PER_RUN", "10")), base_url=base, dry_run=dry_run, log=log)
+                                            max_per_run=int(os.environ.get("INFLECTION_TELEGRAM_MAX_PER_RUN", "10")), base_url=base, dry_run=dry_run, log=log, day=asof)
     want_weekly = weekly or (weekly_on_friday and asof.weekday() == 4)
     if daily or want_weekly:
         to = resolve_email_to(db)
@@ -424,8 +472,12 @@ def run(asof: Optional[date] = None, *, send: bool = False, telegram: bool = Fal
             send_fn = (lambda s, h, t: None) if dry_run else smtp_sender(to)
             q = quality_snapshot(db, asof)
             if daily:
-                evs = _events(db, "e.first_detected_at >= %s::timestamptz - interval '26 hours' AND e.severity IN ('high','medium')", (datetime.combine(asof, datetime.max.time(), tzinfo=timezone.utc),))
-                subj, h, t = daily_digest(evs, q, asof, base)
+                # "since the last digest" from the delivery ledger, so a skipped or repeated night neither drops nor repeats events; 26 hours before the session's end the first time
+                since = delivery.last_sent_at("email_digest") or (datetime.combine(asof, datetime.max.time(), tzinfo=timezone.utc) - timedelta(hours=26))
+                new = _events(db, "e.first_detected_at > %s AND e.severity IN ('high','medium')", (since,), limit=1000)
+                cutoff = asof - timedelta(days=DIGEST_MAX_AGE_DAYS)
+                evs = [e for e in new if date.fromisoformat(e["available_at"]) >= cutoff]
+                subj, h, t = daily_digest(evs, q, asof, base, older=len(new) - len(evs))
                 out["daily"] = send_email_once(delivery, f"email_digest:{asof.isoformat()}", "email_digest", subj, h, t, send_fn, dry_run=dry_run, log=log)
             if want_weekly:
                 iso = asof.isocalendar()
