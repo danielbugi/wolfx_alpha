@@ -1,4 +1,4 @@
-"""SEC company identity behind a listed symbol (migration 41, sec_cik_lineage; LAB ONLY, the live inflection engine does not call this yet).
+"""SEC company identity behind a listed symbol (migration 42, sec_cik_lineage; LAB ONLY, the live inflection engine does not call this yet).
 
 The SEC ticker file maps a symbol to today's registrant only. This module answers, for a symbol at an as-of date:
   * which CIKs its filing history is read from (`sources`): the current CIK, plus a predecessor's filings for periods that ended before the succession,

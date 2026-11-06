@@ -1,6 +1,6 @@
-"""SEC company identity (sec_lineage.py, migration 41; lab only): regression tests for XOM and the other split-history cases of 2026-11-05.
+"""SEC company identity (sec_lineage.py, migration 42; lab only): regression tests for XOM and the other split-history cases of 2026-11-05.
 
-No network. The database test applies migration 41 to the test database and is skipped when PostgreSQL is unreachable (CI's real-Postgres job runs it)."""
+No network. The database test applies migration 42 to the test database and is skipped when PostgreSQL is unreachable (CI's real-Postgres job runs it)."""
 import os
 import sys
 from dataclasses import replace
@@ -142,7 +142,7 @@ def test_two_current_rows_for_one_symbol_are_refused():
         L.by_symbol([LINKS["XOM"], LINKS["XOM"]])
 
 
-# ------------------------------------------------------------------------------------------------------------------------------------------------ migration 41 on PostgreSQL
+# ------------------------------------------------------------------------------------------------------------------------------------------------ migration 42 on PostgreSQL
 def _conn():
     psycopg2 = pytest.importorskip("psycopg2")
     from shared.config import config
@@ -155,7 +155,7 @@ def _conn():
     return conn
 
 
-def test_migration_41_enforces_the_rules_and_is_append_only():
+def test_migration_42_enforces_the_rules_and_is_append_only():
     import psycopg2
     conn = _conn()
     cur = conn.cursor()

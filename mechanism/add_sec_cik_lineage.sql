@@ -1,4 +1,4 @@
--- mechanism/add_sec_cik_lineage.sql   (migration 41 -- SEC company identity: predecessor CIKs and other identity breaks behind a listed symbol)
+-- mechanism/add_sec_cik_lineage.sql   (migration 42 -- SEC company identity: predecessor CIKs and other identity breaks behind a listed symbol)
 --
 -- Additive only (IF NOT EXISTS); touches no existing table. LAB ONLY: not applied to production (owner decision 2026-11-06).
 -- Apply to a research / scratch database with:  psql -v ON_ERROR_STOP=1 -1 -f mechanism/add_sec_cik_lineage.sql

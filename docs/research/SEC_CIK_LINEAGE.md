@@ -1,6 +1,6 @@
 # SEC company identity: predecessor CIKs and identity breaks (Lab, 2026-11-06)
 
-**Status:** Lab only. This is migration 41 (`mechanism/add_sec_cik_lineage.sql`) plus the resolver `mechanism/data_updaters/sec_lineage.py` and a reviewed seed `sec_lineage_seed.csv`.
+**Status:** Lab only. This is migration 42 (`mechanism/add_sec_cik_lineage.sql`) plus the resolver `mechanism/data_updaters/sec_lineage.py` and a reviewed seed `sec_lineage_seed.csv`.
 - **Not applied to production.**
 - The live inflection engine does not call the resolver.
 
@@ -42,13 +42,13 @@ Read-only SEC submissions lookups and production price history, 2026-11-06.
 **Effect:** only 2 of the 14 can recover history: XOM (filings since 1994) and VNOM (since 2014). The other 12 are correct as they are, but 4 need a price cut (GLIBA, MTAL, SHAZ) or exclusion (MTAL, EAI) in research.
 
 ## What activation would take (not done; each step needs owner approval)
-1. Apply migration 41 to the research database or production, and load the seed.
+1. Apply migration 42 to the research database or production, and load the seed.
 2. Ingest the predecessor CIKs' `companyfacts` (2 companies, 2 requests).
 3. Call `sec_lineage.merge_facts` in `inflection/store.load_sec_filing_versions` and in the PR #94 reconstruction.
 4. Apply `price_identity_from` and `research_eligible` in research universes, and add the detector count ("split-history candidates: N") to the Lab data-quality view.
 
 ## Tests
-`mechanism/data_updaters/tests/test_sec_lineage.py` has 30 tests. One applies migration 41 on PostgreSQL in CI's real-database job. They cover:
+`mechanism/data_updaters/tests/test_sec_lineage.py` has 30 tests. One applies migration 42 on PostgreSQL in CI's real-database job. They cover:
 - the full seed;
 - the "only proven reorganisations inherit" rule, with 7 refusal cases;
 - XOM point in time end-to-end through `pit.first_public` and `pit.pit_items`: the comparative is dated by ExxonMobil's own 10-Q, the predecessor's post-succession stub is not read, and only the predecessor is read before `known_at`;
