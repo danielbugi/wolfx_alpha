@@ -35,6 +35,8 @@ The survivor-only study found that company-quarters with **2+ event types** halv
 
 **Decision rule (fixed in advance): ROBUST to survivorship** for the stacked-event (2+) difference. It stays negative in every scenario and eligibility variant.
 
+> **Update (same day), [SURVIVORSHIP_INFERENCE.md](SURVIVORSHIP_INFERENCE.md):** the fixed rule tests point estimates. With 95% intervals (company, quarter and two-way bootstraps), the difference stays below zero under S1–S3. **Under S4 adversarial it is not distinguishable from zero.** At that bound it is worth about 0.17–0.45% a year, about one round-trip cost.
+
 ## How to read it
 - **The gap is large.** The missing companies would add about 48% more stacked events (1,258 against 2,643 observed) and 77% more pool stock-months. Survivor-only results on this universe should never be quoted without this correction.
 - **The direction survives, but the size is uncertain.**
