@@ -128,8 +128,10 @@ def main() -> int:
     if a.audit:
         print(json.dumps(u.audit(), indent=1))
         return 0
-    stats = u.run(asof=date.fromisoformat(a.asof) if a.asof else None, symbols=a.symbols, full=a.full, dry_run=a.dry_run, limit=a.limit, source=a.source,
-                   since=(date.fromisoformat(a.since) if a.since else (date.today() - timedelta(days=200)) if a.source == "sec_pit" and not a.full else None))
+    asof = date.fromisoformat(a.asof) if a.asof else None
+    # the 200-day window is anchored on the run's session (--asof, which the pipeline passes) and only falls back to the wall clock for a manual run without one
+    stats = u.run(asof=asof, symbols=a.symbols, full=a.full, dry_run=a.dry_run, limit=a.limit, source=a.source,
+                   since=(date.fromisoformat(a.since) if a.since else ((asof or date.today()) - timedelta(days=200)) if a.source == "sec_pit" and not a.full else None))
     return 0 if stats["errors"] == 0 else 1
 
 

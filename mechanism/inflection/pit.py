@@ -75,9 +75,12 @@ def _quarter_data(period: date, rows: Mapping[str, S.QuarterRow], accepted_at: O
                          None, accepted_at, kind)
 
 
-def pit_items(facts: Sequence[S.RawFact], accepted: Mapping[str, date], sector: Optional[str] = None, since: Optional[date] = None, latest: Optional[Mapping[date, Mapping[str, S.QuarterRow]]] = None
-              ) -> List[Dict[str, Any]]:
+def pit_items(facts: Sequence[S.RawFact], accepted: Mapping[str, date], sector: Optional[str] = None, since: Optional[date] = None, latest: Optional[Mapping[date, Mapping[str, S.QuarterRow]]] = None,
+              max_lag_days: Optional[int] = C.SEC_MAX_FIRST_PUBLIC_LAG_DAYS) -> List[Dict[str, Any]]:
     """One item per company-quarter first public on or after `since` (all when None): the feature computed from the figures known at that date, its availability and provenance.
+
+    A quarter first public more than `max_lag_days` after its end is skipped (stale: a comparative in a later filing, see config.SEC_MAX_FIRST_PUBLIC_LAG_DAYS); None disables the guard.
+    It still serves as the prior-year / previous quarter of later quarters.
 
     `latest` (the quarters as known today) is optional: when given, a quarter whose revenue / operating income / net income have since been restated gets a `restated_since` note (information
     only: the stored feature stays the as-published one)."""
@@ -85,6 +88,8 @@ def pit_items(facts: Sequence[S.RawFact], accepted: Mapping[str, date], sector: 
     items: List[Dict[str, Any]] = []
     for q, (d, kind, accn) in sorted(first_public(facts, accepted).items()):
         if since is not None and d < since:
+            continue
+        if max_lag_days is not None and (d - q).days > max_lag_days:
             continue
         table = known_quarters(pub, d)
         if q not in table or not (set(table[q]) & {"revenue", "operating_income", "net_income"}):
