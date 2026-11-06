@@ -1,11 +1,14 @@
-# Research Missions: plan for the first real-model test (draft, NOT authorised)
+# Research Missions: plan for the first real-model test (preparation approved 2026-11-06; execution NOT authorised)
 
 **Status:** paid calls stay disabled (`RESEARCH_PAID_CALLS_ENABLED` unset) until the owner explicitly authorises this test. Nothing here touches production data, schedules or notifications.
 
 ## 1. Where it runs
 - **Recommended:** the owner's development PC, with a **local** Postgres that has migration 41 applied. That database holds missions, evidence, claims, reports and the ledger.
 - **Source data** (prices, industries, SEC point-in-time revenue, inflection events, headlines) is read from production over an SSH tunnel, in a **forced read-only** session.
-- **Small code change needed before the test:** a separate read-only source connection, `RESEARCH_SOURCE_DSN`, used by `FirstLightDb`. Today the CLI uses one database for both store and sources.
+- **Read-only source adapter (implemented, `mechanism/research_missions/source_db.py`):** with `RESEARCH_SOURCE_DSN` set, `FirstLightDb` reads through one session that is refused unless read-only is proven on the live connection: the server default `default_transaction_read_only=on`, the client `set_session(readonly=True)`, and a write probe (`CREATE TEMP TABLE`) that must fail with SQLSTATE 25006. Only a single SELECT / WITH statement is accepted; a 60-second statement timeout applies. `run` refuses when the store and the source are the same database (fingerprint: database, postmaster start time, port, version). The DSN is never printed or put in an error.
+- **Source role (owner decision):** a superuser source role is refused by the code. Production has no read-only login role today (verified read-only 2026-11-06: the login roles are `donchian_app`, read-write, and `trading_user`, a superuser). Options: **(a, recommended)** a dedicated SELECT-only login role on the tables `FirstLightDb` reads (`daily_fundamentals`, `companies`, `inactive_symbols`, `fundamental_inflection_event`, prices, SEC PIT, `news_items`). This is a production role change and needs its own approval. **(b)** `donchian_app` under the three read-only layers above: the server refuses writes, but the role itself holds write grants.
+- **Tunnel:** Postgres publishes no port on the VPS. Run `ssh -N -L 15432:<postgres container IP>:5432 deploy@<VPS>`, resolving the container IP at tunnel time (it is 172.18.0.4 today and can change on restart). Then set `RESEARCH_SOURCE_DSN=host=127.0.0.1 port=15432 dbname=trading_production user=<role> password=…` in the local shell only.
+- **Preflight (no paid call):** `python -m research_missions preflight` prints the read-only proof, the store and source fingerprints, the effective limits, this month's ledger, the paid-calls switch and whether the keys are present (booleans only).
 - **Alternative** (not recommended for the first test): apply migration 41 to production and run on the VPS. That is a production change and needs its own approval.
 
 ## 2. Model and API configuration (as in `mechanism/research_missions/config.py`)
@@ -73,4 +76,4 @@
 ## 9. Owner decisions needed to start
 1. Authorise the test and the limits above.
 2. Provide the dedicated API key (and set the Console limit).
-3. Approve the small `RESEARCH_SOURCE_DSN` change (a read-only source connection) and the local database setup.
+3. Review the preflight output (read-only proof, isolation, limits) and explicitly authorise execution. The adapter is built and tested; nothing runs until then.

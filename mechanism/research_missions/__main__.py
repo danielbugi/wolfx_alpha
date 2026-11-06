@@ -6,8 +6,12 @@
     python -m research_missions run <id>           # paid calls need RESEARCH_PAID_CALLS_ENABLED=1 and ANTHROPIC_API_KEY
     python -m research_missions show <id>          # status, steps, report
     python -m research_missions budget             # this month's spend against the cap
+    python -m research_missions preflight          # read-only source proof, store isolation, limits, switches (no paid call)
 
 (run from mechanism/, like the other modules)
+
+With RESEARCH_SOURCE_DSN set, FirstLightDb reads through a proven read-only session (source_db.py) and `run` refuses unless the store
+(shared.db, where missions and the ledger are written) is a different database. Without it, both use shared.db (local development).
 """
 from __future__ import annotations
 
@@ -21,6 +25,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from research_missions import budget as B  # noqa: E402
 from research_missions import config as C  # noqa: E402
 from research_missions.llm import Gateway, paid_calls_enabled  # noqa: E402
+from research_missions import source_db as SDB  # noqa: E402
 from research_missions.pipeline import Sources, run_mission  # noqa: E402
 from research_missions.sources import FirstLightDb, Gdelt, TiingoNews  # noqa: E402
 from research_missions.store import DbStore  # noqa: E402
@@ -46,6 +51,7 @@ def main(argv=None) -> int:
     s = sub.add_parser("show")
     s.add_argument("id", type=int)
     sub.add_parser("budget")
+    sub.add_parser("preflight")
     a = p.parse_args(argv)
 
     from shared import db
@@ -63,10 +69,21 @@ def main(argv=None) -> int:
         mid = store.create_mission("company", title, question, a.domain, params, min(a.budget, limits.mission_usd))
         print(json.dumps({"id": mid, "status": "draft"}))
     elif a.cmd == "run":
+        source = SDB.from_env()
+        if source is not None:
+            SDB.assert_isolated(db, source)
         gateway = Gateway(B.DbLedger(db), limits)
-        res = run_mission(a.id, store, gateway, Sources(FirstLightDb(db), Gdelt(), TiingoNews()))
+        res = run_mission(a.id, store, gateway, Sources(FirstLightDb(source or db), Gdelt(), TiingoNews()))
         print(json.dumps(res, default=str))
         return 0 if res["status"] == "completed" else 1
+    elif a.cmd == "preflight":
+        source = SDB.from_env()
+        out = {"source": "RESEARCH_SOURCE_DSN not set: sources read the store database" if source is None else
+               {"read_only_proof": source.proof, **SDB.assert_isolated(db, source)},
+               "limits": {"monthly_usd": limits.monthly_usd, "mission_usd": limits.mission_usd, "call_usd": limits.call_usd},
+               "budget": B.DbLedger(db).status(limits), "paid_calls_enabled": paid_calls_enabled(),
+               "anthropic_api_key_present": bool(os.environ.get("ANTHROPIC_API_KEY")), "tiingo_key_present": bool(os.environ.get("TIINGO_API_KEY"))}
+        print(json.dumps(out, default=str, indent=2))
     elif a.cmd == "show":
         m = store.get_mission(a.id)
         rep = db.execute_dict_query("SELECT markdown FROM research_report WHERE mission_id = %s ORDER BY version DESC LIMIT 1", (a.id,))
