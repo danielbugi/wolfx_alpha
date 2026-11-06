@@ -1,0 +1,115 @@
+Base events reconstructed: 31,039. HOLDOUT (public 2023-01-01..2025-03-31): 5,461 events / 3,668 company-quarters removed before reading prices; no outcome computed for them.
+Stale (first public > 120 days after quarter end) dropped: 145 events.
+Exploration set: 25,433 events, 16,767 company-quarters, 1,530 companies.
+
+Prices: 2016-09-20..2026-10-30 (sha aefa1522c943), SEC-covered symbols with prices: 1,876
+
+Company-quarters with an eligible, priced entry: 9,068 (pre-holdout 6,577, post-holdout 2,491)
+
+=== PRE-HOLDOUT: excess return vs same-date volatility x size matched SEC-covered stocks ===
+                     cut   H  company-quarters  companies  months mean raw median raw excess vs matched (month-equal) [95% CI]                 ex-2020 leave-one-year-out range top-decile rate (base 10%)
+    all company-quarters  20              6577       1196      64   +0.69%     +0.80%                  +0.01% [-0.53%, +0.50%] +0.19% [-0.25%, +0.60%]         -0.09% .. +0.19%                      10.7%
+       max severity high  20              4446       1122      63   +0.74%     +0.79%                  +0.01% [-0.53%, +0.62%] +0.11% [-0.25%, +0.63%]         -0.16% .. +0.11%                      11.7%
+         medium/low only  20              2131        857      64   +0.57%     +0.82%                  -0.10% [-0.80%, +0.50%] +0.26% [-0.36%, +0.82%]         -0.20% .. +0.26%                       8.7%
+2+ event types (stacked)  20              2643        806      64   +0.81%     +0.62%                  -0.25% [-1.00%, +0.62%] -0.05% [-0.59%, +0.63%]         -0.42% .. -0.05%                      11.4%
+            1 event type  20              3934       1124      64   +0.60%     +0.90%                  +0.18% [-0.31%, +0.56%] +0.34% [-0.19%, +0.76%]         +0.05% .. +0.34%                      10.3%
+    all company-quarters  60              6577       1196      64   +2.44%     +1.40%                  +0.54% [-0.42%, +1.61%] +0.21% [-0.52%, +0.91%]         +0.21% .. +0.80%                      10.8%
+       max severity high  60              4446       1122      63   +2.77%     +1.29%                  +0.92% [-0.06%, +2.48%] +0.37% [-0.38%, +1.58%]         +0.37% .. +1.15%                      11.7%
+         medium/low only  60              2131        857      64   +1.74%     +1.74%                  -0.56% [-1.97%, +0.54%] -0.16% [-1.40%, +0.71%]         -0.72% .. -0.16%                       9.0%
+2+ event types (stacked)  60              2643        806      64   +2.86%     +1.21%                  +1.34% [-0.27%, +3.90%] +0.15% [-0.90%, +1.48%]         +0.15% .. +1.70%                      11.5%
+            1 event type  60              3934       1124      64   +2.15%     +1.55%                  -0.02% [-0.89%, +0.68%] +0.16% [-0.75%, +0.86%]         -0.21% .. +0.18%                      10.3%
+    all company-quarters 120              6576       1196      64   +4.78%     +2.32%                  +1.81% [+0.11%, +3.43%] +1.26% [+0.09%, +1.77%]         +1.26% .. +2.23%                      11.0%
+       max severity high 120              4446       1122      63   +5.06%     +1.91%                  +2.04% [+0.20%, +4.75%] +1.21% [-0.03%, +2.80%]         +1.21% .. +2.39%                      11.4%
+         medium/low only 120              2130        856      64   +4.19%     +2.92%                  +0.43% [-2.02%, +1.97%] +1.11% [-0.95%, +2.33%]         -0.02% .. +1.11%                      10.2%
+2+ event types (stacked) 120              2643        806      64   +4.33%     +1.31%                  +1.54% [-1.14%, +4.93%] +0.76% [-0.84%, +2.36%]         +0.76% .. +2.13%                      11.5%
+            1 event type 120              3933       1124      64   +5.09%     +3.02%                  +1.98% [+0.39%, +2.97%] +1.61% [-0.08%, +2.57%]         +1.46% .. +2.42%                      10.7%
+    all company-quarters 250              6575       1196      64   +9.70%     +3.06%                  +3.68% [+0.33%, +7.06%] +1.52% [-0.44%, +2.51%]         +1.52% .. +4.65%                      11.6%
+       max severity high 250              4445       1122      63   +9.85%     +1.98%                 +4.47% [+0.41%, +10.48%] +1.38% [-0.54%, +3.99%]         +1.38% .. +5.47%                      12.2%
+         medium/low only 250              2130        856      64   +9.38%     +4.63%                  +0.77% [-1.99%, +2.59%] +0.91% [-2.38%, +3.08%]         -0.17% .. +2.01%                      10.3%
+2+ event types (stacked) 250              2643        806      64   +8.07%     +0.96%                  +4.18% [-0.33%, +9.68%] +2.30% [-0.95%, +5.53%]         +2.30% .. +5.62%                      12.4%
+            1 event type 250              3932       1124      64  +10.80%     +4.35%                  +3.31% [-0.14%, +6.25%] +1.40% [-1.33%, +2.84%]         +1.40% .. +4.99%                      11.1%
+
+=== PRE-HOLDOUT: big winners and big losers at 250 sessions vs matched expectation ===
+                     cut  company-quarters  companies  months doubled expected (matched) doubled - expected [CI] halved expected (matched)   halved - expected [CI]      doubled/halved top-decile 250
+    all company-quarters              6575       1196      64    3.6%               3.4% +0.37% [-0.25%, +1.17%]   4.3%                5.4% -0.70% [-1.39%, -0.00%] 0.84 (matched 0.62)          11.6%
+       max severity high              4445       1122      63    4.0%               3.8% +0.51% [-0.42%, +1.44%]   4.8%                6.0% -1.01% [-2.24%, -0.02%] 0.84 (matched 0.63)          12.2%
+2+ event types (stacked)              2643        806      64    3.4%               2.9% +0.30% [-0.42%, +0.88%]   3.8%                6.1% -2.21% [-3.33%, -1.27%] 0.88 (matched 0.48)          12.4%
+         ex-2020 entries              5607       1183      52    1.7%               1.4% -0.22% [-0.64%, +0.18%]   5.0%                6.3% -0.77% [-1.59%, +0.03%] 0.34 (matched 0.23)          11.8%
+
+=== PRE-HOLDOUT by event type (a company-quarter counts under every type it has) ===
+                          cut   H  company-quarters  companies  months mean raw median raw excess vs matched (month-equal) [95% CI]                 ex-2020 leave-one-year-out range top-decile rate (base 10%)
+         revenue_acceleration  60              2773       1030      63   +2.87%     +2.04%                  +1.12% [-0.66%, +3.03%] +1.14% [-0.22%, +2.37%]         +0.94% .. +1.34%                      11.0%
+         revenue_acceleration 250              2771       1030      63   +7.21%     +1.14%                 +3.61% [-1.66%, +10.24%] +2.91% [-0.20%, +6.05%]         +2.91% .. +4.14%                      12.3%
+             margin_expansion  60              2878        742      64   +2.68%     +1.33%                  +0.66% [-0.49%, +2.12%] +0.48% [-0.49%, +1.53%]         +0.40% .. +0.82%                      11.4%
+             margin_expansion 250              2878        742      64   +8.08%     +1.38%                  +1.59% [-2.02%, +4.03%] +1.94% [-1.31%, +3.77%]         +0.57% .. +2.53%                      11.7%
+operating_leverage_inflection  60              2262        673      64   +2.44%     +0.95%                  +1.08% [-0.36%, +3.06%] +0.45% [-0.66%, +1.99%]         +0.45% .. +1.38%                      10.2%
+operating_leverage_inflection 250              2262        673      64   +8.87%     +3.11%                  +2.09% [-2.11%, +5.91%] +2.69% [-0.44%, +5.59%]         +0.83% .. +3.64%                      11.6%
+     profitability_turnaround  60              1239        602      60   +2.32%     +0.34%                  +1.93% [-0.70%, +6.19%] +0.67% [-0.64%, +2.15%]         +0.67% .. +2.79%                      12.8%
+     profitability_turnaround 250              1239        602      60   +8.45%     +0.73%                 +5.83% [-1.45%, +17.67%] +1.12% [-2.27%, +5.20%]         +1.12% .. +7.35%                      11.9%
+               fcf_turnaround  60              1211        596      61   +3.12%     +2.06%                  -0.64% [-2.39%, +1.38%] -1.21% [-2.84%, +0.69%]         -1.21% .. +0.12%                      13.0%
+               fcf_turnaround 250              1211        596      61  +17.64%     +5.92%                 +6.13% [+0.26%, +13.34%] +0.67% [-4.10%, +5.24%]         +0.67% .. +9.78%                      13.0%
+                          cut         H  company-quarters  companies  months doubled expected (matched) doubled - expected [CI] halved expected (matched)   halved - expected [CI]      doubled/halved top-decile 250
+         revenue_acceleration 250 tails              2771       1030      63    3.1%               3.0% +0.05% [-1.08%, +1.25%]   4.9%                5.7% -0.07% [-1.55%, +1.63%] 0.64 (matched 0.53)          12.3%
+             margin_expansion 250 tails              2878        742      64    3.1%               2.8% -0.06% [-0.93%, +0.60%]   4.0%                5.8% -1.69% [-2.57%, -0.85%] 0.79 (matched 0.49)          11.7%
+operating_leverage_inflection 250 tails              2262        673      64    2.9%               2.6% -0.19% [-1.12%, +0.81%]   2.7%                4.6% -1.51% [-2.35%, -0.71%] 1.05 (matched 0.56)          11.6%
+     profitability_turnaround 250 tails              1239        602      60    3.6%               3.6% +1.41% [-0.14%, +3.21%]   4.6%                6.8% -2.28% [-3.43%, -1.33%] 0.79 (matched 0.53)          11.9%
+               fcf_turnaround 250 tails              1211        596      61    7.3%               5.7% +1.76% [+0.29%, +3.65%]   5.6%                6.9% -0.83% [-2.94%, +1.38%] 1.31 (matched 0.83)          13.0%
+
+=== PRE-HOLDOUT price state at entry (within-date tercile of the pool): does it separate doublers from halvers among inflections? ===
+                                 cut  company-quarters  companies  months doubled expected (matched) doubled - expected [CI] halved expected (matched)   halved - expected [CI]      doubled/halved top-decile 250
+ distance from 52w high: low tercile              1849        780      62    5.3%               4.9% +0.80% [-0.28%, +2.44%]   8.9%                9.4% -0.44% [-2.44%, +1.81%] 0.59 (matched 0.52)          15.5%
+ distance from 52w high: mid tercile              2149        880      64    3.4%               3.2% +1.10% [-0.26%, +2.49%]   3.0%                4.2% -0.83% [-2.18%, +0.83%] 1.12 (matched 0.76)          11.8%
+distance from 52w high: high tercile              2577        938      64    2.6%               2.4% -0.48% [-1.24%, +0.23%]   2.2%                3.6% -1.21% [-2.25%, -0.13%] 1.21 (matched 0.68)           8.6%
+         6-month return: low tercile              1775        856      63    3.8%               3.7% +1.71% [-0.29%, +4.92%]   6.4%                6.4% -0.33% [-2.51%, +1.58%] 0.60 (matched 0.58)          12.9%
+         6-month return: mid tercile              2025        882      63    2.4%               2.5% -0.56% [-1.49%, -0.04%]   2.4%                3.8% -1.43% [-2.28%, -0.65%] 1.00 (matched 0.67)          10.0%
+        6-month return: high tercile              2775        973      64    4.4%               3.8% +0.42% [-0.29%, +1.50%]   4.4%                6.0% -1.00% [-2.19%, +0.20%] 0.99 (matched 0.63)          11.9%
+
+=== PRE-HOLDOUT by entry year (pooled; 60-session excess, 250-session tails) ===
+         n     x60     dbl  dbl_exp     hlv  hlv_exp
+year                                                
+2017   229 -0.0358  0.0175   0.0194  0.0262   0.0197
+2018  1000  0.0030  0.0130   0.0108  0.0300   0.0336
+2019   970 -0.0028  0.0237   0.0221  0.0577   0.0779
+2020   970 -0.0038  0.1467   0.1456  0.0041   0.0047
+2021  1941  0.0062  0.0118   0.0109  0.0654   0.0862
+2022  1467  0.0168  0.0225   0.0158  0.0423   0.0480
+
+=== POST-HOLDOUT: excess return vs same-date volatility x size matched SEC-covered stocks ===
+                     cut   H  company-quarters  companies  months mean raw median raw excess vs matched (month-equal) [95% CI]                   ex-2020 leave-one-year-out range top-decile rate (base 10%)
+    all company-quarters  20              2310       1044      18   +1.63%     +0.63%                  -0.11% [-1.61%, +0.93%]   -0.11% [-1.59%, +0.92%]         -0.77% .. +0.56%                      11.7%
+       max severity high  20              1481        781      18   +1.88%     +0.67%                  +0.03% [-1.45%, +0.90%]   +0.03% [-1.44%, +0.78%]         -0.88% .. +0.95%                      13.8%
+         medium/low only  20               829        570      18   +1.19%     +0.61%                  -0.15% [-2.25%, +2.27%]   -0.15% [-2.32%, +2.12%]         -0.15% .. -0.14%                       8.0%
+2+ event types (stacked)  20               894        476      18   +1.33%     +0.11%                  -1.19% [-2.83%, -0.49%]   -1.19% [-2.82%, -0.57%]         -1.49% .. -0.88%                      13.6%
+            1 event type  20              1416        891      18   +1.82%     +0.86%                  +0.07% [-1.91%, +1.80%]   +0.07% [-2.07%, +1.82%]         -0.49% .. +0.62%                      10.5%
+    all company-quarters  60              2206       1017      17   +6.25%     +3.70%                  +0.32% [-2.04%, +2.87%]   +0.32% [-2.05%, +2.89%]         -2.13% .. +3.08%                      12.3%
+       max severity high  60              1404        755      17   +7.15%     +4.17%                  +1.25% [-2.10%, +5.47%]   +1.25% [-2.35%, +5.46%]         -2.85% .. +5.87%                      13.8%
+         medium/low only  60               802        556      17   +4.69%     +2.74%                  -0.48% [-2.05%, +1.52%]   -0.48% [-2.12%, +1.50%]         -0.53% .. -0.43%                       9.6%
+2+ event types (stacked)  60               843        460      17   +6.57%     +3.40%                  -1.97% [-7.11%, +1.69%]   -1.97% [-7.09%, +1.69%]         -3.36% .. -0.40%                      14.6%
+            1 event type  60              1363        860      17   +6.05%     +3.89%                  -0.06% [-3.47%, +3.36%]   -0.06% [-3.26%, +3.59%]         -1.81% .. +1.91%                      10.9%
+    all company-quarters 120              1763        914      14  +14.84%     +7.30%                  +2.47% [-1.90%, +8.57%]   +2.47% [-1.88%, +8.74%]        -1.77% .. +10.10%                      13.0%
+       max severity high 120              1136        665      14  +16.38%     +7.80%                 +4.44% [-1.71%, +12.95%]  +4.44% [-1.80%, +12.85%]        -1.35% .. +14.87%                      14.0%
+         medium/low only 120               627        460      14  +12.05%     +6.51%                  +1.85% [-5.36%, +9.90%]   +1.85% [-4.88%, +9.66%]         +0.00% .. +5.18%                      11.3%
+2+ event types (stacked) 120               645        383      14  +16.90%     +6.94%                  +0.56% [-6.09%, +6.12%]   +0.56% [-5.81%, +5.64%]         -1.91% .. +5.02%                      16.1%
+            1 event type 120              1118        755      14  +13.65%     +7.80%                 +1.63% [-5.52%, +10.03%]   +1.63% [-5.40%, +9.92%]         -2.48% .. +9.03%                      11.3%
+    all company-quarters 250               823        587       8  +34.87%    +16.86%                  +4.82% [-0.94%, +8.50%]   +4.82% [-0.94%, +8.30%]           +nan% .. +nan%                      14.8%
+       max severity high 250               508        395       8  +42.15%    +19.09%                +12.87% [+7.53%, +20.99%] +12.87% [+7.86%, +20.99%]           +nan% .. +nan%                      18.1%
+         medium/low only 250               315        263       8  +23.12%    +11.85%                 -8.77% [-25.12%, -1.40%]  -8.77% [-25.15%, -1.40%]           +nan% .. +nan%                       9.5%
+2+ event types (stacked) 250               282        215       8  +47.23%    +20.75%                +15.17% [+1.28%, +37.59%] +15.17% [+1.31%, +37.59%]           +nan% .. +nan%                      19.9%
+            1 event type 250               541        449       8  +28.42%    +14.86%                -3.29% [-29.35%, +13.82%] -3.29% [-29.49%, +13.82%]           +nan% .. +nan%                      12.2%
+
+=== POST-HOLDOUT: big winners and big losers at 250 sessions vs matched expectation ===
+                     cut  company-quarters  companies  months doubled expected (matched)  doubled - expected [CI] halved expected (matched)   halved - expected [CI]      doubled/halved top-decile 250
+    all company-quarters               823        587       8   12.2%               9.8%  +3.52% [+1.69%, +5.45%]   3.3%                3.6% -0.71% [-1.88%, +1.44%] 3.70 (matched 2.76)          14.8%
+       max severity high               508        395       8   15.4%              11.5%  +6.09% [+5.02%, +8.07%]   3.0%                3.8% -1.59% [-2.45%, +0.53%] 5.20 (matched 3.00)          18.1%
+2+ event types (stacked)               282        215       8   17.7%              11.5% +8.03% [+4.75%, +13.22%]   3.2%                3.9% -2.48% [-3.97%, -0.69%] 5.56 (matched 2.93)          19.9%
+         ex-2020 entries               823        587       8   12.2%               9.8%  +3.52% [+1.73%, +5.45%]   3.3%                3.6% -0.71% [-1.88%, +1.38%] 3.70 (matched 2.76)          14.8%
+
+=== PRE-HOLDOUT reverse view: month-end SEC-covered eligible stocks; base event public in the previous 91 days vs none (250-session outcome) ===
+  snapshots: 64
+  stock-months: 74776
+  with a recent event: 19329
+  doubling rate, recent event / none: 4.0% / 3.8%
+  halving rate, recent event / none: 4.8% / 4.5%
+  within-vol-decile difference, doubled [CI]: +0.68% [+0.23%, +1.16%]
+  within-vol-decile difference, halved [CI]: -0.97% [-1.56%, -0.52%]
+  share of future doublers with a recent event: 26.8% (share of all stock-months: 25.8%)
