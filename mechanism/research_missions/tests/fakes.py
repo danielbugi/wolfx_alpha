@@ -16,7 +16,7 @@ def usage(i=1000, o=500, cr=0, cw=0, iterations=None):
 
 def response(payload: Any, model="claude-sonnet-5-5", stop="end_turn", u=None):
     return SimpleNamespace(content=[SimpleNamespace(type="thinking", thinking=""), SimpleNamespace(type="text", text=json.dumps(payload))],
-                           stop_reason=stop, model=model, usage=u or usage(), stop_details=None)
+                           stop_reason=stop, model=model, usage=u or usage(), stop_details=None, id="msg_fake01", _request_id="req_fake01")
 
 
 class FakeClient:

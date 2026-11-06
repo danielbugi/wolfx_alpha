@@ -110,10 +110,10 @@ class MemoryLedger:
                 raise BudgetExceeded(reason)
             return row["id"]
 
-    def settle(self, row_id: int, cost_usd: float, tokens: Dict[str, int], served_model: Optional[str]) -> None:
+    def settle(self, row_id: int, cost_usd: float, tokens: Dict[str, int], served_model: Optional[str], note: Optional[str] = None) -> None:
         r = self.rows[row_id - 1]
         assert r["status"] == "reserved"
-        r.update(status="settled", cost_usd=cost_usd, served_model=served_model, **tokens)
+        r.update(status="settled", cost_usd=cost_usd, served_model=served_model, note=note, **tokens)
 
     def fail(self, row_id: int, cost_usd: float, note: str) -> None:
         r = self.rows[row_id - 1]
@@ -159,11 +159,11 @@ class DbLedger:
             raise BudgetExceeded(reason)
         return int(row_id)
 
-    def settle(self, row_id: int, cost_usd: float, tokens: Dict[str, int], served_model: Optional[str]) -> None:
+    def settle(self, row_id: int, cost_usd: float, tokens: Dict[str, int], served_model: Optional[str], note: Optional[str] = None) -> None:
         self.db.execute_insert("""UPDATE research_llm_usage SET status = 'settled', cost_usd = %s, input_tokens = %s, output_tokens = %s, cache_read_tokens = %s,
-                                  cache_write_tokens = %s, served_model = %s, settled_at = NOW() WHERE id = %s AND status = 'reserved'""",
+                                  cache_write_tokens = %s, served_model = %s, note = %s, settled_at = NOW() WHERE id = %s AND status = 'reserved'""",
                                (cost_usd, tokens.get("input_tokens", 0), tokens.get("output_tokens", 0), tokens.get("cache_read_tokens", 0),
-                                tokens.get("cache_write_tokens", 0), served_model, row_id))
+                                tokens.get("cache_write_tokens", 0), served_model, (note or "")[:500] or None, row_id))
 
     def fail(self, row_id: int, cost_usd: float, note: str) -> None:
         self.db.execute_insert("UPDATE research_llm_usage SET status = 'failed', cost_usd = %s, note = %s, settled_at = NOW() WHERE id = %s AND status = 'reserved'",

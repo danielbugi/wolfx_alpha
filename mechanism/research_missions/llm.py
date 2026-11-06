@@ -78,7 +78,9 @@ class Gateway:
         cost = B.usage_cost_usd(getattr(resp, "model", None), usage)
         tokens = {"input_tokens": int(getattr(usage, "input_tokens", 0) or 0), "output_tokens": int(getattr(usage, "output_tokens", 0) or 0),
                   "cache_read_tokens": int(getattr(usage, "cache_read_input_tokens", 0) or 0), "cache_write_tokens": int(getattr(usage, "cache_creation_input_tokens", 0) or 0)}
-        self.ledger.settle(row_id, cost, tokens, getattr(resp, "model", None))
+        trace = (f"message_id={getattr(resp, 'id', None)} request_id={getattr(resp, '_request_id', None)} stop_reason={resp.stop_reason}"
+                 f" stop_category={getattr(getattr(resp, 'stop_details', None), 'category', None)}")   # ties the ledger row to the API's own records
+        self.ledger.settle(row_id, cost, tokens, getattr(resp, "model", None), trace)
         self.calls += 1
         self.cost_usd += cost
         if resp.stop_reason == "refusal":

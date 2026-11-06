@@ -6,7 +6,14 @@
 - **Recommended:** the owner's development PC, with a **local** Postgres that has migration 41 applied. That database holds missions, evidence, claims, reports and the ledger.
 - **Source data** (prices, industries, SEC point-in-time revenue, inflection events, headlines) is read from production over an SSH tunnel, in a **forced read-only** session.
 - **Read-only source adapter (implemented, `mechanism/research_missions/source_db.py`):** with `RESEARCH_SOURCE_DSN` set, `FirstLightDb` reads through one session that is refused unless read-only is proven on the live connection: the server default `default_transaction_read_only=on`, the client `set_session(readonly=True)`, and a write probe (`CREATE TEMP TABLE`) that must fail with SQLSTATE 25006. Only a single SELECT / WITH statement is accepted; a 60-second statement timeout applies. `run` refuses when the store and the source are the same database (fingerprint: database, postmaster start time, port, version). The DSN is never printed or put in an error.
-- **Source role (owner decision):** a superuser source role is refused by the code. Production has no read-only login role today (verified read-only 2026-11-06: the login roles are `donchian_app`, read-write, and `trading_user`, a superuser). Options: **(a, recommended)** a dedicated SELECT-only login role on the tables `FirstLightDb` reads (`daily_fundamentals`, `companies`, `inactive_symbols`, `fundamental_inflection_event`, prices, SEC PIT, `news_items`). This is a production role change and needs its own approval. **(b)** `donchian_app` under the three read-only layers above: the server refuses writes, but the role itself holds write grants.
+- **Source role: option (a), decided 2026-11-06:** a dedicated SELECT-only login role, `research_reader`.
+  - It is defined in `deploy/db/research_reader_role.sql`, with checks in `research_reader_verify.sql` and removal in `research_reader_rollback.sql`.
+  - It reads exactly the 8 tables the sources read: `companies`, `daily_fundamentals`, `fundamental_inflection_event`, `inactive_symbols`, `news_items`, `sec_quarter`, `sec_symbol_cik`, `stock_prices`.
+  - It has no write privilege, sequence or CREATE right, and belongs to no other role.
+  - Sessions default to read-only, with a 60 s statement timeout and a 256 MB temp-file cap. It allows at most 2 connections and expires on 2027-01-31.
+  - The password is set interactively with `\password` and never written down.
+  - CI's real-Postgres job creates the role, verifies it, runs every research-source query as the role, checks that the grants alone refuse a write even with read-only switched off, and removes it again (`test_reader_role.py`).
+  - **It is not applied to production until the owner approves the SQL.**
 - **Tunnel:** Postgres publishes no port on the VPS. Run `ssh -N -L 15432:<postgres container IP>:5432 deploy@<VPS>`, resolving the container IP at tunnel time (it is 172.18.0.4 today and can change on restart). Then set `RESEARCH_SOURCE_DSN=host=127.0.0.1 port=15432 dbname=trading_production user=<role> password=…` in the local shell only.
 - **Preflight (no paid call):** `python -m research_missions preflight` prints the read-only proof, the store and source fingerprints, the effective limits, this month's ledger, the paid-calls switch and whether the keys are present (booleans only).
 - **Alternative** (not recommended for the first test): apply migration 41 to production and run on the VPS. That is a production change and needs its own approval.
@@ -76,4 +83,43 @@
 ## 9. Owner decisions needed to start
 1. Authorise the test and the limits above.
 2. Provide the dedicated API key (and set the Console limit).
-3. Review the preflight output (read-only proof, isolation, limits) and explicitly authorise execution. The adapter is built and tested; nothing runs until then.
+3. Approve the `research_reader` SQL (section 1), then review the preflight output (read-only proof, isolation, limits) and explicitly authorise execution (runbook, step 7).
+
+## 10. Runbook for T1 (HBM): every gate in order. Nothing paid runs before step 7.
+1. **Owner approves the SQL**, then applies `research_reader_role.sql` and sets the password interactively (commands are in the file header).
+   - Run `research_reader_verify.sql`; it must print `research_reader verified`.
+   - Undo with `ALTER ROLE research_reader NOLOGIN` (immediate), or with `research_reader_rollback.sql`.
+2. **Local result store** (never production). Start a dedicated local PostgreSQL, for example:
+   - `docker run -d --name research-local -e POSTGRES_PASSWORD=<local> -p 127.0.0.1:55432:5432 postgres:16-alpine`
+   - Create the `research_local` database.
+   - Apply migration 41 with `psql -v ON_ERROR_STOP=1 -1 -f mechanism/add_research_mission_tables.sql`.
+3. **Tunnel** in its own window: `ssh -N -L 15432:<postgres container IP>:5432 -i ~/.ssh/donchian_deploy deploy@<VPS>`.
+   - Resolve the IP first with `docker inspect donchian-screener-postgres-1 --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'`.
+4. **Shell environment** (this shell only; nothing written to `.env`):
+   - The store: `DB_HOST=127.0.0.1`, `DB_PORT=55432`, `DB_NAME=research_local`, `DB_USER=postgres`, `DB_PASSWORD=<local>`.
+   - `RESEARCH_SOURCE_DSN=host=127.0.0.1 port=15432 dbname=trading_production user=research_reader password=…`
+   - `RESEARCH_MONTHLY_BUDGET_USD=10`, `RESEARCH_MISSION_BUDGET_USD=2`, `RESEARCH_MAX_CALL_USD=2`.
+   - `ANTHROPIC_API_KEY`: the dedicated key from the workspace with the $20 Console limit.
+   - `TIINGO_API_KEY` (internal use only).
+   - **`RESEARCH_PAID_CALLS_ENABLED` stays unset.**
+5. **Preflight:** `python -m research_missions preflight` (from `mechanism/`). It must show:
+   - the read-only proof, with the write probe refused (25006);
+   - two different fingerprints: the store is `research_local` and the source is `trading_production`;
+   - limits of 10 / 2 / 2 and a spend of 0 this month;
+   - `paid_calls_enabled: false` and `anthropic_api_key_present: true`.
+
+   The owner confirms the $20 workspace limit in the Anthropic Console; the code cannot read it.
+6. **Create the mission** (this writes only to the local store):
+
+   `python -m research_missions create-thematic --domain ai_semiconductors --title "HBM and advanced packaging" --question "Which US-listed companies are exposed to HBM and advanced semiconductor packaging, in which value-chain role, and what are the main risks?" --theme "High-bandwidth memory (HBM3E/HBM4), TSV stacking, advanced packaging (CoWoS, hybrid bonding), packaging equipment and materials" --budget 2`
+
+   Then `show <id>` must show `status: draft` and `budget_usd: 2`.
+7. **Owner's explicit execution approval.** Then set `RESEARCH_PAID_CALLS_ENABLED=1` in this shell only, run `python -m research_missions run <id>`, and unset it straight after.
+8. **Record:**
+   - `show <id>`: the report, the claims with statuses, and the evidence table;
+   - `budget`: the measured cost from the ledger;
+   - a dump of the local `research_*` tables (`pg_dump -t 'research_*'`) kept with the review, for reproducibility.
+
+   Then the owner reviews against section 7.
+
+**Reproducibility:** every evidence item stores its source, URL, publication and retrieval times, licence, excerpt and SHA-256. Every model call stores the model requested and served, tokens, cost, and (in `note`) the message id, request id and stop reason. The local dump is the frozen record of the run. A rerun is a new mission, not an overwrite.
