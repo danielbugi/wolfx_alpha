@@ -23,19 +23,18 @@ BEGIN
     -- exactly the 8 tables are readable, none writable, across every schema
     SELECT count(*) INTO n FROM pg_class c JOIN pg_namespace s ON s.oid = c.relnamespace
      WHERE c.relkind IN ('r','p','v','m','f') AND s.nspname NOT IN ('pg_catalog','information_schema') AND s.nspname NOT LIKE 'pg_toast%'
-       AND has_table_privilege('research_reader', c.oid, 'SELECT');
+       AND CASE WHEN c.relkind IN ('r','p','v','m','f') THEN has_table_privilege('research_reader', c.oid, 'SELECT') ELSE false END;   -- CASE: WHERE order is not guaranteed
     IF n <> 8 THEN RAISE EXCEPTION 'research_reader can read % relations, expected 8', n; END IF;
     FOREACH t IN ARRAY allowed LOOP
         IF NOT has_table_privilege('research_reader', 'public.' || t, 'SELECT') THEN RAISE EXCEPTION 'cannot read %', t; END IF;
     END LOOP;
     SELECT count(*) INTO n FROM pg_class c JOIN pg_namespace s ON s.oid = c.relnamespace
      WHERE c.relkind IN ('r','p','v','m','f') AND s.nspname NOT IN ('pg_catalog','information_schema') AND s.nspname NOT LIKE 'pg_toast%'
-       AND (has_table_privilege('research_reader', c.oid, 'INSERT') OR has_table_privilege('research_reader', c.oid, 'UPDATE')
-            OR has_table_privilege('research_reader', c.oid, 'DELETE') OR has_table_privilege('research_reader', c.oid, 'TRUNCATE')
-            OR has_table_privilege('research_reader', c.oid, 'REFERENCES') OR has_table_privilege('research_reader', c.oid, 'TRIGGER'));
+       AND CASE WHEN c.relkind IN ('r','p','v','m','f') THEN has_table_privilege('research_reader', c.oid, 'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') ELSE false END;
     IF n <> 0 THEN RAISE EXCEPTION 'research_reader has write-type privileges on % relations', n; END IF;
     SELECT count(*) INTO n FROM pg_class c JOIN pg_namespace s ON s.oid = c.relnamespace
-     WHERE c.relkind = 'S' AND s.nspname NOT IN ('pg_catalog','information_schema') AND has_sequence_privilege('research_reader', c.oid, 'USAGE,UPDATE');
+     WHERE c.relkind = 'S' AND s.nspname NOT IN ('pg_catalog','information_schema')
+       AND CASE WHEN c.relkind = 'S' THEN has_sequence_privilege('research_reader', c.oid, 'USAGE,SELECT,UPDATE') ELSE false END;
     IF n <> 0 THEN RAISE EXCEPTION 'research_reader can use % sequences', n; END IF;
     IF has_schema_privilege('research_reader', 'public', 'CREATE') OR has_database_privilege('research_reader', current_database(), 'CREATE') THEN
         RAISE EXCEPTION 'research_reader can create objects';
