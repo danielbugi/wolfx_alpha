@@ -98,6 +98,7 @@ def test_a_call_is_reserved_then_settled_at_its_actual_cost():
     r = led.rows[0]
     assert r["status"] == "settled" and r["cost_usd"] == pytest.approx(cost) and r["reserved_usd"] >= cost
     assert cost == pytest.approx((1000 * 4 + 500 * 20) / 1e6)                     # FakeClient's default usage on the planner model (Opus 5.5)
+    assert r["note"] == "message_id=msg_fake01 request_id=req_fake01 stop_reason=end_turn stop_category=None"   # traceable to the API's records
     req = client.requests[0]
     assert req["model"] == C.MODELS["planner"] and req["output_config"]["format"]["type"] == "json_schema" and req["fallbacks"] == "default"
     assert "temperature" not in req and "thinking" not in req and "tool_choice" not in req
