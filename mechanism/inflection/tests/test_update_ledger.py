@@ -138,3 +138,37 @@ def test_constraints(ledger, key, version, kind):
     with pytest.raises(psycopg2.Error):
         _sql("INSERT INTO fundamental_update_publication (update_key, version, kind, public_json, content_hash, render_version, symbol, quarter_end, event_type, public_date, method_version) "
              "VALUES (%s, %s, %s, '{}'::jsonb, %s, 'fu1', 'ZZBAD', '2026-09-30', 'margin_expansion', '2026-11-05', 'v')", (key, version, kind, "0" * 64))
+
+
+# ======================================================================================================== migration scripts (apply twice, verify, rollback)
+def _script(name):
+    base = "mechanism" if name.startswith("add_") else os.path.join("deploy", "db")
+    return open(os.path.join(ROOT, base, name), encoding="utf-8").read()
+
+
+def test_verify_script_passes_and_reapplying_the_migration_is_harmless(ledger, sym):
+    ledger.publish(_update(sym), 1, "inflection_v2_sec_pit")
+    with _connect() as c:
+        cur = c.cursor()
+        cur.execute(_script("add_fundamental_update_publication.sql"))                     # second apply: IF NOT EXISTS / OR REPLACE / DROP TRIGGER IF EXISTS
+        cur.execute(_script("fundamental_update_publication_verify.sql"))
+        assert cur.fetchone() == ("migration 41 verified",)
+        cur.execute("SELECT count(*) FROM fundamental_update_publication WHERE update_key = %s", (f"{sym}/2026-09-30/margin-expansion",))
+        assert cur.fetchone() == (1,)                                                     # re-applying kept the data
+        c.rollback()
+
+
+def test_rollback_refuses_with_rows_and_removes_everything_when_confirmed(ledger, sym):
+    ledger.publish(_update(sym), 1, "inflection_v2_sec_pit")
+    rollback = _script("fundamental_update_publication_rollback.sql")
+    with _connect() as c:
+        cur = c.cursor()
+        with pytest.raises(psycopg2.Error, match="has rows"):
+            cur.execute(rollback)
+        c.rollback()
+        cur = c.cursor()
+        cur.execute("SET LOCAL fup.confirm_drop_with_rows = 'yes'")
+        cur.execute(rollback)
+        assert cur.fetchone() == ("migration 41 removed",)
+        c.rollback()                                                                      # DDL is transactional: the test leaves everything in place
+    assert _sql("SELECT count(*) > 0 FROM fundamental_update_publication") == [(True,)]
