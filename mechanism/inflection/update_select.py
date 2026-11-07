@@ -1,26 +1,46 @@
 #!/usr/bin/env python3
 """Fundamental Updates: which events become Telegram posts on one night. Pure and deterministic (no database, no network, no sending).
 
-Owner rules (2026-11-07): at most 3 posts a night; at most 1 post per company; prefer profitability, operating-margin and revenue inflections;
-count several INDEPENDENT inflections in the same quarter; require a verified SEC filing and point-in-time validity; never flood the channel with a
-historical backlog.
+Owner rules (2026-11-07, revised the same day after the first simulation):
+  - at most 3 posts a night, at most 1 per company, at most 2 posts with the same lead event type; empty slots are fine (never relax a rule to fill one);
+  - require a verified SEC filing and point-in-time validity; never flood the channel with a historical backlog;
+  - prefer profitability, operating-margin and revenue inflections, and several INDEPENDENT inflections in the same quarter;
+  - prefer improvements supported by operating income, operating margin, revenue growth and cash flow; an extreme net-income swing must not outrank
+    an operationally supported improvement by its size alone; consider one-off / nonrecurring items where the source data permits;
+  - no predictive investment score: nothing here uses prices, returns or the inflection score.
 
 Each event is first screened (the first failing rule is its exclusion reason):
   not_public_type            limited repricing (a price judgement on an internal score)
   date_not_sec_verified      the public date is not an SEC acceptance / filing date
   no_filing_accession        the quarter's SEC filing (accession) is unknown
   public_too_long_after_quarter_end, detected_before_public_date, fewer_than_two_figures, explanation_inputs_missing   (update_model rules)
-  backlog_not_fresh          public more than FRESH_DAYS before the session: old news, e.g. a first run or a coverage expansion writing history
   public_after_session       dated after the session it would be posted for (cannot be, so refused)
+  backlog_not_fresh          public more than FRESH_DAYS before the session: old news, e.g. a first run or a coverage expansion writing history
   below_size_floor           market cap at publication below MIN_MARKET_CAP, or unknown
-Survivors are grouped by company (one post per company). A company's post leads with its highest-priority event; companies are ranked by:
-  1. preferred families present (net income, operating margin/leverage, revenue): more first;
-  2. independent families present (those three plus free cash flow): more first;
-  3. priority of the lead event: net income > operating margin > revenue > operating leverage > free cash flow;
-  4. size of the lead change (points of revenue, margin or swing): larger first;
-  5. market cap at publication: larger first; then symbol.
-A company posted within COOLDOWN_DAYS is excluded (company_posted_recently). The top MAX_POSTS are selected; the rest are 'outranked'.
-This ranking is editorial salience (what is most worth a reader's attention), not a forecast: no return is implied by the order.
+
+Operational support (support()) is read from the same quarter's feature metrics (the filing the event came from; nothing later):
+  operating_income   operating income above the prior-year quarter's (prior year = op_margin_py x revenue_py)
+  operating_margin   operating margin up at least MIN_MARGIN_BPS year over year
+  revenue_growth     revenue up at least MIN_REV_GROWTH year over year
+  cash_flow          free-cash-flow margin up at least MIN_FCF_PP percentage points year over year
+A signal whose inputs are missing (e.g. banks and insurers report no operating income) counts as absent, never as present.
+
+One-off proxy: the share of the net-income improvement NOT explained by the operating-income improvement,
+  non_operating_share = (dNI - dOI) / dNI      (dNI > 0; needs operating income for both years)
+i.e. what came from below the operating line: gains on sales, revaluations, tax benefits, interest, discontinued operations. The source data
+(normalized quarterly statements) does not itemize nonrecurring items, so this is the one-off measure the data permits. A net-income turnaround with
+non_operating_share > MAX_NON_OPERATING_SHARE is 'not operationally supported': it does not count as an inflection family, it cannot lead a post
+while the company has another inflection, and a company whose ONLY basis is such a turnaround is held (net_income_mostly_non_operating).
+
+Companies are ranked by:
+  1. supported preferred families (net income, operating margin/leverage, revenue): more first;
+  2. operational support signals (0-4): more first;
+  3. supported independent families (those three plus free cash flow): more first;
+  4. priority of the lead event: net income > operating margin > revenue > operating leverage > free cash flow;
+  5. size of the lead change, capped at MAGNITUDE_CAP points, so an extreme swing does not win on size alone: larger first;
+  6. market cap at publication: larger first; then symbol.
+Walking that order, a company is skipped when its lead type already has MAX_PER_TYPE posts (type_mix_cap) and selection stops at MAX_POSTS.
+A company posted within COOLDOWN_DAYS is excluded (cooldown). The rest are 'outranked'. This ranking is editorial salience, not a forecast.
 """
 from __future__ import annotations
 
@@ -31,14 +51,19 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from inflection.update_model import PUBLIC_TYPES, PublicUpdate, build_update
 
-MAX_POSTS, FRESH_DAYS, COOLDOWN_DAYS = 3, 3, 30
+MAX_POSTS, MAX_PER_TYPE, FRESH_DAYS, COOLDOWN_DAYS = 3, 2, 3, 30
 MIN_MARKET_CAP = 300e6
+MAGNITUDE_CAP = 50.0                    # points of revenue / margin; above this the size no longer raises the rank
+MIN_MARGIN_BPS, MIN_REV_GROWTH, MIN_FCF_PP = 50.0, 0.02, 1.0
+MAX_NON_OPERATING_SHARE = 0.5
 
 FAMILY = {"profitability_turnaround": "net_income", "margin_expansion": "operating", "operating_leverage_inflection": "operating",
           "revenue_acceleration": "revenue", "fcf_turnaround": "cash"}
 PREFERRED_FAMILIES = {"net_income", "operating", "revenue"}
 PRIORITY = {"profitability_turnaround": 0, "margin_expansion": 1, "revenue_acceleration": 2, "operating_leverage_inflection": 3, "fcf_turnaround": 4}
+UNSUPPORTED_PRIORITY = 9                # a not-operationally-supported net-income turnaround sorts behind every other event of the company
 SEC_BASES = {"sec_acceptance", "sec_filed_date"}
+SUPPORT_SIGNALS = ("operating_income", "operating_margin", "revenue_growth", "cash_flow")
 ACCESSION_NOTE = re.compile(r"^prov:q=(\d{10}-\d{2}-\d{6})$")
 
 
@@ -50,13 +75,39 @@ def accession_of(notes: Optional[Sequence[str]]) -> Optional[str]:
     return None
 
 
+def _num(m: Mapping[str, Any], k: str) -> Optional[float]:
+    v = m.get(k)
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and v == v else None
+
+
 def magnitude(event_type: str, m: Mapping[str, Any]) -> float:
     """The size of the change in comparable points (percentage points of revenue or margin)."""
     def g(k):
-        v = m.get(k)
-        return float(v) if isinstance(v, (int, float)) and v == v else 0.0
+        return _num(m, k) or 0.0
     return {"profitability_turnaround": g("ni_swing_pct_rev") * 100, "margin_expansion": g("op_margin_yoy_bps") / 100, "revenue_acceleration": g("rev_accel_pp"),
             "operating_leverage_inflection": g("rev_yoy") * 100, "fcf_turnaround": g("fcf_margin_yoy_pp")}.get(event_type, 0.0)
+
+
+def operating_income_change(fm: Mapping[str, Any]) -> Optional[float]:
+    oi, opm_py, rev_py = _num(fm, "operating_income"), _num(fm, "op_margin_py"), _num(fm, "revenue_py")
+    if oi is None or opm_py is None or rev_py is None:
+        return None
+    return oi - opm_py * rev_py
+
+
+def non_operating_share(fm: Mapping[str, Any]) -> Optional[float]:
+    """Share of the net-income improvement not explained by operating income (None when the data does not permit it)."""
+    ni, ni_py, d_oi = _num(fm, "net_income"), _num(fm, "net_income_py"), operating_income_change(fm)
+    if ni is None or ni_py is None or d_oi is None or ni - ni_py <= 0:
+        return None
+    return (ni - ni_py - d_oi) / (ni - ni_py)
+
+
+def support(fm: Mapping[str, Any]) -> Dict[str, Optional[bool]]:
+    """Operational support signals of one quarter: True / False, or None when the inputs are missing."""
+    d_oi, bps, rev, fcf = operating_income_change(fm), _num(fm, "op_margin_yoy_bps"), _num(fm, "rev_yoy"), _num(fm, "fcf_margin_yoy_pp")
+    return {"operating_income": None if d_oi is None else d_oi > 0, "operating_margin": None if bps is None else bps >= MIN_MARGIN_BPS,
+            "revenue_growth": None if rev is None else rev >= MIN_REV_GROWTH, "cash_flow": None if fcf is None else fcf >= MIN_FCF_PP}
 
 
 def market_cap_at_publication(ev: Mapping[str, Any]) -> Optional[float]:
@@ -73,8 +124,11 @@ class Company:
     lead: Dict[str, Any]
     update: PublicUpdate
     events: List[Dict[str, Any]]
-    families: List[str]
+    families: List[str]                 # supported independent families
     market_cap: float
+    support: Dict[str, Optional[bool]] = field(default_factory=dict)
+    non_operating_share: Optional[float] = None
+    flags: List[str] = field(default_factory=list)
     rank_key: Tuple = field(default_factory=tuple)
 
 
@@ -101,9 +155,37 @@ def screen(ev: Mapping[str, Any], session: date, *, fresh_days: int = FRESH_DAYS
     return u, None
 
 
-def select(events: Sequence[Mapping[str, Any]], session: date, posted: Mapping[str, date], *, max_posts: int = MAX_POSTS, fresh_days: int = FRESH_DAYS,
-           min_market_cap: float = MIN_MARKET_CAP, cooldown_days: int = COOLDOWN_DAYS) -> Dict[str, Any]:
-    """{'selected': [Company], 'outranked': [Company], 'excluded': [(event, reason)], 'cooldown': [Company]} for one session's newly detected events."""
+def _company(sym: str, items: List[Tuple[Dict[str, Any], PublicUpdate]]) -> Tuple[Company, Optional[str]]:
+    fm = items[0][0].get("feature_metrics") or {}          # one feature row per symbol and quarter: the same for every event of the company
+    sup, nos = support(fm), non_operating_share(fm)
+    ni_unsupported = nos is not None and nos > MAX_NON_OPERATING_SHARE
+
+    def prio(e):
+        return UNSUPPORTED_PRIORITY if e["event_type"] == "profitability_turnaround" and ni_unsupported else PRIORITY[e["event_type"]]
+
+    items.sort(key=lambda t: (prio(t[0]), -magnitude(t[0]["event_type"], t[0].get("metrics") or {}), t[0]["event_type"]))
+    lead, u = items[0]
+    flags = []
+    if ni_unsupported and any(e["event_type"] == "profitability_turnaround" for e, _ in items):
+        flags.append("net_income_mostly_non_operating")
+    if any(e["event_type"] == "profitability_turnaround" and magnitude(e["event_type"], e.get("metrics") or {}) > MAGNITUDE_CAP for e, _ in items):
+        flags.append("extreme_net_income_swing")
+    if all(v is None for v in sup.values()):
+        flags.append("operating_support_unverifiable")
+    fams = sorted({FAMILY[e["event_type"]] for e, _ in items if prio(e) != UNSUPPORTED_PRIORITY})
+    c = Company(sym, lead, u, [e for e, _ in items], fams, market_cap_at_publication(lead) or 0.0, sup, nos, flags)
+    if not fams:
+        return c, "net_income_mostly_non_operating"
+    n_support = sum(1 for v in sup.values() if v)
+    c.rank_key = (-len(PREFERRED_FAMILIES & set(fams)), -n_support, -len(fams), prio(lead),
+                  -round(min(magnitude(lead["event_type"], lead.get("metrics") or {}), MAGNITUDE_CAP), 6), -c.market_cap, sym)
+    return c, None
+
+
+def select(events: Sequence[Mapping[str, Any]], session: date, posted: Mapping[str, date], *, max_posts: int = MAX_POSTS, max_per_type: int = MAX_PER_TYPE,
+           fresh_days: int = FRESH_DAYS, min_market_cap: float = MIN_MARKET_CAP, cooldown_days: int = COOLDOWN_DAYS) -> Dict[str, Any]:
+    """One session's newly detected events -> {'selected', 'outranked', 'type_capped', 'cooldown': [Company], 'held': [(Company, reason)],
+    'excluded': [(event, reason)]}."""
     excluded: List[Tuple[Mapping[str, Any], str]] = []
     by_symbol: Dict[str, List[Tuple[Dict[str, Any], PublicUpdate]]] = {}
     for ev in events:
@@ -112,15 +194,26 @@ def select(events: Sequence[Mapping[str, Any]], session: date, posted: Mapping[s
             excluded.append((ev, reason))
         else:
             by_symbol.setdefault(ev["symbol"], []).append((dict(ev), u))
-    companies, cooldown = [], []
+    companies, cooldown, held = [], [], []
     for sym, items in by_symbol.items():
-        items.sort(key=lambda t: (PRIORITY[t[0]["event_type"]], -magnitude(t[0]["event_type"], t[0].get("metrics") or {}), t[0]["event_type"]))
-        lead, u = items[0]
-        fams = sorted({FAMILY[e["event_type"]] for e, _ in items})
-        cap = market_cap_at_publication(lead) or 0.0
-        c = Company(sym, lead, u, [e for e, _ in items], fams, cap)
-        c.rank_key = (-len(PREFERRED_FAMILIES & set(fams)), -len(fams), PRIORITY[lead["event_type"]], -round(magnitude(lead["event_type"], lead.get("metrics") or {}), 6), -cap, sym)
+        c, reason = _company(sym, items)
         last = posted.get(sym)
-        (cooldown if last is not None and (session - last).days < cooldown_days else companies).append(c)
+        if reason:
+            held.append((c, reason))
+        elif last is not None and (session - last).days < cooldown_days:
+            cooldown.append(c)
+        else:
+            companies.append(c)
     companies.sort(key=lambda c: c.rank_key)
-    return {"selected": companies[:max_posts], "outranked": companies[max_posts:], "excluded": excluded, "cooldown": cooldown}
+    selected, outranked, type_capped = [], [], []
+    per_type: Dict[str, int] = {}
+    for c in companies:
+        t = c.lead["event_type"]
+        if len(selected) >= max_posts:
+            outranked.append(c)
+        elif per_type.get(t, 0) >= max_per_type:
+            type_capped.append(c)
+        else:
+            selected.append(c)
+            per_type[t] = per_type.get(t, 0) + 1
+    return {"selected": selected, "outranked": outranked, "type_capped": type_capped, "cooldown": cooldown, "held": held, "excluded": excluded}

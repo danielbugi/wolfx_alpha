@@ -1,5 +1,6 @@
-"""Fundamental Updates night selection (update_select): every exclusion rule, the backlog guard, one post per company, the cap of 3, the ranking
-order, the cooldown and determinism. Pure: no database, no network."""
+"""Fundamental Updates night selection (update_select): every exclusion rule, the backlog guard, one post per company, the cap of 3, the cap of 2
+per lead type (empty slots allowed), operational support, the non-operating (one-off) hold, the magnitude cap, the ranking order, the cooldown,
+independence from prices and scores, and determinism. Pure: no database, no network."""
 import os
 import random
 import sys
@@ -55,7 +56,7 @@ def test_each_exclusion_rule(over, reason):
 def test_backlog_flood_is_contained():
     """A first run writing two years of history: only events public within the fresh window can be posted, and never more than 3."""
     history = [ev(f"H{i:03d}", available_at=f"2026-{m:02d}-15", quarter_end=f"2026-{m - 1:02d}-28") for i, m in enumerate([3, 4, 5, 6, 7, 8] * 50)]
-    fresh = [ev(f"F{i}", cap=1e9 * (i + 1)) for i in range(6)]
+    fresh = [ev(f"F{i}", kind, cap=1e9 * (i + 1)) for i, kind in enumerate(["margin_expansion", "revenue_acceleration", "fcf_turnaround"] * 2)]
     r = S.select(history + fresh, SESSION, {})
     assert len(r["selected"]) == 3 and all(c.symbol.startswith("F") for c in r["selected"])
     assert sum(1 for _, why in r["excluded"] if why == "backlog_not_fresh") == len(history)
@@ -98,3 +99,58 @@ def test_simulation_maps_detection_to_the_previous_session():
     assert session_of(date(2026, 11, 3)) == date(2026, 11, 2)
     assert session_of(date(2026, 11, 7)) == date(2026, 11, 6)
     assert session_of(date(2026, 11, 9)) == date(2026, 11, 6)       # Monday's date -> Friday's session
+
+
+# same-quarter feature metrics (features.compute_features): operating income 50 on revenue 500, a year earlier margin 4% on revenue 400 (= 16)
+SUPPORTED = {"revenue": 500e6, "revenue_py": 400e6, "rev_yoy": 0.25, "operating_income": 50e6, "op_margin_py": 0.04, "op_margin_yoy_bps": 600.0,
+             "net_income": 30e6, "net_income_py": -10e6, "fcf_margin_yoy_pp": 3.0}
+# the net-income swing came from below the operating line: operating income FELL (50 vs 60), net income rose 40
+NON_OPERATING = dict(SUPPORTED, op_margin_py=0.15, op_margin_yoy_bps=-500.0, rev_yoy=0.25)
+
+
+def test_support_signals_and_non_operating_share():
+    assert S.support(SUPPORTED) == {"operating_income": True, "operating_margin": True, "revenue_growth": True, "cash_flow": True}
+    assert S.non_operating_share(SUPPORTED) == pytest.approx((40e6 - 34e6) / 40e6)
+    assert S.non_operating_share(NON_OPERATING) == pytest.approx((40e6 + 10e6) / 40e6)
+    # missing inputs are unknown, never support (banks and insurers report no operating income)
+    assert S.support({"rev_yoy": 0.1}) == {"operating_income": None, "operating_margin": None, "revenue_growth": True, "cash_flow": None}
+    assert S.non_operating_share({"net_income": 5, "net_income_py": -5}) is None
+    assert S.non_operating_share(dict(SUPPORTED, net_income=-20e6)) is None          # no improvement: no share
+
+
+def test_at_most_two_posts_per_lead_type_and_empty_slots_are_not_filled():
+    nis = [ev(f"N{i}", "profitability_turnaround", cap=1e9 * (5 - i), feature_metrics=SUPPORTED) for i in range(4)]
+    r = S.select(nis, SESSION, {})
+    assert [c.symbol for c in r["selected"]] == ["N0", "N1"] and [c.symbol for c in r["type_capped"]] == ["N2", "N3"] and r["outranked"] == []
+    r = S.select(nis + [ev("MAR", "margin_expansion", cap=4e8, feature_metrics=SUPPORTED)], SESSION, {})
+    assert [c.symbol for c in r["selected"]] == ["N0", "N1", "MAR"]
+
+
+def test_net_income_turnaround_mostly_below_the_operating_line():
+    # alone: held, not posted, the slot stays empty
+    r = S.select([ev("ONE", "profitability_turnaround", feature_metrics=NON_OPERATING)], SESSION, {})
+    assert r["selected"] == [] and [(c.symbol, why) for c, why in r["held"]] == [("ONE", "net_income_mostly_non_operating")]
+    # with an operating inflection: the operating event leads and net income is not counted as a family
+    r = S.select([ev("TWO", "profitability_turnaround", feature_metrics=NON_OPERATING), ev("TWO", "revenue_acceleration", feature_metrics=NON_OPERATING)], SESSION, {})
+    c = r["selected"][0]
+    assert c.lead["event_type"] == "revenue_acceleration" and c.families == ["revenue"] and "net_income_mostly_non_operating" in c.flags
+
+
+def test_an_extreme_swing_does_not_outrank_operational_support_by_size():
+    big = dict(METRICS["profitability_turnaround"], ni_swing_pct_rev=5.68)                  # +568 points of revenue
+    weak = dict(SUPPORTED, op_margin_yoy_bps=10.0, fcf_margin_yoy_pp=-2.0)                  # 2 of 4 support signals
+    r = S.select([ev("XTR", "profitability_turnaround", metrics=big, feature_metrics=weak), ev("SUP", "profitability_turnaround", feature_metrics=SUPPORTED)],
+                 SESSION, {})
+    assert [c.symbol for c in r["selected"]] == ["SUP", "XTR"] and "extreme_net_income_swing" in r["selected"][1].flags
+    # equal support: above the cap the size no longer counts, market cap decides
+    r = S.select([ev("XTR", "profitability_turnaround", metrics=big, cap=1e9, feature_metrics=SUPPORTED),
+                  ev("CAP", "profitability_turnaround", metrics=dict(big, ni_swing_pct_rev=0.6), cap=5e9, feature_metrics=SUPPORTED)], SESSION, {})
+    assert [c.symbol for c in r["selected"]] == ["CAP", "XTR"]
+
+
+def test_selection_ignores_prices_returns_and_scores():
+    evs = [ev(s, k, feature_metrics=SUPPORTED) for s in ("AAA", "BBB", "CCC", "DDD") for k in ("margin_expansion", "profitability_turnaround")]
+    base = [c.symbol for c in S.select(evs, SESSION, {})["selected"]]
+    noisy = [dict(e, strength=99 - i, severity="high", inflection_score=i,
+                  context=dict(e["context"], reaction={"excess_return": i}, excess_vs_sector_since_publication=-i)) for i, e in enumerate(evs)]
+    assert [c.symbol for c in S.select(noisy, SESSION, {})["selected"]] == base
