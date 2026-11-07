@@ -231,7 +231,7 @@ jobs:
         # self-skip when Postgres is unreachable -- this job deliberately has no postgres service,
         # matching the codebase's own existing skip-if-unreachable convention. Schema/DB-level
         # correctness is covered separately by db-bootstrap-integration below.
-        run: python -m pytest mechanism/alerts/tests mechanism/data_updaters/tests mechanism/research/tests mechanism/market_intelligence/tests mechanism/forward_collection/tests ml_training/tests -q
+        run: python -m pytest mechanism/alerts/tests mechanism/data_updaters/tests mechanism/inflection/tests mechanism/research/tests mechanism/market_intelligence/tests mechanism/forward_collection/tests ml_training/tests -q
 
       - name: scan-wrapper real-flock tests (must run on Linux, never skip)
         # The lock-contention tests of deploy/vps/run_discontinuity_scan.sh need real util-linux flock and bash. They self-skip on Windows/macOS dev machines, so
