@@ -35,6 +35,7 @@ describe('navigation groups', () => {
       ['Watchlist', '/watchlist'],
       ['Markets', '/markets'],
       ['Earnings', '/earnings'],
+      ['Fundamental Updates', '/signals'],
     ]);
     expect(product.items.some((i) => /alert/i.test(i.name))).toBe(false);
     const dv = internal.items.find((i) => i.href === '/alerts');
@@ -63,7 +64,7 @@ describe('navigation groups', () => {
     expect(new Set(listed).size).toBe(listed.length);
     const unlisted = pageRoutes().filter((r) => !listed.includes(r));
     // /stock/[symbol] and /markets/[symbol] are reached from tables; /strategies/[strategyKey] from Strategies; /login has no chrome.
-    expect(unlisted.sort()).toEqual(['/login', '/markets/[symbol]', '/sectors/[slug]', '/stock/[symbol]', '/strategies/[strategyKey]']);
+    expect(unlisted.sort()).toEqual(['/login', '/markets/[symbol]', '/sectors/[slug]', '/signals/[symbol]/[quarter]/[type]', '/stock/[symbol]', '/strategies/[strategyKey]']);
   });
 
   it('treats stock pages as product pages and the Users page as owner-only', () => {

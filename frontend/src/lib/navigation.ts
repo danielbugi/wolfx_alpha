@@ -10,6 +10,7 @@ import {
   BeakerIcon,
   BoltIcon,
   CalendarDaysIcon,
+  DocumentTextIcon,
   ChartBarIcon,
   ClipboardDocumentListIcon,
   CpuChipIcon,
@@ -57,6 +58,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { name: 'Watchlist', href: '/watchlist', icon: StarIcon, description: 'Your saved stocks, side by side (this browser)' },
       { name: 'Markets', href: '/markets', icon: GlobeAltIcon, description: 'Futures, commodities, currencies, crypto' },
       { name: 'Earnings', href: '/earnings', icon: CalendarDaysIcon, description: 'Earnings calendar: who reports, day by day' },
+      { name: 'Fundamental Updates', href: '/signals', icon: DocumentTextIcon, description: 'Public: changes in reported figures, dated and linked to the filing' },
     ],
   },
   {
