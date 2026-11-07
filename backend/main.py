@@ -481,6 +481,17 @@ except ImportError as e:
     logger.warning(f"⚠️  Public signals router not available: {e}")
 except Exception as e:
     logger.error(f"❌ Error including public signals router: {e}")
+# Import and include the Research Missions router (OWNER ONLY: research missions, their cited and verified findings,
+# and the research budget; creates draft missions only -- see services/research_missions_service.py)
+try:
+    from routers.research_missions import research_missions_router
+
+    app.include_router(research_missions_router)
+    logger.info("✅ Research missions router included successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  Research missions router not available: {e}")
+except Exception as e:
+    logger.error(f"❌ Error including research missions router: {e}")
 
 # Import and include the Momentum Leaders router (who's still moving after making an
 # earlier Momentum Board list — see services/momentum_leaders_service.py)
