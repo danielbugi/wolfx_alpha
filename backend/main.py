@@ -470,6 +470,18 @@ except ImportError as e:
 except Exception as e:
     logger.error(f"❌ Error including inflection router: {e}")
 
+# Import and include the PUBLIC Fundamental Updates router (unauthenticated, read-only, rate-limited; reads only the
+# publication record of migration 41; see routers/public_signals.py). Answers 503 until that migration is applied.
+try:
+    from routers.public_signals import public_signals_router
+
+    app.include_router(public_signals_router)
+    logger.info("✅ Public signals router included successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  Public signals router not available: {e}")
+except Exception as e:
+    logger.error(f"❌ Error including public signals router: {e}")
+
 # Import and include the Momentum Leaders router (who's still moving after making an
 # earlier Momentum Board list — see services/momentum_leaders_service.py)
 try:

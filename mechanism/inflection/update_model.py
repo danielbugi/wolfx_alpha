@@ -49,6 +49,10 @@ SLUG_TO_TYPE = {slug: t for t, (slug, _) in PUBLIC_TYPES.items()}
 # Where the public date comes from -> how it is described. Anything else is not publishable.
 DATE_SOURCES = {"sec_acceptance": "SEC filing accepted", "sec_filed_date": "SEC filing date", "earnings_calendar": "company's quarterly report date"}
 
+# A quarter first made public this long after it ended is old news (late filers, a quarter first seen in a later registrant's filings: QNST/FUBO/DIN
+# were public 400+ days after quarter end in the SEC version). The same 104-day bound as the regulator's latest 10-Q/10-K deadline plus a margin.
+MAX_DAYS_QUARTER_TO_PUBLIC = 104
+
 SYMBOL_RE = re.compile(r"^[A-Z][A-Z0-9.\-]{0,9}$")
 ACCESSION_RE = re.compile(r"^\d{10}-\d{2}-\d{6}$")
 
@@ -230,6 +234,8 @@ def ineligibility(ev: Mapping[str, Any], check_freshness: bool = True) -> Option
         return "bad_symbol"
     if ev.get("availability_basis") not in DATE_SOURCES:
         return "public_date_not_verified"
+    if (date.fromisoformat(str(ev["available_at"])[:10]) - date.fromisoformat(str(ev["quarter_end"])[:10])).days > MAX_DAYS_QUARTER_TO_PUBLIC:
+        return "public_too_long_after_quarter_end"
     detected = ev.get("first_detected_on")
     if check_freshness and (detected is None or date.fromisoformat(str(detected)[:10]) < date.fromisoformat(str(ev["available_at"])[:10])):
         return "detected_before_public_date"          # the re-dated case the alert freshness rule also blocks

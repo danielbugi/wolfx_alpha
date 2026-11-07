@@ -1,6 +1,6 @@
 # Fundamental Updates: Phase 1 (built) and Phase 2 (architecture)
 
-Status 2026-11-07. Branch `feat/fundamental-updates-v2`. **Nothing is sent, deployed or migrated.** The current owner alert (`mechanism/inflection/alerts.py`, `telegram_text`) is unchanged and remains the default.
+Status 2026-11-07. Branch `feat/fundamental-updates-v2`. Phase 1 and Phase 2 are built on the branch. **Nothing is sent, deployed, merged or migrated** (migration 41 is written and tested, not applied). The current owner alert (`mechanism/inflection/alerts.py`, `telegram_text`) is unchanged and remains the default.
 
 ## Owner decisions (2026-11-07)
 | # | Decision |
@@ -54,7 +54,7 @@ Status 2026-11-07. Branch `feat/fundamental-updates-v2`. **Nothing is sent, depl
 - News must have `published_at`, `updated_at` and `fetched_at` all at or before the cutoff. It must also fall within [public date − 1 day, public date + 3 days].
 - The chosen news is frozen with the publication and is never re-selected later.
 
-## Phase 2: public `/signals` architecture (not built)
+## Phase 2: public `/signals` architecture (design; see "Phase 2: as built" below)
 
 ### Source of truth: a publication ledger, never live event rows
 ```
@@ -170,3 +170,24 @@ Guards:
   - the layout works at phone width;
   - a withdrawn banner appears for withdrawn updates.
 - **End to end with no sending:** fixture events → ledger (test database) → API → page. CI uses a fake Telegram client, and any socket fails the test.
+
+## Phase 2: as built (2026-11-07, branch only)
+Owner decisions applied:
+- The source of public updates will be `inflection_v2_sec_pit`, but nothing is switched yet; the evidence is in [FUNDAMENTAL_UPDATES_SOURCE_COMPARISON.md](FUNDAMENTAL_UPDATES_SOURCE_COMPARISON.md).
+- Public news stays off.
+- Telegram posts carry SEC and Finviz links only.
+
+| Piece | Where |
+|---|---|
+| Publication record | `mechanism/add_fundamental_update_publication.sql` (migration 41):<br>• append-only table, one row per version (initial / restated / redated / withdrawn);<br>• `UNIQUE (update_key, version)`;<br>• key and hash checks;<br>• UPDATE, DELETE and TRUNCATE refused by `ENABLE ALWAYS` triggers;<br>• the `fundamental_update_current` view;<br>• SELECT + INSERT for `donchian_app`.<br>Mounted as init 41 (CI applies it); **not applied to production**. |
+| Writer | `mechanism/inflection/update_ledger.py`:<br>• `publish()` is idempotent (`exists` on repeat);<br>• `revise()` writes one version per real change, keeps the first publication's news, never revives a withdrawn update, and lets a racing loser write nothing.<br>No scheduled caller. |
+| Eligibility | `update_model.py` adds a cap of at most 104 days from quarter end to public date. It drops late filers and quarters first seen in a later registrant's filings. |
+| Public API | `backend/routers/public_signals.py` + `backend/services/public_signals_service.py`; `GET /api/public/signals` and `GET /api/public/signals/{symbol}/{quarter_end}/{slug}`:<br>• no authentication;<br>• reads only the publication record;<br>• response models are exactly `PUBLIC_FIELDS` with `extra="forbid"` (unexpected nested data fails closed with a 503);<br>• keyset cursor; closed-list filters; errors that never echo the input;<br>• token bucket per client IP (60 per minute on the feed, 120 on detail pages) with `Retry-After`;<br>• `X-Forwarded-For` trusted only from the proxy network;<br>• `Cache-Control: public, max-age=300`;<br>• `ETag`/304 on detail pages;<br>• 503 until migration 41 exists. |
+| Frontend | `/signals` (feed: type chips, sector, "show older") and `/signals/[symbol]/[quarter]/[type]` (detail: figures, date source, news when present, SEC and Finviz, correction history, withdrawn banner).<br>`AuthGate` gains open paths (`lib/signals.ts`): public header when signed out, app frame when signed in, no redirect.<br>"Fundamental Updates" is added to the Product navigation. |
+| Tests | `test_update_ledger.py` and `test_public_signals_db.py` run on real PostgreSQL in the CI database job. `test_public_signals_api.py` covers the allowlist, no internals, validation, cursor, 304, 429, client IP and no authentication. Frontend: `signals.test.ts`, `UpdateView.test.tsx`, `AuthGate.test.tsx`. |
+
+**Deferred from the design (each is a later decision):**
+- **Card image endpoint:** `card.png`, also usable as the OG image. The backend image would need Pillow.
+- **Server-rendered metadata:** the pages render client-side, like the rest of the dashboard.
+- **Per-worker rate limit:** the bucket lives in memory per worker, so with N workers the effective limit is N times the stated one. A shared limit would need Redis or Caddy, which is new infrastructure.
+- **Correction job and Telegram correction posts:** they belong to the sending phases, which need separate approval.

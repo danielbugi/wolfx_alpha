@@ -164,8 +164,10 @@ def test_keys_links_and_buttons():
     ({"availability_basis": "first_seen"}, "public_date_not_verified"),
     ({"availability_basis": "repricing_window_end(sec_acceptance)"}, "public_date_not_verified"),
     ({"symbol": "bad sym"}, "bad_symbol"),
-    # the BILL/ETON shape of 2026-11-06: a June quarter re-dated to a November report, first detected before that date
-    ({"quarter_end": "2026-06-30", "available_at": "2026-11-05", "availability_basis": "earnings_calendar", "first_detected_on": "2026-10-31"}, "detected_before_public_date"),
+    ({"quarter_end": "2025-06-30", "available_at": "2026-08-26", "first_detected_on": "2026-11-03"}, "public_too_long_after_quarter_end"),   # QNST-like late quarter
+    # the BILL/ETON shape of 2026-11-06: a June quarter re-dated to a November report (128 days), first detected before that date: caught twice
+    ({"quarter_end": "2026-06-30", "available_at": "2026-11-05", "availability_basis": "earnings_calendar", "first_detected_on": "2026-10-31"}, "public_too_long_after_quarter_end"),
+    ({"quarter_end": "2026-09-30", "available_at": "2026-11-05", "first_detected_on": "2026-11-01"}, "detected_before_public_date"),
     ({"first_detected_on": None}, "detected_before_public_date"),
     ({"metrics": {"op_margin": 0.15}}, "fewer_than_two_figures"),
     ({"metrics": {"op_margin": 0.15, "op_margin_yoy_bps": 100.0}}, "explanation_inputs_missing"),
