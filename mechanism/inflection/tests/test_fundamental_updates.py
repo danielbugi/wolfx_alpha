@@ -148,8 +148,8 @@ def test_keys_links_and_buttons():
     assert u.key == "POWI/2026-09-30/margin-expansion"
     assert u.links == {"finviz": "https://finviz.com/quote.ashx?t=POWI", "detail": "https://dashboard.first-light.finance/signals/POWI/2026-09-30/margin-expansion",
                        "sec": "https://www.sec.gov/Archives/edgar/data/833640/000083364026000156/0000833640-26-000156-index.htm", "sec_kind": "filing"}
-    assert buttons(u) == {"inline_keyboard": [[{"text": "SEC filing", "url": u.links["sec"]}, {"text": "Finviz", "url": u.links["finviz"]}],
-                                              [{"text": "Details on First Light", "url": u.links["detail"]}]]}
+    assert buttons(u) == {"inline_keyboard": [[{"text": "SEC filing", "url": u.links["sec"]}, {"text": "Finviz", "url": u.links["finviz"]}]]}
+    assert "first-light" not in json.dumps(buttons(u)) and "/signals/" not in text_message(u)          # no First Light link in the post
     assert UM.SLUG_TO_TYPE[u.key.split("/")[2]] == "margin_expansion"
     no_acc = build(accession="not-an-accession")
     assert no_acc.links["sec_kind"] == "company_filings" and "CIK=0000833640" in no_acc.links["sec"]

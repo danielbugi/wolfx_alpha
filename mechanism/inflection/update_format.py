@@ -56,7 +56,7 @@ def _compose(u: PublicUpdate, news_n: int, with_industry: bool, with_links: bool
         lines.append(e(" · ".join(ctx)))
     if with_links:
         links = [f'<a href="{html.escape(u.links[k], quote=True)}">{label}</a>' for k, label in (("sec", "SEC filing" if u.links.get("sec_kind") == "filing" else "SEC filings"),
-                                                                                    ("finviz", "Finviz"), ("detail", "Details")) if u.links.get(k)]
+                                                                                    ("finviz", "Finviz")) if u.links.get(k)]
         lines.append(" · ".join(links))
     lines.append(f"<i>{e(FOOTER)}</i>")
     return "\n".join(lines)
@@ -81,12 +81,12 @@ def text_message(u: PublicUpdate) -> str:
 
 
 def buttons(u: PublicUpdate) -> Dict[str, Any]:
-    """Telegram inline keyboard: SEC and Finviz on one row, Details on its own row. Only http(s) URLs."""
+    """Telegram inline keyboard: one row with SEC and Finviz (no First Light link: owner decision 2026-11-07). Only https URLs."""
     row1 = []
     if u.links.get("sec"):
         row1.append({"text": "SEC filing" if u.links.get("sec_kind") == "filing" else "SEC filings", "url": u.links["sec"]})
     row1.append({"text": "Finviz", "url": u.links["finviz"]})
-    kb = {"inline_keyboard": [row1, [{"text": "Details on First Light", "url": u.links["detail"]}]]}
+    kb = {"inline_keyboard": [row1]}
     for row in kb["inline_keyboard"]:
         for b in row:
             if not b["url"].startswith("https://"):

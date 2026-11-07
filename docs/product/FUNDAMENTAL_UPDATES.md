@@ -36,7 +36,7 @@ Status 2026-11-07. Branch `feat/fundamental-updates-v2`. **Nothing is sent, depl
 |---|---|
 | `mechanism/inflection/update_model.py` | `build_update()` → `PublicUpdate`: allowlisted fields only (`PUBLIC_FIELDS`), eligibility, 2–3 figures, the deterministic "why it matters", links, natural key, content hash, `classify_revision()` |
 | `mechanism/inflection/update_news.py` | `select_news()`: point-in-time cutoff, window, company-name match, roundup, rating and advice filters, de-duplication, ranking; at most 2 |
-| `mechanism/inflection/update_format.py` | Telegram v2 caption (≤1,024 characters after parsing, fixed drop order), inline buttons, text fallback |
+| `mechanism/inflection/update_format.py` | Telegram v2 caption (≤1,024 characters after parsing, fixed drop order), inline buttons (SEC and Finviz only; no First Light link in the post, owner decision 2026-11-07), text fallback |
 | `mechanism/inflection/update_card.py` | 1200×675 PNG card; its own identity (teal-graphite surface, one amber accent), contrast-checked |
 | `mechanism/inflection/update_preview.py` | CLI: fixture JSON → `card.png`, `caption.html/txt`, `buttons.json`, `update.json`, `v1.txt`, `index.html`. No database, no network, no send. |
 | `mechanism/inflection/tests/test_fundamental_updates.py` | 49 tests: allowlist and no-internals, advice guard (pinned to the channel test's `BANNED`), snapshots, point-in-time, news matching on the real collision headlines, Telegram limits and escaping, card, corrections, backward compatibility, the preview CLI with sockets blocked |
