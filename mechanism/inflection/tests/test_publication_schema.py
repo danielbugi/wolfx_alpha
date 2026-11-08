@@ -270,46 +270,54 @@ def test_rollback_is_idempotent_and_touches_nothing_else(db):
 
 # ======================================================================================================== backup -> rollback -> re-apply -> restore drill
 def _client_tools(server_major):
-    """pg_dump / psql of the SERVER's major version. A newer pg_dump writes settings an older server rejects (pg_dump 17+ emits
-    `SET transaction_timeout`, unknown to PostgreSQL 16), so the drill, like the production procedure (pg_dump inside the postgres:16 container),
-    must use the matching major version."""
+    """Command prefixes for pg_dump / psql of the SERVER's major version. A newer pg_dump writes settings an older server rejects (pg_dump 17+
+    emits `SET transaction_timeout`, unknown to PostgreSQL 16: found by CI 2026-11-08), so the drill, like the production procedure (pg_dump run
+    inside the postgres:16 container), must use the matching major version. FUP_PG_CLIENT_IMAGE (set by CI) runs the tools in that image."""
+    image = os.getenv("FUP_PG_CLIENT_IMAGE")
+    if image and shutil.which("docker"):
+        base = ["docker", "run", "--rm", "-i", "--network", "host", "-e", "PGPASSWORD", image]
+        return base + ["pg_dump"], base + ["psql"]
     for d in [f"/usr/lib/postgresql/{server_major}/bin", f"C:/Program Files/PostgreSQL/{server_major}/bin", None]:
         dump = shutil.which("pg_dump", path=d) if d else shutil.which("pg_dump")
         sql = shutil.which("psql", path=d) if d else shutil.which("psql")
         if dump and sql:
-            out = subprocess.run([dump, "--version"], capture_output=True, text=True).stdout
-            m = re.search(r"(\d+)(?:\.\d+)?", out)
+            m = re.search(r"(\d+)", subprocess.run([dump, "--version"], capture_output=True, text=True).stdout.split(")")[-1])
             if m and int(m.group(1)) == server_major:
-                return dump, sql
+                return [dump], [sql]
     return None, None
 
 
 def test_backup_rollback_reapply_restore_drill(db):
-    """The documented procedure, end to end, with the real client tools of the server's major version, in a throwaway database."""
+    """The documented procedure, end to end, with the real client tools of the server's major version, in a throwaway database. All SQL goes in
+    on stdin, exactly like the production commands (`docker exec -i ... psql ... < file`)."""
     with _connect() as c:
         cur = c.cursor()
         cur.execute("SHOW server_version_num")
         server_major = int(cur.fetchone()[0]) // 10000
     pg_dump, psql = _client_tools(server_major)
     if not pg_dump:
-        pytest.skip(f"pg_dump / psql {server_major} not installed (the CI db-bootstrap job installs postgresql-client-{server_major})")
+        pytest.skip(f"pg_dump / psql {server_major} not available (CI sets FUP_PG_CLIENT_IMAGE=postgres:{server_major}-alpine)")
     name = "fup_drill_" + "".join(random.choices(string.ascii_lowercase, k=8))
     admin = psycopg2.connect(**_dsn())
     admin.autocommit = True
     admin.cursor().execute(f"CREATE DATABASE {name}")
     env = dict(os.environ, PGPASSWORD=_dsn()["password"])
     conn_args = ["-h", _dsn()["host"], "-p", str(_dsn()["port"]), "-U", _dsn()["user"], "-d", name]
+    tx = ["-v", "ON_ERROR_STOP=1", "-1", "-q"]
 
-    def run(*args, stdin=None):
-        r = subprocess.run(list(args), input=stdin, capture_output=True, text=True, env=env, timeout=120)
+    def call(cmd, stdin=None):
+        return subprocess.run(cmd, input=stdin, capture_output=True, text=True, env=env, timeout=180)
+
+    def run(cmd, stdin=None):
+        r = call(cmd, stdin)
         assert r.returncode == 0, r.stderr
         return r.stdout
 
     try:
-        run(psql, *conn_args, "-v", "ON_ERROR_STOP=1", "-1", "-q", "-f", MIGRATION)
+        run(psql + conn_args + tx, _read(MIGRATION))
         # with no rows the rollback needs no confirmation; re-applying afterwards is clean
-        assert "migration 41 removed" in run(psql, *conn_args, "-v", "ON_ERROR_STOP=1", "-1", "-q", "-f", ROLLBACK)
-        run(psql, *conn_args, "-v", "ON_ERROR_STOP=1", "-1", "-q", "-f", MIGRATION)
+        assert "migration 41 removed" in run(psql + conn_args + tx, _read(ROLLBACK))
+        run(psql + conn_args + tx, _read(MIGRATION))
         ledger = Ledger(lambda: _connect(dbname=name))
         syms = [_sym() for _ in range(3)]
         for s in syms:
@@ -323,17 +331,16 @@ def test_backup_rollback_reapply_restore_drill(db):
         assert len(before) == 4
 
         # 1. back up (data only, this table only) -- the exact command of the rollback script's header
-        dump = run(pg_dump, *conn_args, "--data-only", "--table=public.fundamental_update_publication")
+        dump = run(pg_dump + conn_args + ["--data-only", "--table=public.fundamental_update_publication"])
         assert "COPY public.fundamental_update_publication" in dump and "setval" in dump and "DISABLE TRIGGER" not in dump
-        # 2. the rollback refuses while rows exist, then removes everything once confirmed
-        r = subprocess.run([psql, *conn_args, "-v", "ON_ERROR_STOP=1", "-1", "-q", "-f", ROLLBACK], capture_output=True, text=True, env=env, timeout=120)
+        # 2. the rollback refuses while rows exist, then removes everything once confirmed in the same session
+        r = call(psql + conn_args + tx, _read(ROLLBACK))
         assert r.returncode != 0 and "has rows" in r.stderr
-        out = run(psql, *conn_args, "-v", "ON_ERROR_STOP=1", "-1", "-q", "-c", "SET fup.confirm_drop_with_rows = 'yes'", "-f", ROLLBACK)
-        assert "migration 41 removed" in out
+        assert "migration 41 removed" in run(psql + conn_args + tx, "SET fup.confirm_drop_with_rows = 'yes';\n" + _read(ROLLBACK))
         # 3. re-apply the migration, 4. restore the backup in one transaction, 5. verify
-        run(psql, *conn_args, "-v", "ON_ERROR_STOP=1", "-1", "-q", "-f", MIGRATION)
-        run(psql, *conn_args, "-v", "ON_ERROR_STOP=1", "-1", "-q", stdin=dump)
-        assert "migration 41 verified" in run(psql, *conn_args, "-v", "ON_ERROR_STOP=1", "-f", VERIFY)
+        run(psql + conn_args + tx, _read(MIGRATION))
+        run(psql + conn_args + tx, dump)
+        assert "migration 41 verified" in run(psql + conn_args + ["-v", "ON_ERROR_STOP=1"], _read(VERIFY))
         with _connect(dbname=name) as c:
             cur = c.cursor()
             cur.execute(snapshot)
