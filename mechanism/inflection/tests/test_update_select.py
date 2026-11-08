@@ -1,5 +1,5 @@
 """Fundamental Updates night selection (update_select): every exclusion rule, the backlog guard, one post per company, the cap of 3, the cap of 2
-per lead type (empty slots allowed), operational support, the non-operating (one-off) hold, the magnitude cap, the ranking order, the cooldown,
+per lead type (empty slots allowed), operational support, the non-operating divergence heuristic and its edge cases, the magnitude cap, the ranking order, the cooldown,
 independence from prices and scores, and determinism. Pure: no database, no network."""
 import os
 import random
@@ -108,14 +108,14 @@ SUPPORTED = {"revenue": 500e6, "revenue_py": 400e6, "rev_yoy": 0.25, "operating_
 NON_OPERATING = dict(SUPPORTED, op_margin_py=0.15, op_margin_yoy_bps=-500.0, rev_yoy=0.25)
 
 
-def test_support_signals_and_non_operating_share():
+def test_support_signals_and_non_operating_divergence():
     assert S.support(SUPPORTED) == {"operating_income": True, "operating_margin": True, "revenue_growth": True, "cash_flow": True}
-    assert S.non_operating_share(SUPPORTED) == pytest.approx((40e6 - 34e6) / 40e6)
-    assert S.non_operating_share(NON_OPERATING) == pytest.approx((40e6 + 10e6) / 40e6)
+    assert S.non_operating_divergence(SUPPORTED) == pytest.approx((40e6 - 34e6) / 40e6)
+    assert S.non_operating_divergence(NON_OPERATING) == pytest.approx((40e6 + 10e6) / 40e6)
     # missing inputs are unknown, never support (banks and insurers report no operating income)
     assert S.support({"rev_yoy": 0.1}) == {"operating_income": None, "operating_margin": None, "revenue_growth": True, "cash_flow": None}
-    assert S.non_operating_share({"net_income": 5, "net_income_py": -5}) is None
-    assert S.non_operating_share(dict(SUPPORTED, net_income=-20e6)) is None          # no improvement: no share
+    assert S.non_operating_divergence({"net_income": 5, "net_income_py": -5}) is None
+    assert S.non_operating_divergence(dict(SUPPORTED, net_income=-20e6)) is None          # no improvement: undefined
 
 
 def test_at_most_two_posts_per_lead_type_and_empty_slots_are_not_filled():
@@ -129,11 +129,11 @@ def test_at_most_two_posts_per_lead_type_and_empty_slots_are_not_filled():
 def test_net_income_turnaround_mostly_below_the_operating_line():
     # alone: held, not posted, the slot stays empty
     r = S.select([ev("ONE", "profitability_turnaround", feature_metrics=NON_OPERATING)], SESSION, {})
-    assert r["selected"] == [] and [(c.symbol, why) for c, why in r["held"]] == [("ONE", "net_income_mostly_non_operating")]
+    assert r["selected"] == [] and [(c.symbol, why) for c, why in r["held"]] == [("ONE", "non_operating_divergence")]
     # with an operating inflection: the operating event leads and net income is not counted as a family
     r = S.select([ev("TWO", "profitability_turnaround", feature_metrics=NON_OPERATING), ev("TWO", "revenue_acceleration", feature_metrics=NON_OPERATING)], SESSION, {})
     c = r["selected"][0]
-    assert c.lead["event_type"] == "revenue_acceleration" and c.families == ["revenue"] and "net_income_mostly_non_operating" in c.flags
+    assert c.lead["event_type"] == "revenue_acceleration" and c.families == ["revenue"] and "non_operating_divergence" in c.flags
 
 
 def test_an_extreme_swing_does_not_outrank_operational_support_by_size():
@@ -154,3 +154,62 @@ def test_selection_ignores_prices_returns_and_scores():
     noisy = [dict(e, strength=99 - i, severity="high", inflection_score=i,
                   context=dict(e["context"], reaction={"excess_return": i}, excess_vs_sector_since_publication=-i)) for i, e in enumerate(evs)]
     assert [c.symbol for c in S.select(noisy, SESSION, {})["selected"]] == base
+
+
+M = 1e6
+
+
+def fm(ni, ni_py, oi, oi_py, rev=100 * M, rev_py=100 * M):
+    """Feature metrics for one quarter from plain figures (prior-year operating income is stored as margin x revenue, as features.py does)."""
+    return {"net_income": ni, "net_income_py": ni_py, "operating_income": oi, "revenue": rev, "revenue_py": rev_py,
+            "op_margin_py": None if oi_py is None or not rev_py or rev_py <= 0 else oi_py / rev_py}
+
+
+@pytest.mark.parametrize("label,metrics,expected", [
+    # sign changes and negative values
+    ("operating loss narrowed, net income turned positive", fm(5 * M, -50 * M, -10 * M, -40 * M), (55 - 30) / 55),
+    ("operating income turned positive and explains more than all of it", fm(5 * M, -40 * M, 20 * M, -30 * M), (45 - 50) / 45),
+    ("operating income fell into a loss while net income turned positive", fm(10 * M, -5 * M, -20 * M, 10 * M), (15 + 30) / 15),
+    ("both still losses, net loss narrowed below the line", fm(-10 * M, -50 * M, -45 * M, -55 * M), (40 - 10) / 40),
+    ("unchanged operating income: all of it is non-operating", fm(30 * M, -10 * M, 50 * M, 50 * M), 1.0),
+    ("fully operational improvement after a 21% tax: negative", fm(0.79 * 40 * M, 0, 60 * M, 20 * M), (31.6 - 40) / 31.6),
+    # undefined: never holds, never demotes
+    ("net income fell", fm(10 * M, 20 * M, 50 * M, 10 * M), None),
+    ("net income unchanged", fm(10 * M, 10 * M, 50 * M, 10 * M), None),
+    ("prior-year revenue zero", fm(10 * M, -10 * M, 5 * M, None, rev_py=0), None),
+    ("prior-year revenue negative", dict(fm(10 * M, -10 * M, 5 * M, 1 * M), revenue_py=-5 * M), None),
+    ("operating income missing (bank)", dict(fm(10 * M, -10 * M, 5 * M, 1 * M), operating_income=None), None),
+    ("infinite input", dict(fm(10 * M, -10 * M, 5 * M, 1 * M), net_income=float("inf")), None),
+    ("not-a-number input", dict(fm(10 * M, -10 * M, 5 * M, 1 * M), op_margin_py=float("nan")), None),
+    ("boolean is not a number", dict(fm(10 * M, -10 * M, 5 * M, 1 * M), net_income_py=False), None),
+])
+def test_non_operating_divergence_edge_cases(label, metrics, expected):
+    got = S.non_operating_divergence(metrics)
+    assert (got is None) if expected is None else got == pytest.approx(expected), label
+
+
+def _ni(sym, metrics, **over):
+    return ev(sym, "profitability_turnaround", feature_metrics=metrics, **over)
+
+
+def test_divergence_threshold_is_strictly_above_one_half():
+    at = fm(40 * M, -10 * M, 45 * M, 20 * M)                                       # dNI 50, dOI 25: exactly 0.5
+    above = fm(40 * M, -10 * M, 44 * M, 20 * M)                                    # dNI 50, dOI 24: 0.52
+    assert S.non_operating_divergence(at) == pytest.approx(0.5) and S.non_operating_divergence(above) == pytest.approx(0.52)
+    assert [c.symbol for c in S.select([_ni("ATT", at)], SESSION, {})["selected"]] == ["ATT"]
+    assert [(c.symbol, why) for c, why in S.select([_ni("ABV", above)], SESSION, {})["held"]] == [("ABV", "non_operating_divergence")]
+
+
+def test_undefined_divergence_never_holds_or_flags():
+    bank = dict(fm(10 * M, -10 * M, None, None), rev_yoy=0.05)                     # no operating income at all
+    r = S.select([_ni("BNK", bank)], SESSION, {})
+    c = r["selected"][0]
+    assert c.non_operating_divergence is None and "non_operating_divergence" not in c.flags and r["held"] == []
+
+
+def test_divergence_only_concerns_net_income_turnarounds():
+    # a margin-led company whose net income moved below the line is neither held nor flagged: the heuristic judges only net-income events
+    high = fm(40 * M, -10 * M, 10 * M, 30 * M)
+    r = S.select([ev("MAR", "margin_expansion", feature_metrics=high)], SESSION, {})
+    assert [c.symbol for c in r["selected"]] == ["MAR"] and r["selected"][0].flags == [] and r["held"] == []
+    assert r["selected"][0].non_operating_divergence > 1                          # still recorded, for the report

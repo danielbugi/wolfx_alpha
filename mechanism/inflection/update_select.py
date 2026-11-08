@@ -6,7 +6,8 @@ Owner rules (2026-11-07, revised the same day after the first simulation):
   - require a verified SEC filing and point-in-time validity; never flood the channel with a historical backlog;
   - prefer profitability, operating-margin and revenue inflections, and several INDEPENDENT inflections in the same quarter;
   - prefer improvements supported by operating income, operating margin, revenue growth and cash flow; an extreme net-income swing must not outrank
-    an operationally supported improvement by its size alone; consider one-off / nonrecurring items where the source data permits;
+    an operationally supported improvement by its size alone; consider one-off / nonrecurring items where the source data permits (done with the
+    non-operating divergence heuristic below: a proxy, not proof of a nonrecurring item);
   - no predictive investment score: nothing here uses prices, returns or the inflection score.
 
 Each event is first screened (the first failing rule is its exclusion reason):
@@ -25,12 +26,25 @@ Operational support (support()) is read from the same quarter's feature metrics 
   cash_flow          free-cash-flow margin up at least MIN_FCF_PP percentage points year over year
 A signal whose inputs are missing (e.g. banks and insurers report no operating income) counts as absent, never as present.
 
-One-off proxy: the share of the net-income improvement NOT explained by the operating-income improvement,
-  non_operating_share = (dNI - dOI) / dNI      (dNI > 0; needs operating income for both years)
-i.e. what came from below the operating line: gains on sales, revaluations, tax benefits, interest, discontinued operations. The source data
-(normalized quarterly statements) does not itemize nonrecurring items, so this is the one-off measure the data permits. A net-income turnaround with
-non_operating_share > MAX_NON_OPERATING_SHARE is 'not operationally supported': it does not count as an inflection family, it cannot lead a post
-while the company has another inflection, and a company whose ONLY basis is such a turnaround is held (net_income_mostly_non_operating).
+Non-operating divergence heuristic: the share of the year-over-year net-income improvement NOT matched by an operating-income improvement,
+  non_operating_divergence = (dNI - dOI) / dNI
+  dNI = net_income - net_income_py              must be > 0 (no improvement: undefined)
+  dOI = operating_income - op_margin_py x revenue_py   needs both years' operating figures and revenue_py > 0
+Every input must be a finite number; otherwise the heuristic is undefined (None) and never holds or demotes anything.
+Read: 0 or less = the operating line explains all of it; 1 = none of it; above 1 = operating income fell while net income rose. The rest came from
+below the operating line: gains on sales, revaluations, tax effects, interest, discontinued operations.
+A net-income turnaround with divergence > MAX_NON_OPERATING_DIVERGENCE is 'not operationally supported': it does not count as an inflection family,
+it cannot lead a post while the company has another inflection, and a company whose ONLY basis is such a turnaround is held
+(non_operating_divergence). Other event types are never held or flagged by it.
+LIMITATIONS (it is a proxy, not proof of a nonrecurring item):
+  - the source data (normalized quarterly statements) does not itemize nonrecurring items; the heuristic only sees where the line moved;
+  - operating income is pre-tax and net income after tax: a fully operational improvement taxed at rate t shows a NEGATIVE divergence of about
+    -t/(1-t) (about -0.27 at 21%), so the heuristic leans toward calling an improvement operational, never the other way;
+  - a one-off item INSIDE operating income (a litigation settlement, a restructuring charge, an asset sale booked as operating) is invisible to it;
+  - a recurring below-the-line item (a steady equity-method stake, lower interest after debt repayment) is counted as divergence;
+  - prior-year operating income is derived from the stored margin and revenue, so rounding in either feeds through;
+  - a tiny dNI makes the ratio extreme in either direction; only the threshold is used, never the size, so this changes no ranking;
+  - companies without operating income (banks, insurers) are undefined: never held by it, and their operating signals count as absent.
 
 Companies are ranked by:
   1. supported preferred families (net income, operating margin/leverage, revenue): more first;
@@ -44,6 +58,7 @@ A company posted within COOLDOWN_DAYS is excluded (cooldown). The rest are 'outr
 """
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -55,7 +70,7 @@ MAX_POSTS, MAX_PER_TYPE, FRESH_DAYS, COOLDOWN_DAYS = 3, 2, 3, 30
 MIN_MARKET_CAP = 300e6
 MAGNITUDE_CAP = 50.0                    # points of revenue / margin; above this the size no longer raises the rank
 MIN_MARGIN_BPS, MIN_REV_GROWTH, MIN_FCF_PP = 50.0, 0.02, 1.0
-MAX_NON_OPERATING_SHARE = 0.5
+MAX_NON_OPERATING_DIVERGENCE = 0.5
 
 FAMILY = {"profitability_turnaround": "net_income", "margin_expansion": "operating", "operating_leverage_inflection": "operating",
           "revenue_acceleration": "revenue", "fcf_turnaround": "cash"}
@@ -77,7 +92,7 @@ def accession_of(notes: Optional[Sequence[str]]) -> Optional[str]:
 
 def _num(m: Mapping[str, Any], k: str) -> Optional[float]:
     v = m.get(k)
-    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and v == v else None
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) else None
 
 
 def magnitude(event_type: str, m: Mapping[str, Any]) -> float:
@@ -90,13 +105,13 @@ def magnitude(event_type: str, m: Mapping[str, Any]) -> float:
 
 def operating_income_change(fm: Mapping[str, Any]) -> Optional[float]:
     oi, opm_py, rev_py = _num(fm, "operating_income"), _num(fm, "op_margin_py"), _num(fm, "revenue_py")
-    if oi is None or opm_py is None or rev_py is None:
+    if oi is None or opm_py is None or rev_py is None or rev_py <= 0:
         return None
     return oi - opm_py * rev_py
 
 
-def non_operating_share(fm: Mapping[str, Any]) -> Optional[float]:
-    """Share of the net-income improvement not explained by operating income (None when the data does not permit it)."""
+def non_operating_divergence(fm: Mapping[str, Any]) -> Optional[float]:
+    """The non-operating divergence heuristic (see the module docstring): None when the data does not permit it."""
     ni, ni_py, d_oi = _num(fm, "net_income"), _num(fm, "net_income_py"), operating_income_change(fm)
     if ni is None or ni_py is None or d_oi is None or ni - ni_py <= 0:
         return None
@@ -127,7 +142,7 @@ class Company:
     families: List[str]                 # supported independent families
     market_cap: float
     support: Dict[str, Optional[bool]] = field(default_factory=dict)
-    non_operating_share: Optional[float] = None
+    non_operating_divergence: Optional[float] = None
     flags: List[str] = field(default_factory=list)
     rank_key: Tuple = field(default_factory=tuple)
 
@@ -157,8 +172,8 @@ def screen(ev: Mapping[str, Any], session: date, *, fresh_days: int = FRESH_DAYS
 
 def _company(sym: str, items: List[Tuple[Dict[str, Any], PublicUpdate]]) -> Tuple[Company, Optional[str]]:
     fm = items[0][0].get("feature_metrics") or {}          # one feature row per symbol and quarter: the same for every event of the company
-    sup, nos = support(fm), non_operating_share(fm)
-    ni_unsupported = nos is not None and nos > MAX_NON_OPERATING_SHARE
+    sup, nod = support(fm), non_operating_divergence(fm)
+    ni_unsupported = nod is not None and nod > MAX_NON_OPERATING_DIVERGENCE
 
     def prio(e):
         return UNSUPPORTED_PRIORITY if e["event_type"] == "profitability_turnaround" and ni_unsupported else PRIORITY[e["event_type"]]
@@ -167,15 +182,15 @@ def _company(sym: str, items: List[Tuple[Dict[str, Any], PublicUpdate]]) -> Tupl
     lead, u = items[0]
     flags = []
     if ni_unsupported and any(e["event_type"] == "profitability_turnaround" for e, _ in items):
-        flags.append("net_income_mostly_non_operating")
+        flags.append("non_operating_divergence")
     if any(e["event_type"] == "profitability_turnaround" and magnitude(e["event_type"], e.get("metrics") or {}) > MAGNITUDE_CAP for e, _ in items):
         flags.append("extreme_net_income_swing")
     if all(v is None for v in sup.values()):
         flags.append("operating_support_unverifiable")
     fams = sorted({FAMILY[e["event_type"]] for e, _ in items if prio(e) != UNSUPPORTED_PRIORITY})
-    c = Company(sym, lead, u, [e for e, _ in items], fams, market_cap_at_publication(lead) or 0.0, sup, nos, flags)
+    c = Company(sym, lead, u, [e for e, _ in items], fams, market_cap_at_publication(lead) or 0.0, sup, nod, flags)
     if not fams:
-        return c, "net_income_mostly_non_operating"
+        return c, "non_operating_divergence"
     n_support = sum(1 for v in sup.values() if v)
     c.rank_key = (-len(PREFERRED_FAMILIES & set(fams)), -n_support, -len(fams), prio(lead),
                   -round(min(magnitude(lead["event_type"], lead.get("metrics") or {}), MAGNITUDE_CAP), 6), -c.market_cap, sym)

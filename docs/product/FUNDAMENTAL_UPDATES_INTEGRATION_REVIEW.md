@@ -57,7 +57,7 @@ What #101 changes (31 files): new modules, a new API router, new pages, tests, d
   - stop re-trying listings that never return statements.
 
 ## 4. Night selection simulation (v2, five sessions, read-only)
-> **Superseded 2026-11-07** by the revised policy (2 per lead type, operational support, one-off hold, 50-point cap) and its re-run: [FUNDAMENTAL_UPDATES_SELECTION.md](FUNDAMENTAL_UPDATES_SELECTION.md). The first run is kept below for comparison.
+> **Superseded 2026-11-07** by the revised policy (2 per lead type, operational support, non-operating divergence heuristic, 50-point cap) and its re-run: [FUNDAMENTAL_UPDATES_SELECTION.md](FUNDAMENTAL_UPDATES_SELECTION.md). The first run is kept below for comparison.
 
 - **Code:** `mechanism/inflection/update_select.py` (pure), replayed by `update_simulate.py` over a read-only export (`fu_selection_simulation.sql`); 15 tests.
 - **Rules:**

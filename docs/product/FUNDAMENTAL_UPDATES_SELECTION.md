@@ -1,7 +1,7 @@
 # Fundamental Updates: night selection policy and simulation (revised)
 
-2026-11-07. **Read-only simulation. Nothing was sent, merged into a schedule, or written to production.**
-Code: `mechanism/inflection/update_select.py` (pure) and `update_simulate.py` (replay); 20 tests in `mechanism/inflection/tests/test_update_select.py`.
+2026-11-07, revised 2026-11-08 (heuristic renamed and documented; results unchanged). **Read-only simulation. Nothing was sent, merged into a schedule, or written to production.**
+Code: `mechanism/inflection/update_select.py` (pure) and `update_simulate.py` (replay); 37 tests in `mechanism/inflection/tests/test_update_select.py`.
 Input: the read-only export `docs/product/fu_selection_simulation.sql`, which now also carries the quarter's feature metrics (`fundamental_feature.metrics`).
 
 ## Policy (as approved by the owner on 2026-11-07)
@@ -29,15 +29,48 @@ Input: the read-only export `docs/product/fu_selection_simulation.sql`, which no
 | revenue growth | at least +2% year over year |
 | cash flow | free-cash-flow margin up at least 1 point year over year |
 
-**One-off / nonrecurring check:** the share of the net-income improvement **not** explained by the operating-income improvement.
-- Formula: `non_operating_share = (ΔNI − ΔOI) / ΔNI`.
-- **What it captures:** what came from below the operating line, such as gains on sales, revaluations, tax benefits, interest and discontinued operations.
-- **Why a proxy:** the source data (normalized quarterly statements) does not itemize nonrecurring items, so this is the measure the data permits.
+**Non-operating divergence heuristic.** This is a proxy, **not proof of a nonrecurring item**. It measures the share of the year-over-year net-income improvement **not** matched by an operating-income improvement.
+- **Formula:** `non_operating_divergence = (ΔNI − ΔOI) / ΔNI`.
+  - **ΔNI:** this quarter's net income minus the prior-year quarter's. It must be above 0.
+  - **ΔOI:** this quarter's operating income minus the prior-year quarter's, where prior-year operating income = prior-year operating margin × prior-year revenue. Prior-year revenue must be above 0.
+- **Every input must be a finite number.** Otherwise the heuristic is *undefined*, and it then holds or demotes nothing.
+- **Reading the value:**
+  - 0 or less: operating income explains all of the improvement.
+  - 1: operating income explains none of it.
+  - Above 1: operating income fell while net income rose.
 
-**A net-income turnaround with a non-operating share above 50%:**
+  The remainder came from below the operating line: gains on sales, revaluations, tax effects, interest or discontinued operations.
+
+**A net-income turnaround with a divergence above 0.5:**
 - does not count as an inflection;
 - cannot lead a post if the company has another inflection;
 - holds the company (no post) if it is the company's only basis.
+
+It judges **only** net-income turnarounds. A margin-, revenue- or cash-led company is never held or flagged by it.
+
+**Limitations:**
+- The source data (normalized quarterly statements) does not itemize nonrecurring items. The heuristic only sees which line moved.
+- **Tax effect:** operating income is pre-tax and net income is after tax. A fully operational improvement taxed at rate *t* shows a **negative** divergence of about −t/(1−t), about −0.27 at 21%. The heuristic therefore leans toward calling an improvement operational, never the other way.
+- **Blind spot:** a one-off item *inside* operating income, such as a litigation settlement, a restructuring charge or an asset sale booked as operating, is invisible to it.
+- **False flag:** a recurring below-the-line item, such as a steady equity-method stake or lower interest after debt repayment, counts as divergence.
+- **Rounding:** prior-year operating income is derived from the stored margin and revenue, so rounding in either carries through.
+- **Small changes:** a tiny ΔNI makes the ratio extreme in either direction. Only the threshold is used, never the size, so this cannot change a ranking.
+- **Banks and insurers:** companies without operating income are undefined. The heuristic never holds them, and their operating signals count as absent.
+
+**Edge cases tested** (`test_non_operating_divergence_edge_cases` and three further tests):
+- an operating loss that narrowed while net income turned positive;
+- operating income turning positive;
+- operating income falling into a loss while net income turned positive;
+- both still losses;
+- unchanged operating income;
+- a fully operational, taxed improvement;
+- net income that fell or was unchanged;
+- zero or negative prior-year revenue;
+- missing operating income;
+- infinite, NaN and boolean inputs;
+- the exact 0.5 boundary (not held) versus 0.52 (held);
+- undefined input never holding or flagging;
+- non-net-income leads never being held.
 
 **Ranking** (editorial salience, not a forecast):
 1. Supported preferred families: net income, operating margin or leverage, revenue.
@@ -50,7 +83,7 @@ Input: the read-only export `docs/product/fu_selection_simulation.sql`, which no
 **No predictive investment score.** Prices, returns, market reaction, `strength`, `severity` and the inflection score are not inputs. A test changes all of them and asserts that the selection is identical.
 
 ## Results, sessions Nov 2–6 (inflection_v2_sec_pit)
-| Session | New events | Excluded (reason: count) | Held (one-off) | Eligible companies | Posts (previous rules) |
+| Session | New events | Excluded (reason: count) | Held (non-operating divergence) | Eligible companies | Posts (previous rules) |
 |---|---|---|---|---|---|
 | Mon Nov 2 | 2,116 (first run: backlog) | backlog 1,891 · limited-repricing type 148 · >104 days 5 · size 4 | SMP | 45 | **FET, PTEN, KRYS** (FET, PTEN, CVEO) |
 | Tue Nov 3 | 1,011 (coverage expanded) | backlog 863 · limited-repricing type 65 · >104 days 2 · size 1 | — | 47 | **ICHR, LITE, CE** (ICHR, LITE, MQ) |
@@ -63,7 +96,7 @@ Input: the read-only export `docs/product/fu_selection_simulation.sql`, which no
 ### The 15 selected posts
 Support order: operating income / operating margin / revenue growth / cash flow; `+` = met, `−` = not met.
 
-| Session | Company | Lead (other inflections) | Key figures | Support | Non-op. share | Mkt cap | Public |
+| Session | Company | Lead (other inflections) | Key figures | Support | Non-op. divergence | Mkt cap | Public |
 |---|---|---|---|---|---|---|---|
 | Nov 2 | FET Forum Energy Technologies | Net income turned positive (margin, revenue) | NI $11.2M; swing 13.4% of revenue | ++++ | 0.18 | $955M | Oct 30 |
 | Nov 2 | PTEN Patterson-UTI | Net income turned positive (margin, revenue) | NI $28.4M; swing 4.8% | ++++ | −0.41 | $4.48B | Nov 2 |
@@ -81,23 +114,23 @@ Support order: operating income / operating margin / revenue growth / cash flow;
 | Nov 6 | ETON Eton Pharmaceuticals | Net income turned positive (margin, revenue) | NI $35.2M; swing 64.2% (extreme, operationally backed) | ++++ | 0.34 | $1.35B | Nov 5 |
 | Nov 6 | CENX Century Aluminum | Operating margin expanded (FCF, op. leverage, revenue) | margin 30.4%, +21.6 pts; revenue +52.0% | ++++ | 0.18 | $2.98B | Nov 5 |
 
-A negative non-operating share means operating income improved by more than net income did, so the improvement is fully operational.
+A negative divergence means operating income improved by more than net income did, so the improvement is fully operational.
 
 ### What changed and why
 | Company | Before | Now | Reason |
 |---|---|---|---|
-| QCOM | (outranked) | **held** | Year-ago net loss −$3.12B against about +$2.9B of operating income: the loss came from below the operating line. Operating income actually fell (to $1.36B), so 136% of the net-income "improvement" is non-operating |
-| SMP, ROCK | (outranked) | **held** | 86% / 91% of the net-income improvement is non-operating, and it was their only inflection |
-| CORZ | selected (+568 pts) | outranked, led by its margin event | 90% non-operating: net income no longer counts or leads |
+| QCOM | (outranked) | **held** | Year-ago net loss −$3.12B against about +$2.9B of operating income: the loss came from below the operating line. Operating income actually fell (to $1.36B), so the divergence is 1.36 |
+| SMP, ROCK | (outranked) | **held** | divergence 0.86 / 0.91: most of the net-income improvement is not matched by operating income, and it was their only inflection |
+| CORZ | selected (+568 pts) | outranked, led by its margin event | divergence 0.90: net income no longer counts or leads |
 | BKSY | selected (+79 pts) | type cap | Third net-income lead that night; operating support unknown for cash flow |
-| MQ, SVV | selected | outranked | 86% / 75% non-operating; their remaining operating inflection ranks lower |
+| MQ, SVV | selected | outranked | divergence 0.86 / 0.75; their remaining operating inflection ranks lower |
 | TFX, GLIBA, NVST | outranked | outranked | Extreme swings no longer gain from their size (cap at 50 points) |
 | CVEO, MSGE | selected | type cap | Third net-income lead that night |
 | KRYS, CORT, VSEC, CENX | outranked | selected | Operating-margin leaders with full operational support take the third slot |
 | CE, U | outranked | selected | Net-income turnarounds fully backed by operating income |
 
 **Extreme swings** (above 50 points of revenue): 14 eligible companies.
-- **Selected (2):** CE and ETON. Both are backed by operating income (non-operating share −0.03 and 0.34) and all four support signals.
+- **Selected (2):** CE and ETON. Both are backed by operating income (divergence −0.03 and 0.34) and all four support signals.
 - **The other 12 are not selected:**
   - type-capped: BKSY;
   - outranked: ZVRA, MQ, LTC, NVST, ECHO, CORZ, ENOV, TAP, TFX, COLD and GLIBA.
@@ -115,5 +148,5 @@ A negative non-operating share means operating income improved by more than net 
 
    That is a policy choice, and the code supports it via `max_per_type`.
 2. **ETON** is selected on Nov 6 for its September quarter, which is correct and operationally backed. It was one of the 16 misleading owner alerts, for its June quarter, so the name may look familiar.
-3. **The one-off check is a proxy.** It cannot tell a one-off operating item (a litigation settlement or restructuring inside operating income) from recurring operations. Itemized nonrecurring facts would need SEC XBRL line items, which are not applied to production (migration 38).
-4. **Thresholds are owner-adjustable constants:** 50 bps, +2%, +1 point, 50% non-operating, 50-point cap and 2 per type. They were chosen for plain meaning, not fitted to outcomes.
+3. **The non-operating divergence heuristic is a proxy, not proof of a nonrecurring item.** Its limitations are listed above. A held company is "not operationally supported by its filing's figures", never "a one-off". Itemized nonrecurring facts would need SEC XBRL line items, which are not applied to production (migration 38).
+4. **Thresholds are owner-adjustable constants:** 50 bps, +2%, +1 point, 0.5 divergence, 50-point cap and 2 per type. They were chosen for plain meaning, not fitted to outcomes.

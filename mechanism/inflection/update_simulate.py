@@ -54,7 +54,7 @@ def _row(c) -> Dict[str, Any]:
     return {"symbol": c.symbol, "company": u.company_name, "lead": u.label, "families": c.families, "events": sorted(e["event_type"] for e in c.events),
             "lead_change_points": round(magnitude(c.lead["event_type"], c.lead.get("metrics") or {}), 1), "market_cap": u.market_cap["value"] if u.market_cap else None,
             "quarter_end": u.quarter_end, "public_date": u.public_date, "sec": u.links.get("sec"), "figures": [f"{f.label}: {f.value}" for f in u.figures],
-            "support": {k: v for k, v in c.support.items()}, "non_operating_share": None if c.non_operating_share is None else round(c.non_operating_share, 2),
+            "support": {k: v for k, v in c.support.items()}, "non_operating_divergence": None if c.non_operating_divergence is None else round(c.non_operating_divergence, 2),
             "flags": c.flags}
 
 
@@ -76,10 +76,10 @@ def main() -> int:
         print(f"\n=== session {n['session']}: {n['new_events']} newly detected events, {n['eligible_companies']} eligible companies, {n['slots_filled']} posts")
         print("excluded:", n["excluded_by_reason"])
         for i, c in enumerate(n["selected"], 1):
-            print(f"  POST {i}: {c['symbol']} ({c['company']}) - {c['lead']}; families {c['families']}; support {_sup(c)}; non-operating {c['non_operating_share']}; "
+            print(f"  POST {i}: {c['symbol']} ({c['company']}) - {c['lead']}; families {c['families']}; support {_sup(c)}; non-operating divergence {c['non_operating_divergence']}; "
                   f"change {c['lead_change_points']} pts; cap {c['market_cap']}; public {c['public_date']}; flags {c['flags']}")
         for c in n["held"]:
-            print(f"  held ({c['reason']}): {c['symbol']} - non-operating share {c['non_operating_share']}; change {c['lead_change_points']} pts")
+            print(f"  held ({c['reason']}): {c['symbol']} - non-operating divergence {c['non_operating_divergence']}; change {c['lead_change_points']} pts")
         for c in n["type_capped"][:5]:
             print(f"  type cap: {c['symbol']} - {c['lead']}; families {c['families']}; support {_sup(c)}")
         for c in n["outranked"][:8]:
