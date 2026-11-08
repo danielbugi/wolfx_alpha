@@ -393,7 +393,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install psql client
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client postgresql-client-16   # -16: the restore drill needs pg_dump of the server's major version (17+ emits settings PG16 rejects)
 
       - name: Discover migration files from docker-compose.yml's init-mount list (single source of truth -- never hardcode a second list here; this is what caught the job silently drifting 2 files behind during the 2026-09-25 audit)
         # sed, not grep -P: a PCRE lookaround extraction of this same pattern was verified locally to behave

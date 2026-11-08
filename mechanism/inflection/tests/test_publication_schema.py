@@ -269,11 +269,30 @@ def test_rollback_is_idempotent_and_touches_nothing_else(db):
 
 
 # ======================================================================================================== backup -> rollback -> re-apply -> restore drill
+def _client_tools(server_major):
+    """pg_dump / psql of the SERVER's major version. A newer pg_dump writes settings an older server rejects (pg_dump 17+ emits
+    `SET transaction_timeout`, unknown to PostgreSQL 16), so the drill, like the production procedure (pg_dump inside the postgres:16 container),
+    must use the matching major version."""
+    for d in [f"/usr/lib/postgresql/{server_major}/bin", f"C:/Program Files/PostgreSQL/{server_major}/bin", None]:
+        dump = shutil.which("pg_dump", path=d) if d else shutil.which("pg_dump")
+        sql = shutil.which("psql", path=d) if d else shutil.which("psql")
+        if dump and sql:
+            out = subprocess.run([dump, "--version"], capture_output=True, text=True).stdout
+            m = re.search(r"(\d+)(?:\.\d+)?", out)
+            if m and int(m.group(1)) == server_major:
+                return dump, sql
+    return None, None
+
+
 def test_backup_rollback_reapply_restore_drill(db):
-    """The documented procedure, end to end, with the real client tools, in a throwaway database."""
-    pg_dump, psql = shutil.which("pg_dump"), shutil.which("psql")
-    if not pg_dump or not psql:
-        pytest.skip("pg_dump / psql not installed (the CI db-bootstrap job installs postgresql-client)")
+    """The documented procedure, end to end, with the real client tools of the server's major version, in a throwaway database."""
+    with _connect() as c:
+        cur = c.cursor()
+        cur.execute("SHOW server_version_num")
+        server_major = int(cur.fetchone()[0]) // 10000
+    pg_dump, psql = _client_tools(server_major)
+    if not pg_dump:
+        pytest.skip(f"pg_dump / psql {server_major} not installed (the CI db-bootstrap job installs postgresql-client-{server_major})")
     name = "fup_drill_" + "".join(random.choices(string.ascii_lowercase, k=8))
     admin = psycopg2.connect(**_dsn())
     admin.autocommit = True

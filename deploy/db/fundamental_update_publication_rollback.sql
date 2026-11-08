@@ -12,6 +12,8 @@
 --   1. Back up (data only, this table only; no trigger disabling is involved):
 --        docker exec C sh -c 'pg_dump -U "$POSTGRES_USER" -d trading_production --data-only --table=public.fundamental_update_publication' > fup_backup_TS.sql
 --        sha256sum fup_backup_TS.sql            # keep the file and its hash off the VPS before step 2; the nightly backup also holds the table
+--      Always dump with the pg_dump INSIDE the postgres container (the same major version as the server, 16). A newer pg_dump (17+) writes
+--      settings such as `SET transaction_timeout` that PostgreSQL 16 rejects, so its dump would fail to restore (found by CI, 2026-11-08).
 --   2. Roll back. With rows:
 --        docker exec -i C sh -c 'psql -v ON_ERROR_STOP=1 -1 -U "$POSTGRES_USER" -d trading_production -c "SET fup.confirm_drop_with_rows = '"'"'yes'"'"'" -f -' < deploy/db/fundamental_update_publication_rollback.sql
 --      With no rows (the expected case before anything is published), no confirmation is needed:
