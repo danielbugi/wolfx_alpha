@@ -92,3 +92,31 @@ def test_detail_reports_corrections_and_hides_unpublished(env):
     dumped = d.model_dump_json()
     assert "event_id" not in dumped and "method_version" not in dumped and "inflection_v2" not in dumped   # internal provenance is never returned
     assert svc.detail(_sym(), "2026-09-30", "margin-expansion") is None
+
+
+def test_unapproved_fields_in_public_json_never_reach_a_caller(env):
+    """The database refuses unknown TOP-LEVEL keys (migration 41's public_keys_chk). A nested unknown key passes the database; the response
+    models then refuse the whole response (the router answers a generic 503) instead of returning it. Run inside one transaction, rolled back."""
+    import json
+    from pydantic import ValidationError
+    from routers.public_signals import _unavailable
+
+    s = _sym()
+    d = _update(s, kind="margin_expansion").to_public_dict()
+    d["figures"] = [dict(d["figures"][0], internal_score="91.5-SECRET")] + d["figures"][1:]
+    d["links"] = dict(d["links"], admin="https://internal.example/SECRET")
+    conn = _connect_raw()
+    cur = conn.cursor()
+    cur.execute("INSERT INTO fundamental_update_publication (update_key, version, kind, public_json, content_hash, render_version, symbol, quarter_end, event_type, "
+                "sector, public_date, event_id, method_version) VALUES (%s, 1, 'initial', %s::jsonb, %s, %s, %s, '2026-09-30', %s, 'Utilities', '2026-11-05', 1, 'v')",
+                (d["key"], json.dumps(d), d["content_hash"], d["render_version"], s, d["event_type"]))
+    svc = PublicSignalsService(lambda: conn)                                        # the service reads in the same transaction, then rolls it back
+    with pytest.raises(ValidationError) as caught:
+        svc.detail(s, "2026-09-30", "margin-expansion")
+    http = _unavailable(caught.value)
+    assert http.status_code == 503 and "SECRET" not in str(http.detail) and "internal" not in str(http.detail)
+    conn2 = _connect_raw()
+    try:
+        assert PublicSignalsService(lambda: conn2).detail(s, "2026-09-30", "margin-expansion") is None   # rolled back: never stored
+    finally:
+        conn2.close()
