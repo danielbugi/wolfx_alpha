@@ -55,6 +55,9 @@ Companies are ranked by:
   6. market cap at publication: larger first; then symbol.
 Walking that order, a company is skipped when its lead type already has MAX_PER_TYPE posts (type_mix_cap) and selection stops at MAX_POSTS.
 A company posted within COOLDOWN_DAYS is excluded (cooldown). The rest are 'outranked'. This ranking is editorial salience, not a forecast.
+
+Every night's choices are kept for later analysis: decisions() turns select()'s result into one record per input event (outcome, reason, rank,
+support signals, divergence, flags and the policy in force); update_simulate.py writes them with --decisions. INTERNAL only, never published.
 """
 from __future__ import annotations
 
@@ -232,3 +235,60 @@ def select(events: Sequence[Mapping[str, Any]], session: date, posted: Mapping[s
             selected.append(c)
             per_type[t] = per_type.get(t, 0) + 1
     return {"selected": selected, "outranked": outranked, "type_capped": type_capped, "cooldown": cooldown, "held": held, "excluded": excluded}
+
+
+# ---------------------------------------------------------------------------------------------------------------- the decision record
+POLICY_VERSION = "fu-select-2026-11-08"
+
+
+def policy(**kw) -> Dict[str, Any]:
+    """The rules a night was selected under (the defaults, overridden by select()'s keyword arguments), stored with every decision."""
+    p = {"policy_version": POLICY_VERSION, "max_posts": MAX_POSTS, "max_per_type": MAX_PER_TYPE, "fresh_days": FRESH_DAYS, "cooldown_days": COOLDOWN_DAYS,
+         "min_market_cap": MIN_MARKET_CAP, "magnitude_cap": MAGNITUDE_CAP, "min_margin_bps": MIN_MARGIN_BPS, "min_rev_growth": MIN_REV_GROWTH,
+         "min_fcf_pp": MIN_FCF_PP, "max_non_operating_divergence": MAX_NON_OPERATING_DIVERGENCE}
+    p.update(kw)
+    return p
+
+
+# outcome -> the reason recorded when the outcome has no more specific one
+_REASON = {"selected": "selected", "outranked": "post_limit_reached", "type_capped": "type_mix_cap", "cooldown": "cooldown"}
+
+
+def decisions(result: Mapping[str, Any], session: date, **policy_kw) -> List[Dict[str, Any]]:
+    """select()'s result as a flat, JSON-ready record: ONE row per input event, with its outcome and reason, so every night's choices (and every
+    refusal) can be analysed later. INTERNAL: never published (it holds the non-operating divergence, rank keys and support signals).
+
+    outcome    selected | outranked | type_capped | cooldown | held | excluded     (the company's outcome; an excluded event has its own)
+    reason     the exclusion rule, the hold reason, 'type_mix_cap', 'post_limit_reached', 'cooldown' or 'selected'
+    is_lead    the event the company's post is (or would be) about; the others are its supporting events
+    rank       position in the night's ranking among companies still competing for a slot (selected, type_capped, outranked), 1 = first; else None
+    Prices, returns and scores are not part of the selection, so they are not part of the record either."""
+    pol = policy(**policy_kw)
+    ranked = sorted(list(result["selected"]) + list(result["type_capped"]) + list(result["outranked"]), key=lambda c: c.rank_key)
+    rank = {c.symbol: i for i, c in enumerate(ranked, 1)}
+    rows: List[Dict[str, Any]] = []
+
+    def base(e: Mapping[str, Any]) -> Dict[str, Any]:
+        return {"session": session.isoformat(), "policy": pol, "event_id": e.get("id"), "symbol": e.get("symbol"), "event_type": e.get("event_type"),
+                "quarter_end": str(e.get("quarter_end"))[:10] if e.get("quarter_end") else None,
+                "available_at": str(e.get("available_at"))[:10] if e.get("available_at") else None, "availability_basis": e.get("availability_basis"),
+                "first_detected_on": str(e.get("first_detected_on"))[:10] if e.get("first_detected_on") else None}
+
+    def company_rows(c: Company, outcome: str, reason: str) -> None:
+        for e in c.events:
+            rows.append(dict(base(e), outcome=outcome, reason=reason, is_lead=e is c.lead,
+                             rank=rank.get(c.symbol), rank_key=list(c.rank_key) or None, families=list(c.families), support=dict(c.support),
+                             non_operating_divergence=c.non_operating_divergence, flags=list(c.flags), market_cap=c.market_cap or None,
+                             lead_change_points=magnitude(e["event_type"], e.get("metrics") or {})))
+
+    for outcome in ("selected", "type_capped", "outranked", "cooldown"):
+        for c in result[outcome]:
+            company_rows(c, outcome, _REASON[outcome])
+    for c, why in result["held"]:
+        company_rows(c, "held", why)
+    for e, why in result["excluded"]:
+        rows.append(dict(base(e), outcome="excluded", reason=why, is_lead=None, rank=None, rank_key=None, families=None, support=None,
+                         non_operating_divergence=None, flags=None, market_cap=market_cap_at_publication(e) if e.get("available_at") else None,
+                         lead_change_points=magnitude(e.get("event_type"), e.get("metrics") or {})))
+    rows.sort(key=lambda r: (r["outcome"] != "selected", r["rank"] is None, r["rank"] or 0, r["symbol"] or "", r["event_type"] or ""))
+    return rows

@@ -82,6 +82,26 @@ It judges **only** net-income turnarounds. A margin-, revenue- or cash-led compa
 
 **No predictive investment score.** Prices, returns, market reaction, `strength`, `severity` and the inflection score are not inputs. A test changes all of them and asserts that the selection is identical.
 
+## Decision record (kept for later analysis; owner, 2026-11-08)
+
+Every night's choices, and every refusal, are kept: `update_select.decisions()` turns one night's selection into **one row per input event**,
+and `update_simulate.py --decisions FILE` writes them as JSON Lines. Each row holds:
+
+| Field | Meaning |
+|---|---|
+| `session`, `event_id`, `symbol`, `event_type`, `quarter_end`, `available_at`, `availability_basis`, `first_detected_on` | which event, on which night |
+| `outcome` | `selected`, `type_capped`, `outranked`, `cooldown`, `held` or `excluded` |
+| `reason` | the exclusion rule (`backlog_not_fresh`, `below_size_floor`, …), the hold reason (`non_operating_divergence`), `type_mix_cap`, `post_limit_reached`, `cooldown` or `selected` |
+| `is_lead` | the event the company's post is (or would be) about; its other events are supporting ones |
+| `rank`, `rank_key` | position among companies still competing for a slot (1 = first), and the full sort key |
+| `families`, `support`, `non_operating_divergence`, `flags`, `market_cap`, `lead_change_points` | the inputs the ranking used |
+| `policy` | the rules in force (`policy_version` `fu-select-2026-11-08`, the caps, thresholds and windows), so a later policy change never reinterprets old rows |
+
+The record is **internal** (it holds the divergence, rank keys and support signals) and is never published. It holds no prices, returns or
+scores, because the selection uses none. Nov 2–6: 3,609 rows, one per newly detected event (excluded 3,011, outranked 495, selected 54 rows
+for the 15 posts and their supporting events, type-capped 46, held 3). Storing it in the database (a table beside the publication record) would
+need its own migration and approval; until then it is a file written by the simulation, and later by the nightly job when one is approved.
+
 ## Results, sessions Nov 2–6 (inflection_v2_sec_pit)
 | Session | New events | Excluded (reason: count) | Held (non-operating divergence) | Eligible companies | Posts (previous rules) |
 |---|---|---|---|---|---|

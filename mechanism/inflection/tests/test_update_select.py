@@ -213,3 +213,46 @@ def test_divergence_only_concerns_net_income_turnarounds():
     r = S.select([ev("MAR", "margin_expansion", feature_metrics=high)], SESSION, {})
     assert [c.symbol for c in r["selected"]] == ["MAR"] and r["selected"][0].flags == [] and r["held"] == []
     assert r["selected"][0].non_operating_divergence > 1                          # still recorded, for the report
+
+
+def test_the_decision_record_keeps_every_event_with_its_outcome_and_reason():
+    """Every input event gets exactly one row; selection and exclusion reasons and the policy in force are kept for later analysis."""
+    import json
+    evs = [ev("MLT", "profitability_turnaround", feature_metrics=SUPPORTED), ev("MLT", "margin_expansion", feature_metrics=SUPPORTED)]   # net-income lead
+    evs += [ev(f"N{i}", "profitability_turnaround", cap=1e9 * (5 - i), feature_metrics=SUPPORTED) for i in range(3)]      # N1, N2: type cap
+    evs += [ev("FCF", "fcf_turnaround", cap=9e8), ev("OUT", "fcf_turnaround", cap=4e8)]                                     # 3rd post; outranked
+    evs += [ev("HLD", "profitability_turnaround", feature_metrics=NON_OPERATING)]                                            # held
+    evs += [ev("COO", "margin_expansion")]                                                                                     # cooldown
+    evs += [ev("OLD", available_at="2026-11-01"), ev("SML", cap=1e8), ev("LRP", "improvement_with_limited_repricing")]        # excluded
+    r = S.select(evs, SESSION, {"COO": date(2026, 10, 30)})
+    rows = S.decisions(r, SESSION)
+    assert len(rows) == len(evs) and len({(x["symbol"], x["event_type"]) for x in rows}) == len(evs)
+    got = {(x["symbol"], x["event_type"]): (x["outcome"], x["reason"]) for x in rows}
+    assert got[("MLT", "profitability_turnaround")] == ("selected", "selected") and got[("MLT", "margin_expansion")] == ("selected", "selected")
+    assert got[("N0", "profitability_turnaround")] == ("selected", "selected") and got[("FCF", "fcf_turnaround")] == ("selected", "selected")
+    assert got[("N1", "profitability_turnaround")] == got[("N2", "profitability_turnaround")] == ("type_capped", "type_mix_cap")
+    assert got[("OUT", "fcf_turnaround")] == ("outranked", "post_limit_reached")
+    assert got[("HLD", "profitability_turnaround")] == ("held", "non_operating_divergence")
+    assert got[("COO", "margin_expansion")] == ("cooldown", "cooldown")
+    assert got[("OLD", "margin_expansion")] == ("excluded", "backlog_not_fresh") and got[("SML", "margin_expansion")] == ("excluded", "below_size_floor")
+    assert got[("LRP", "improvement_with_limited_repricing")] == ("excluded", "not_public_type")
+    lead = [x for x in rows if x["symbol"] == "MLT"]
+    assert sorted(x["is_lead"] for x in lead) == [False, True] and {x["rank"] for x in lead} == {1}
+    assert sorted(x["rank"] for x in rows if x["outcome"] in ("selected", "type_capped", "outranked") and x["is_lead"]) == [1, 2, 3, 4, 5, 6]
+    assert [x["symbol"] for x in rows if x["outcome"] == "selected" and x["is_lead"]] == ["MLT", "N0", "FCF"]    # the record lists posts first
+    assert all(x["rank"] is None for x in rows if x["outcome"] in ("cooldown", "held", "excluded"))
+    held = next(x for x in rows if x["symbol"] == "HLD")
+    assert held["non_operating_divergence"] > S.MAX_NON_OPERATING_DIVERGENCE and "non_operating_divergence" in held["flags"]
+    assert all(x["policy"] == S.policy() and x["policy"]["max_per_type"] == 2 and x["session"] == "2026-11-05" for x in rows)
+    assert S.decisions(r, SESSION, max_posts=5)[0]["policy"]["max_posts"] == 5                      # overrides are recorded as used
+    json.loads(json.dumps(rows))                                                                    # JSON-ready
+    assert not {"price", "return", "inflection_score", "score"} & {k for x in rows for k in x}     # no prices, returns or scores
+
+
+def test_the_simulation_writes_the_decision_record(tmp_path):
+    from inflection import update_simulate as SIM
+    evs = [ev("AAA", "margin_expansion"), ev("BBB", "revenue_acceleration", cap=1e8)]
+    rows = []
+    out = SIM.run(evs, [SESSION], decision_rows=rows)
+    assert out[0]["slots_filled"] == 1
+    assert [(x["symbol"], x["outcome"], x["reason"]) for x in rows] == [("AAA", "selected", "selected"), ("BBB", "excluded", "below_size_floor")]
