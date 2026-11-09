@@ -61,6 +61,50 @@ PUBLIC_FIELDS = ("key", "symbol", "company_name", "event_type", "label", "quarte
                  "market_cap", "figures", "why", "links", "news", "content_hash", "render_version")
 
 
+# The NESTED allowlist (the same rules as migration 41's fundamental_update_public_json_ok and the public API's response models; a test runs one
+# set of payloads through all three). Keys a nested object may hold, and which of them are required.
+_REQUIRED_STR = ("key", "symbol", "event_type", "label", "quarter_end", "fiscal_label", "public_date", "date_source", "why", "content_hash", "render_version")
+_OPTIONAL_STR = ("company_name", "sector", "industry")
+_NESTED = {"market_cap": (("value", "as_of"), ()), "figure": (("label", "value"), ("compare",)),
+           "news": (("published_at", "source", "headline", "url"), ()), "links": (("finviz", "detail"), ("sec", "sec_kind"))}
+SEC_KINDS = ("filing", "company_filings")
+
+
+def _shape_ok(obj: Any, name: str) -> bool:
+    required, optional = _NESTED[name]
+    return (isinstance(obj, dict) and set(required) <= set(obj) <= set(required) | set(optional)
+            and all(isinstance(obj[k], str) for k in required) and all(obj.get(k) is None or isinstance(obj[k], str) for k in optional))
+
+
+def public_dict_problem(d: Any) -> Optional[str]:
+    """None when `d` is a storable public dict, else the NAME of the first offending field (never its value). Exactly the 18 PUBLIC_FIELDS at the top;
+    inside, only approved keys of approved types: an internal score in a figure or an internal link cannot be written."""
+    if not isinstance(d, dict) or set(d) != set(PUBLIC_FIELDS):
+        return "top-level keys"
+    for k in _REQUIRED_STR:
+        if not isinstance(d[k], str):
+            return k
+    for k in _OPTIONAL_STR:
+        if d[k] is not None and not isinstance(d[k], str):
+            return k
+    if d["market_cap"] is not None and not _shape_ok(d["market_cap"], "market_cap"):
+        return "market_cap"
+    if not _shape_ok(d["links"], "links") or d["links"].get("sec_kind") not in SEC_KINDS + (None,):
+        return "links"
+    if not isinstance(d["figures"], list) or not all(_shape_ok(f, "figure") for f in d["figures"]):
+        return "figures"
+    if not isinstance(d["news"], list) or not all(_shape_ok(n, "news") for n in d["news"]):
+        return "news"
+    return None
+
+
+def validate_public_dict(d: Any) -> None:
+    """Raise ValueError (naming the field, not its content) unless `d` may be stored in the publication record."""
+    problem = public_dict_problem(d)
+    if problem:
+        raise ValueError(f"public_json refused: unapproved or malformed field '{problem}'")
+
+
 @dataclass(frozen=True)
 class Figure:
     label: str
