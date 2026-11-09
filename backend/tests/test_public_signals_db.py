@@ -94,10 +94,92 @@ def test_detail_reports_corrections_and_hides_unpublished(env):
     assert svc.detail(_sym(), "2026-09-30", "margin-expansion") is None
 
 
-def test_unapproved_fields_in_public_json_never_reach_a_caller(env):
-    """The database refuses unknown TOP-LEVEL keys (migration 41's public_keys_chk). A nested unknown key passes the database; the response
-    models then refuse the whole response (the router answers a generic 503) instead of returning it. Run inside one transaction, rolled back."""
+def _base():
+    d = _update("ZYBASE", kind="margin_expansion").to_public_dict()
+    d["news"] = [{"published_at": "2026-11-05T12:00:00Z", "source": "Wire", "headline": "Results", "url": "https://news.example/a"}]
+    d["market_cap"] = {"value": "$2.17B", "as_of": "2026-11-05"}
+    return d
+
+
+def _fig(d, **kv):
+    return dict(d, figures=[dict(d["figures"][0], **kv)] + d["figures"][1:])
+
+
+def _drop(obj, key):
+    return {k: v for k, v in obj.items() if k != key}
+
+
+# (name, mutate, storable). Every case goes through the writer's check, the database function and the public response model.
+NESTED_CASES = [
+    ("valid", lambda d: d, True),
+    ("no news", lambda d: dict(d, news=[]), True),
+    ("no market cap", lambda d: dict(d, market_cap=None), True),
+    ("no figures", lambda d: dict(d, figures=[]), True),
+    ("figure without compare", lambda d: dict(d, figures=[_drop(d["figures"][0], "compare")]), True),
+    ("figure compare null", lambda d: _fig(d, compare=None), True),
+    ("links without sec", lambda d: dict(d, links={"finviz": "https://f.example", "detail": "https://d.example"}), True),
+    ("links company_filings", lambda d: dict(d, links=dict(d["links"], sec_kind="company_filings")), True),
+    ("nullable company name", lambda d: dict(d, company_name=None, sector=None, industry=None), True),
+    ("score in figure", lambda d: _fig(d, internal_score=91.5), False),
+    ("score text in figure", lambda d: _fig(d, internal_score="91.5-SECRET"), False),
+    ("numeric figure value", lambda d: _fig(d, value=0.15), False),
+    ("numeric compare", lambda d: _fig(d, compare=1), False),
+    ("figure missing label", lambda d: dict(d, figures=[_drop(d["figures"][0], "label")]), False),
+    ("figure not an object", lambda d: dict(d, figures=["15%"]), False),
+    ("figure null", lambda d: dict(d, figures=[None]), False),
+    ("news extra key", lambda d: dict(d, news=[dict(d["news"][0], rank=1)]), False),
+    ("news missing url", lambda d: dict(d, news=[_drop(d["news"][0], "url")]), False),
+    ("news not an object", lambda d: dict(d, news=[None]), False),
+    ("news as object", lambda d: dict(d, news=d["news"][0]), False),
+    ("internal link", lambda d: dict(d, links=dict(d["links"], admin="https://internal.example/SECRET")), False),
+    ("links missing finviz", lambda d: dict(d, links=_drop(d["links"], "finviz")), False),
+    ("numeric sec link", lambda d: dict(d, links=dict(d["links"], sec=1)), False),
+    ("unknown sec kind", lambda d: dict(d, links=dict(d["links"], sec_kind="internal")), False),
+    ("links as list", lambda d: dict(d, links=[]), False),
+    ("market cap extra key", lambda d: dict(d, market_cap=dict(d["market_cap"], raw=2.17e9)), False),
+    ("market cap missing date", lambda d: dict(d, market_cap=_drop(d["market_cap"], "as_of")), False),
+    ("market cap as text", lambda d: dict(d, market_cap="$2.17B"), False),
+    ("why as object", lambda d: dict(d, why={"text": "x", "score": 1}), False),
+    ("numeric label", lambda d: dict(d, label=5), False),
+    ("boolean company name", lambda d: dict(d, company_name=True), False),
+    ("numeric sector", lambda d: dict(d, sector=3), False),
+    ("missing why", lambda d: _drop(d, "why"), False),
+    ("extra top-level score", lambda d: dict(d, score=91.5), False),
+]
+
+
+@pytest.mark.parametrize("name,mutate,storable", NESTED_CASES, ids=[c[0] for c in NESTED_CASES])
+def test_writer_database_and_api_agree_on_every_nested_shape(env, name, mutate, storable):
+    """One allowlist, three enforcement points: the writer (update_model.public_dict_problem), the database (fundamental_update_public_json_ok
+    plus the top-level CHECK) and the public response model. Every payload gets the same verdict from all three."""
     import json
+    from pydantic import ValidationError
+    from services.public_signals_service import PublicUpdate as ApiUpdate, _public
+
+    d = mutate(_base())
+    writer = UM.public_dict_problem(d) is None
+    with _connect() as c:
+        cur = c.cursor()
+        cur.execute("SELECT jsonb_typeof(%s::jsonb) = 'object' AND fundamental_update_public_json_ok(%s::jsonb) "
+                    "AND (%s::jsonb - %s::text[]) = '{}'::jsonb AND %s::jsonb ?& %s::text[]",
+                    (json.dumps(d), json.dumps(d), json.dumps(d), list(UM.PUBLIC_FIELDS), json.dumps(d), list(UM.PUBLIC_FIELDS)))
+        database = cur.fetchone()[0] is True
+        c.rollback()
+    try:
+        ApiUpdate(**d)                                                             # strict: no unknown key, at any level
+        _public(d)
+        api = True
+    except (ValidationError, TypeError):
+        api = False
+    assert (writer, database, api) == (storable, storable, storable), name
+
+
+def test_unapproved_fields_in_public_json_never_reach_a_caller(env):
+    """Write time: the database refuses an unknown NESTED key (public_nested_chk), as it refuses unknown top-level keys (public_keys_chk).
+    Defence in depth: even with that constraint removed (inside this rolled-back transaction), the response models refuse the whole response
+    and the router answers a generic 503 instead of returning the field."""
+    import json
+    from psycopg2 import errors
     from pydantic import ValidationError
     from routers.public_signals import _unavailable
 
@@ -107,6 +189,13 @@ def test_unapproved_fields_in_public_json_never_reach_a_caller(env):
     d["links"] = dict(d["links"], admin="https://internal.example/SECRET")
     conn = _connect_raw()
     cur = conn.cursor()
+    cur.execute("SAVEPOINT s")
+    with pytest.raises(errors.CheckViolation, match="public_nested_chk"):
+        cur.execute("INSERT INTO fundamental_update_publication (update_key, version, kind, public_json, content_hash, render_version, symbol, quarter_end, "
+                    "event_type, sector, public_date, event_id, method_version) VALUES (%s, 1, 'initial', %s::jsonb, %s, %s, %s, '2026-09-30', %s, 'Utilities', "
+                    "'2026-11-05', 1, 'v')", (d["key"], json.dumps(d), d["content_hash"], d["render_version"], s, d["event_type"]))
+    cur.execute("ROLLBACK TO SAVEPOINT s")
+    cur.execute("ALTER TABLE fundamental_update_publication DROP CONSTRAINT fundamental_update_publication_public_nested_chk")   # rolled back below
     cur.execute("INSERT INTO fundamental_update_publication (update_key, version, kind, public_json, content_hash, render_version, symbol, quarter_end, event_type, "
                 "sector, public_date, event_id, method_version) VALUES (%s, 1, 'initial', %s::jsonb, %s, %s, %s, '2026-09-30', %s, 'Utilities', '2026-11-05', 1, 'v')",
                 (d["key"], json.dumps(d), d["content_hash"], d["render_version"], s, d["event_type"]))

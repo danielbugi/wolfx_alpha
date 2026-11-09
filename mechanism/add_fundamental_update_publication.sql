@@ -18,10 +18,12 @@
 --     UNIQUE (update_key, version) is the idempotency guard: two writers racing for the same version cannot both win, and re-publishing the same
 --     update is a no-op. public_json is exactly PublicUpdate.to_public_dict() as published, frozen: news and links included.
 --     The database itself enforces the allowlist: public_json must be an object with EXACTLY the 18 keys of update_model.PUBLIC_FIELDS (a test pins
---     the two lists equal), and its key / symbol / content_hash / render_version must equal the row's own columns.
+--     the two lists equal), and its key / symbol / content_hash / render_version must equal the row's own columns. NESTED fields are enforced
+--     too (fundamental_update_public_json_ok): figures, news, links and market_cap may hold only their approved keys, each of its approved type.
 --     event_id and method_version are INTERNAL provenance: the public API never selects them.
 --   fundamental_update_current       view: the latest version of every update, with its first publication time (the feed's order).
---   Privileges: donchian_app (the runtime login) gets SELECT + INSERT on the table, SELECT on the view and USAGE on the id sequence; nothing else.
+--   Privileges: donchian_app (the runtime login) gets SELECT + INSERT on the table, SELECT on the view, USAGE on the id sequence and EXECUTE on
+--     the allowlist function (its CHECK runs as the inserting role); nothing else.
 --     Everything is revoked first, from donchian_app and PUBLIC, so the result never depends on earlier or default grants.
 
 -- ------------------------------------------------------------------------------------------------------------------------ 1. pre-check
@@ -54,6 +56,44 @@ BEGIN
 END $$;
 
 -- ------------------------------------------------------------------------------------------------------------------------ 2. objects
+-- The NESTED allowlist, enforced by the database too: every nested object holds only its allowed keys and every value has its allowed JSON
+-- type. The same rules as the public API's response models (backend/services/public_signals_service.py, extra="forbid") and the writer's own
+-- check (update_model.validate_public_dict); a test runs one set of payloads through all three and requires the same verdict. A CHECK constraint
+-- (below) calls it, so a row with an unapproved nested field (a score inside a figure, an internal link) can never be stored.
+CREATE OR REPLACE FUNCTION fundamental_update_public_json_ok(p jsonb) RETURNS boolean LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $fn$
+SELECT coalesce(CASE WHEN jsonb_typeof(p) <> 'object' THEN false ELSE
+       (SELECT bool_and(coalesce(jsonb_typeof(p -> k), 'missing') = 'string')
+          FROM unnest(ARRAY['key', 'symbol', 'event_type', 'label', 'quarter_end', 'fiscal_label', 'public_date', 'date_source', 'why', 'content_hash',
+                            'render_version']) AS k)
+   AND (SELECT bool_and(coalesce(jsonb_typeof(p -> k), 'missing') IN ('string', 'null')) FROM unnest(ARRAY['company_name', 'sector', 'industry']) AS k)
+   AND CASE jsonb_typeof(p -> 'market_cap')
+           WHEN 'null' THEN true
+           WHEN 'object' THEN (p -> 'market_cap') - ARRAY['value', 'as_of'] = '{}'::jsonb
+                              AND jsonb_typeof(p -> 'market_cap' -> 'value') = 'string' AND jsonb_typeof(p -> 'market_cap' -> 'as_of') = 'string'
+           ELSE false END
+   AND CASE WHEN jsonb_typeof(p -> 'links') = 'object' THEN
+                (p -> 'links') - ARRAY['finviz', 'detail', 'sec', 'sec_kind'] = '{}'::jsonb
+            AND jsonb_typeof(p -> 'links' -> 'finviz') = 'string' AND jsonb_typeof(p -> 'links' -> 'detail') = 'string'
+            AND coalesce(jsonb_typeof(p -> 'links' -> 'sec'), 'null') IN ('string', 'null')
+            AND coalesce(p -> 'links' -> 'sec_kind', 'null'::jsonb) IN ('"filing"'::jsonb, '"company_filings"'::jsonb, 'null'::jsonb)
+            ELSE false END
+   AND CASE WHEN jsonb_typeof(p -> 'figures') = 'array' THEN NOT EXISTS (
+            SELECT 1 FROM jsonb_array_elements(p -> 'figures') AS f(e)
+             WHERE CASE WHEN jsonb_typeof(e) <> 'object' THEN true ELSE NOT coalesce(
+                        e - ARRAY['label', 'value', 'compare'] = '{}'::jsonb
+                    AND jsonb_typeof(e -> 'label') = 'string' AND jsonb_typeof(e -> 'value') = 'string'
+                    AND coalesce(jsonb_typeof(e -> 'compare'), 'null') IN ('string', 'null'), false) END)
+            ELSE false END
+   AND CASE WHEN jsonb_typeof(p -> 'news') = 'array' THEN NOT EXISTS (
+            SELECT 1 FROM jsonb_array_elements(p -> 'news') AS n(e)
+             WHERE CASE WHEN jsonb_typeof(e) <> 'object' THEN true ELSE NOT coalesce(
+                        e - ARRAY['published_at', 'source', 'headline', 'url'] = '{}'::jsonb
+                    AND jsonb_typeof(e -> 'published_at') = 'string' AND jsonb_typeof(e -> 'source') = 'string'
+                    AND jsonb_typeof(e -> 'headline') = 'string' AND jsonb_typeof(e -> 'url') = 'string', false) END)
+            ELSE false END
+       END, false)
+$fn$;
+
 CREATE TABLE IF NOT EXISTS fundamental_update_publication (
     id               BIGSERIAL    PRIMARY KEY,
     update_key       VARCHAR(80)  NOT NULL,                  -- natural key SYMBOL/quarter_end/slug, also the public URL path
@@ -86,6 +126,8 @@ CREATE TABLE IF NOT EXISTS fundamental_update_publication (
         AND (public_json - ARRAY['key', 'symbol', 'company_name', 'event_type', 'label', 'quarter_end', 'fiscal_label', 'public_date', 'date_source', 'sector',
                                  'industry', 'market_cap', 'figures', 'why', 'links', 'news', 'content_hash', 'render_version']) = '{}'::jsonb
         AND jsonb_typeof(public_json -> 'figures') = 'array' AND jsonb_typeof(public_json -> 'news') = 'array' AND jsonb_typeof(public_json -> 'links') = 'object'),
+    -- ... and inside: no unapproved nested field, every value of its approved type
+    CONSTRAINT fundamental_update_publication_public_nested_chk CHECK (fundamental_update_public_json_ok(public_json)),
     -- the row's own columns are the published values, never different ones
     CONSTRAINT fundamental_update_publication_public_match_chk CHECK (
         public_json ->> 'key' = update_key AND public_json ->> 'symbol' = symbol AND public_json ->> 'content_hash' = content_hash
@@ -121,15 +163,18 @@ REVOKE ALL ON fundamental_update_publication FROM PUBLIC;
 REVOKE ALL ON fundamental_update_current FROM PUBLIC;
 REVOKE ALL ON SEQUENCE fundamental_update_publication_id_seq FROM PUBLIC;
 REVOKE ALL ON FUNCTION fundamental_update_publication_append_only() FROM PUBLIC;
+REVOKE ALL ON FUNCTION fundamental_update_public_json_ok(jsonb) FROM PUBLIC;
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'donchian_app') THEN
         REVOKE ALL ON fundamental_update_publication FROM donchian_app;
         REVOKE ALL ON fundamental_update_current FROM donchian_app;
         REVOKE ALL ON SEQUENCE fundamental_update_publication_id_seq FROM donchian_app;
+        REVOKE ALL ON FUNCTION fundamental_update_public_json_ok(jsonb) FROM donchian_app;
         GRANT SELECT, INSERT ON fundamental_update_publication TO donchian_app;
         GRANT SELECT ON fundamental_update_current TO donchian_app;
         GRANT USAGE ON SEQUENCE fundamental_update_publication_id_seq TO donchian_app;     -- nextval only: no setval (UPDATE), no SELECT needed
+        GRANT EXECUTE ON FUNCTION fundamental_update_public_json_ok(jsonb) TO donchian_app;  -- the nested CHECK runs it as the inserting role
     END IF;
 END $$;
 
@@ -138,6 +183,8 @@ DO $$
 DECLARE
     t CONSTANT regclass := 'public.fundamental_update_publication'::regclass;
     got text;
+    good jsonb;
+    who CONSTANT text := 'migration 41';
 BEGIN
     SELECT string_agg(conname || ': ' || pg_get_constraintdef(oid), E'\n' ORDER BY conname) INTO got FROM pg_constraint WHERE conrelid = t;
     IF got IS DISTINCT FROM concat_ws(E'\n',
@@ -149,6 +196,7 @@ BEGIN
         'fundamental_update_publication_pkey: PRIMARY KEY (id)',
         'fundamental_update_publication_public_keys_chk: CHECK (((jsonb_typeof(public_json) = ''object''::text) AND (public_json ?& ARRAY[''key''::text, ''symbol''::text, ''company_name''::text, ''event_type''::text, ''label''::text, ''quarter_end''::text, ''fiscal_label''::text, ''public_date''::text, ''date_source''::text, ''sector''::text, ''industry''::text, ''market_cap''::text, ''figures''::text, ''why''::text, ''links''::text, ''news''::text, ''content_hash''::text, ''render_version''::text]) AND ((public_json - ARRAY[''key''::text, ''symbol''::text, ''company_name''::text, ''event_type''::text, ''label''::text, ''quarter_end''::text, ''fiscal_label''::text, ''public_date''::text, ''date_source''::text, ''sector''::text, ''industry''::text, ''market_cap''::text, ''figures''::text, ''why''::text, ''links''::text, ''news''::text, ''content_hash''::text, ''render_version''::text]) = ''{}''::jsonb) AND (jsonb_typeof((public_json -> ''figures''::text)) = ''array''::text) AND (jsonb_typeof((public_json -> ''news''::text)) = ''array''::text) AND (jsonb_typeof((public_json -> ''links''::text)) = ''object''::text)))',
         'fundamental_update_publication_public_match_chk: CHECK ((((public_json ->> ''key''::text) = (update_key)::text) AND ((public_json ->> ''symbol''::text) = (symbol)::text) AND ((public_json ->> ''content_hash''::text) = (content_hash)::text) AND ((public_json ->> ''render_version''::text) = (render_version)::text) AND ((public_json ->> ''event_type''::text) = (event_type)::text)))',
+        'fundamental_update_publication_public_nested_chk: CHECK (fundamental_update_public_json_ok(public_json))',
         'fundamental_update_publication_version: UNIQUE (update_key, version)',
         'fundamental_update_publication_version_chk: CHECK ((version >= 1))') THEN
         RAISE EXCEPTION 'migration 41: unexpected constraints on fundamental_update_publication:%', E'\n' || coalesce(got, '(none)');
@@ -170,6 +218,29 @@ BEGIN
         RAISE EXCEPTION 'migration 41: unexpected triggers on fundamental_update_publication:%', E'\n' || coalesce(got, '(none)');
     END IF;
 
+    -- the nested allowlist function: IMMUTABLE, not SECURITY DEFINER, and it behaves: one valid shape accepted, each kind of unapproved field refused
+    IF (SELECT provolatile::text || prosecdef::text FROM pg_proc WHERE oid = 'public.fundamental_update_public_json_ok(jsonb)'::regprocedure) IS DISTINCT FROM 'ifalse' THEN
+        RAISE EXCEPTION '%: fundamental_update_public_json_ok must be IMMUTABLE and not SECURITY DEFINER', who;
+    END IF;
+    good := '{"key": "A/2026-09-30/margin-expansion", "symbol": "A", "company_name": null, "event_type": "margin_expansion", "label": "l",
+              "quarter_end": "2026-09-30", "fiscal_label": "f", "public_date": "2026-11-05", "date_source": "d", "sector": null, "industry": null,
+              "market_cap": {"value": "$1B", "as_of": "2026-11-05"}, "figures": [{"label": "l", "value": "v", "compare": null}], "why": "w",
+              "links": {"finviz": "u", "detail": "u", "sec": null, "sec_kind": null}, "news": [{"published_at": "t", "source": "s", "headline": "h", "url": "u"}],
+              "content_hash": "h", "render_version": "fu1"}';
+    IF fundamental_update_public_json_ok(good) IS NOT TRUE
+       OR fundamental_update_public_json_ok(jsonb_set(jsonb_set(good, '{news}', '[]'), '{market_cap}', 'null')) IS NOT TRUE
+       OR fundamental_update_public_json_ok(jsonb_set(good, '{figures,0,score}', '91.5')) IS NOT FALSE
+       OR fundamental_update_public_json_ok(jsonb_set(good, '{news,0,internal}', '"x"')) IS NOT FALSE
+       OR fundamental_update_public_json_ok(jsonb_set(good, '{links,admin}', '"x"')) IS NOT FALSE
+       OR fundamental_update_public_json_ok(jsonb_set(good, '{market_cap,raw}', '1')) IS NOT FALSE
+       OR fundamental_update_public_json_ok(jsonb_set(good, '{why}', '{"score": 1}')) IS NOT FALSE
+       OR fundamental_update_public_json_ok(jsonb_set(good, '{figures,0,value}', '1.5')) IS NOT FALSE
+       OR fundamental_update_public_json_ok(jsonb_set(good, '{links,sec_kind}', '"other"')) IS NOT FALSE
+       OR fundamental_update_public_json_ok(jsonb_set(good, '{figures}', '[1]')) IS NOT FALSE
+       OR fundamental_update_public_json_ok(good - 'why') IS NOT FALSE THEN
+        RAISE EXCEPTION '%: fundamental_update_public_json_ok does not enforce the nested allowlist', who;
+    END IF;
+
     SELECT string_agg(attname || ' ' || format_type(atttypid, atttypmod), ', ' ORDER BY attnum) INTO got FROM pg_attribute
      WHERE attrelid = 'public.fundamental_update_current'::regclass AND attnum > 0 AND NOT attisdropped;
     IF got IS DISTINCT FROM 'update_key character varying(80), version integer, kind character varying(10), public_json jsonb, content_hash character(64), '
@@ -178,8 +249,9 @@ BEGIN
         RAISE EXCEPTION 'migration 41: unexpected columns on fundamental_update_current: %', got;
     END IF;
 
-    IF has_table_privilege('public', t, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
-        RAISE EXCEPTION 'migration 41: PUBLIC has a privilege on fundamental_update_publication';
+    IF has_table_privilege('public', t, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+       OR has_function_privilege('public', 'public.fundamental_update_public_json_ok(jsonb)', 'EXECUTE') THEN
+        RAISE EXCEPTION 'migration 41: PUBLIC has a privilege on fundamental_update_publication or its allowlist function';
     END IF;
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'donchian_app') AND (
            NOT has_table_privilege('donchian_app', t, 'SELECT') OR NOT has_table_privilege('donchian_app', t, 'INSERT')
@@ -188,7 +260,8 @@ BEGIN
            OR NOT has_sequence_privilege('donchian_app', 'public.fundamental_update_publication_id_seq', 'USAGE')
            OR has_sequence_privilege('donchian_app', 'public.fundamental_update_publication_id_seq', 'UPDATE')
            OR NOT has_table_privilege('donchian_app', 'public.fundamental_update_current', 'SELECT')
-           OR has_table_privilege('donchian_app', 'public.fundamental_update_current', 'INSERT,UPDATE,DELETE,TRUNCATE')) THEN
-        RAISE EXCEPTION 'migration 41: donchian_app privileges are not exactly SELECT+INSERT (table), SELECT (view), USAGE (sequence)';
+           OR has_table_privilege('donchian_app', 'public.fundamental_update_current', 'INSERT,UPDATE,DELETE,TRUNCATE')
+           OR NOT has_function_privilege('donchian_app', 'public.fundamental_update_public_json_ok(jsonb)', 'EXECUTE')) THEN
+        RAISE EXCEPTION 'migration 41: donchian_app privileges are not exactly SELECT+INSERT (table), SELECT (view), USAGE (sequence), EXECUTE (allowlist function)';
     END IF;
 END $$;

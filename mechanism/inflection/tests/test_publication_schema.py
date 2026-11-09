@@ -33,10 +33,30 @@ def _read(p):
 # ======================================================================================================== no database needed
 def test_the_sql_allowlist_is_exactly_public_fields():
     sql = _read(MIGRATION)
-    arrays = re.findall(r"ARRAY\[('key'.*?)\]", sql, flags=re.S)
+    block = sql[sql.index("CONSTRAINT fundamental_update_publication_public_keys_chk"):sql.index("CONSTRAINT fundamental_update_publication_public_nested_chk")]
+    arrays = re.findall(r"ARRAY\[('key'.*?)\]", block, flags=re.S)
     assert len(arrays) == 2                                                        # ?& (all present) and - (nothing else)
     for a in arrays:
         assert tuple(re.findall(r"'([a-z_]+)'", a)) == UM.PUBLIC_FIELDS
+
+
+def test_the_writer_refuses_unapproved_nested_fields_before_connecting():
+    """Write-time check: the ledger validates the dict before it opens a connection, so an unapproved field never reaches the database."""
+    def no_db():
+        raise AssertionError("the ledger must not connect for a refused dict")
+    ledger = Ledger(no_db)
+    for tamper in (lambda d: d["figures"][0].update(internal_score="91.5"), lambda d: d["links"].update(admin="https://internal.example"),
+                   lambda d: d.update(news=[{"published_at": "t", "source": "s", "headline": "h", "url": "u", "rank": 1}]),
+                   lambda d: d.update(market_cap={"value": "$1B", "as_of": "2026-11-05", "raw": 1.0e9})):
+        u = _update("ZXWRITE")
+        d = u.to_public_dict()
+        tamper(d)
+        assert UM.public_dict_problem(d) is not None
+        u.to_public_dict = lambda d=d: d                                           # the ledger serialises through to_public_dict()
+        with pytest.raises(ValueError, match="public_json refused") as e:
+            ledger.publish(u, 1, "v")
+        assert "91.5" not in str(e.value) and "internal.example" not in str(e.value)   # the message names the field, never its content
+    assert UM.public_dict_problem(_update("ZXWRITE").to_public_dict()) is None    # what build_update produces passes
 
 
 # ======================================================================================================== real PostgreSQL
@@ -122,11 +142,36 @@ def _event_id_inside(d):
     return dict(d, event_id=11)
 
 
+def _score_in_figure(d):
+    return dict(d, figures=[dict(d["figures"][0], internal_score=91.5)] + d["figures"][1:])
+
+
+def _internal_link(d):
+    return dict(d, links=dict(d["links"], admin="https://internal.example"))
+
+
+def _news_rank(d):
+    return dict(d, news=[{"published_at": "2026-11-05T12:00:00Z", "source": "S", "headline": "H", "url": "https://x.example", "rank": 1}])
+
+
+def _raw_market_cap(d):
+    return dict(d, market_cap={"value": "$1.00B", "as_of": "2026-11-05", "raw": 1.0e9})
+
+
+def _numeric_figure(d):
+    return dict(d, figures=[dict(d["figures"][0], value=0.1524)] + d["figures"][1:])
+
+
 @pytest.mark.parametrize("mutate,col,constraint", [
     (_extra_top, {}, "public_keys_chk"),                                           # an internal score cannot be stored as a public field
     (_event_id_inside, {}, "public_keys_chk"),                                     # nor internal provenance
     (_missing, {}, "public_keys_chk"),
     (_figures_object, {}, "public_keys_chk"),
+    (_score_in_figure, {}, "public_nested_chk"),                                    # nor inside a figure,
+    (_internal_link, {}, "public_nested_chk"),                                      # an internal link,
+    (_news_rank, {}, "public_nested_chk"),                                          # a ranking in a news item,
+    (_raw_market_cap, {}, "public_nested_chk"),                                     # an unformatted figure beside the public one,
+    (_numeric_figure, {}, "public_nested_chk"),                                     # or a raw number where the public text belongs
     (_ok, {"update_key": "ZZOTHER/2026-09-30/margin-expansion"}, "public_match_chk"),
     (_ok, {"symbol": "ZZOTHER"}, "public_match_chk"),
     (_ok, {"content_hash": "f" * 64}, "public_match_chk"),
@@ -159,7 +204,11 @@ def test_the_runtime_role_can_only_add_and_read(db):
         cur.execute(_read(MIGRATION))                                              # re-apply: grants for the role, and its own post-check
         cur.execute("SET LOCAL ROLE donchian_app")
         cur.execute(_INSERT + " RETURNING id", _row(d))
-        assert cur.fetchone()[0] > 0                                               # INSERT works (USAGE on the id sequence)
+        assert cur.fetchone()[0] > 0                                               # INSERT works (USAGE on the id sequence, EXECUTE on the check)
+        cur.execute("SAVEPOINT s")
+        with pytest.raises(errors.CheckViolation, match="public_nested_chk"):      # the nested allowlist binds the runtime role
+            cur.execute(_INSERT, _row(_score_in_figure(_update(_sym()).to_public_dict())))
+        cur.execute("ROLLBACK TO SAVEPOINT s")
         cur.execute("SELECT count(*) FROM fundamental_update_current WHERE update_key = %s", (d["key"],))
         assert cur.fetchone() == (1,)                                              # SELECT on the view works
         for stmt in ("UPDATE fundamental_update_publication SET kind = 'restated' WHERE update_key = %(k)s",
@@ -197,6 +246,7 @@ def test_append_only_also_binds_the_owner_and_replica_sessions(db):
     ("ALTER TABLE fundamental_update_publication ALTER COLUMN event_id SET NOT NULL", "unexpected schema"),
     ("ALTER TABLE fundamental_update_publication ALTER COLUMN changed DROP DEFAULT", "unexpected schema"),
     ("ALTER TABLE fundamental_update_publication DROP CONSTRAINT fundamental_update_publication_public_keys_chk", "unexpected constraints"),
+    ("ALTER TABLE fundamental_update_publication DROP CONSTRAINT fundamental_update_publication_public_nested_chk", "unexpected constraints"),
     ("ALTER TABLE fundamental_update_publication ADD CONSTRAINT extra_chk CHECK (version < 1000)", "unexpected constraints"),
     ("CREATE INDEX extra_idx ON fundamental_update_publication (symbol)", "unexpected indexes"),
     ("CREATE TRIGGER extra_trg BEFORE INSERT ON fundamental_update_publication FOR EACH ROW EXECUTE FUNCTION fundamental_update_publication_append_only()",
@@ -221,6 +271,11 @@ def test_reapplying_over_an_unexpected_schema_fails_closed(db, tamper, message):
     ("CREATE OR REPLACE VIEW fundamental_update_current AS SELECT DISTINCT ON (p.update_key) p.update_key, p.version, p.kind, p.public_json, p.content_hash, p.symbol, "
      "p.quarter_end, p.event_type, p.sector, p.public_date, p.published_at AS updated_at, p.published_at AS first_published_at, p.public_date AS first_public_date "
      "FROM fundamental_update_publication p ORDER BY p.update_key, p.version ASC", "not the latest version"),
+    ("CREATE OR REPLACE FUNCTION fundamental_update_public_json_ok(p jsonb) RETURNS boolean LANGUAGE sql IMMUTABLE AS $f$SELECT jsonb_typeof(p) = 'object'$f$",
+     "does not enforce the nested allowlist"),                                     # a weakened function
+    ("ALTER FUNCTION fundamental_update_public_json_ok(jsonb) VOLATILE", "must be IMMUTABLE"),
+    ("ALTER FUNCTION fundamental_update_public_json_ok(jsonb) SECURITY DEFINER", "must be IMMUTABLE and not SECURITY DEFINER"),
+    ("GRANT EXECUTE ON FUNCTION fundamental_update_public_json_ok(jsonb) TO PUBLIC", "PUBLIC can execute"),
 ])
 def test_the_verify_script_catches_drift(db, tamper, message):
     d = _update(_sym()).to_public_dict()
@@ -239,11 +294,23 @@ def test_the_verify_script_catches_drift(db, tamper, message):
             cur.execute(_read(VERIFY))
 
 
+def test_the_verify_script_finds_rows_stored_under_a_weaker_check(db):
+    """A row that got in while the nested check was weaker (here: replaced by a permissive version, then restored by re-applying the migration)
+    is found by the verify script; the migration's own post-check checks the function, the verify script also checks every stored row."""
+    with _rolled_back() as (c, cur):
+        cur.execute("CREATE OR REPLACE FUNCTION fundamental_update_public_json_ok(p jsonb) RETURNS boolean LANGUAGE sql IMMUTABLE AS 'SELECT true'")
+        cur.execute(_INSERT, _row(_score_in_figure(_update(_sym()).to_public_dict())))
+        cur.execute(_read(MIGRATION))                                              # the function is correct again; the row is still there
+        with pytest.raises(psycopg2.Error, match="stored rows hold an unapproved nested field"):
+            cur.execute(_read(VERIFY))
+
+
 def test_reapplying_heals_grants_and_trigger_state(db):
     with _rolled_back() as (c, cur):
         cur.execute("GRANT SELECT ON fundamental_update_publication TO PUBLIC")
         cur.execute("ALTER TABLE fundamental_update_publication ENABLE TRIGGER fundamental_update_publication_no_update")
-        cur.execute(_read(MIGRATION))                                              # revokes, recreates the triggers as ALWAYS
+        cur.execute("CREATE OR REPLACE FUNCTION fundamental_update_public_json_ok(p jsonb) RETURNS boolean LANGUAGE sql IMMUTABLE AS 'SELECT true'")
+        cur.execute(_read(MIGRATION))                                              # revokes, recreates the triggers as ALWAYS, restores the check
         cur.execute(_read(VERIFY))
         assert cur.fetchone() == ("migration 41 verified",)
 

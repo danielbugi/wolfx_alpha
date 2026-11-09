@@ -1,6 +1,6 @@
 -- deploy/db/fundamental_update_publication_rollback.sql -- remove migration 41 (mechanism/add_fundamental_update_publication.sql). Touches nothing else:
 -- it drops only the view fundamental_update_current, the table fundamental_update_publication (with its triggers, constraints, indexes, grants
--- and owned id sequence) and the function fundamental_update_publication_append_only().
+-- and owned id sequence) and the functions fundamental_update_publication_append_only() and fundamental_update_public_json_ok(jsonb).
 --
 -- The publication record is the public history of what was published. If it holds ANY row this script REFUSES, unless the operator has first
 -- taken a backup and confirms in the same session. Run with -1 (one transaction): any failure leaves everything as it was. /api/public/signals
@@ -43,7 +43,8 @@ END $$;
 DROP VIEW IF EXISTS fundamental_update_current;
 DROP TABLE IF EXISTS fundamental_update_publication;            -- its triggers, constraints, indexes and sequence go with it
 DROP FUNCTION IF EXISTS fundamental_update_publication_append_only();
+DROP FUNCTION IF EXISTS fundamental_update_public_json_ok(jsonb);         -- after the table: its nested CHECK depends on it
 
 SELECT CASE WHEN to_regclass('public.fundamental_update_publication') IS NULL AND to_regclass('public.fundamental_update_current') IS NULL
-            AND NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'fundamental_update_publication_append_only')
+            AND NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname IN ('fundamental_update_publication_append_only', 'fundamental_update_public_json_ok'))
             THEN 'migration 41 removed' ELSE 'STILL PRESENT' END AS result;
