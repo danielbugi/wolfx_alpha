@@ -155,7 +155,7 @@ def test_the_publisher_is_owner_only_and_dormant():
 
 def test_the_event_query_matches_the_reviewed_simulation_export():
     sim = open(os.path.join(ROOT, "docs", "product", "fu_selection_simulation.sql"), encoding="utf-8").read()
-    for col in ("f.quality_notes AS feature_notes", "p.date AS profile_date", "sc.cik", "co.company_name", "(e.first_detected_at AT TIME ZONE 'UTC')::date AS first_detected_on",
+    for col in ("f.quality_notes AS feature_notes", "f.metrics AS feature_metrics", "p.date AS profile_date", "sc.cik", "co.company_name", "(e.first_detected_at AT TIME ZONE 'UTC')::date AS first_detected_on",
                 "d.date <= e.available_at"):
         assert col in sim and col in P.EVENTS_SQL, col
 
