@@ -38,6 +38,12 @@ except ImportError as e:
 warnings.filterwarnings('ignore')
 
 
+
+# Due-list policy (see get_symbols_to_update).
+RECHECK_AFTER_DAYS = 25          # backstop: re-ask a symbol at least this often
+EARNINGS_WINDOW_DAYS = 21        # after a report, retry daily for this long until the reported quarter is stored
+MISSING_QUARTER_GAP_DAYS = 75    # newest stored quarter ending more than this before the report => the reported quarter is missing
+
 class QuarterlyFundamentalsUpdater:
     """Backfills/refreshes trailing-quarter fundamentals per symbol"""
 
@@ -348,68 +354,73 @@ class QuarterlyFundamentalsUpdater:
             return False
 
     @retry_on_failure(max_retries=3, delay=1.0)
-    def get_symbols_to_update(self, limit: Optional[int] = None, recheck_after_days: int = 25) -> List[str]:
+    def get_symbols_to_update(self, limit: Optional[int] = None, recheck_after_days: int = RECHECK_AFTER_DAYS,
+                              earnings_window_days: int = EARNINGS_WINDOW_DAYS, missing_quarter_gap_days: int = MISSING_QUARTER_GAP_DAYS) -> List[str]:
         """
-        Symbols actually worth a quarterly-fundamentals API call today.
+        Symbols actually worth a quarterly-fundamentals API call today, in priority order.
 
-        Previously this queried every active symbol unconditionally, every
-        run -- fine for a one-time backfill, wasteful once this runs daily
-        (a company only files a new 10-Q/10-K ~4 times a year, so a daily
-        blind re-fetch of all ~3,000 symbols was ~99% wasted requests; see
-        2026-09-18 conversation).
+        1. EARNINGS-TRIGGERED (first): the symbol has produced quarterly rows before, earnings_calendar shows a report between
+           `earnings_window_days` days ago and yesterday, the quarter that report is about is NOT stored yet (our newest stored quarter
+           ends more than `missing_quarter_gap_days` before the report date), and the symbol has not already been checked today.
+           Oldest report first. A vendor often publishes the new quarter a few days after the release, so such a symbol is retried
+           at most once a day until the quarter arrives or the window closes.
+        2. The 25-day BACKSTOP: not checked for `recheck_after_days` days (stalest first) -- catches companies missing from the calendar.
+        3. Symbols that have NEVER produced a quarterly row (closed-end funds and the like, which fail every night) last, so under a
+           time budget they can never starve the others. They are not earnings-triggered for the same reason.
 
-        The staleness signal here is `updated_at` on each symbol's most
-        recent quarter row, NOT the quarter's own end date -- that
-        distinction matters and was wrong in an earlier version of this
-        method: companies report ~30-45 days after quarter-end, so by the
-        time a "new" quarter first appears in our data it's already most
-        of the way through any reasonable re-check window measured from
-        quarter-end. `updated_at` instead reflects "when did we last ask
-        and confirm this was still current" -- upsert_quarter's ON
-        CONFLICT clause refreshes it on every run regardless of whether
-        the financial values actually changed, so it's a true last-checked
-        timestamp. No separate earnings-calendar data source is needed:
-        `recheck_after_days` (default 25) just needs to be shorter than a
-        ~91-day quarter so a new filing is never missed for long, while
-        still skipping the ~90% of days a symbol has nothing new to report.
+        Why (2026-11-10): with the backstop alone, 2,716 symbols refreshed together on 2026-10-13/14 were not asked again until
+        2026-11-08, so the Q3 results reported in between (1,833 companies) reached quarterly_fundamentals 1-6 weeks late and the
+        inflection engine detected them late (median 7 days, worst 43). earnings_calendar was added for exactly this gate
+        (add_earnings_calendar_table.sql) but was never wired in.
 
-        Always includes a symbol with no quarterly_fundamentals row yet
-        (brand new -- needs an initial fetch regardless of timing). NOT
-        applied to fundamentals_updater.py's daily_fundamentals (market
-        cap/PE/PB) -- those are price-derived and genuinely change every
-        day the stock trades, so a daily refresh there is correct, not
-        wasteful, and this staleness logic would be the wrong fix for it.
+        The staleness signal is `updated_at` on the symbol's newest row: upsert_quarter's ON CONFLICT clause refreshes it on every
+        successful run whether or not values changed, so it is a true last-checked timestamp. That is also why the earnings rule
+        tests the newest stored QUARTER, not `updated_at` alone: a check the day after a release that finds nothing new still bumps
+        `updated_at`, and only the missing quarter keeps the symbol due the next day.
+
+        `missing_quarter_gap_days` (75): a report is about the quarter that ended roughly 10-60 days before it, while the previous
+        quarter ended 100-150 days before it, so "newest stored quarter ends more than 75 days before the report" means "the reported
+        quarter is missing". Earnings dates only decide WHEN to ask; the data and its dating still come from the vendor exactly as before.
+
+        Not applied to fundamentals_updater.py's daily_fundamentals (market cap/PE/PB): those are price-derived and change daily.
         """
         try:
             query = """
             SELECT sp.symbol
             FROM (SELECT DISTINCT symbol FROM stock_prices) sp
             LEFT JOIN (
-                SELECT symbol, MAX(updated_at) AS last_checked
+                SELECT symbol, MAX(updated_at) AS last_checked, MAX(quarter) AS newest_quarter
                 FROM quarterly_fundamentals
                 GROUP BY symbol
             ) qf ON qf.symbol = sp.symbol
+            LEFT JOIN LATERAL (
+                SELECT MIN(e.report_date) AS report_date
+                FROM earnings_calendar e
+                WHERE e.symbol = sp.symbol
+                AND e.report_date BETWEEN CURRENT_DATE - %s AND CURRENT_DATE - 1
+                AND qf.newest_quarter < e.report_date - %s
+            ) er ON qf.last_checked IS NOT NULL AND qf.last_checked::date < CURRENT_DATE
             WHERE sp.symbol IS NOT NULL
             AND sp.symbol != ''
             AND sp.symbol NOT IN (SELECT symbol FROM inactive_symbols)
             AND (
                 qf.last_checked IS NULL
                 OR qf.last_checked <= NOW() - INTERVAL '%s days'
+                OR er.report_date IS NOT NULL
             )
-            ORDER BY (qf.last_checked IS NULL), qf.last_checked, sp.symbol
+            ORDER BY (er.report_date IS NULL), er.report_date, (qf.last_checked IS NULL), qf.last_checked, sp.symbol
             """
-            # Stalest successful symbol first; symbols that have NEVER produced a quarterly row (closed-end funds and the like, which fail every night) come last, so under a
-            # time budget they can never starve the symbols that genuinely need a refresh.
-            params = (recheck_after_days,)
+            params: tuple = (earnings_window_days, missing_quarter_gap_days, recheck_after_days)
             if limit:
                 query += " LIMIT %s"
-                params = (recheck_after_days, limit)
+                params = params + (limit,)
 
             results = db.execute_dict_query(query, params)
             symbols = [row['symbol'] for row in results]
             self.logger.info(
                 f"Found {len(symbols)} symbols due for a quarterly fundamentals check "
-                f"(no data yet, or not checked in the last {recheck_after_days} days)"
+                f"(reported in the last {earnings_window_days} days with the quarter not yet stored, no data yet, "
+                f"or not checked in the last {recheck_after_days} days)"
             )
             return symbols
 
