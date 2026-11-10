@@ -41,8 +41,6 @@ What #101 changes (31 files): new modules, a new API router, new pages, tests, d
 - **Frontend:** `/signals` pages showing "not available right now", and a "Fundamental Updates" navigation item. If main is deployed before migration 41, consider hiding that item.
 
 ## 3. Why v1 stopped updating after October 26 (read-only)
-> Owner decision 2026-11-07: leave V1 unchanged. Limitation and dependencies: [INFLECTION_V1_REFRESH_CYCLE.md](INFLECTION_V1_REFRESH_CYCLE.md).
-
 **V1 is not broken; it is waiting on its 25-day recheck cycle.**
 - `quarterly_fundamentals_updater.py` re-checks a symbol only when its newest row's `updated_at` is more than **25 days** old (`recheck_after_days=25`).
 - On **2026-10-13**, **3,055 symbols** were due at once (the batch last checked around Sep 18). All were refreshed that night, and their rows are stamped Oct 13–14.
@@ -97,8 +95,6 @@ What #101 changes (31 files): new modules, a new API router, new pages, tests, d
 4. **Not checked:** headline merit and real-world materiality are not assessed by rules. A human glance at the first dev-channel week is advised.
 
 ## 5. Shared rate limiting for the public API
-> Full technical design, operational impact and rollback: [docs/operations/EDGE_RATE_LIMIT_DESIGN.md](../operations/EDGE_RATE_LIMIT_DESIGN.md). The snippet below needs no `order` line (the module orders itself before `basic_auth`).
-
 **Today:**
 - Production runs **one uvicorn process** (`uvicorn main:app`, no `--workers`). The in-app token bucket is therefore already shared by every request to the API.
 - Its weaknesses are a reset on backend restart and becoming per-worker if workers are ever added.
