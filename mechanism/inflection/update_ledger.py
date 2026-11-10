@@ -9,6 +9,8 @@ Rules (tested in tests/test_update_ledger.py against a real PostgreSQL):
     facts as displayed changed (update_model.classify_revision); UNIQUE (update_key, version) means two racing writers cannot both add version n+1
     (the loser gets 'lost_race' and writes nothing).
   * APPEND-ONLY: nothing is updated or deleted (the table's trigger refuses it); history is the sequence of versions.
+  * ALLOWLIST AT WRITE TIME: every dict is checked by update_model.validate_public_dict before the INSERT (nothing is sent to the database on a
+    refusal), and the database's own CHECKs (top-level keys and fundamental_update_public_json_ok for nested fields) refuse it again.
   * FROZEN: public_json is stored exactly as published (news and links included) and never recomputed. A withdrawal keeps the last published facts.
   * NOTHING SENDS: this module only records. Telegram delivery (and its own claim) belongs to a later, separately approved phase.
 No scheduled job calls this module.
@@ -18,7 +20,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, Optional
 
-from inflection.update_model import PublicUpdate, classify_revision
+from inflection.update_model import PublicUpdate, classify_revision, validate_public_dict
 
 _INSERT = """INSERT INTO fundamental_update_publication (update_key, version, kind, changed, public_json, content_hash, render_version, symbol, quarter_end, event_type,
                  sector, public_date, event_id, method_version)
@@ -32,6 +34,7 @@ class Ledger:
         self._connect = connect
 
     def _insert(self, d: Dict[str, Any], version: int, kind: str, changed, event_id: Optional[int], method_version: str) -> bool:
+        validate_public_dict(d)                          # before any connection: an unapproved field is never sent to the database
         with self._connect() as conn:
             try:
                 return self._insert_on(conn, d, version, kind, changed, event_id, method_version)

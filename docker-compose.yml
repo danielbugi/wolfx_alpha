@@ -138,7 +138,10 @@ services:
         condition: service_healthy
 
   reverse-proxy:
-    image: caddy:2-alpine
+    # Pinned to the exact image production runs (verified on the VPS 2026-11-08: container donchian-screener-reverse-proxy-1 =
+    # sha256:6aeddd44c307..., Caddy v2.11.4, linux/amd64). The floating caddy:2-alpine tag moved to a newer image on 2026-11-06, so an unpinned
+    # pull + recreate would silently upgrade production. Change this line only deliberately (a new digest is a reviewed upgrade).
+    image: caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
     restart: unless-stopped
     ports:
       - "8080:8080"   # the ONLY published port in this stack — see PRODUCTION_READINESS_CHECKLIST.md
