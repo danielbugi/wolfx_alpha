@@ -14,10 +14,12 @@
 > **Market Intelligence has no timer.** No unit, script or pipeline step runs `mechanism/market_intelligence` (pinned by `test_activation_neutral.py`); the
 > Market Environment Telegram post is in no package or rotation. See [MARKET_INTELLIGENCE.md](MARKET_INTELLIGENCE.md).
 
-> **Exception: `donchian-forward-collection.{service,timer}` and `donchian-forward-collection-alert.service` are committed in `deploy/vps/` but are NOT installed and NOT scheduled.**
-> They are the dormant forward-research collector (04:00 and 08:15 Asia/Jerusalem, the day after a session) and appear in no table below because production does not run them.
-> Installing them is a manual administrator step in [../operations/FORWARD_RESEARCH_ACTIVATION_RUNBOOK.md](../operations/FORWARD_RESEARCH_ACTIVATION_RUNBOOK.md); until then this
-> document's "everything in `deploy/vps/` is what runs" rule does not apply to them (the wrapper also refuses without an arming file).
+> **The forward-research collector (`donchian-forward-collection.{service,timer}` + `donchian-forward-collection-alert.service`) IS installed and scheduled in production**
+> (verified 2026-11-09: timer fires 06:45 and 08:15 Asia/Jerusalem, i.e. 04:45/06:15 UTC in winter, the day after a session; 100% of runs 10-28..10-31 COMPLETE).
+> An earlier version of this note said it was not installed; that was true only before the October activation. Its wrapper still refuses (exit 5) unless
+> `/opt/donchian/FORWARD_COLLECTION_ARMED` equals `CURRENT_MECHANISM_SHA`, and **every image re-pin disarms it** until the arming file is re-created by hand
+> (2026-10-31..11-09: disarmed, five sessions lost). The alert unit runs `run_ops_alert.sh` (owner-only private message + `logs/ops_alerts.log`; needs
+> `OPS_ALERTS_ENABLED=1`); before that change it was `/bin/true`. Install steps: [../operations/FORWARD_RESEARCH_ACTIVATION_RUNBOOK.md](../operations/FORWARD_RESEARCH_ACTIVATION_RUNBOOK.md).
 
 ## 1. All timers, one table
 
