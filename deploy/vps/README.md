@@ -22,7 +22,7 @@ SHA-256, and committed verbatim — until this pass, every tracked systemd unit 
 `donchian-docker-firewall.service` pointed at a script that existed only on the VPS. Every tracked
 production systemd unit now resolves to a tracked wrapper/entrypoint in this repo.
 
-## Committed but dormant: the forward research collector (NOT installed anywhere)
+## The forward research collector (installed in production since October 2026; armed per image)
 
 `donchian-forward-collection.service`, `donchian-forward-collection.timer`, `donchian-forward-collection-alert.service` and `run_forward_collection.sh` are committed here so the
 activation is reviewable, but **nothing installs, enables or starts them**: this README's rule applies (an administrator copies them with root SSH; the CI/CD key cannot), no deploy script
@@ -30,6 +30,11 @@ touches units, the units order against nothing else, only the timer has an `[Ins
 arming file `/opt/donchian/FORWARD_COLLECTION_ARMED` (created by hand) contains exactly the tag in `CURRENT_MECHANISM_SHA`. Re-pinning the image disarms it. The proof is executable:
 `mechanism/forward_collection/tests/test_dormant_units.py`. The install sequence is in `docs/operations/FORWARD_RESEARCH_ACTIVATION_RUNBOOK.md`; the timer is 04:00 and 08:15
 Asia/Jerusalem, Tue-Sat (the day after a session).
+
+**Failure alerting.** `donchian-forward-collection-alert.service` (the collector's `OnFailure=` target) runs `run_ops_alert.sh donchian-forward-collection`: it always
+appends a line to `/opt/donchian/logs/ops_alerts.log` and, once per UTC day and exit status, sends one message to the owner's **private** chat through
+`mechanism/alerts/ops_failure_alert.py` (needs `OPS_ALERTS_ENABLED=1` and an image that contains that module). A failed delivery fails the alert unit. Install:
+`install -m 755 -o root -g root deploy/vps/run_ops_alert.sh /opt/donchian/scripts/` and the updated unit file, then a daemon reload (administrator, root).
 
 ## Scheduling (systemd timers)
 

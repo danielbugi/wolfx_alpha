@@ -1,9 +1,14 @@
-# COMMITTED BUT DORMANT (installed by nobody). OnFailure= target. It must NOT post to a Telegram channel (channels carry only data/promotion/news/info). The lab does not
-# decide the alert transport: at activation point this at the operator's existing private alert path (e.g. the private bot's owner chat) or leave it a
-# journald-only unit and alert from the unit's `failed` state.
+# OnFailure= target of donchian-forward-collection.service (exit 2 incomplete, 4 missed, 5 refused; 3 = locked is not a failure).
+# It must NOT post to a Telegram channel (channels carry only data/promotion/news/info). It runs run_ops_alert.sh, which ALWAYS writes one line to
+# /opt/donchian/logs/ops_alerts.log and, once per UTC day and exit status, sends ONE message to the owner's PRIVATE chat with the bot
+# (mechanism/alerts/ops_failure_alert.py, target 'owner'; it also needs OPS_ALERTS_ENABLED=1 in .env). It never retries, re-arms or changes the
+# collector. If delivery fails, this unit fails too (visible in the failed-units list) instead of hiding the problem.
+# Until 2026-11 this unit was ExecStart=/bin/true, so a collector refusing every night after an image re-pin went unnoticed for nine days.
+# Installing this file is a manual administrator step (see deploy/vps/README.md); no script, workflow or CD path installs units.
 [Unit]
-Description=First Light: forward collection FAILED (incomplete, missed or refused session) -- see journalctl -u donchian-forward-collection
+Description=First Light: forward collection FAILED (incomplete, missed or refused session) -- owner alert + logs/ops_alerts.log
 
 [Service]
 Type=oneshot
-ExecStart=/bin/true
+TimeoutStartSec=10m
+ExecStart=/opt/donchian/scripts/run_ops_alert.sh donchian-forward-collection

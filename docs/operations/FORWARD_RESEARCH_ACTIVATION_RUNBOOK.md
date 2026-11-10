@@ -205,6 +205,7 @@ and `$D "docker run --rm --network donchian-screener_app_net --env-file $ENVF -e
 **14a Action (installs files; enables nothing):**
 ```bash
 $R 'install -m 755 -o root -g root /dev/stdin /opt/donchian/scripts/run_forward_collection.sh' < deploy/vps/run_forward_collection.sh
+$R 'install -m 755 -o root -g root /dev/stdin /opt/donchian/scripts/run_ops_alert.sh' < deploy/vps/run_ops_alert.sh   # the alert unit's body (owner-only alert + logs/ops_alerts.log)
 for u in donchian-forward-collection.service donchian-forward-collection.timer donchian-forward-collection-alert.service; do
   $R "install -m 644 -o root -g root /dev/stdin /etc/systemd/system/$u" < deploy/vps/$u; done
 $R 'systemd-analyze verify /etc/systemd/system/donchian-forward-collection.service /etc/systemd/system/donchian-forward-collection.timer && systemctl daemon-reload'
@@ -301,7 +302,7 @@ e147ae29a396264330cd5b1ccc5e4e8d664b8cdd5b9a8028c15121e9b9ce00d1  deploy/db/pre_
 7f927df3e2590292cf14b397d660458aea7f01d8f40f5b7c6de74fe54ef21905  deploy/vps/run_forward_collection.sh
 d024b112623c9093fa41775ba707a2d9ddb5eb7c4184f8591a98dfea21fb50df  deploy/vps/donchian-forward-collection.service
 7e61a83a4c3fb84a1af83b1813618e1a955ec27ceb52da118f0bd7c9a66b6118  deploy/vps/donchian-forward-collection.timer
-39f2c9baeedda1eb7ca3a72aefc1f1b1bcf47cae04f07d832701983836667185  deploy/vps/donchian-forward-collection-alert.service
+1c8910245f4568fae3dbf80261054c90e4382a323ab51d1e40759133df85cc6b  deploy/vps/donchian-forward-collection-alert.service
 4305bb298a082b082e2a049d5ca2e6d7518289727b7778f7ce64522c175a781b  deploy/vps/donchian-discontinuity-scan.timer
 78713bf765ee6a417b0acb795f8cd8b39187c6f9cc22eb38b8b9da30c6a85a33  deploy/vps/donchian-discontinuity-scan.service
 9bcfaa0478790aabdd55d92de675c5b5076e556ef6a1238bd1ceb12f0286100c  deploy/vps/run_discontinuity_scan.sh

@@ -108,6 +108,7 @@ All [optional], `mechanism/shared/config.py`:
 | `TELEGRAM_CONTROL_TOKEN` | [secret] | — | Unset or a placeholder means every Telegram Control Center dashboard mutation is refused — fails closed, by design |
 | `TELEGRAM_READ_REQUIRES_TOKEN` | [optional] | off | Opt-in toggle; only relevant once the dashboard API is hosted somewhere other than localhost |
 | `BOT_OWNER_ID` | **[required]** for the bot | `0` | Unset means no new user can ever be approved |
+| `OPS_ALERTS_ENABLED` | [optional] | `0` | `1` lets `mechanism/alerts/ops_failure_alert.py` send failure alerts for scheduled jobs (first: the forward collector) to the owner's **private** chat (`BOT_OWNER_ID`), never a channel. Also needs the wrapper's `--send`. Unset: the alert is printed and logged only |
 | `PROD_SENDING_ENABLED` | **[required]** — THE production-posting safety gate | unset = locked | Read via `mechanism/alerts/telegram_client.py`'s `PROD_SWITCH` constant — see [../architecture/TELEGRAM_PUBLISHING.md](../architecture/TELEGRAM_PUBLISHING.md) §5. Fails closed: unset or anything other than exactly `"1"` means locked. |
 
 ## Bot access / rate limits

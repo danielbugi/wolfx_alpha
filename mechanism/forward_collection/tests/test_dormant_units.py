@@ -83,7 +83,7 @@ def test_the_collectors_own_units_declare_only_the_ordering_they_need():
     assert [d for d in directives(SERVICE) if re.match(r"(Wants|Requires|After|Before|OnFailure|OnSuccess|BindsTo|PartOf|Also|Upholds)=", d)] == \
         ["After=docker.service", "Requires=docker.service", "OnFailure=donchian-forward-collection-alert.service"]
     assert not [d for d in directives(TIMER) if re.match(r"(Wants|Requires|After|Before|Unit|OnSuccess|Also)=", d)]    # the timer triggers the same-named service only
-    assert directives(ALERT)[-1] == "ExecStart=/bin/true"                                                           # journald-only: no channel, no network, no database
+    assert directives(ALERT)[-1] == "ExecStart=/opt/donchian/scripts/run_ops_alert.sh donchian-forward-collection"   # owner-only alert + log line; no channel, no database
 
 
 def test_only_the_timer_can_be_enabled_and_nothing_wants_the_service():
