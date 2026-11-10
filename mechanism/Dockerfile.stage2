@@ -54,3 +54,9 @@ COPY mechanism/data_updaters/sec_statements.py /app/mechanism/data_updaters/sec_
 COPY mechanism/add_sec_fundamentals_tables.sql /app/mechanism/add_sec_fundamentals_tables.sql
 # SEC point-in-time run (PR #88, 2026-11-01): coverage report module, the capex fallback in sec_statements, the filing-version-aware inflection family and pipeline step 8e (OPTIONAL).
 COPY mechanism/data_updaters/sec_coverage.py /app/mechanism/data_updaters/sec_coverage.py
+# Fundamental Updates record-only release (owner decisions 2026-11-10; main 86af094 + PR #110). Every file below is byte-identical to main; the delta against 1fc1753 is exactly:
+#  - mechanism/inflection/update_*.py (new, PR #102/#103/#109; already copied by the mechanism/inflection line above): the publisher and its pure modules. Imported only by update_publish.py.
+#  - automation_pipeline.sh (already copied above): step 8f/8g, OFF unless FU_PUBLISH_MODE is set in .env (PR #110).
+#  - quarterly_fundamentals_updater.py + its tests (already copied above): earnings-aware recheck ordering (PR #108). Step 8 only.
+#  - mechanism/alerts/ops_failure_alert.py (new, PR #107): owner-only failure alert, used only by the host wrapper run_ops_alert.sh (not installed; OPS_ALERTS_ENABLED unset).
+COPY mechanism/alerts/ops_failure_alert.py /app/mechanism/alerts/ops_failure_alert.py

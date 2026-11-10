@@ -271,6 +271,23 @@ run_optional_step "8d" "SEC EDGAR fundamentals updater" 1800 mechanism/data_upda
 # can never rewrite a stored event. Its own event set: no alert, API or page reads it except the Quant Lab data-quality view. Only quarters first public in the last 200 days are evaluated each night (idempotent).
 run_optional_step "8e" "inflection (SEC, filing-version-aware)" 1200 mechanism/inflection/updater.py --source sec_pit "${ASOF_ARGS[@]}"
 
+# Step 8f: Fundamental Updates publisher (OPTIONAL; migration 41; docs/operations/FUNDAMENTAL_UPDATES_DEPLOYMENT.md). OFF unless FU_PUBLISH_MODE is set in .env:
+#   record -> select tonight's updates from step 8e's events and write them to the publication ledger only (no claim, no message); then report corrections.
+#   send   -> the same, then send each new update ONCE to the owner's private chat; the publisher itself still refuses unless FU_OWNER_SEND_ENABLED=1 and INFLECTION_ALERTS_ENABLED=0.
+# Runs only for the gate's explicit session (never a wall-clock date); idempotent (ledger UNIQUE + delivery claim), so the 00:15 retry or a rerun records and sends nothing twice.
+# Corrections (--revise) are report-only until FU_CORRECTIONS_ENABLED=1 and are never sent. Nothing later in this script reads the ledger.
+FU_MODE="${FU_PUBLISH_MODE:-off}"
+if [ -z "$SESSION_DATE" ] || [ "$FU_MODE" = "off" ]; then
+    log "Step 8f skipped: Fundamental Updates publisher is off (FU_PUBLISH_MODE=${FU_MODE}, session=${SESSION_DATE:-none})"
+elif [ "$FU_MODE" = "record" ] || [ "$FU_MODE" = "send" ]; then
+    FU_ARGS=(--session "$SESSION_DATE" --record)
+    if [ "$FU_MODE" = "send" ]; then FU_ARGS+=(--send); fi
+    run_optional_step "8f" "fundamental updates publisher (${FU_MODE})" 300 mechanism/inflection/update_publish.py "${FU_ARGS[@]}"
+    run_optional_step "8g" "fundamental updates corrections (report-only unless FU_CORRECTIONS_ENABLED=1)" 300 mechanism/inflection/update_publish.py --session "$SESSION_DATE" --revise
+else
+    log "${YELLOW}OPTIONAL_STEP_WARNING step=8f reason=bad_mode -- FU_PUBLISH_MODE=${FU_MODE} is not off/record/send; skipped${NC}"
+fi
+
 # Step 9: Multi-timeframe Screening
 run_step 9 "multi-timeframe screener" mechanism/screeners/multi_timeframe_screener.py "${SESSION_ARGS[@]}"
 
