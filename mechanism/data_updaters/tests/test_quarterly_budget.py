@@ -75,7 +75,9 @@ def test_the_due_list_is_ordered_stalest_first_with_never_succeeded_symbols_last
     u = object.__new__(Q.QuarterlyFundamentalsUpdater)
     u.logger = logging.getLogger("test_quarterly_budget")
     assert u.get_symbols_to_update() == ["X"]
-    assert re.search(r"ORDER BY \(qf\.last_checked IS NULL\), qf\.last_checked, sp\.symbol", seen["query"]) and seen["params"] == (25,)
+    assert re.search(r"ORDER BY \(er\.report_date IS NULL\), er\.report_date, \(qf\.last_checked IS NULL\), qf\.last_checked, sp\.symbol", seen["query"])
+    assert seen["params"] == (Q.EARNINGS_WINDOW_DAYS, Q.MISSING_QUARTER_GAP_DAYS, Q.RECHECK_AFTER_DAYS) == (21, 75, 25)
+    assert u.get_symbols_to_update(limit=7) == ["X"] and seen["params"] == (21, 75, 25, 7)
 
 
 def test_the_updater_prints_one_machine_readable_summary_line_for_monitoring():
