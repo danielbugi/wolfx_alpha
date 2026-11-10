@@ -59,24 +59,40 @@ COPY mechanism/inflection/update_publish.py /app/mechanism/inflection/update_pub
 Verify: `docker run --rm --entrypoint python <image> -c "import sys; sys.path.insert(0,'/app/mechanism'); import inflection.update_publish"` exits 0.
 **Rollback:** re-pin the previous tag (`1fc1753cdae0`) and re-arm for it.
 
-### Step C. One manual dry run, then one record-only run (no sending)
+### Step C. Record-only validation (at least 3 nights; no sending)
+Wire ONE pipeline step (or timer) after the inflection step that runs, for the **explicit** session just processed:
 ```bash
-$R '/opt/donchian/scripts/run_channel_sender.sh mechanism/inflection/update_publish.py --session <last completed session>'            # dry run: prints the picks
-$R '/opt/donchian/scripts/run_channel_sender.sh mechanism/inflection/update_publish.py --session <last completed session> --record'   # writes the ledger only
+/opt/donchian/scripts/run_channel_sender.sh mechanism/inflection/update_publish.py --session <session> --record
+/opt/donchian/scripts/run_channel_sender.sh mechanism/inflection/update_publish.py --session <session> --revise     # report-only while FU_CORRECTIONS_ENABLED is unset
 ```
-Expected: `FU_PUBLISH {... "published": n ...}` with n ≤ 3; the verify script still passes; `SELECT update_key, version, kind FROM fundamental_update_publication` shows the n rows.
-**Rollback:** the ledger is append-only by design; while nothing public reads it, rows are harmless. To remove the table entirely, step A's rollback with the confirmation setting (after a backup).
+Before wiring it, run both once by hand for the last completed session. Each night, check (read-only):
+- `FU_PUBLISH {...}`: `published` ≤ 3, `refused` null; the picks match the decision record (PR #103) for that night;
+- `SELECT update_key, version, kind, public_date FROM fundamental_update_publication ORDER BY id DESC LIMIT 10;`: version 1 rows only, public dates within 3 days of the session;
+- `deploy/db/fundamental_update_publication_verify.sql` still prints `migration 41 verified`;
+- `FU_REVISE {...}`: `would_change` empty or explained (a real 10-Q/A restatement);
+- `SELECT count(*) FROM inflection_alert_delivery WHERE claimed_at > <step start>` = 0 (nothing claimed, nothing sent).
+**Rollback:** remove the step. Recorded rows are append-only and read by nothing public yet (the `/signals` API is not deployed); they can stay, or the whole table can be removed with step A's rollback after a backup.
 
-### Step D. Enable owner-chat sending
-1. Back up `.env`, then append `FU_OWNER_SEND_ENABLED=1` (deploy user can edit `/opt/donchian/env/.env`).
-2. Confirm `INFLECTION_ALERTS_ENABLED=0` is still set (the publisher refuses otherwise).
-3. Schedule: a pipeline step or a small timer after the inflection step, passing the **explicit session** (`--session`), `--record --send`. The exact wiring is its own reviewed change; it must use `run_channel_sender.sh` (pinned image, flock) and must not be added to the post-market package.
-**Rollback / stop:** remove `FU_OWNER_SEND_ENABLED` (sending stops at the next run; recording continues if the step still passes `--record`).
+### Step D. Enable owner-chat sending (**explicit owner approval required**)
+1. Back up `.env`; append `FU_OWNER_SEND_ENABLED=1`. Confirm `INFLECTION_ALERTS_ENABLED=0` (the publisher refuses to send otherwise).
+2. Change the step to `--record --send`.
+3. First night: watch `inflection_alert_delivery WHERE channel = 'fu_owner'`: at most 3 rows, all `sent`; the messages in the owner chat match the ledger rows.
+**Rollback / stop:** set `FU_OWNER_SEND_ENABLED=0` (takes effect at the next run; recording continues). A message already in the chat stays; nothing is deleted.
 
-### Step E. Watch the first nights
-- `inflection_alert_delivery` rows with `channel = 'fu_owner'`: one per update, `status = 'sent'`; no `claimed` rows older than a run.
-- No `telegram_owner` rows (legacy alerts off).
-- The decision record (PR #103) for each night: why each event was selected or excluded.
+### Step E. Corrections (separate approval, after a clean week)
+`--revise` rebuilds updates first published in the last 120 days from their current event and records `restated` / `redated` / `withdrawn` versions.
+- **Never sends, edits or deletes** a Telegram message; the delivery key is per update and version 1, so a correction is never re-sent as a new update.
+- Records only with `FU_CORRECTIONS_ENABLED=1`; otherwise reports what it would record.
+- **Mass-change breaker:** more than 10 changes in one run → nothing recorded, exit 2, review the source data (a re-dating bug, a vendor restatement batch).
+- A `withdrawn` update is never revived automatically.
+**Rollback:** unset `FU_CORRECTIONS_ENABLED` (stops recording). Versions already recorded are history by design (append-only).
+
+## 3a. Full rollback, newest step first
+1. `FU_OWNER_SEND_ENABLED=0` → no more owner messages.
+2. Remove the publisher step → no more ledger writes.
+3. Re-pin the previous image (`1fc1753cdae0`) and **re-arm forward collection for it**.
+4. Optional, after a backup: `deploy/db/fundamental_update_publication_rollback.sql` with `SET fup.confirm_drop_with_rows = 'yes'` → migration 41 removed.
+5. Optional: restore the legacy alerts with `INFLECTION_ALERTS_ENABLED=1` (only after step 1, never both on).
 
 ## 4. Not in this deployment
 - Dev and public channels (gates 5 and 6: `post_delivery` claim, `PROD_SENDING_ENABLED`, two clean weeks, explicit approval).

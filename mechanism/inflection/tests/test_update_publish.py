@@ -18,15 +18,19 @@ ON = {"FU_OWNER_SEND_ENABLED": "1", "INFLECTION_ALERTS_ENABLED": "0"}
 
 class FakeDb:
     def __init__(self, events, ledger=True, posted=None):
-        self.events, self.ledger, self.posted, self.calls = events, ledger, posted or {}, []
+        self.events, self.ledger, self.posted, self.calls, self.recent = events, ledger, posted or {}, [], []
 
     def execute_dict_query(self, q, params=None):
         self.calls.append(q)
         if "to_regclass" in q:
             return [{"ok": self.ledger}]
+        if "e.id = ANY" in q:
+            return [dict(e) for e in self.events if e["id"] in params[0]]
         if "FROM fundamental_inflection_event" in q:
             assert params[0] == "inflection_v2_sec_pit"
             return [dict(e) for e in self.events]
+        if "DISTINCT ON (p.update_key)" in q:
+            return list(self.recent)
         if "FROM fundamental_update_publication" in q:
             return [{"symbol": s, "last": d} for s, d in self.posted.items()]
         raise AssertionError(q)
@@ -34,7 +38,18 @@ class FakeDb:
 
 class FakeLedger:
     def __init__(self):
-        self.rows = {}
+        self.rows, self.versions = {}, {}
+
+    def latest(self, key):
+        v = self.versions.get(key) or [("initial", self.rows[key].to_public_dict())]
+        return {"version": len(v), "kind": v[-1][0], "public_json": v[-1][1]}
+
+    def revise(self, key, current, event_id, method_version):
+        from inflection.update_model import classify_revision
+        last = self.latest(key)
+        kind, _ = classify_revision(last["public_json"], current)
+        self.versions.setdefault(key, [("initial", self.rows[key].to_public_dict())]).append((kind, current.to_public_dict() if current else last["public_json"]))
+        return kind
 
     def publish(self, u, event_id, method_version):
         assert method_version == "inflection_v2_sec_pit"
@@ -143,3 +158,66 @@ def test_the_event_query_matches_the_reviewed_simulation_export():
     for col in ("f.quality_notes AS feature_notes", "p.date AS profile_date", "sc.cik", "co.company_name", "(e.first_detected_at AT TIME ZONE 'UTC')::date AS first_detected_on",
                 "d.date <= e.available_at"):
         assert col in sim and col in P.EVENTS_SQL, col
+
+
+# ------------------------------------------------------------------ corrections (--revise): record-only, never sent
+def published_world(n=3):
+    """A night that was recorded and sent; returns the db (with its 'recent' ledger view), ledger, delivery and the events by symbol."""
+    out, sent, ledger, delivery = go()
+    events = {e["symbol"]: e for e in night()}
+    db = FakeDb(list(events.values()))
+    db.recent = [{"update_key": u.key, "event_id": events[u.symbol]["id"], "version": 1, "kind": "initial"} for u in sent[:n]]
+    return db, ledger, delivery, events, sent
+
+
+def test_unchanged_updates_record_nothing():
+    db, ledger, _, _, _ = published_world()
+    out = P.revise(SESSION, db=db, ledger=ledger, env={"FU_CORRECTIONS_ENABLED": "1"}, log=lambda s: None)
+    assert out["checked"] == 3 and out["would_change"] == {} and out["recorded"] == {} and ledger.versions == {}
+
+
+def test_a_restated_figure_is_recorded_as_a_new_version_and_never_sent():
+    db, ledger, delivery, events, sent = published_world()
+    before = dict(delivery.state)
+    a = events["AAA"]
+    a["metrics"] = dict(a["metrics"], net_income=12.3e6)                       # the company restated the quarter
+    db.events = list(events.values())
+    out = P.revise(SESSION, db=db, ledger=ledger, env={"FU_CORRECTIONS_ENABLED": "1"}, log=lambda s: None)
+    assert out["would_change"] == {"restated": 1} and out["recorded"] == {"restated": 1}
+    assert [k for k, _ in ledger.versions[sent[0].key]] == ["initial", "restated"]
+    assert delivery.state == before                                           # no claim, no send for a correction
+
+
+def test_a_vanished_event_is_withdrawn_not_deleted():
+    db, ledger, _, events, sent = published_world()
+    db.events = [e for s_, e in events.items() if s_ != "BBB"]
+    out = P.revise(SESSION, db=db, ledger=ledger, env={"FU_CORRECTIONS_ENABLED": "1"}, log=lambda s: None)
+    assert out["recorded"] == {"withdrawn": 1} and [k for k, _ in ledger.versions[sent[1].key]] == ["initial", "withdrawn"]
+
+
+def test_without_the_switch_corrections_are_reported_but_not_recorded():
+    db, ledger, _, events, _ = published_world()
+    db.events = []
+    out = P.revise(SESSION, db=db, ledger=ledger, env={}, log=lambda s: None)
+    assert out["would_change"] == {"withdrawn": 3} and out["recorded"] == {} and "FU_CORRECTIONS_ENABLED is not 1" in out["refused"] and ledger.versions == {}
+
+
+def test_a_mass_change_records_nothing(monkeypatch):
+    db, ledger, _, _, _ = published_world()
+    db.events = []
+    monkeypatch.setattr(P, "MAX_REVISIONS_PER_RUN", 2)
+    out = P.revise(SESSION, db=db, ledger=ledger, env={"FU_CORRECTIONS_ENABLED": "1"}, log=lambda s: None)
+    assert "would change in one run" in out["refused"] and out["recorded"] == {} and ledger.versions == {}
+
+
+def test_a_withdrawn_update_is_never_revived():
+    db, ledger, _, _, _ = published_world(1)
+    db.recent[0]["kind"] = "withdrawn"
+    out = P.revise(SESSION, db=db, ledger=ledger, env={"FU_CORRECTIONS_ENABLED": "1"}, log=lambda s: None)
+    assert out["would_change"] == {} and ledger.versions == {}
+
+
+def test_revise_refuses_without_the_ledger_and_cannot_be_combined_with_sending():
+    out = P.revise(SESSION, db=FakeDb([], ledger=False), ledger=FakeLedger(), env={"FU_CORRECTIONS_ENABLED": "1"}, log=lambda s: None)
+    assert out["refused"] == "migration 41 is not applied"
+    assert P.main(["--session", "2026-11-05", "--revise", "--send"]) == P.EXIT_REFUSED

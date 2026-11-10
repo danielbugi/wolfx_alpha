@@ -22,11 +22,17 @@ Duplicate-notification guards (each one alone prevents a repeat):
 Gates. Default is a dry run that prints the night's picks and writes nothing.
   --record needs migration 41 (refuses cleanly without it).
   --send   needs --record, FU_OWNER_SEND_ENABLED=1 and INFLECTION_ALERTS_ENABLED not 1. PROD_SENDING_ENABLED is not involved (no channel).
+Corrections (--revise; RECORD-ONLY, never sends): updates first published in the last REVISE_DAYS are rebuilt from their event's current
+state and compared with what was published (update_model.classify_revision). A changed fact becomes a new ledger version (restated / redated /
+withdrawn); nothing is posted, edited or deleted in Telegram, and the owner-chat delivery key is per update and version 1 only, so a correction can
+never be re-sent as a new update. Without FU_CORRECTIONS_ENABLED=1 it only reports what it would record. A mass-change breaker refuses to record
+anything when more than MAX_REVISIONS_PER_RUN updates would change in one run (a sign of a data problem, not of real corrections).
 News stays off (owner decision: no public news until Alpaca redistribution rights are verified): updates carry no headlines.
 
     python mechanism/inflection/update_publish.py --session 2026-11-09                 # dry run
     python mechanism/inflection/update_publish.py --session 2026-11-09 --record        # ledger only
     python mechanism/inflection/update_publish.py --session 2026-11-09 --record --send  # ledger + owner chat
+    python mechanism/inflection/update_publish.py --session 2026-11-09 --revise         # corrections: report (or record, if enabled); never sends
 Exit: 0 ok (including "nothing to do" and dry runs) | 1 at least one send failed | 2 refused (bad arguments or a gate).
 """
 from __future__ import annotations
@@ -49,20 +55,30 @@ SOURCE_VERSION = "inflection_v2_sec_pit"
 CHANNEL = "fu_owner"                     # inflection_alert_delivery.channel for this path
 RECIPIENT = "owner"                      # a label, never an address
 SEND_ENV = "FU_OWNER_SEND_ENABLED"
+CORRECTIONS_ENV = "FU_CORRECTIONS_ENABLED"
+REVISE_DAYS = 120
+MAX_REVISIONS_PER_RUN = 10
 LEGACY_ENV = "INFLECTION_ALERTS_ENABLED"
 EXIT_OK, EXIT_SEND_FAILED, EXIT_REFUSED = 0, 1, 2
 
-EVENTS_SQL = """
+_EVENT_SELECT = """
 SELECT e.id, e.symbol, e.event_type, e.severity, e.strength, e.fiscal_year, e.fiscal_quarter, e.quarter_end, e.available_at, e.availability_basis, e.data_quality,
        e.method_version, e.metrics, e.context, (e.first_detected_at AT TIME ZONE 'UTC') AS first_detected_utc, (e.first_detected_at AT TIME ZONE 'UTC')::date AS first_detected_on,
-       co.company_name, sc.cik, f.quality_notes AS feature_notes, p.date AS profile_date, p.sector, p.industry, p.market_cap AS profile_market_cap
+       co.company_name, sc.cik, f.quality_notes AS feature_notes, f.metrics AS feature_metrics, p.date AS profile_date, p.sector, p.industry, p.market_cap AS profile_market_cap
   FROM fundamental_inflection_event e
   LEFT JOIN LATERAL (SELECT c.company_name FROM companies c WHERE c.symbol = e.symbol LIMIT 1) co ON true
   LEFT JOIN sec_symbol_cik sc ON sc.symbol = e.symbol
   LEFT JOIN fundamental_feature f ON f.method_version = e.method_version AND f.symbol = e.symbol AND f.quarter_end = e.quarter_end
   LEFT JOIN LATERAL (SELECT d.date, d.sector, d.industry, d.market_cap FROM daily_fundamentals d WHERE d.symbol = e.symbol AND d.date <= e.available_at ORDER BY d.date DESC LIMIT 1) p ON true
- WHERE e.method_version = %s AND e.available_at BETWEEN %s AND %s
- ORDER BY e.symbol, e.event_type"""
+ """
+EVENTS_SQL = _EVENT_SELECT + " WHERE e.method_version = %s AND e.available_at BETWEEN %s AND %s ORDER BY e.symbol, e.event_type"
+EVENTS_BY_ID_SQL = _EVENT_SELECT + " WHERE e.id = ANY(%s)"
+
+# The latest version of every update first published within the window, with the event it came from (internal provenance).
+RECENT_SQL = """SELECT DISTINCT ON (p.update_key) p.update_key, p.event_id, p.version, p.kind
+                  FROM fundamental_update_publication p
+                 WHERE p.update_key IN (SELECT update_key FROM fundamental_update_publication WHERE version = 1 AND published_at >= %s)
+                 ORDER BY p.update_key, p.version DESC"""
 
 POSTED_SQL = """SELECT symbol, MAX(published_at)::date AS last FROM fundamental_update_publication
                  WHERE version = 1 AND published_at >= %s GROUP BY symbol"""
@@ -149,6 +165,54 @@ def run(session: date, *, db, ledger=None, delivery=None, sender: Optional[Calla
     return out
 
 
+def rebuild(ev: Optional[Mapping[str, Any]]):
+    """The update as the event says NOW (freshness not re-checked), or None when the event is gone or no longer publishable."""
+    if ev is None or ev.get("event_type") not in S.PUBLIC_TYPES or ev.get("availability_basis") not in S.SEC_BASES:
+        return None
+    acc = S.accession_of(ev.get("feature_notes"))
+    if not acc:
+        return None
+    from inflection.update_model import build_update
+    profile = {"date": ev.get("profile_date"), "sector": ev.get("sector"), "industry": ev.get("industry")} if ev.get("profile_date") else None
+    u, _reason = build_update(ev, company_name=ev.get("company_name"), cik=ev.get("cik"), accession=acc, profile=profile, check_freshness=False)
+    return u
+
+
+def revise(session: date, *, db, ledger, env: Mapping[str, str] = os.environ, log: Callable[[str], None] = print) -> Dict[str, Any]:
+    """Corrections for recently published updates. RECORD-ONLY: never claims, sends, edits or deletes a message."""
+    from inflection.update_model import classify_revision
+    out: Dict[str, Any] = {"session": session.isoformat(), "checked": 0, "would_change": {}, "recorded": {}, "refused": None}
+    if not ledger_present(db):
+        out["refused"] = "migration 41 is not applied"
+        log(f"FU_REVISE refused: {out['refused']}")
+        return out
+    recent = db.execute_dict_query(RECENT_SQL, (session - timedelta(days=REVISE_DAYS),))
+    ids = [r["event_id"] for r in recent if r.get("event_id") is not None]
+    events = {e["id"]: e for e in (_json_ready(r) for r in db.execute_dict_query(EVENTS_BY_ID_SQL, (ids,)))} if ids else {}
+    plan = []
+    for r in recent:
+        out["checked"] += 1
+        if r["kind"] == "withdrawn":
+            continue                                                    # never revived automatically
+        current = rebuild(events.get(r["event_id"]))
+        last = ledger.latest(r["update_key"])
+        kind, _changed = classify_revision(last["public_json"], current)
+        if kind != "unchanged":
+            plan.append((r, current))
+            out["would_change"][kind] = out["would_change"].get(kind, 0) + 1
+    enabled = env.get(CORRECTIONS_ENV, "0").strip() == "1"
+    if len(plan) > MAX_REVISIONS_PER_RUN:
+        out["refused"] = f"{len(plan)} updates would change in one run (limit {MAX_REVISIONS_PER_RUN}): nothing recorded; review the source data first"
+    elif not enabled:
+        out["refused"] = f"{CORRECTIONS_ENV} is not 1: reported only, nothing recorded"
+    else:
+        for r, current in plan:
+            res = ledger.revise(r["update_key"], current, r["event_id"], SOURCE_VERSION)
+            out["recorded"][res] = out["recorded"].get(res, 0) + 1
+    log("FU_REVISE " + json.dumps(out, sort_keys=True))
+    return out
+
+
 def owner_sender():
     """The real sender: card + caption + buttons to the owner's PRIVATE chat (target fixed to 'owner'); text fallback if the photo fails."""
     from alerts.telegram_client import TelegramClient
@@ -170,7 +234,11 @@ def main(argv=None) -> int:
     p.add_argument("--session", required=True, type=date.fromisoformat, help="the US market session (explicit; never inferred)")
     p.add_argument("--record", action="store_true", help="write the selected updates to the publication ledger (migration 41)")
     p.add_argument("--send", action="store_true", help=f"send recorded updates to the owner chat (needs --record and {SEND_ENV}=1)")
+    p.add_argument("--revise", action="store_true", help=f"corrections only: report, or record with {CORRECTIONS_ENV}=1; never sends")
     a = p.parse_args(argv)
+    if a.revise and (a.record or a.send):
+        print("FU_PUBLISH refused: --revise runs on its own (it never records new updates or sends)")
+        return EXIT_REFUSED
     try:
         from dotenv import load_dotenv
         load_dotenv(MECH.parent / ".env")
@@ -179,6 +247,9 @@ def main(argv=None) -> int:
     from shared import db
     from inflection.alerts import DbDelivery
     from inflection.update_ledger import Ledger
+    if a.revise:
+        out = revise(a.session, db=db, ledger=Ledger(db.get_sync_connection))
+        return EXIT_REFUSED if out["refused"] and "would change" in out["refused"] else EXIT_OK
     ledger_ok = ledger_present(db)
     if gate(a.record, a.send, os.environ, ledger_ok):
         run(a.session, db=db, record=a.record, send=a.send)          # logs the refusal
