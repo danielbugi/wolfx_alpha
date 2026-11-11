@@ -108,6 +108,9 @@ All [optional], `mechanism/shared/config.py`:
 | `TELEGRAM_CONTROL_TOKEN` | [secret] | — | Unset or a placeholder means every Telegram Control Center dashboard mutation is refused — fails closed, by design |
 | `TELEGRAM_READ_REQUIRES_TOKEN` | [optional] | off | Opt-in toggle; only relevant once the dashboard API is hosted somewhere other than localhost |
 | `BOT_OWNER_ID` | **[required]** for the bot | `0` | Unset means no new user can ever be approved |
+| `FU_PUBLISH_MODE` | [optional] | `off` | Pipeline step 8f/8g, the Fundamental Updates publisher (`mechanism/inflection/update_publish.py`, migration 41). `off`: skipped. `record`: write tonight's updates to `fundamental_update_publication` for the gate session, never send. `send`: also send each new update once to the owner's private chat (still needs `FU_OWNER_SEND_ENABLED=1`). See `docs/operations/FUNDAMENTAL_UPDATES_DEPLOYMENT.md` |
+| `FU_OWNER_SEND_ENABLED` | [optional] | unset | `1` lets the Fundamental Updates publisher send to the owner's private chat. Refused while `INFLECTION_ALERTS_ENABLED=1` (never both) |
+| `FU_CORRECTIONS_ENABLED` | [optional] | unset | `1` lets `update_publish.py --revise` record corrected versions (`restated`/`redated`/`withdrawn`); unset = report only. Corrections are never sent |
 | `OPS_ALERTS_ENABLED` | [optional] | `0` | `1` lets `mechanism/alerts/ops_failure_alert.py` send failure alerts for scheduled jobs (first: the forward collector) to the owner's **private** chat (`BOT_OWNER_ID`), never a channel. Also needs the wrapper's `--send`. Unset: the alert is printed and logged only |
 | `PROD_SENDING_ENABLED` | **[required]** — THE production-posting safety gate | unset = locked | Read via `mechanism/alerts/telegram_client.py`'s `PROD_SWITCH` constant — see [../architecture/TELEGRAM_PUBLISHING.md](../architecture/TELEGRAM_PUBLISHING.md) §5. Fails closed: unset or anything other than exactly `"1"` means locked. |
 

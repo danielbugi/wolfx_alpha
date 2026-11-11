@@ -149,8 +149,13 @@ def test_the_publisher_is_owner_only_and_dormant():
     assert 'TelegramClient.from_env("owner", dry_run=False)' in src
     for forbidden in ('"prod"', '"dev"', "TELEGRAM_CHAT_ID", "PROD_SENDING_ENABLED=1", "post_delivery"):
         assert forbidden not in src, forbidden
-    for p in ("automation_pipeline.sh",) + tuple(f"deploy/vps/{n}" for n in os.listdir(os.path.join(ROOT, "deploy", "vps"))):
-        assert "update_publish" not in open(os.path.join(ROOT, p), encoding="utf-8", errors="ignore").read(), p   # nothing runs it yet
+    for p in tuple(f"deploy/vps/{n}" for n in os.listdir(os.path.join(ROOT, "deploy", "vps"))):
+        assert "update_publish" not in open(os.path.join(ROOT, p), encoding="utf-8", errors="ignore").read(), p   # no unit or wrapper runs it
+    # The pipeline runs it only from step 8f, which is off unless FU_PUBLISH_MODE is set (behaviour: test_pipeline_fu_step.py).
+    pipe = open(os.path.join(ROOT, "automation_pipeline.sh"), encoding="utf-8").read()
+    gated = pipe[pipe.index('FU_MODE="${FU_PUBLISH_MODE:-off}"'):]
+    gated = gated[:gated.index("\nfi") + 3]
+    assert pipe.count("update_publish") == gated.count("update_publish") == 2
 
 
 def test_the_event_query_matches_the_reviewed_simulation_export():

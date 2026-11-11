@@ -13,12 +13,12 @@ Scope: replacing the legacy owner alerts (`mechanism/inflection/alerts.py`) with
 | Runtime role | `donchian_app` exists. PostgreSQL 16.15. |
 | Mechanism image | `1fc1753cdae0` (derived). It has `inflection/alerts.py` (`DbDelivery`), `alerts/telegram_client.py` (`send_photo`, `CAPTION_MAX`, `TEXT_MAX`, `text_length`) and the card fonts, but **none** of the `inflection/update_*.py` modules. |
 | Source events | `inflection_v2_sec_pit` (SEC acceptance dates and accession per quarter): 2026-11-09 run ok, 0 errors. |
-| Selection dry run, session 2026-11-09 | 128 candidate events → GTN, HNGE, KGS (all `profitability_turnaround`). **On `main` there is no per-type cap**; the owner-approved cap of 2 per lead type and the decision record are in PR #103 (draft). |
+| Selection dry run, session 2026-11-09 | Under the merged policy (PR #103): GTN, OMDA, HLIT (TEAM and CLOV held back by the 2-per-type cap). |
 
-## 1. Prerequisites (code; each a separate approval)
-1. **Merge PR #103** (selection policy: 3 per night, 1 per company, 2 per lead type, empty slots allowed; decision record). Without it the first night above would post three profitability turnarounds.
-2. **Merge the publisher PR** (`mechanism/inflection/update_publish.py` + tests + this runbook). It is dormant: nothing calls it.
-3. Optional before or after: PR #108 (earnings-aware quarterly refresh) affects v1 only; Fundamental Updates read v2.
+## 1. Prerequisites (code): done 2026-11-10
+1. PR #103 (selection policy: 3 per night, 1 per company, 2 per lead type, empty slots allowed; decision record): merged `353033b`.
+2. PR #107 (failure alerts, dormant), #108 (earnings-aware quarterly refresh), #109 (this publisher): merged `feed386`, `e39e042`, `86af094`.
+3. Pipeline step 8f/8g (`FU_PUBLISH_MODE`, default off): this runbook's Step C.
 
 ## 2. Duplicate-notification guards
 | Layer | Guard | Effect |
@@ -60,24 +60,25 @@ Verify: `docker run --rm --entrypoint python <image> -c "import sys; sys.path.in
 **Rollback:** re-pin the previous tag (`1fc1753cdae0`) and re-arm for it.
 
 ### Step C. Record-only validation (at least 3 nights; no sending)
-Wire ONE pipeline step (or timer) after the inflection step that runs, for the **explicit** session just processed:
+The pipeline runs the publisher as **optional step 8f/8g** (after step 8e, before the screener), for the gate's **explicit** session only. It is **off** until `FU_PUBLISH_MODE` is set in `/opt/donchian/env/.env` (deploy-writable; no root needed):
 ```bash
-/opt/donchian/scripts/run_channel_sender.sh mechanism/inflection/update_publish.py --session <session> --record
-/opt/donchian/scripts/run_channel_sender.sh mechanism/inflection/update_publish.py --session <session> --revise     # report-only while FU_CORRECTIONS_ENABLED is unset
+cp -p /opt/donchian/env/.env /opt/donchian/env/.env.bak-fu-record-$(date -u +%Y%m%dT%H%M%SZ)
+echo 'FU_PUBLISH_MODE=record' >> /opt/donchian/env/.env          # 8f: --session <gate session> --record ; 8g: --revise (report-only)
 ```
-Before wiring it, run both once by hand for the last completed session. Each night, check (read-only):
-- `FU_PUBLISH {...}`: `published` ≤ 3, `refused` null; the picks match the decision record (PR #103) for that night;
+`record` never passes `--send`; nothing is claimed or sent. A failing 8f/8g logs `OPTIONAL_STEP_WARNING` and the pipeline continues.
+Before the first night, run both once by hand for the last completed session (`run_channel_sender.sh mechanism/inflection/update_publish.py --session <session> --record`, then `--revise`). Each night, check (read-only):
+- pipeline log: `FU_PUBLISH {...}`: `published` ≤ 3, `refused` null; the picks match the decision record (`update_select.decisions`) for that night;
 - `SELECT update_key, version, kind, public_date FROM fundamental_update_publication ORDER BY id DESC LIMIT 10;`: version 1 rows only, public dates within 3 days of the session;
 - `deploy/db/fundamental_update_publication_verify.sql` still prints `migration 41 verified`;
 - `FU_REVISE {...}`: `would_change` empty or explained (a real 10-Q/A restatement);
 - `SELECT count(*) FROM inflection_alert_delivery WHERE claimed_at > <step start>` = 0 (nothing claimed, nothing sent).
-**Rollback:** remove the step. Recorded rows are append-only and read by nothing public yet (the `/signals` API is not deployed); they can stay, or the whole table can be removed with step A's rollback after a backup.
+**Rollback:** set `FU_PUBLISH_MODE=off` (or delete the line); takes effect at the next pipeline run. Recorded rows are append-only and read by nothing public yet (the `/signals` API is not deployed); they can stay, or the whole table can be removed with step A's rollback after a backup.
 
 ### Step D. Enable owner-chat sending (**explicit owner approval required**)
 1. Back up `.env`; append `FU_OWNER_SEND_ENABLED=1`. Confirm `INFLECTION_ALERTS_ENABLED=0` (the publisher refuses to send otherwise).
-2. Change the step to `--record --send`.
+2. Change `FU_PUBLISH_MODE=record` to `FU_PUBLISH_MODE=send` (step 8f then adds `--send`; the publisher still refuses unless `FU_OWNER_SEND_ENABLED=1` and `INFLECTION_ALERTS_ENABLED=0`).
 3. First night: watch `inflection_alert_delivery WHERE channel = 'fu_owner'`: at most 3 rows, all `sent`; the messages in the owner chat match the ledger rows.
-**Rollback / stop:** set `FU_OWNER_SEND_ENABLED=0` (takes effect at the next run; recording continues). A message already in the chat stays; nothing is deleted.
+**Rollback / stop:** set `FU_OWNER_SEND_ENABLED=0` or `FU_PUBLISH_MODE=record` (takes effect at the next run; recording continues). A message already in the chat stays; nothing is deleted.
 
 ### Step E. Corrections (separate approval, after a clean week)
 `--revise` rebuilds updates first published in the last 120 days from their current event and records `restated` / `redated` / `withdrawn` versions.
@@ -89,7 +90,7 @@ Before wiring it, run both once by hand for the last completed session. Each nig
 
 ## 3a. Full rollback, newest step first
 1. `FU_OWNER_SEND_ENABLED=0` → no more owner messages.
-2. Remove the publisher step → no more ledger writes.
+2. `FU_PUBLISH_MODE=off` → no more ledger writes.
 3. Re-pin the previous image (`1fc1753cdae0`) and **re-arm forward collection for it**.
 4. Optional, after a backup: `deploy/db/fundamental_update_publication_rollback.sql` with `SET fup.confirm_drop_with_rows = 'yes'` → migration 41 removed.
 5. Optional: restore the legacy alerts with `INFLECTION_ALERTS_ENABLED=1` (only after step 1, never both on).
