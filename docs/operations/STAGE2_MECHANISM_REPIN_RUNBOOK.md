@@ -114,6 +114,8 @@ Order of operations on any failure: (1) stop, do not retry the failed step; (2) 
 
 A live read-only snapshot of production was restored into a throwaway database; every symbol's `updated_at` was aged to 26-60 days so the **whole universe (3,075 symbols) was due**, the 2026-10-13 scenario. The new updater was run with `--time-budget-seconds 150`: exit 0 at 153 s wall time, 41 symbols attempted, 41 ok, 0 failed, `stopped_by_budget: true`, 3,034 symbols left due, a `QUARTERLY_SUMMARY` line printed. The refreshed symbols were the stalest (their mean synthetic age 60 days against 43 for those still due), ~3.7 s per symbol. At that rate a 45-minute budget handles about 700 symbols a night, so a 3,000-symbol cohort is cleared in about five nights. The scratch environment was removed afterwards.
 
+> **Update 2026-10-23.** For the window on **Tue 2026-10-27, 12:00–14:00 Jerusalem (10:00–12:00 UTC after the 10-25 clock change)**, the owner approved preparing an **extended** derived image that also carries the PR #55 earnings-post correction: tag `46b8b8ae0342`, digest `sha256:2beafa741aae2c5f9adb5aeded8d4c9452d6d84f3c360a4788816473275536f3` (branch `release/stage2-quarterly-earnings`, PR #59). Full readiness record, pin matrix and GO/NO-GO: [STAGE2_CUTOVER_READINESS_2026-10-27.md](STAGE2_CUTOVER_READINESS_2026-10-27.md). The record below is the original 2026-10-15 one for `0384c9b91c63`, which remains a valid fallback.
+
 ## 10. Readiness record (2026-10-15, for the 2026-10-21 12:00-14:00 Asia/Jerusalem window)
 
 | Item | Value |
