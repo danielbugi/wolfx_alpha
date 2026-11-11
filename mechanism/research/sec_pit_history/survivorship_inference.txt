@@ -1,0 +1,45 @@
+Pre-holdout only (public before 2023-01-01); holdout not opened. pp = percentage points of the 250-session halving rate (event minus matched expectation).
+
+=== 1. Uncertainty of every scenario (corrected difference; 95% bootstrap intervals; imputed outcomes drawn, not fixed) ===
+eligibility       scenario                  cut    point                     company CI                     quarter CI                        both CI
+        any        S1 mild       2+ event types -1.75 pp [-2.42, -1.11] pp; P(<0) 1.000 [-2.73, -0.51] pp; P(<0) 0.998 [-3.05, -0.34] pp; P(<0) 0.992
+        any        S1 mild all company-quarters -0.80 pp [-1.24, -0.37] pp; P(<0) 1.000 [-1.58, +0.02] pp; P(<0) 0.973 [-1.69, +0.10] pp; P(<0) 0.954
+        any     S2 Shumway       2+ event types -4.61 pp [-5.42, -3.81] pp; P(<0) 1.000 [-6.45, -2.37] pp; P(<0) 1.000 [-6.77, -2.20] pp; P(<0) 1.000
+        any     S2 Shumway all company-quarters -2.69 pp [-3.28, -2.10] pp; P(<0) 1.000 [-4.27, -1.01] pp; P(<0) 1.000 [-4.39, -0.91] pp; P(<0) 1.000
+        any      S3 severe       2+ event types -4.61 pp [-5.44, -3.79] pp; P(<0) 1.000 [-6.42, -2.49] pp; P(<0) 1.000 [-6.70, -2.19] pp; P(<0) 1.000
+        any      S3 severe all company-quarters -2.69 pp [-3.25, -2.11] pp; P(<0) 1.000 [-4.30, -1.05] pp; P(<0) 1.000 [-4.56, -0.97] pp; P(<0) 1.000
+        any S4 adversarial       2+ event types -0.27 pp [-1.06, +0.50] pp; P(<0) 0.757 [-1.49, +1.36] pp; P(<0) 0.647 [-1.80, +1.38] pp; P(<0) 0.621
+        any S4 adversarial all company-quarters +1.41 pp [+0.91, +1.96] pp; P(<0) 0.000 [+0.45, +2.51] pp; P(<0) 0.001 [+0.26, +2.59] pp; P(<0) 0.009
+ float>=75M        S1 mild       2+ event types -1.87 pp [-2.53, -1.12] pp; P(<0) 1.000 [-2.91, -0.66] pp; P(<0) 0.999 [-3.21, -0.43] pp; P(<0) 0.996
+ float>=75M        S1 mild all company-quarters -0.88 pp [-1.31, -0.40] pp; P(<0) 1.000 [-1.63, -0.08] pp; P(<0) 0.985 [-1.76, +0.07] pp; P(<0) 0.961
+ float>=75M     S2 Shumway       2+ event types -3.07 pp [-3.80, -2.33] pp; P(<0) 1.000 [-4.43, -1.40] pp; P(<0) 1.000 [-4.75, -1.25] pp; P(<0) 0.999
+ float>=75M     S2 Shumway all company-quarters -1.58 pp [-2.09, -1.05] pp; P(<0) 1.000 [-2.69, -0.40] pp; P(<0) 0.998 [-2.95, -0.33] pp; P(<0) 0.995
+ float>=75M      S3 severe       2+ event types -3.07 pp [-3.81, -2.27] pp; P(<0) 1.000 [-4.44, -1.43] pp; P(<0) 1.000 [-4.70, -1.32] pp; P(<0) 0.999
+ float>=75M      S3 severe all company-quarters -1.58 pp [-2.09, -1.08] pp; P(<0) 1.000 [-2.64, -0.43] pp; P(<0) 0.996 [-2.80, -0.29] pp; P(<0) 0.993
+ float>=75M S4 adversarial       2+ event types -0.71 pp [-1.46, +0.11] pp; P(<0) 0.957 [-1.84, +0.78] pp; P(<0) 0.827 [-2.22, +0.94] pp; P(<0) 0.801
+ float>=75M S4 adversarial all company-quarters +0.72 pp [+0.19, +1.24] pp; P(<0) 0.005 [-0.16, +1.71] pp; P(<0) 0.059 [-0.29, +1.83] pp; P(<0) 0.096
+
+=== 2. Observed (survivor-only) difference, 2+ event types: independence checks ===
+company-quarters 2,643; companies 806; calendar quarters 22
+pooled (every company-quarter)          -2.29 pp
+one observation per company (mean of d)  -1.48 pp  95% CI [-2.46, -0.39]; companies with d<0: 70%, d>0: 9%
+first qualifying quarter per company     -1.47 pp (n=806)
+per calendar year of the public date (pp):
+                n  companies  halved  expected  diff
+available_at                                        
+2017           80         80    5.00      2.62  2.38
+2018          349        240    3.15      3.52 -0.36
+2019          283        214    3.89      8.91 -5.02
+2020          324        227    0.62      0.46  0.16
+2021          977        541    5.63      9.13 -3.50
+2022          630        382    2.86      4.94 -2.08
+years with a negative difference: 4 of 6
+per calendar quarter: 22 quarters, negative in 15; mean of quarter means -1.88 pp
+
+=== 3. Economics of the smallest robust effect (stacked events, adversarial scenario) ===
+adversarial, any eligibility     halving rate lower by 0.27 pp  x  mean loss when halved 64%  =  0.17% of position value per 250 sessions
+adversarial, float >= $75M       halving rate lower by 0.71 pp  x  mean loss when halved 64%  =  0.45% of position value per 250 sessions
+observed survivor-only           halving rate lower by 2.29 pp  x  mean loss when halved 64%  =  1.46% of position value per 250 sessions
+for scale: observed 250-session excess return of stacked events vs matched stocks +2.20% (event-level bootstrap [+0.44, +4.17]; survivor-biased upward)
+costs: a round trip in this universe (close >= $5, >= $2M daily dollar volume) costs about 0.10-0.60% (spread + impact + commission; small names at the top);
+an annual rebalance pays it once, a quarterly one up to four times; the opportunity cost is the excluded names' return (the filter removes candidates, it does not add any).

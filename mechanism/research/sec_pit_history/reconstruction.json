@@ -1,0 +1,183 @@
+{
+ "asof": "2026-11-02",
+ "availability_basis": {
+  "sec_acceptance": 75535,
+  "sec_filed_date": 23992
+ },
+ "base_events": 31039,
+ "by_year": {
+  "2009": {
+   "companies": 239,
+   "company_quarters": 929,
+   "event_companies": 44,
+   "events": 61
+  },
+  "2010": {
+   "companies": 563,
+   "company_quarters": 2692,
+   "event_companies": 267,
+   "events": 739
+  },
+  "2011": {
+   "companies": 1085,
+   "company_quarters": 5014,
+   "event_companies": 417,
+   "events": 1020
+  },
+  "2012": {
+   "companies": 1131,
+   "company_quarters": 5675,
+   "event_companies": 470,
+   "events": 1128
+  },
+  "2013": {
+   "companies": 1166,
+   "company_quarters": 4825,
+   "event_companies": 467,
+   "events": 1204
+  },
+  "2014": {
+   "companies": 1215,
+   "company_quarters": 4979,
+   "event_companies": 507,
+   "events": 1287
+  },
+  "2015": {
+   "companies": 1250,
+   "company_quarters": 5169,
+   "event_companies": 436,
+   "events": 974
+  },
+  "2016": {
+   "companies": 1281,
+   "company_quarters": 5192,
+   "event_companies": 454,
+   "events": 1027
+  },
+  "2017": {
+   "companies": 1336,
+   "company_quarters": 5457,
+   "event_companies": 560,
+   "events": 1470
+  },
+  "2018": {
+   "companies": 1403,
+   "company_quarters": 5784,
+   "event_companies": 716,
+   "events": 1835
+  },
+  "2019": {
+   "companies": 1457,
+   "company_quarters": 6004,
+   "event_companies": 755,
+   "events": 1768
+  },
+  "2020": {
+   "companies": 1524,
+   "company_quarters": 6205,
+   "event_companies": 747,
+   "events": 1866
+  },
+  "2021": {
+   "companies": 1650,
+   "company_quarters": 6789,
+   "event_companies": 1113,
+   "events": 3974
+  },
+  "2022": {
+   "companies": 1693,
+   "company_quarters": 6982,
+   "event_companies": 949,
+   "events": 2813
+  },
+  "2023": {
+   "companies": 1719,
+   "company_quarters": 6964,
+   "event_companies": 888,
+   "events": 2529
+  },
+  "2024": {
+   "companies": 1765,
+   "company_quarters": 7150,
+   "event_companies": 861,
+   "events": 2253
+  },
+  "2025": {
+   "companies": 1819,
+   "company_quarters": 7345,
+   "event_companies": 950,
+   "events": 2483
+  },
+  "2026": {
+   "companies": 1869,
+   "company_quarters": 6372,
+   "event_companies": 954,
+   "events": 2608
+  }
+ },
+ "companies": 1876,
+ "companies_with_features": 1875,
+ "company_quarters": 99527,
+ "company_quarters_by_period": {
+  "holdout": 15913,
+  "post_holdout": 11918,
+  "pre_holdout": 71696
+ },
+ "events_by_period": {
+  "holdout": 5461,
+  "post_holdout": 4412,
+  "pre_holdout": 21166
+ },
+ "events_by_severity": {
+  "high": 18792,
+  "low": 3355,
+  "medium": 8892
+ },
+ "events_by_type": {
+  "fcf_turnaround": 4324,
+  "margin_expansion": 8464,
+  "operating_leverage_inflection": 6372,
+  "profitability_turnaround": 4030,
+  "revenue_acceleration": 7849
+ },
+ "filing_lag_days": {
+  "max": 1095,
+  "p05": 25,
+  "p50": 38,
+  "p95": 403
+ },
+ "first_public_time_of_day_et": {
+  "after_close": 45706,
+  "before_open": 9321,
+  "during_session": 20508,
+  "unknown": 23992
+ },
+ "inputs": {
+  "prod_v2_events.csv.gz": "0123c2e2030708b4d5208eb4107aaca0d7bb3ff0afa3f4141f508a920bc0bb99",
+  "sec_facts.csv.gz": "fb9214b3e89dd860b292451db696462131141580c00d2144bd142b8d9cb2d684",
+  "sec_filings.csv.gz": "673883a7b7dbfa1b416dd5e9f11e823c4f261a58e262e785ccbf9227cc6f2961",
+  "sectors.csv.gz": "281de2efb959702f0a0fcab0d644081f5396163c2b17519889a59d561dd17c16",
+  "symbols.csv.gz": "a764990cbae9b8d8b93094d3971b3cf91f7243c0751e9cef36599a66e986c0a4",
+  "universe.csv.gz": "e93a5ed96c4afec5f2a9d8bc52a00d51d472394be05731b78d5a4571786199d1"
+ },
+ "leakage_examples": [],
+ "leakage_violations": 0,
+ "method_version": "inflection_v2_sec_pit",
+ "outputs": {
+  "events.csv.gz": "6e32908eaa328d57fcad9c39d8829f9ba875d5491bca0fbfcec91bd31ae9c120",
+  "features.csv.gz": "fd7b562f1c7c513685410c57ebf11bafa24ac15ab99a8a769dae831d05df4c0f"
+ },
+ "partial_data_share": 0.4614,
+ "production_check": {
+  "identical": 1968,
+  "matched_keys": 1968,
+  "n_only_offline": 0,
+  "n_only_production": 0,
+  "offline_base_events_in_window": 1968,
+  "only_offline": [],
+  "only_production": [],
+  "production_base_events": 1968
+ },
+ "restated_since_share": 0.1514,
+ "schema": "sec_pit_reconstruction_v1"
+}

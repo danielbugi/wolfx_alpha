@@ -1,0 +1,31 @@
+Missing (delisted, not in our universe) companies: 2,315 candidates, 1,807 after exclusions (blank-check / parse errors).
+By delisting reason (OBSERVED from SEC filings):
+reason
+merger             1313
+listing_failure     216
+bankruptcy          172
+deregistration       58
+unknown              48
+
+Their point-in-time inflection events (OBSERVED, same engine, 120-day stale guard): 13,320; pre-holdout window: 5,438
+
+=== Bounds: observed vs corrected halving comparison (outcomes of missing companies are IMPUTED per scenario) ===
+eligibility                                     scenario                  cut  observed events  missing events (imputed) observed halved observed expected observed diff  pool stock-months  missing stock-months (imputed) corrected halved corrected expected corrected diff
+        any                   S1 mild (-30%, not halved) all company-quarters             6575                      3631           4.33%             5.42%      -1.08 pp              74776                           57621            4.04%              4.84%       -0.80 pp
+        any                   S1 mild (-30%, not halved)       2+ event types             2643                      1258           3.82%             6.11%      -2.29 pp              74776                           57621            3.71%              5.45%       -1.75 pp
+        any                    S2 Shumway (-55%, halved) all company-quarters             6575                      3631           4.33%             5.42%      -1.08 pp              74776                           57621            5.01%              7.70%       -2.69 pp
+        any                    S2 Shumway (-55%, halved)       2+ event types             2643                      1258           3.82%             6.11%      -2.29 pp              74776                           57621            4.07%              8.68%       -4.61 pp
+        any                    S3 severe (-100%, halved) all company-quarters             6575                      3631           4.33%             5.42%      -1.08 pp              74776                           57621            5.01%              7.70%       -2.69 pp
+        any                    S3 severe (-100%, halved)       2+ event types             2643                      1258           3.82%             6.11%      -2.29 pp              74776                           57621            4.07%              8.68%       -4.61 pp
+        any S4 adversarial (events -100%, controls -30%) all company-quarters             6575                      3631           4.33%             5.42%      -1.08 pp              74776                           57621            6.25%              4.84%       +1.41 pp
+        any S4 adversarial (events -100%, controls -30%)       2+ event types             2643                      1258           3.82%             6.11%      -2.29 pp              74776                           57621            5.19%              5.45%       -0.27 pp
+ float>=75M                   S1 mild (-30%, not halved) all company-quarters             6575                      2779           4.33%             5.42%      -1.08 pp              74776                           38372            4.06%              4.94%       -0.88 pp
+ float>=75M                   S1 mild (-30%, not halved)       2+ event types             2643                       972           3.82%             6.11%      -2.29 pp              74776                           38372            3.70%              5.57%       -1.87 pp
+ float>=75M                    S2 Shumway (-55%, halved) all company-quarters             6575                      2779           4.33%             5.42%      -1.08 pp              74776                           38372            4.64%              6.22%       -1.58 pp
+ float>=75M                    S2 Shumway (-55%, halved)       2+ event types             2643                       972           3.82%             6.11%      -2.29 pp              74776                           38372            3.95%              7.02%       -3.07 pp
+ float>=75M                    S3 severe (-100%, halved) all company-quarters             6575                      2779           4.33%             5.42%      -1.08 pp              74776                           38372            4.64%              6.22%       -1.58 pp
+ float>=75M                    S3 severe (-100%, halved)       2+ event types             2643                       972           3.82%             6.11%      -2.29 pp              74776                           38372            3.95%              7.02%       -3.07 pp
+ float>=75M S4 adversarial (events -100%, controls -30%) all company-quarters             6575                      2779           4.33%             5.42%      -1.08 pp              74776                           38372            5.66%              4.94%       +0.72 pp
+ float>=75M S4 adversarial (events -100%, controls -30%)       2+ event types             2643                       972           3.82%             6.11%      -2.29 pp              74776                           38372            4.86%              5.57%       -0.71 pp
+
+Decision rule (fixed in the spec): ROBUST to survivorship for the stacked-event difference.
