@@ -1,0 +1,75 @@
+High-volatility group: 36,004 stock-months, 1873 stocks, 98 months; rest of universe for reference:
+                    group  stock-months  months  doubled  halved  doubled/halved  median 250d
+         top vol quintile         36004      98   0.1182  0.1442            0.82       0.0367
+                other 80%        144688      98   0.0269  0.0257            1.05       0.0813
+top vol quintile, ex-2020         32026      86   0.0855  0.1607            0.53      -0.0510
+
+=== Inside the top volatility quintile: outcome by within-date tercile of each feature ===
+                 feature tercile (within the quintile)       era  stock-months  months  doubled  halved  doubled/halved  median 250d
+          6-month return                           low all years         11968      98   0.1231  0.1792            0.69       0.0308
+          6-month return                           low   ex-2020         10646      86   0.0850  0.2013            0.42      -0.0760
+          6-month return                           mid all years         11998      98   0.1072  0.1288            0.83       0.0391
+          6-month return                           mid   ex-2020         10671      86   0.0739  0.1451            0.51      -0.0488
+          6-month return                          high all years         12033      98   0.1241  0.1247            1.00       0.0428
+          6-month return                          high   ex-2020         10704      86   0.0973  0.1360            0.72      -0.0293
+          1-month return                           low all years         11970      98   0.1196  0.1660            0.72       0.0263
+          1-month return                           low   ex-2020         10648      86   0.0860  0.1862            0.46      -0.0685
+          1-month return                           mid all years         12000      98   0.1112  0.1288            0.86       0.0527
+          1-month return                           mid   ex-2020         10673      86   0.0807  0.1447            0.56      -0.0333
+          1-month return                          high all years         12034      98   0.1238  0.1379            0.90       0.0375
+          1-month return                          high   ex-2020         10705      86   0.0897  0.1514            0.59      -0.0513
+  distance from 52w high                           low all years         11966      98   0.1300  0.2008            0.65       0.0058
+  distance from 52w high                           low   ex-2020         10644      86   0.0896  0.2257            0.40      -0.1078
+  distance from 52w high                           mid all years         11996      98   0.1161  0.1377            0.84       0.0318
+  distance from 52w high                           mid   ex-2020         10669      86   0.0838  0.1536            0.55      -0.0589
+  distance from 52w high                          high all years         12032      98   0.1082  0.0945            1.15       0.0762
+  distance from 52w high                          high   ex-2020         10703      86   0.0827  0.1033            0.80       0.0098
+    dollar volume (size)                           low all years         11970      98   0.1147  0.1524            0.75       0.0245
+    dollar volume (size)                           low   ex-2020         10648      86   0.0820  0.1687            0.49      -0.0640
+    dollar volume (size)                           mid all years         12000      98   0.1167  0.1364            0.86       0.0370
+    dollar volume (size)                           mid   ex-2020         10673      86   0.0822  0.1535            0.54      -0.0575
+    dollar volume (size)                          high all years         12034      98   0.1232  0.1438            0.86       0.0605
+    dollar volume (size)                          high   ex-2020         10705      86   0.0922  0.1600            0.58      -0.0219
+   volume trend 20d/120d                           low all years         11968      98   0.1173  0.1476            0.79       0.0311
+   volume trend 20d/120d                           low   ex-2020         10646      86   0.0845  0.1657            0.51      -0.0586
+   volume trend 20d/120d                           mid all years         11999      98   0.1160  0.1344            0.86       0.0511
+   volume trend 20d/120d                           mid   ex-2020         10672      86   0.0847  0.1505            0.56      -0.0382
+   volume trend 20d/120d                          high all years         12033      98   0.1212  0.1507            0.80       0.0347
+   volume trend 20d/120d                          high   ex-2020         10704      86   0.0870  0.1660            0.52      -0.0512
+new 55d high in last 20d                            no all years         24554      98   0.1162  0.1528            0.76       0.0311
+new 55d high in last 20d                            no   ex-2020         22162      86   0.0828  0.1697            0.49      -0.0574
+new 55d high in last 20d                           yes all years         11450      98   0.1158  0.1241            0.93       0.0396
+new 55d high in last 20d                           yes   ex-2020          9864      86   0.0893  0.1374            0.65      -0.0303
+             share price                           low all years         11969      98   0.1473  0.1355            1.09       0.0737
+             share price                           low   ex-2020         10647      86   0.1108  0.1521            0.73      -0.0283
+             share price                           mid all years         11999      98   0.1194  0.1309            0.91       0.0488
+             share price                           mid   ex-2020         10672      86   0.0802  0.1474            0.54      -0.0522
+             share price                          high all years         12036      98   0.0881  0.1661            0.53       0.0034
+             share price                          high   ex-2020         10707      86   0.0656  0.1827            0.36      -0.0672
+
+=== Stratified (volatility decile 8-10 x size tercile x trend regime; cells with >= 400 stock-months) ===
+ vol decile size tercile     trend  stock-months  months  doubled  halved  doubled/halved  median 250d
+          8        small      Bear           839      13   0.1071  0.0483            2.22       0.2162
+          8        small      Bull          5151      73   0.0636  0.0716            0.89       0.0407
+          8        small Weakening           466       7   0.0657  0.0388            1.70       0.0938
+          8          mid      Bear           883      13   0.1190  0.0456            2.61       0.2941
+          8          mid      Bull          4836      73   0.0542  0.0704            0.77       0.0343
+          8          mid Weakening           470       7   0.0528  0.0786            0.67       0.1098
+          8        large      Bear           649      13   0.1286  0.0206            6.23       0.3002
+          8        large      Bull          3475      73   0.0576  0.0834            0.69       0.0383
+          9        small      Bear           878      13   0.1487  0.0791            1.88       0.1843
+          9        small      Bull          5571      73   0.0813  0.1172            0.69       0.0088
+          9        small Weakening           517       7   0.1040  0.0742            1.40       0.0685
+          9          mid      Bear           915      13   0.1496  0.0654            2.29       0.2394
+          9          mid      Bull          4668      73   0.0809  0.1205            0.67       0.0272
+          9          mid Weakening           425       7   0.0849  0.0960            0.88       0.0931
+          9        large      Bear           571      13   0.1509  0.0458            3.29       0.2571
+          9        large      Bull          3199      73   0.1043  0.1221            0.85       0.0329
+         10        small      Bear           955      13   0.1601  0.1402            1.14       0.1230
+         10        small      Bull          5908      73   0.1251  0.2025            0.62      -0.0293
+         10        small  Recovery           413       5   0.1760  0.1147            1.54       0.1816
+         10        small Weakening           561       7   0.1422  0.1613            0.88       0.0992
+         10          mid      Bear           748      13   0.1774  0.1120            1.58       0.1835
+         10          mid      Bull          4368      73   0.1327  0.1947            0.68      -0.0303
+         10        large      Bear           659      13   0.1940  0.0734            2.64       0.3157
+         10        large      Bull          3129      73   0.1347  0.1892            0.71       0.0251
