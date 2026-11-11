@@ -1,0 +1,129 @@
+# PROPOSED replacement for docker-compose.prod.yml -- NOT INSTALLED, NOT SHIPPED by cd.yml (docs/operations/BOT_DUAL_PIN.md).
+#
+# One image-tag variable per consumer instead of the shared ${IMAGE_TAG}:
+#   bot                         BOT_IMAGE_TAG        STRICT: no fallback to IMAGE_TAG. Only run_bot_service.sh (via compose_env.sh, from CURRENT_BOT_SHA) sets it,
+#                                                    so a backend deploy or a hand-run `IMAGE_TAG=... docker compose up` can never retag the bot.
+#   backend                     BACKEND_IMAGE_TAG    transitional: falls back to the legacy IMAGE_TAG
+#   pipeline, channel-sender    MECHANISM_IMAGE_TAG  transitional: falls back to the legacy IMAGE_TAG (the wrappers still export IMAGE_TAG until they source compose_env.sh)
+#   frontend (fallback profile) FRONTEND_IMAGE_TAG   transitional: falls back to the legacy IMAGE_TAG
+# A variable that is missing everywhere resolves to an obviously invalid tag ("...-not-set"), which fails at pull/create for THAT service only and cannot match any running image.
+# docker-compose.prod.yml — production overlay. Used via /opt/donchian/scripts/deploy.sh and
+# rollback.sh on the VPS (Phase 4B.1/4B.2) — see docs/devops/CD_DESIGN.md.
+#
+# Would be run as:
+#   IMAGE_TAG=<sha> docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps <changed-service>
+# — never a blanket `up -d` for every service (see docs/devops/CICD_STRATEGY.md §5's reasoning).
+#
+# Prerequisites this file assumes but does NOT create: a real `.env` next to this file on the VPS
+# (never committed, not the docker/.env.example placeholder used for local validation), and images
+# already pushed to ghcr.io under the tags referenced by ${IMAGE_TAG}.
+#
+# Three deliberate differences from a plain merge onto the base file:
+#   * `env_file: !override` — the base file's services read docker/.env.example (committed dev
+#     placeholders, including a JWT_SECRET anyone with the repo can read). A plain overlay APPENDS
+#     `.env` after it, so any key missing from the real .env would silently fall back to the
+#     committed placeholder. Production services read the real .env ONLY.
+#   * `ports: !override` on the reverse proxy — otherwise the base's local-validation 8080 would be
+#     published alongside 80/443.
+#   * postgres `volumes: !override` — production Postgres never auto-runs the 17-file schema
+#     bootstrap. A production volume is populated by restoring a pg_dump (PRODUCTION_MIGRATION_RUNBOOK.md);
+#     an accidentally empty volume must fail loudly (backend health = degraded / missing tables),
+#     not silently come up as a healthy-looking database with an empty schema and no data.
+
+services:
+  postgres:
+    restart: unless-stopped
+    # No published port here either — production Postgres is exactly as internal-only as the
+    # local validation stack's, see docker-compose.yml's own comment on this.
+    volumes: !override
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: !reset null   # production deploys a pulled image, never builds on the VPS
+    image: ghcr.io/danielbugi/wolfx_alpha-backend:${BACKEND_IMAGE_TAG:-${IMAGE_TAG:-backend-tag-not-set}}
+    restart: unless-stopped
+    env_file: !override
+      - .env   # the real production secrets file — lives only on the VPS, never in git
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      API_HOST: 0.0.0.0
+
+  frontend:
+    # Not deployed here under the recommended architecture (Vercel handles it — see
+    # docs/devops/TARGET_ARCHITECTURE.md §2, Option C). Kept only as the Option A fallback should
+    # Vercel ever be rejected; disabled by default via `profiles:` so `up -d` never starts it
+    # under this overlay by accident.
+    profiles: ["self-hosted-frontend-fallback"]
+    build: !reset null
+    image: ghcr.io/danielbugi/wolfx_alpha-frontend:${FRONTEND_IMAGE_TAG:-${IMAGE_TAG:-frontend-tag-not-set}}
+    restart: unless-stopped
+
+  reverse-proxy:
+    restart: unless-stopped
+    ports: !override
+      - "80:80"
+      - "443:443"
+    environment:
+      # Caddy site address. Default ":80" = plain HTTP on port 80, no ACME/TLS (staging, before DNS
+      # exists). At DNS cutover set API_SITE_ADDRESS=api.first-light.finance in .env: Caddy then
+      # obtains and renews a Let's Encrypt certificate for it automatically on :443.
+      API_SITE_ADDRESS: ${API_SITE_ADDRESS:-:80}
+    volumes: !override
+      - ./docker/Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data     # ACME certificate persistence — must survive container recreation
+      - caddy_config:/config
+    # Under the recommended architecture the frontend lives on Vercel, not this VPS (see
+    # TARGET_ARCHITECTURE.md §2, Option C) — the base file's `depends_on: frontend` would break
+    # `docker compose config` here since `frontend` is profile-gated off by default in this overlay
+    # (see that service above). Reset to just the one dependency that's actually always present.
+    depends_on: !override
+      backend:
+        condition: service_healthy
+
+  bot:
+    # Kept behind a profile until the scheduler/bot cutover (PRODUCTION_MIGRATION_RUNBOOK.md,
+    # CUTOVER): a second copy of the bot polling the same token as the existing Windows-hosted one
+    # would fight it for updates, and a stray blanket `up -d` must never start it. Start explicitly
+    # with `--profile bot` at cutover only.
+    profiles: ["bot"]
+    build: !reset null
+    image: ghcr.io/danielbugi/wolfx_alpha-mechanism:${BOT_IMAGE_TAG:-bot-tag-not-set}
+    restart: unless-stopped
+    env_file: !override
+      - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+
+  pipeline:
+    build: !reset null
+    image: ghcr.io/danielbugi/wolfx_alpha-mechanism:${MECHANISM_IMAGE_TAG:-${IMAGE_TAG:-mechanism-tag-not-set}}
+    env_file: !override
+      - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+    # The one resource cap flagged as load-bearing in docs/devops/RESOURCE_REQUIREMENTS.md §2 —
+    # protects the always-on backend/bot from CPU/RAM contention during the nightly pipeline +
+    # ML retrain (steps 10-12) without needing a second VPS. Raised from 3g to 5g 2026-09-24: a
+    # real production run on the 8GB VPS was OOM-killed by the cgroup at step 11 (ML training,
+    # momentum target) — momentum_predictor.py peaked around ~3.1GB resident, over the old 3g cap
+    # (kernel log: "Killed process ... python.exe ... anon-rss:3132224kB"). 5g leaves ~2.5GB of
+    # headroom on this box for postgres+backend+caddy+OS at the same time (verified against a real
+    # run before raising this — see docs/devops/PRODUCTION_MIGRATION_RUNBOOK.md / Gate 4 report).
+    mem_limit: 5g
+    cpus: "2.0"
+
+  channel-sender:
+    build: !reset null
+    image: ghcr.io/danielbugi/wolfx_alpha-mechanism:${MECHANISM_IMAGE_TAG:-${IMAGE_TAG:-mechanism-tag-not-set}}
+    env_file: !override
+      - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+
+volumes:
+  caddy_data:
+  caddy_config:
