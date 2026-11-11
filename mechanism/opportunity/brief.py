@@ -1,4 +1,4 @@
-"""Opportunity Intelligence v0: assemble the owner's change briefs for ONE explicit session.
+"""Opportunity Intelligence v1: assemble the owner's change briefs for ONE explicit session.
 
     python mechanism/opportunity/brief.py --session 2026-11-10 [--days 14] [--json out.json]
 
@@ -34,6 +34,15 @@ DEFAULT_WINDOW_DAYS = 14
 EARNINGS_AFTER_FILING_DAYS = 3        # an earnings release up to 3 days after the 10-Q acceptance still belongs to the same quarter
 PREDICTIVE = re.compile(r"\b(buy\w*|sell\w*|targets?|recommend\w*|should|will\s+(rise|fall|climb|drop|go)|outperform\w*|guarantee\w*|alpha|"
                         r"winners?|picks?|upside|undervalued|bargain|opportunit\w*|signals?)\b", re.I)
+
+
+CAVEATS = [
+    "Market response is how the price moved, not evidence that the business is better; it is shown as a separate dimension.",
+    "No verified pre-release EPS consensus is stored (the vendor row is overwritten after the release), so expectations are not counted.",
+    "Prices are unadjusted (adj_close equals close in this database); windows with a detected discontinuity or a one-day move matching a 2x-20x split "
+    "ratio are marked unreliable. Smaller splits (3:2, 5:4) cannot be told apart from a large earnings move without corporate-action data.",
+    "Categories describe evidence. None of them is a forecast, a rating or a recommendation; outcomes are not measured yet (Evidence Ledger).",
+]
 
 
 def cutoff(session: date) -> datetime:
@@ -72,6 +81,11 @@ def build(data: Mapping[str, Any], session: date, window_days: int = DEFAULT_WIN
     for r in data["earnings"]:
         earnings[r["symbol"]].append(r)
     sessions = [d for d in data["sessions"] if d <= session]
+    disc: Dict[str, List[Mapping[str, Any]]] = defaultdict(list)
+    for d in data.get("discontinuities", []):
+        if _aware(d["detected_at"]) <= cut:                    # a discontinuity found only after the cutoff was not known then
+            disc[d["symbol"]].append(d)
+    pre_release = data.get("pre_release", {})                 # (symbol, report_date) -> verified consensus snapshot; none stored today
 
     briefs = []
     for (symbol, qe), evs in sorted(groups.items()):
@@ -85,35 +99,40 @@ def build(data: Mapping[str, Any], session: date, window_days: int = DEFAULT_WIN
 
         if _aware(head["feature_computed_at"]) > cut:
             pit["feature_recomputed_after_cutoff"] += 1
-            fund = [E.Fact(f, E.UNAVAILABLE, note="figures recomputed after the knowledge cutoff") for f in E.FUNDAMENTAL_FACTS]
+            business = [E.Fact(f, E.UNAVAILABLE, note="figures recomputed after the knowledge cutoff") for f in E.FUNDAMENTAL_FACTS]
         else:
-            fund = E.fundamental_facts(head["feature_metrics"], source, public_at)
+            business = E.business_facts(head["feature_metrics"], source, public_at)
 
         er = match_earnings(earnings.get(symbol, []), qe, public_day, session)
         if er and _aware(er["fetched_at"]) > cut:
             pit["earnings_refetched_after_cutoff"] += 1
-            surprise, er_day = E.surprise_fact(None, "the vendor row was refreshed after the knowledge cutoff; the value known then cannot be proven"), None
+            expectations, er_day = E.expectations_fact(None, None, "the vendor row was refreshed after the knowledge cutoff; the value known then cannot be proven"), None
         else:
-            surprise, er_day = E.surprise_fact(er), (er["report_date"] if er else None)
+            expectations, er_day = E.expectations_fact(er, pre_release.get((symbol, er["report_date"])) if er else None), (er["report_date"] if er else None)
 
         first_public = min(d for d in (public_day, er_day) if d is not None)
-        reaction = E.reaction_fact(symbol, sessions, first_public, data["bars"].get(symbol, {}), data["bench"])
-        conv = E.convergence(fund, surprise, reaction)
+        market = E.market_fact(symbol, sessions, first_public, data["bars"].get(symbol, {}), data["bench"], disc.get(symbol, ()))
+        assessment = E.assess(business, expectations, market)
         briefs.append({
             "version": E.BRIEF_VERSION, "symbol": symbol, "company_name": head.get("company_name"), "quarter_end": qe.isoformat(),
             "filing": {"form": form, "accession": head.get("accession"), "accepted_at": public_at, "source": source},
             "first_public": first_public.isoformat(),
             "what_changed": [{"event_type": e["event_type"], "label": PUBLIC_TYPES.get(e["event_type"], (None, e["event_type"]))[1],
                               "lines": list(e.get("explanation") or []), "source": source, "available_at": public_at} for e in evs],
-            "evidence": {"fundamental": [E.fact_dict(f) for f in fund], "surprise": E.fact_dict(surprise), "reaction": E.fact_dict(reaction)},
-            "convergence": conv, "contradictions": E.contradictions(fund, surprise, reaction),
+            "evidence": {"business": [E.fact_dict(f) for f in business], "expectations": E.fact_dict(expectations), "market": E.fact_dict(market)},
+            "assessment": assessment, "contradictions": E.contradictions(business, expectations, market),
         })
 
     ordered = E.order(briefs)
+    by_cat = Counter(b["assessment"]["category"] for b in ordered)
     return {"version": E.BRIEF_VERSION, "session": session.isoformat(), "knowledge_cutoff": cut.isoformat(), "window_days": window_days,
             "calendar_source": data.get("calendar_source"),
-            "counts": {"company_quarters": len(ordered), "converging": sum(b["convergence"]["converging"] for b in ordered),
-                       "by_classes_supporting": dict(sorted(Counter(len(b["convergence"]["supporting"]) for b in ordered).items()))},
+            "counts": {"company_quarters": len(ordered), "converging": sum(b["assessment"]["converging"] for b in ordered),
+                       "by_category": {k: by_cat.get(k, 0) for k in E.CATEGORY_LABELS},
+                       "expectations_verified": sum(b["assessment"]["dimensions"]["expectations"] in (E.SUPPORTS, E.CONTRADICTS, E.NEUTRAL) for b in ordered),
+                       "market_unreliable": sum(b["assessment"]["dimensions"]["market"] == E.UNRELIABLE for b in ordered)},
+            "category_labels": E.CATEGORY_LABELS,
+            "caveats": CAVEATS,
             "pit_exclusions": dict(sorted(pit.items())), "briefs": ordered}
 
 
@@ -123,7 +142,7 @@ def wording_violations(report: Mapping[str, Any]) -> List[str]:
     for b in report["briefs"]:
         for w in b["what_changed"]:
             texts += w["lines"]
-        texts += [c["text"] for c in b["contradictions"]] + [b["convergence"]["summary"]]
+        texts += [c["text"] for c in b["contradictions"]] + [b["assessment"]["summary"], b["assessment"]["category_label"]]
     return [t for t in texts if PREDICTIVE.search(t)]
 
 

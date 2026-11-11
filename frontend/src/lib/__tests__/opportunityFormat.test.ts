@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DASH, fmtFigure, fmtUsd, fmtWhen, provenance, VERDICT_LABEL } from '@/lib/opportunityFormat';
+import { DASH, fmtFigure, fmtUsd, fmtWhen, provenance, VERDICT_CLASS, VERDICT_LABEL, VIEW_LABEL } from '@/lib/opportunityFormat';
 
 describe('opportunityFormat', () => {
   it('never turns a missing value into zero', () => {
@@ -22,7 +22,12 @@ describe('opportunityFormat', () => {
     expect(provenance({ label: 'Revenue', value: 1, unit: 'usd', source: 'SEC 10-Q 0001511737-26-000074', available_at: '2026-11-06T12:01:36+00:00' }))
       .toBe('SEC 10-Q 0001511737-26-000074 · 2026-11-06 12:01 UTC');
   });
-  it('verdict labels are descriptive, not advice', () => {
-    for (const v of Object.values(VERDICT_LABEL)) expect(v).not.toMatch(/buy|sell|target|should|outperform/i);
+  it('labels are descriptive, never advice or a forecast', () => {
+    for (const v of [...Object.values(VERDICT_LABEL), ...Object.values(VIEW_LABEL)]) expect(v).not.toMatch(/buy|sell|target|should|outperform|opportunit|signal|winner/i);
+  });
+  it('a market response is never coloured as business evidence', () => {
+    expect(VERDICT_CLASS.positive).not.toBe(VERDICT_CLASS.supports);
+    expect(VERDICT_CLASS.negative).not.toBe(VERDICT_CLASS.contradicts);
+    expect(VERDICT_CLASS.unverified).toBe(VERDICT_CLASS.unavailable);
   });
 });

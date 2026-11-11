@@ -2,7 +2,8 @@
 // Read-only, owner-only client for Opportunity Intelligence v0 (GET /api/opportunity/*). Descriptive change briefs: no score, no forecast.
 import { apiClient } from '@/services/api';
 
-export type Verdict = 'supports' | 'contradicts' | 'neutral' | 'mixed' | 'unavailable' | 'held';
+export type Verdict = 'supports' | 'contradicts' | 'neutral' | 'mixed' | 'unavailable' | 'held' | 'unverified' | 'positive' | 'negative' | 'flat' | 'unreliable';
+export type View = 'all' | 'agreeing' | 'discovery';
 export type FigureUnit = 'usd' | 'pct' | 'pp' | 'bps' | 'x' | 'usd_per_share';
 
 export interface OIFigure {
@@ -14,7 +15,7 @@ export interface OIFigure {
 }
 
 export interface OIFact {
-  family: 'revenue' | 'operating' | 'net_income' | 'cash' | 'surprise' | 'reaction';
+  family: 'revenue' | 'operating' | 'net_income' | 'cash' | 'expectations' | 'market';
   label: string;
   verdict: Verdict;
   figures: OIFigure[];
@@ -29,14 +30,16 @@ export interface OIBrief {
   filing: { form: string; accession: string | null; accepted_at: string; source: string };
   first_public: string;
   what_changed: { event_type: string; label: string; lines: string[]; source: string; available_at: string }[];
-  evidence: { fundamental: OIFact[]; surprise: OIFact; reaction: OIFact };
-  convergence: {
-    classes: { fundamental: Verdict; surprise: Verdict; reaction: Verdict };
-    supporting: string[];
-    contradicting: string[];
+  evidence: { business: OIFact[]; expectations: OIFact; market: OIFact };
+  assessment: {
+    dimensions: { business: Verdict; expectations: Verdict; market: Verdict };
+    agreeing: string[];
+    disagreeing: string[];
+    category: string;
+    category_label: string;
     converging: boolean;
-    fundamental_supporting: string[];
-    fundamental_contradicting: string[];
+    business_improved: string[];
+    business_worsened: string[];
     summary: string;
   };
   contradictions: { family: string; kind: 'contradicts' | 'caution'; text: string }[];
@@ -48,14 +51,18 @@ export interface OIReport {
   knowledge_cutoff: string;
   provisional: boolean;
   window_days: number;
-  counts: { company_quarters: number; converging: number; by_classes_supporting: Record<string, number> };
+  counts: { company_quarters: number; converging: number; by_category: Record<string, number>; expectations_verified: number; market_unreliable: number };
+  category_labels: Record<string, string>;
+  caveats: string[];
+  view: View;
+  matching: number;
   pit_exclusions: Record<string, number>;
   returned: number;
   briefs: OIBrief[];
 }
 
 export const opportunityApi = {
-  async briefs(params: { session?: string; days?: number; converging_only?: boolean; limit?: number } = {}): Promise<OIReport> {
+  async briefs(params: { session?: string; days?: number; view?: View; limit?: number } = {}): Promise<OIReport> {
     const r = await apiClient.get<OIReport>('/api/opportunity/briefs', { params });
     return r.data;
   },

@@ -49,25 +49,48 @@ export function provenance(f: OIFigure): string {
 }
 
 export const VERDICT_LABEL: Record<Verdict, string> = {
-  supports: 'Supports',
-  contradicts: 'Contradicts',
+  supports: 'Improved',
+  contradicts: 'Worsened',
   neutral: 'No clear change',
   mixed: 'Mixed',
   unavailable: 'Not available',
   held: 'Held (non-operating)',
+  unverified: 'Not verified',
+  positive: 'Rose vs S&P 500',
+  negative: 'Fell vs S&P 500',
+  flat: 'In line with S&P 500',
+  unreliable: 'Unreliable window',
 };
 
+const GOOD = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+const BAD = 'bg-rose-50 text-rose-800 border-rose-200';
+const AMBER = 'bg-amber-50 text-amber-800 border-amber-200';
+const PLAIN = 'bg-slate-50 text-slate-700 border-slate-200';
+const NONE = 'bg-white text-slate-400 border-slate-200';
+const MARKET = 'bg-sky-50 text-sky-800 border-sky-200';
 export const VERDICT_CLASS: Record<Verdict, string> = {
-  supports: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-  contradicts: 'bg-rose-50 text-rose-800 border-rose-200',
-  neutral: 'bg-slate-50 text-slate-700 border-slate-200',
-  mixed: 'bg-amber-50 text-amber-800 border-amber-200',
-  unavailable: 'bg-white text-slate-400 border-slate-200',
-  held: 'bg-amber-50 text-amber-800 border-amber-200',
+  supports: GOOD,
+  contradicts: BAD,
+  neutral: PLAIN,
+  mixed: AMBER,
+  unavailable: NONE,
+  held: AMBER,
+  unverified: NONE,
+  // market response uses its own neutral palette: a price move is a response, not evidence of business quality
+  positive: MARKET,
+  negative: MARKET,
+  flat: MARKET,
+  unreliable: AMBER,
 };
 
-export const CLASS_LABEL: Record<'fundamental' | 'surprise' | 'reaction', string> = {
-  fundamental: 'Reported figures',
-  surprise: 'EPS vs estimate',
-  reaction: 'Price vs S&P 500',
+export const DIMENSION_LABEL: Record<'business' | 'expectations' | 'market', string> = {
+  business: 'Business',
+  expectations: 'Expectations',
+  market: 'Market response',
+};
+
+export const VIEW_LABEL: Record<'agreeing' | 'discovery' | 'all', string> = {
+  agreeing: 'Business improved, market rose',
+  discovery: 'Business improved, market did not',
+  all: 'All changes',
 };

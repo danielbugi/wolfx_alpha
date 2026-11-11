@@ -1,7 +1,7 @@
 """Opportunity Intelligence v0: the read-only repository. Every read runs on a READ ONLY session (a write raises), and every query is bounded
 by the explicit session; the knowledge-cutoff filters are applied in brief.py, on the timestamps returned here.
 
-Reads: fundamental_inflection_event, fundamental_feature, sec_filing, companies, earnings_calendar, stock_prices, market_index_prices
+Reads: fundamental_inflection_event, fundamental_feature, sec_filing, companies, earnings_calendar, price_discontinuities, stock_prices, market_index_prices
 (prices and the benchmark through research.labels.repository, the fwd_v1 readers, unchanged)."""
 from __future__ import annotations
 
@@ -29,6 +29,10 @@ SELECT e.id, e.symbol, e.quarter_end, e.event_type, e.severity, e.available_at, 
   LEFT JOIN LATERAL (SELECT c.company_name FROM companies c WHERE c.symbol = e.symbol LIMIT 1) co ON true
  WHERE e.method_version = %s AND e.event_type = ANY(%s) AND e.available_at BETWEEN %s AND %s
  ORDER BY e.symbol, e.quarter_end, e.event_type
+"""
+
+DISCONTINUITY_SQL = """
+SELECT symbol, date, kind, ratio, detected_at FROM price_discontinuities WHERE symbol = ANY(%s) AND date BETWEEN %s AND %s ORDER BY symbol, date
 """
 
 EARNINGS_SQL = """
@@ -67,7 +71,8 @@ def load(conn, session: date, start: date, headline_types: Sequence[str], price_
         sessions, calendar_source = labels_sessions.derive_sessions(conn, price_start, session, BENCHMARK)
         bars = labels_repo.fetch_bars(conn, symbols, price_start, session) if symbols else {}
         bench = labels_repo.fetch_benchmark(conn, BENCHMARK, price_start, session)
-    return {"events": events, "earnings": earnings, "sessions": list(sessions), "calendar_source": calendar_source,
+        disc = _rows(conn, DISCONTINUITY_SQL, (symbols, price_start, session)) if symbols else []
+    return {"events": events, "earnings": earnings, "discontinuities": disc, "pre_release": {}, "sessions": list(sessions), "calendar_source": calendar_source,
             "bars": {s: {d: b.close for d, b in by.items() if b.close is not None} for s, by in bars.items()}, "bench": bench}
 
 

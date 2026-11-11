@@ -1,4 +1,4 @@
-"""Opportunity Intelligence v0 (owner-only, read-only): change briefs with their evidence. Descriptive: no score, no forecast, no advice.
+"""Opportunity Intelligence v1 (owner-only, read-only): change briefs with their evidence. Descriptive: no score, no forecast, no advice.
 docs/architecture/OPPORTUNITY_INTELLIGENCE.md."""
 import logging
 from datetime import date
@@ -25,10 +25,12 @@ def get_opportunity_service() -> OpportunityService:
 
 @opportunity_router.get("/briefs")
 def list_briefs(session: Optional[date] = Query(None, description="Market session (default: newest session with an S&P 500 close)"),
-                days: int = Query(14, ge=1, le=60), converging_only: bool = False, limit: int = Query(100, ge=1, le=1000),
+                days: int = Query(14, ge=1, le=60),
+                view: str = Query("all", pattern="^(all|agreeing|discovery)$", description="all | agreeing | discovery (business improved, market flat or negative)"),
+                limit: int = Query(100, ge=1, le=1000),
                 svc: OpportunityService = Depends(get_opportunity_service)):
     try:
-        return svc.briefs(session, days, converging_only, limit)
+        return svc.briefs(session, days, view, limit)
     except (OpportunityUnavailable, LookupError) as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:  # noqa: BLE001

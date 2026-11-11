@@ -70,6 +70,7 @@ def seeded(env):
                                    %s, %s, %s)""",
                         (sym, t, Json([f"{t} explained"]), Json(["pit_as_of:2026-11-04", f"prov:q={acc}"]), (sym + t).encode().hex()[:64].ljust(64, "0"),
                          detected, detected))
+    cur.execute("INSERT INTO price_discontinuities (symbol, date, kind, prev_close, close, ratio, detected_at) VALUES ('AAA', '2026-10-01', 'jump_up', 25, 100, 4, '2026-10-02')")
     cur.execute("INSERT INTO earnings_calendar (symbol, report_date, eps_estimate, eps_actual, surprise_pct, fetched_at) VALUES ('AAA', '2026-11-04', 1.00, 1.08, 8.0, %s)",
                 (datetime(2026, 11, 6, 22, 0, tzinfo=UTC),))
     conn.commit()
@@ -85,9 +86,20 @@ def test_the_brief_end_to_end_on_the_real_schema(seeded):
     assert b["company_name"] == "AAA Corp." and b["filing"]["accession"] == "0000123456-26-000077" and b["filing"]["form"] == "10-Q"
     assert b["filing"]["accepted_at"] == "2026-11-04T21:05:00+00:00"
     assert [w["event_type"] for w in b["what_changed"]] == ["margin_expansion", "revenue_acceleration"]
-    assert b["convergence"]["supporting"] == ["fundamental", "surprise", "reaction"] and b["convergence"]["converging"]
-    assert b["evidence"]["reaction"]["note"] == "window 2026-11-03 close to 2026-11-06 close"
+    a = b["assessment"]
+    assert a["dimensions"] == {"business": E.SUPPORTS, "expectations": E.UNVERIFIED, "market": E.POSITIVE} and a["converging"]
+    assert b["evidence"]["market"]["note"] == "window 2026-11-03 close to 2026-11-06 close"     # the October discontinuity is outside the window
     assert B.wording_violations(rep) == []
+
+
+def test_the_repository_reads_discontinuities_and_has_no_pre_release_store(seeded):
+    conn = seeded.admin()
+    try:
+        data = R.load(conn, SESSION, SESSION - timedelta(days=14), E.HEADLINE_TYPES, SESSION - timedelta(days=134))
+    finally:
+        conn.close()
+    assert [(d["symbol"], d["date"]) for d in data["discontinuities"]] == [("AAA", date(2026, 10, 1))]
+    assert data["pre_release"] == {}                                                           # no verified consensus snapshots exist yet
 
 
 def test_reads_run_in_a_read_only_session_and_the_connection_is_restored(seeded):

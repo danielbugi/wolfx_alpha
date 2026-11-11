@@ -1,6 +1,6 @@
 # Opportunity Intelligence: architecture (v0 → v2)
 
-Status 2026-11-12: **v0 built on this draft PR (owner-only, read-only), NOT deployed.** First real output: a read-only run against production for session 2026-11-10 (625 company-quarters, 186 converging, 0 availability exclusions). Follows the Value Expansion audit (draft PR #106, ranks 1 and 2) and the owner's
+Status 2026-11-12: **v1 built on this PR (owner-only, read-only), NOT deployed.** Real output: a read-only run against production for session 2026-11-10 (section 5). Follows the Value Expansion audit (draft PR #106, ranks 1 and 2) and the owner's
 2026-11-11 decision that Opportunity Intelligence is the next product priority after the Fundamental Updates release.
 
 ## 1. What it is, in one sentence
@@ -65,27 +65,28 @@ verified from the filing, in plain language, the day it became public". No inves
   same session returns the same bytes (determinism test). Freezing for the record happens in v1 through the Evidence Ledger (`event_observation`
   with `source = 'change_brief'`, audit §6.3 decision 8), not a second table.
 
-## 5. Ordering without a score (owner decision 2026-11-11: evidence convergence)
+## 5. v1 rules (owner decisions 2026-11-11 and 2026-11-12)
 
-**Evidence classes** (independent sources): *reported figures* (the SEC filing vs a year earlier), *EPS vs the consensus estimate*, *price move vs
-the S&P 500* (close before the first public day to the close of the 3rd session from it). **Accounting facts** inside the first class, one per
-underlying fact (`update_select.FAMILY`), so derived metrics never count twice: revenue (growth, acceleration, QoQ), operating (income, margin,
-leverage), net income, cash (FCF, FCF margin, conversion). A net-income gain mostly unexplained by operating income is **held** (shown as a
-caution, not counted).
+Three **separate** dimensions, never merged into one number:
 
-| Verdict | Reported figures | EPS surprise | Price move vs S&P 500 |
+| Dimension | Question | Verdicts | Counted when |
 |---|---|---|---|
-| supports | ≥ 2 facts improved, none worsened | ≥ +2% | ≥ +1 pp |
-| contradicts | more facts worsened than improved | ≤ −2% | ≤ −1 pp |
-| otherwise | mixed / no clear change | in line | no clear move |
-| unavailable | figures recomputed after the cutoff | no row, no figure, or re-fetched after the cutoff | window not complete by the session |
+| **Business** | Did the reported business improve? SEC figures vs a year earlier, one verdict per accounting fact (revenue; operating; net income; cash). Derived metrics of one fact count once (`update_select.FAMILY`). Net-income gains mostly unexplained by operating income are *held*. | improved (≥ 2 facts up, none down) / mixed / worsened / no clear change / not available | always |
+| **Expectations** | Did EPS beat what was expected **before** the release? | above / in line / below (±2%), or **not verified** | only with a verified **pre-release** consensus snapshot (observed before 00:00 New York on the report date). `earnings_calendar` is overwritten on every fetch, so the row holding the reported EPS was always written after the release: **0 verified today**; vendor figures are shown labelled unverified and never counted. Enabling it needs a first-seen consensus store (Evidence Ledger work), no code change here. |
+| **Market response** | How did the price respond vs the S&P 500 (close before the first public day → close of the 3rd session)? A response, **not** evidence of business quality (separate colour in the UI). | rose / in line / fell (±1 pp), **unreliable**, not available | not when **unreliable**: a `price_discontinuities` row known by the cutoff inside the window, or a one-day move matching a 2x–20x split ratio. `adj_close` equals `close` in this database, so returns are unadjusted; 3:2 / 5:4 splits cannot be told from a large earnings move without corporate-action data (on 2026-11-10 those ratios matched 38 genuine earnings-day moves, so they are not used). Missing bar → not available. |
 
-**Converging** = reported figures support AND at least one more class supports AND no class contradicts.
-**Order** (deterministic, `evidence.order_key`): converging first → supported business change → more supporting classes → fewer contradicting →
-more improved facts → fewer worsened → newest first public day → symbol. The counts are shown as the facts they are; nothing is called a score.
+**Categories** (business first; the market only describes the response): *Business improved; market response positive* · *Business improved;
+market response flat or negative* (the **discovery view**: a research list, not a buy signal) · *Business improved; market response unreliable or
+not yet available* · *Business evidence mixed* · *Business did not clearly improve*. "Agreeing" = the first category with nothing disagreeing.
+
+**Order** (unchanged, deterministic, `evidence.order_key`): agreeing first → business improved → more agreeing dimensions → fewer disagreeing →
+more improved facts → fewer worsened → newest first public day → symbol. Counts are shown as the facts they are; nothing is a score.
 
 **Knowledge cutoff** for session S = (S + 1 day) 12:00 UTC. Excluded and counted: events first detected or revised after it, figures recomputed
-after it, earnings rows re-fetched after it (their earlier value is not stored). Prices: sessions ≤ S only.
+after it, earnings rows re-fetched after it, discontinuities detected after it. Prices: sessions ≤ S only.
+
+**Production read-only run, session 2026-11-10, 14 days:** 625 company-quarters; business improved & market rose 176; business improved & market
+flat/fell 139; business improved & market unreadable 20; mixed 243; not improved 47; expectations verified 0; unreliable windows 0 (none in 60 days).
 
 ## 6. Versions
 
@@ -117,14 +118,14 @@ after it, earnings rows re-fetched after it (their earlier value is not stored).
 Runs in parallel with the Fundamental Updates record-only observation (it touches no production component until its deploy is approved) and
 before the Evidence Ledger, which v1 then plugs into.
 
-## 9. v0: operational vs incomplete (2026-11-12)
+## 9. v1: operational vs incomplete (2026-11-12)
 
 | Operational on this PR | Incomplete |
 |---|---|
 | `mechanism/opportunity/` (pure evidence + ordering, read-only repository, CLI `brief.py --session`) | Not deployed (backend + frontend release need approval) |
 | Owner-only read-only API `/api/opportunity/briefs[/{symbol}]`; owner page `/opportunities` | No outcomes yet: needs the Evidence Ledger (migration 44) |
-| Tests: 22 pure (families, PIT exclusions, ordering, wording, no writes), real-schema DB test (CI db job), API access tests, frontend format tests | Unadjusted closes: a split inside the 3-session window distorts that company's move |
-| Read-only production run for 2026-11-10: 625 company-quarters, 186 converging; wording guard clean | Earnings estimates have no first-seen history; rows re-fetched after the cutoff are excluded, not reconstructed |
+| Tests: 26 pure (dimensions, pre-release rule, split/discontinuity flags, categories, PIT, ordering, wording, no writes), 3 real-schema DB tests (CI db job), 6 API tests, frontend format tests | Unadjusted closes: 3:2 / 5:4 splits are not detectable without corporate-action data |
+| Read-only production run for 2026-11-10 (section 5); wording guard clean | Expectations dimension inactive: no verified pre-release consensus is stored |
 | | No sector / size / strength context; no public version |
 
 ## 10. Open questions for the owner (none block v0)

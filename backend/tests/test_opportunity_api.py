@@ -13,12 +13,13 @@ from routers.opportunity import get_opportunity_service, opportunity_router  # n
 from services import opportunity_service as OS  # noqa: E402
 
 
-def _brief(sym, converging):
-    return {"symbol": sym, "convergence": {"converging": converging}}
+def _brief(sym, converging, category):
+    return {"symbol": sym, "assessment": {"converging": converging, "category": category}}
 
 
 REPORT = {"version": "brief_v0", "session": "2026-11-10", "knowledge_cutoff": "2026-11-11T12:00:00+00:00", "counts": {}, "pit_exclusions": {},
-          "briefs": [_brief("AAA", True), _brief("BBB", False), _brief("CCC", True)]}
+          "briefs": [_brief("AAA", True, "business_improved_market_confirmed"), _brief("BBB", False, "business_improved_market_not_confirming"),
+                     _brief("CCC", True, "business_improved_market_confirmed")]}
 
 
 class _Svc(OS.OpportunityService):
@@ -49,8 +50,12 @@ def test_owner_only():
 
 def test_filters_and_explicit_session():
     svc = _Svc()
-    r = _client("owner", svc).get("/api/opportunity/briefs", params={"session": "2026-11-10", "days": 7, "converging_only": "true", "limit": 1}).json()
-    assert [b["symbol"] for b in r["briefs"]] == ["AAA"] and r["returned"] == 1 and svc.calls == [(date(2026, 11, 10), 7)]
+    c = _client("owner", svc)
+    r = c.get("/api/opportunity/briefs", params={"session": "2026-11-10", "days": 7, "view": "agreeing", "limit": 1}).json()
+    assert [b["symbol"] for b in r["briefs"]] == ["AAA"] and r["returned"] == 1 and r["matching"] == 2 and svc.calls == [(date(2026, 11, 10), 7)]
+    d = c.get("/api/opportunity/briefs", params={"view": "discovery"}).json()
+    assert [b["symbol"] for b in d["briefs"]] == ["BBB"] and d["view"] == "discovery"
+    assert c.get("/api/opportunity/briefs", params={"view": "buy"}).status_code == 422
 
 
 def test_company_brief_and_404():
