@@ -1,6 +1,6 @@
 # Opportunity Intelligence: architecture (v0 → v2)
 
-Status 2026-11-11: **design, nothing built or deployed.** Follows the Value Expansion audit (draft PR #106, ranks 1 and 2) and the owner's
+Status 2026-11-12: **v0 built on this draft PR (owner-only, read-only), NOT deployed.** First real output: a read-only run against production for session 2026-11-10 (625 company-quarters, 186 converging, 0 availability exclusions). Follows the Value Expansion audit (draft PR #106, ranks 1 and 2) and the owner's
 2026-11-11 decision that Opportunity Intelligence is the next product priority after the Fundamental Updates release.
 
 ## 1. What it is, in one sentence
@@ -65,16 +65,27 @@ verified from the filing, in plain language, the day it became public". No inves
   same session returns the same bytes (determinism test). Freezing for the record happens in v1 through the Evidence Ledger (`event_observation`
   with `source = 'change_brief'`, audit §6.3 decision 8), not a second table.
 
-## 5. Ordering without a score
+## 5. Ordering without a score (owner decision 2026-11-11: evidence convergence)
 
-Default order of the list (each key shown in the UI as the fact it is):
-1. **Newest public first** (`public_at` desc) — the product is "the day it became public".
-2. Within a day: **number of independent agreeing facts** (business support signals agreeing with the headline change; earnings surprise of the
-   same sign; positive 2-session excess reaction), displayed as "3 of 4 operating signals agree; surprise +; reaction +", never as a number out of 10.
-3. Then company size (market cap, desc), then symbol.
+**Evidence classes** (independent sources): *reported figures* (the SEC filing vs a year earlier), *EPS vs the consensus estimate*, *price move vs
+the S&P 500* (close before the first public day to the close of the 3rd session from it). **Accounting facts** inside the first class, one per
+underlying fact (`update_select.FAMILY`), so derived metrics never count twice: revenue (growth, acceleration, QoQ), operating (income, margin,
+leverage), net income, cash (FCF, FCF margin, conversion). A net-income gain mostly unexplained by operating income is **held** (shown as a
+caution, not counted).
 
-Filters: event type, sector, "held by the divergence heuristic", selected / not selected. **Decision for the owner (default chosen):** key 2 orders
-by agreement count. If the owner prefers zero implied judgement, key 2 is dropped and the order is purely by time and size; one constant.
+| Verdict | Reported figures | EPS surprise | Price move vs S&P 500 |
+|---|---|---|---|
+| supports | ≥ 2 facts improved, none worsened | ≥ +2% | ≥ +1 pp |
+| contradicts | more facts worsened than improved | ≤ −2% | ≤ −1 pp |
+| otherwise | mixed / no clear change | in line | no clear move |
+| unavailable | figures recomputed after the cutoff | no row, no figure, or re-fetched after the cutoff | window not complete by the session |
+
+**Converging** = reported figures support AND at least one more class supports AND no class contradicts.
+**Order** (deterministic, `evidence.order_key`): converging first → supported business change → more supporting classes → fewer contradicting →
+more improved facts → fewer worsened → newest first public day → symbol. The counts are shown as the facts they are; nothing is called a score.
+
+**Knowledge cutoff** for session S = (S + 1 day) 12:00 UTC. Excluded and counted: events first detected or revised after it, figures recomputed
+after it, earnings rows re-fetched after it (their earlier value is not stored). Prices: sessions ≤ S only.
 
 ## 6. Versions
 
@@ -106,9 +117,17 @@ by agreement count. If the owner prefers zero implied judgement, key 2 is droppe
 Runs in parallel with the Fundamental Updates record-only observation (it touches no production component until its deploy is approved) and
 before the Evidence Ledger, which v1 then plugs into.
 
-## 9. Open questions for the owner (none block v0)
+## 9. v0: operational vs incomplete (2026-11-12)
 
-1. Ordering key 2 (agreement count) — keep, or time-and-size only? Default: keep.
-2. Should v0 also include companies **without** a v2 event but with an earnings surprise and a large reaction? Default: no (v0 is change-led;
-   reaction-only cases are a later "market reaction" view).
-3. Retire overlapping "who is moving" views once the brief exists (audit §2.3)? Default: no change until the owner reviews usage.
+| Operational on this PR | Incomplete |
+|---|---|
+| `mechanism/opportunity/` (pure evidence + ordering, read-only repository, CLI `brief.py --session`) | Not deployed (backend + frontend release need approval) |
+| Owner-only read-only API `/api/opportunity/briefs[/{symbol}]`; owner page `/opportunities` | No outcomes yet: needs the Evidence Ledger (migration 44) |
+| Tests: 22 pure (families, PIT exclusions, ordering, wording, no writes), real-schema DB test (CI db job), API access tests, frontend format tests | Unadjusted closes: a split inside the 3-session window distorts that company's move |
+| Read-only production run for 2026-11-10: 625 company-quarters, 186 converging; wording guard clean | Earnings estimates have no first-seen history; rows re-fetched after the cutoff are excluded, not reconstructed |
+| | No sector / size / strength context; no public version |
+
+## 10. Open questions for the owner (none block v0)
+
+1. Should v0 also include companies **without** a v2 event but with an earnings surprise and a large reaction? Default: no (change-led).
+2. Retire overlapping "who is moving" views once the brief exists (audit §2.3)? Default: no change until the owner reviews usage.
