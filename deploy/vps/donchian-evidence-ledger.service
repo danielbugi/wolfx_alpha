@@ -1,0 +1,14 @@
+# COMMITTED BUT DORMANT. Installed by nobody: copying it to /etc/systemd/system, `systemctl daemon-reload` and `systemctl enable --now` on the paired timer are
+# manual administrator steps that need owner approval (docs/research/EVIDENCE_LEDGER.md, "Activation"). Even once enabled, the wrapper refuses (exit 5) without
+# its own pin and arming file. It reads the database read-only and appends only to /opt/donchian/evidence_ledger/ledger.jsonl.
+[Unit]
+Description=First Light: Evidence Ledger nightly capture (read-only; latest completed session)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/donchian/scripts/run_evidence_ledger.sh capture
+TimeoutStartSec=30m
+# 3 = another run holds the lock: not a failure (the other fire re-checks)
+SuccessExitStatus=3

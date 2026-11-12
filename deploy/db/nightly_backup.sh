@@ -53,12 +53,27 @@ rm -f "$DIR/.restore_list_err"
 sha256sum "$DIR/production.dump" | awk '{print $1"  production.dump"}' > "$DIR/production.dump.sha256"
 ( cd "$DIR" && sha256sum -c production.dump.sha256 > /dev/null ) || fail "checksum self-check failed"
 
+# Evidence Ledger (docs/research/EVIDENCE_LEDGER.md): an append-only research file that is NOT in the database. Copied under the ledger's own lock (the
+# capture holds it while appending), so a half-written line is never copied. Absent = the ledger is not activated (noted, not an error). A failed copy is a
+# WARNING in the log line, never a failed run: the database dump above is already good and fail() would delete it.
+LEDGER="$BASE/evidence_ledger/ledger.jsonl"
+LEDGER_NOTE="ledger=absent"
+if [ -f "$LEDGER" ]; then
+  if flock -w 600 "$LEDGER.lock" cp -p "$LEDGER" "$DIR/evidence_ledger.jsonl" \
+     && ( cd "$DIR" && sha256sum evidence_ledger.jsonl > evidence_ledger.jsonl.sha256 && sha256sum -c evidence_ledger.jsonl.sha256 > /dev/null ); then
+    LEDGER_NOTE="ledger_lines=$(wc -l < "$DIR/evidence_ledger.jsonl") ledger_sha256=$(cut -d' ' -f1 "$DIR/evidence_ledger.jsonl.sha256")"
+  else
+    rm -f "$DIR/evidence_ledger.jsonl" "$DIR/evidence_ledger.jsonl.sha256"
+    LEDGER_NOTE="ledger=WARNING_copy_failed"
+  fi
+fi
+
 chmod 700 "$DIR"
 chmod 600 "$DIR"/*
 chown -R root:root "$DIR"
 
 SIZE=$(stat -c %s "$DIR/production.dump")
-log "OK db=$DB dir=$DIR bytes=$SIZE sha256=$(cut -d' ' -f1 "$DIR/production.dump.sha256")"
+log "OK db=$DB dir=$DIR bytes=$SIZE sha256=$(cut -d' ' -f1 "$DIR/production.dump.sha256") $LEDGER_NOTE"
 
 # retention: delete completed runs older than RETAIN_DAYS, only after this run succeeded
 find "$OUT" -mindepth 1 -maxdepth 1 -type d -mtime "+$RETAIN_DAYS" -print -exec rm -rf {} \; \

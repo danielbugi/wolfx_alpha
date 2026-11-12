@@ -40,8 +40,11 @@ class Store:
         prev = GENESIS
         with open(self.path, encoding="utf-8") as fh:
             for n, raw in enumerate(fh, 1):
-                line = json.loads(raw)
-                body = {k: line[k] for k in ("seq", "kind", "key", "record", "record_hash", "identity", "prev_line_hash")}
+                try:
+                    line = json.loads(raw)
+                    body = {k: line[k] for k in ("seq", "kind", "key", "record", "record_hash", "identity", "prev_line_hash")}
+                except (ValueError, KeyError, TypeError) as e:
+                    raise LedgerCorrupt(f"{self.path}: unreadable line {n} ({type(e).__name__})") from None
                 if line["prev_line_hash"] != prev or line["seq"] != n or _h(_canon(line["record"])) != line["record_hash"] or _h(_canon(body)) != line["line_hash"]:
                     raise LedgerCorrupt(f"{self.path}: chain broken at line {n}")
                 prev = line["line_hash"]

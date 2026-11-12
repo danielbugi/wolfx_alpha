@@ -1,6 +1,6 @@
 # Evidence Ledger v0: prospective outcomes for Opportunity Intelligence
 
-Status 2026-11-12: **v0 built (draft PR), first real capture taken manually; no schedule, no migration, nothing deployed.**
+Status 2026-11-12: **v0 built (draft PR), first real capture taken manually; nightly capture + backup leg built and committed DORMANT; no migration, nothing deployed or scheduled.**
 Question it answers, by measurement and not by assumption: *after the business improved, do companies whose market response was positive and
 companies whose market response was not positive behave differently over the next 30, 90 and 180 days?*
 
@@ -32,14 +32,31 @@ not clearly improved 284, awaiting market window 9 · 398 pre-release consensus 
 added nothing (same chain head). Every horizon is pending: the first 30-day results mature from 2026-12-14.
 
 ## Data gaps
-1. **No schedule**: v0 captured once by hand. Without a nightly capture there are no new prospective discoveries and no classifying revisions.
-2. **Storage**: a file in the deploy user's home on the VPS, not in the nightly database backup. A database table (migration) or including the file
-   in the backup is needed before it is relied on.
+1. **Not scheduled yet**: the nightly unit is built but dormant (see below). Until it is armed there are no new prospective discoveries and no classifying revisions.
+2. **Storage**: until activation, a file in the deploy user's home on the VPS, not backed up. The backup leg (below) covers `/opt/donchian/evidence_ledger`; a
+   database table is a later option (migration), not needed for v0.
 3. **Sector benchmark**: no sector ETFs in the database; the peer median is a proxy with survivorship.
 4. **Splits**: `adj_close` equals `close`; distorted windows are excluded (unreliable), not corrected. 3:2 / 5:4 splits are not detectable.
 5. **Delistings**: the universe is today's listed names; a delisting shows as ended_early only after the window is complete.
 6. **Consensus history before 2026-11-12 does not exist** and will never be claimed.
 
-## Smallest next production action (needs approval)
-One nightly capture after the pipeline (session explicit), e.g. an optional pipeline step or a small timer running
-`cli.py capture --session <gate session> --store /opt/donchian/evidence_ledger/ledger.jsonl`, plus adding that file to the nightly backup.
+## Nightly capture + backup (built, committed DORMANT; activation needs owner approval)
+| Piece | What it does |
+|---|---|
+| `cli.py capture --latest-completed` | Session = latest COMPLETED session on the market calendar (`shared.market_calendar`, close + 120 min), never the wall clock; the weekday fallback is refused (exit 5). The session's `^GSPC` bar and ≥1,000 stock bars must be stored, else exit 2 (the later fire retries). Exclusive lock `<store>.lock` (exit 3). A corrupt or half-written ledger is refused (exit 9), nothing appended. |
+| `deploy/vps/run_evidence_ledger.sh` | One-off `docker compose run --rm channel-sender` with a read-only database session, the ledger dir mounted at `/ledger`. **Its own pin and arming file** (`CURRENT_EVIDENCE_LEDGER_SHA`, `EVIDENCE_LEDGER_ARMED`): never reads or moves the mechanism pin, so arming it cannot change the pipeline image. |
+| `donchian-evidence-ledger.{service,timer}` | 07:30 and 10:15 Asia/Jerusalem (after the pipeline, final post-market retry, discontinuity scan and collector; before the 11:45 backup). `Persistent=false`: a missed night is a visible gap whose discoveries are later labelled late_first_capture, never back-dated. |
+| `deploy/db/nightly_backup.sh` | Copies `/opt/donchian/evidence_ledger/ledger.jsonl` into the night's backup dir under the ledger lock, with its sha256; the OK log line carries `ledger_lines`/`ledger_sha256`. Absent = `ledger=absent`; a failed copy is a WARNING, never a failed database backup. `pull_nightly_backup.ps1` pulls and checks it off-box when present. |
+
+Verified 2026-11-12: 44 tests on Linux (the wrapper's refusal paths against a stub docker); an end-to-end `--latest-completed` run on production
+(read-only, against a copy of the ledger) resolved session 2026-11-11 at 20:39Z (11-12 not yet settled) and appended nothing (611 unchanged).
+
+### Activation (owner approval; root steps, outside any Fundamental Updates observation night)
+1. Merge this PR; build the mechanism image at the merge commit (CD build-and-push only; deploys nothing). Its tag `E` is the ledger's pin; the
+   mechanism pin `CURRENT_MECHANISM_SHA` is NOT changed.
+2. Root: install the new `nightly_backup.sh` and `run_evidence_ledger.sh` (mode 755) into `/opt/donchian/scripts`, the unit + timer into
+   `/etc/systemd/system`; `mkdir -m 700 /opt/donchian/evidence_ledger`; move the existing manual ledger in (`cp -p ~deploy/evidence_ledger/ledger.jsonl`,
+   check its sha256 `06503be3…`); `echo E > CURRENT_EVIDENCE_LEDGER_SHA`; `echo E > EVIDENCE_LEDGER_ARMED`.
+3. `run_evidence_ledger.sh report` (read-only) must load the chain (head `4edf18e8…`); then `systemctl daemon-reload && systemctl enable --now donchian-evidence-ledger.timer`.
+4. Next morning: the 07:30 capture log line, then the 11:45 backup line showing `ledger_lines=`.
+Rollback: `systemctl disable --now donchian-evidence-ledger.timer`; remove the arming file. The ledger file stays (append-only evidence).
