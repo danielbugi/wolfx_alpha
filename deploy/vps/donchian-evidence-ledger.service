@@ -5,6 +5,7 @@
 Description=First Light: Evidence Ledger nightly capture (read-only; latest completed session)
 After=docker.service
 Requires=docker.service
+OnFailure=donchian-evidence-ledger-alert.service
 
 [Service]
 Type=oneshot

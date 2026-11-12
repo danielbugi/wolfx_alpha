@@ -10,8 +10,19 @@ companies whose market response was not positive behave differently over the nex
 | `observation` | Every Opportunity Intelligence company-quarter of the captured session's window (the whole research universe, all categories): evidence as seen (dimensions, category, accounting facts, market excess, contradictions, filing), its sha256, the **point-in-time sector** (`sector_observation`, captured at or before the capture), the **actual capture time**. | First capture wins. The same evidence later is a no-op; changed evidence is a `observation_revision` that never replaces the discovery. |
 | `consensus` (`consensus_pre_release_v0`) | Each EPS estimate on file for a report in the next 60 days, with the vendor fetch time and the actual capture time. | Kept only if BOTH times precede 00:00 New York on the report date. A past report is never captured; nothing is verified retroactively. A changed estimate is a revision. |
 
-**Basis.** *prospective* = first public on the captured session or the one before. *late_first_capture* = first seen later (e.g. the 597-row backlog
-present when the ledger started on 2026-11-12). Reported separately, never pooled. Nothing is reconstructed backwards.
+**Basis.** *prospective* = first public on the captured session or the one before, captured on that session's own night. *delayed_processing* = the
+same, but the ledger's night was missed and the session was processed on a later run (below). *late_first_capture* = first seen later (e.g. the
+597-row backlog present when the ledger started on 2026-11-12). The three are reported separately, never pooled. Nothing is reconstructed backwards.
+
+**Missed nights.** Every session the ledger deals with gets one `capture_run` record: `on_time`, `delayed_processing` or `missed`.
+- On its next run the ledger processes the newest 5 sessions it missed, oldest first, before the latest session. Each is built from the same
+  point-in-time brief that night would have produced: every event in it was detected and last changed by the system, in database-stamped
+  timestamps, before that session's knowledge cutoff. So the evidence is what was already recorded at the time, not a reconstruction.
+- Such records carry `basis=delayed_processing`, `processing=delayed_processing`, `evidence_cutoff` and `original_available_at` (the filing's
+  public time), and their **actual** `captured_at`. Nothing is back-dated: the outcome clock starts after the actual capture, like every record.
+  Their sector is the one known by the cutoff. No consensus is captured for them: estimates are only ever captured live.
+- Sessions further back, or whose prices never arrived, are recorded as `missed`, a genuine gap with no observations.
+- `report` shows `session_coverage` (on_time / delayed / missed / no_record) and a separate `delayed_processing` summary.
 
 ## Outcome conventions (`mechanism/evidence_ledger/model.py`)
 - **Group** (two compared groups + the rest): *business improved, market positive* · *business improved, market not positive* (flat or fell) ·
@@ -45,18 +56,21 @@ added nothing (same chain head). Every horizon is pending: the first 30-day resu
 |---|---|
 | `cli.py capture --latest-completed` | Session = latest COMPLETED session on the market calendar (`shared.market_calendar`, close + 120 min), never the wall clock; the weekday fallback is refused (exit 5). The session's `^GSPC` bar and ≥1,000 stock bars must be stored, else exit 2 (the later fire retries). Exclusive lock `<store>.lock` (exit 3). A corrupt or half-written ledger is refused (exit 9), nothing appended. |
 | `deploy/vps/run_evidence_ledger.sh` | One-off `docker compose run --rm channel-sender` with a read-only database session, the ledger dir mounted at `/ledger`. **Its own pin and arming file** (`CURRENT_EVIDENCE_LEDGER_SHA`, `EVIDENCE_LEDGER_ARMED`): never reads or moves the mechanism pin, so arming it cannot change the pipeline image. |
-| `donchian-evidence-ledger.{service,timer}` | 07:30 and 10:15 Asia/Jerusalem (after the pipeline, final post-market retry, discontinuity scan and collector; before the 11:45 backup). `Persistent=false`: a missed night is a visible gap whose discoveries are later labelled late_first_capture, never back-dated. |
-| `deploy/db/nightly_backup.sh` | Copies `/opt/donchian/evidence_ledger/ledger.jsonl` into the night's backup dir under the ledger lock, with its sha256; the OK log line carries `ledger_lines`/`ledger_sha256`. Absent = `ledger=absent`; a failed copy is a WARNING, never a failed database backup. `pull_nightly_backup.ps1` pulls and checks it off-box when present. |
+| `donchian-evidence-ledger.{service,timer}` | 07:30 and 10:15 Asia/Jerusalem (after the pipeline, final post-market retry, discontinuity scan and collector; before the 11:45 backup). `Persistent=false` (no catch-up on boot); a missed night is handled by the next run (delayed processing or missed, above). Failures (exit 2/5/8/9) fire `donchian-evidence-ledger-alert.service`. |
+| `deploy/db/nightly_backup.sh` | Copies `/opt/donchian/evidence_ledger/ledger.jsonl` into the night's backup dir under the ledger lock, with its sha256. Two independent status lines: `OK db=…` and `LEDGER OK|NOT_ACTIVATED|FAILED …`. A ledger failure (file missing once activated, copy/checksum failure, lock timeout) keeps the good database dump and exits **4**; a dump failure exits 1. Both fire `donchian-nightly-backup-alert.service` → `run_ops_alert.sh` (logs/ops_alerts.log + one owner-only private message, with a per-status explanation). `pull_nightly_backup.ps1` pulls and checks the ledger copy off-box when present. |
 
-Verified 2026-11-12: 44 tests on Linux (the wrapper's refusal paths against a stub docker); an end-to-end `--latest-completed` run on production
-(read-only, against a copy of the ledger) resolved session 2026-11-11 at 20:39Z (11-12 not yet settled) and appended nothing (611 unchanged).
+Verified 2026-11-12: 63 tests on Linux (wrapper refusals and the real backup script against a stub docker: not activated / OK / missing file /
+held lock / failed dump); an end-to-end `--latest-completed` run on production (read-only, against a copy of the ledger) resolved session
+2026-11-11 at 20:39Z and appended nothing (611 unchanged).
 
 ### Activation (owner approval; root steps, outside any Fundamental Updates observation night)
 1. Merge this PR; build the mechanism image at the merge commit (CD build-and-push only; deploys nothing). Its tag `E` is the ledger's pin; the
    mechanism pin `CURRENT_MECHANISM_SHA` is NOT changed.
-2. Root: install the new `nightly_backup.sh` and `run_evidence_ledger.sh` (mode 755) into `/opt/donchian/scripts`, the unit + timer into
-   `/etc/systemd/system`; `mkdir -m 700 /opt/donchian/evidence_ledger`; move the existing manual ledger in (`cp -p ~deploy/evidence_ledger/ledger.jsonl`,
+2. Root: install the new `nightly_backup.sh`, `run_evidence_ledger.sh` and `run_ops_alert.sh` (mode 755; the alert wrapper is not on the VPS yet)
+   into `/opt/donchian/scripts`; install the units, timer and both alert units into `/etc/systemd/system`. The backup unit now has
+   `OnFailure=`. Owner alerts are only delivered once `OPS_ALERTS_ENABLED=1` is in `.env`; until then they are logged only, and that is a
+   separate owner decision. `mkdir -m 700 /opt/donchian/evidence_ledger`; move the existing manual ledger in (`cp -p ~deploy/evidence_ledger/ledger.jsonl`,
    check its sha256 `06503be3…`); `echo E > CURRENT_EVIDENCE_LEDGER_SHA`; `echo E > EVIDENCE_LEDGER_ARMED`.
 3. `run_evidence_ledger.sh report` (read-only) must load the chain (head `4edf18e8…`); then `systemctl daemon-reload && systemctl enable --now donchian-evidence-ledger.timer`.
-4. Next morning: the 07:30 capture log line, then the 11:45 backup line showing `ledger_lines=`.
+4. Next morning: the 07:30 capture log line, then the 11:45 backup's `OK db=` and `LEDGER OK … lines=` lines.
 Rollback: `systemctl disable --now donchian-evidence-ledger.timer`; remove the arming file. The ledger file stays (append-only evidence).

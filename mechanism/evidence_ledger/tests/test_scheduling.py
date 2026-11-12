@@ -35,12 +35,12 @@ def code_of(p):
 
 # ---------------------------------------------------------------- the session is explicit, from a trustworthy calendar
 class FakeCalendar:
-    def __init__(self, source, latest):
-        self.source, self.latest, self.asked = source, latest, None
+    def __init__(self, source, latest, sessions=()):
+        self.source, self.latest, self.asked, self.sessions = source, latest, None, sessions
 
     def get_sessions(self, today):
         self.asked = today
-        return {}, self.source
+        return {d: None for d in self.sessions}, self.source
 
     def latest_completed(self, sessions, now):
         return self.latest
@@ -48,9 +48,10 @@ class FakeCalendar:
 
 @pytest.mark.parametrize("source", ["alpaca", "cache", "stale-cache"])
 def test_latest_completed_comes_from_the_calendar_not_the_wall_clock(source):
-    cal = FakeCalendar(source, date(2026, 11, 12))
+    cal = FakeCalendar(source, date(2026, 11, 12), [date(2026, 11, 11), date(2026, 11, 12), date(2026, 11, 13)])
     now = datetime(2026, 11, 13, 5, 30, tzinfo=UTC)                  # 00:30 New York on 11-13: the calendar date is NOT the session
-    assert C.resolve_latest_completed(now, cal) == date(2026, 11, 12) and cal.asked == date(2026, 11, 13)
+    latest, calendar = C.resolve_latest_completed(now, cal)
+    assert latest == date(2026, 11, 12) and cal.asked == date(2026, 11, 13) and calendar == [date(2026, 11, 11), date(2026, 11, 12)]
 
 
 def test_the_weekday_fallback_or_an_empty_calendar_is_refused():
@@ -250,10 +251,104 @@ def test_the_unit_and_timer_are_dormant_and_referenced_by_nothing_installed():
         assert "evidence_ledger" not in t and "evidence-ledger" not in t, f.name
 
 
-def test_the_backup_copies_the_ledger_under_its_lock_and_never_fails_the_dump_because_of_it():
+def test_the_backup_copies_the_ledger_under_its_lock_and_never_deletes_the_dump_because_of_it():
     code = code_of(BACKUP)
-    block = code[code.index('LEDGER="$BASE/evidence_ledger/ledger.jsonl"'):code.index("chmod 700")]
-    assert 'flock -w 600 "$LEDGER.lock" cp -p "$LEDGER" "$DIR/evidence_ledger.jsonl"' in block and "sha256sum -c" in block
-    assert "fail " not in block and "exit" not in block and "WARNING" in block
-    assert "$LEDGER_NOTE" in code[code.index('log "OK'):]
+    block = code[code.index('LEDGER_DIR="$BASE/evidence_ledger"'):code.index("chmod 700")]
+    assert 'flock -w "$LEDGER_LOCK_WAIT" "$LEDGER.lock" cp -p "$LEDGER" "$DIR/evidence_ledger.jsonl"' in block and "sha256sum -c" in block
+    assert "fail " not in block and "exit" not in block and "LEDGER_RC=4" in block       # never fail(): that would delete the good dump
+    assert code.rstrip().endswith('exit "$LEDGER_RC"')
     assert C.store_lock.__doc__ and ".lock" in C.store_lock.__doc__          # the CLI's lock file is '<store>.lock': the same file the backup waits on
+
+
+def test_backup_failures_reach_the_owner_alert():
+    unit = code_of(REPO / "deploy" / "db" / "donchian-nightly-backup.service")
+    assert "OnFailure=donchian-nightly-backup-alert.service" in unit and "SuccessExitStatus" not in unit     # exit 1 and 4 are failures
+    alert = code_of(REPO / "deploy" / "db" / "donchian-nightly-backup-alert.service")
+    assert alert.splitlines()[-1] == "ExecStart=/opt/donchian/scripts/run_ops_alert.sh donchian-nightly-backup" and "[Install]" not in alert
+    ledger_alert = code_of(VPS / "donchian-evidence-ledger-alert.service")
+    assert ledger_alert.splitlines()[-1] == "ExecStart=/opt/donchian/scripts/run_ops_alert.sh donchian-evidence-ledger" and "[Install]" not in ledger_alert
+    assert "OnFailure=donchian-evidence-ledger-alert.service" in code_of(VPS / "donchian-evidence-ledger.service")
+    sys.path.insert(0, str(REPO / "mechanism" / "alerts"))
+    import ops_failure_alert as O
+    assert "LEDGER COPY FAILED" in O.meaning("donchian-nightly-backup", 4, "exit-code") and "kept" in O.meaning("donchian-nightly-backup", 4, "exit-code")
+    assert "DATABASE BACKUP FAILED" in O.meaning("donchian-nightly-backup", 1, "exit-code")
+    for st in (2, 5, 8, 9):
+        assert O.meaning("donchian-evidence-ledger", st, "exit-code") != O.meaning("donchian-other", st, "exit-code")
+
+
+# ---------------------------------------------------------------- the backup script, run for real against a stub docker
+@pytest.fixture
+def backup_world(tmp_path):
+    base = tmp_path / "donchian"
+    base.mkdir()
+    stub = tmp_path / "bin"
+    stub.mkdir()
+    fail_dump = tmp_path / "fail_dump"
+    d = stub / "docker"
+    d.write_text(f"""#!/usr/bin/env bash
+case "$1" in
+  ps) echo abc123 ;;
+  exec) case "$*" in *pg_dump*) [ -e "{fail_dump}" ] && exit 1; exit 0 ;; *) exit 0 ;; esac ;;
+  cp) case "$3" in *:*) exit 0 ;; *) echo "dump-bytes" > "$3" ;; esac ;;
+esac
+exit 0
+""")
+    d.chmod(d.stat().st_mode | stat.S_IEXEC)
+    env = dict(os.environ, PATH=f"{stub}:{os.environ['PATH']}", DONCHIAN_BASE=str(base), LEDGER_LOCK_WAIT="1")
+    return {"base": base, "env": env, "fail_dump": fail_dump}
+
+
+def run_backup(w):
+    r = subprocess.run(["bash", str(BACKUP)], capture_output=True, text=True, env=w["env"])
+    log = (w["base"] / "logs" / "nightly_backup.log").read_text()
+    dirs = sorted((w["base"] / "backups" / "nightly").iterdir())
+    return r.returncode, log, dirs
+
+
+@linux_only
+def test_backup_without_an_activated_ledger_is_ok_and_says_so(backup_world):
+    rc, log, dirs = run_backup(backup_world)
+    assert rc == 0 and "OK db=trading_production" in log and "LEDGER NOT_ACTIVATED" in log and (dirs[-1] / "production.dump").exists()
+
+
+@linux_only
+def test_backup_copies_the_ledger_with_its_checksum_on_its_own_status_line(backup_world):
+    led = backup_world["base"] / "evidence_ledger"
+    led.mkdir()
+    content = '{"a":1}' + chr(10) + '{"b":2}' + chr(10)
+    (led / "ledger.jsonl").write_text(content)
+    rc, log, dirs = run_backup(backup_world)
+    assert rc == 0 and "OK db=" in log and "LEDGER OK" in log and "lines=2" in log
+    assert (dirs[-1] / "evidence_ledger.jsonl").read_text() == content and (dirs[-1] / "evidence_ledger.jsonl.sha256").exists()
+
+
+@linux_only
+def test_a_missing_ledger_file_keeps_the_dump_and_exits_4(backup_world):
+    (backup_world["base"] / "evidence_ledger").mkdir()
+    rc, log, dirs = run_backup(backup_world)
+    assert rc == 4 and "OK db=" in log and "LEDGER FAILED" in log and "ledger_file_missing" in log
+    assert (dirs[-1] / "production.dump").exists() and (dirs[-1] / "production.dump.sha256").exists()
+
+
+@linux_only
+def test_a_held_ledger_lock_keeps_the_dump_and_exits_4(backup_world):
+    import fcntl
+    led = backup_world["base"] / "evidence_ledger"
+    led.mkdir()
+    (led / "ledger.jsonl").write_text("{}" + chr(10))
+    lock = open(led / "ledger.jsonl.lock", "w")
+    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        rc, log, dirs = run_backup(backup_world)
+    finally:
+        lock.close()
+    assert rc == 4 and "LEDGER FAILED" in log and (dirs[-1] / "production.dump").exists() and not (dirs[-1] / "evidence_ledger.jsonl").exists()
+
+
+@linux_only
+def test_a_failed_dump_exits_1_and_reports_no_ledger_status(backup_world):
+    backup_world["fail_dump"].write_text("1")
+    (backup_world["base"] / "evidence_ledger").mkdir()
+    r = subprocess.run(["bash", str(BACKUP)], capture_output=True, text=True, env=backup_world["env"])
+    log = (backup_world["base"] / "logs" / "nightly_backup.log").read_text()
+    assert r.returncode == 1 and "FAILED db=" in log and "LEDGER" not in log

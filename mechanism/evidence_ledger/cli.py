@@ -26,7 +26,7 @@ import sys
 from collections import Counter, defaultdict
 from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -56,8 +56,9 @@ class NotReady(RuntimeError):
     pass
 
 
-def resolve_latest_completed(now: datetime, calendar=None) -> date:
-    """The latest completed US session on a TRUSTWORTHY calendar (Alpaca or its cache). Raises ValueError on the weekday fallback or an empty one."""
+def resolve_latest_completed(now: datetime, calendar=None) -> Tuple[date, List[date]]:
+    """(latest completed session, the calendar's sessions up to it) from a TRUSTWORTHY calendar (Alpaca or its cache). ValueError on the weekday
+    fallback or an empty one."""
     if calendar is None:
         from shared import market_calendar as calendar
     sessions, source = calendar.get_sessions(now.astimezone(M.NY).date())
@@ -66,7 +67,7 @@ def resolve_latest_completed(now: datetime, calendar=None) -> date:
     s = calendar.latest_completed(sessions, now)
     if s is None:
         raise ValueError("the market calendar has no completed session")
-    return s
+    return s, sorted(d for d in sessions if d <= s)
 
 
 def check_ready(conn, session: date) -> Dict[str, int]:
@@ -85,24 +86,32 @@ def _rows(conn, sql: str, params: Sequence[Any]) -> List[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------- capture
-def capture(connect, session: date, store: Store, captured_at: datetime, days: int = 14) -> Dict[str, Any]:
+def capture(connect, session: date, store: Store, captured_at: datetime, days: int = 14, delayed: bool = False) -> Dict[str, Any]:
+    """One session's briefs into the ledger. delayed=True: a session whose own night was missed, processed now from the same point-in-time brief
+    (labelled delayed_processing, the actual captured_at kept, the sector as known by the session's cutoff, and NO consensus: estimates are only ever
+    captured live, for reports still ahead)."""
     from opportunity import brief as OB
     from opportunity import repository as R
     with connect() as conn, R.read_only(conn):
         check_ready(conn, session)
     rep = OB.run(connect, session, days)
+    cutoff = rep.get("knowledge_cutoff")
     symbols = sorted({b["symbol"] for b in rep["briefs"]})
     ny_today = captured_at.astimezone(M.NY).date()
+    sector_asof = min(captured_at, datetime.fromisoformat(cutoff)) if (delayed and cutoff) else captured_at
     with connect() as conn, R.read_only(conn):
-        sectors = {r["symbol"]: r for r in _rows(conn, SECTOR_SQL, (symbols, captured_at))} if symbols else {}
+        sectors = {r["symbol"]: r for r in _rows(conn, SECTOR_SQL, (symbols, sector_asof))} if symbols else {}
         sessions = [r["date"] for r in _rows(conn, SESSIONS_SQL, (session - timedelta(days=30), session))]
-        cons = _rows(conn, CONSENSUS_SQL, (ny_today, ny_today + timedelta(days=CONSENSUS_DAYS_AHEAD)))
+        cons = [] if delayed else _rows(conn, CONSENSUS_SQL, (ny_today, ny_today + timedelta(days=CONSENSUS_DAYS_AHEAD)))
     obs = Counter()
     for b in rep["briefs"]:
         s = sectors.get(b["symbol"])
         rec = M.observation_record(b, session, captured_at, sessions, {"sector": s["sector"], "source": s["source"],
-                                                                       "observed_at": s["captured_at"].astimezone(timezone.utc).isoformat()} if s else None)
+                                                                       "observed_at": s["captured_at"].astimezone(timezone.utc).isoformat()} if s else None,
+                                   delayed=delayed, evidence_cutoff=cutoff)
         obs[(store.append("observation", rec["key"], rec, compare="evidence_hash"), rec["basis"])] += 1
+    mode = M.RUN_DELAYED if delayed else M.RUN_ON_TIME
+    run = store.append("capture_run", session.isoformat(), M.capture_run_record(session, captured_at, mode, len(rep["briefs"]), cutoff), compare="session")
     con = Counter()
     for row in cons:
         rec = Cn.consensus_record(row, captured_at)
@@ -110,9 +119,41 @@ def capture(connect, session: date, store: Store, captured_at: datetime, days: i
             con["not_pre_release"] += 1
             continue
         con[store.append("consensus", rec["key"], rec, compare="eps_estimate")] += 1
-    return {"session": session.isoformat(), "captured_at": captured_at.isoformat(), "briefs": len(rep["briefs"]),
+    return {"session": session.isoformat(), "mode": mode, "run_record": run, "captured_at": captured_at.isoformat(), "briefs": len(rep["briefs"]),
             "observations": {f"{a}/{b}": n for (a, b), n in sorted(obs.items())}, "consensus": dict(sorted((k, v) for k, v in con.items() if v)),
             "store_lines": len(store.lines), "store_head": store.head}
+
+
+def dealt_with(store: Store) -> List[date]:
+    """Sessions the ledger has a capture_run for, plus the sessions of observations written before capture_run existed (the first manual capture)."""
+    runs = {date.fromisoformat(k) for k in store.history("capture_run")}
+    return sorted(runs | legacy_sessions(store))
+
+
+def legacy_sessions(store: Store) -> set:
+    return {date.fromisoformat(r["session"]) for r in store.records("observation") if "processing" not in r}
+
+
+def nightly(connect, store: Store, captured_at: datetime, latest: date, calendar: Sequence[date], days: int = 14) -> Dict[str, Any]:
+    """The scheduled capture: first the gap since the ledger's last session (the newest MAX_DELAYED_SESSIONS processed late, older ones recorded as
+    missed; a past session whose prices never arrived is recorded as missed too), then the latest completed session on time. NotReady from the latest
+    session propagates (exit 2: the later fire retries); what was appended before it stays (first capture wins, a re-run skips it)."""
+    delayed, missed = M.plan_sessions(calendar, latest, dealt_with(store))
+    res: Dict[str, Any] = {"missed": [], "delayed": []}
+    for d in missed:
+        store.append("capture_run", d.isoformat(), M.capture_run_record(d, captured_at, M.RUN_MISSED,
+                     reason=f"more than {M.MAX_DELAYED_SESSIONS} sessions before the next ledger run"), compare="session")
+        res["missed"].append(d.isoformat())
+    for d in delayed:
+        try:
+            r = capture(connect, d, store, captured_at, days, delayed=True)
+            res["delayed"].append({k: r[k] for k in ("session", "briefs", "observations")})
+        except NotReady as e:
+            store.append("capture_run", d.isoformat(), M.capture_run_record(d, captured_at, M.RUN_MISSED, reason=f"session data absent: {e}"),
+                         compare="session")
+            res["missed"].append(d.isoformat())
+    res["latest"] = capture(connect, latest, store, captured_at, days)
+    return res
 
 
 # ---------------------------------------------------------------- report
@@ -159,11 +200,14 @@ def report(connect, store: Store, asof: Optional[date] = None) -> Dict[str, Any]
                     outcomes[o["key"]] = [M.outcome(o, h, sessions, bars.get(o["symbol"], {}), bench, disc.get(o["symbol"], ()), peer[o["sector"]["sector"]])
                                           for h in M.HORIZONS_DAYS]
     reported = [c for c in consensus if date.fromisoformat(c["report_date"]) <= last]
+    runs = {k: v[0] for k, v in store.history("capture_run").items()}
     return dict(out, asof_session=last.isoformat(), observations=len(observations),
                 by_basis=dict(Counter(o["basis"] for o in observations)), by_group=dict(Counter(o["group"] for o in observations)),
                 with_sector=sum(1 for o in observations if o.get("sector")),
                 revisions=sum(1 for l in store.lines if l["kind"] == "observation_revision"),
-                prospective=M.summarize(observations, outcomes, M.PROSPECTIVE), late_first_capture=M.summarize(observations, outcomes, M.LATE),
+                session_coverage=M.coverage([d for d in sessions if d <= last], runs, legacy_sessions(store)),
+                prospective=M.summarize(observations, outcomes, M.PROSPECTIVE), delayed_processing=M.summarize(observations, outcomes, M.DELAYED),
+                late_first_capture=M.summarize(observations, outcomes, M.LATE),
                 consensus_stream={"stream": Cn.STREAM, "pre_release_snapshots": len(consensus), "reports_since_passed": len(reported),
                                   "revisions": sum(1 for l in store.lines if l["kind"] == "consensus_revision")},
                 outcomes={k: [asdict(x) for x in v] for k, v in outcomes.items()})
@@ -185,11 +229,14 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     now = datetime.now(timezone.utc)
     session = getattr(a, "session", None)
-    if a.cmd == "capture" and a.latest_completed:
+    if a.cmd == "capture":
         try:
-            session = resolve_latest_completed(now)
+            latest, calendar = resolve_latest_completed(now)
         except ValueError as e:
             print(f"EVIDENCE_CAPTURE refused: {e}")
+            return EXIT_REFUSED
+        if session is not None and session > latest:
+            print(f"EVIDENCE_CAPTURE refused: {session} is not a completed session yet (latest completed {latest})")
             return EXIT_REFUSED
     lock = None
     if a.cmd == "capture":
@@ -209,7 +256,10 @@ def main(argv=None) -> int:
             return EXIT_CORRUPT
         if a.cmd == "capture":
             try:
-                res = capture(db.get_sync_connection, session, store, now, a.days)
+                if a.latest_completed:
+                    res = nightly(db.get_sync_connection, store, now, latest, calendar, a.days)
+                else:                                   # an explicit session: on time only if it is the latest completed one
+                    res = capture(db.get_sync_connection, session, store, now, a.days, delayed=session < latest)
             except NotReady as e:
                 print(f"EVIDENCE_CAPTURE not ready: {e}")
                 return EXIT_NOT_READY
