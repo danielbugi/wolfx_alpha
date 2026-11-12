@@ -44,11 +44,26 @@ try {
     $actual = (Get-FileHash "$dest\production.dump" -Algorithm SHA256).Hash.ToLower()
     if ($expected -ne $actual) { throw "checksum mismatch: expected $expected got $actual" }
 
+    # Evidence Ledger copy (present only once the ledger is activated; see nightly_backup.sh). Optional: its absence is not a failure.
+    $ledgerNote = "ledger=absent"
+    $hasLedger = "$(ssh -i $SshKeyPath -o BatchMode=yes $VpsHost "test -f ${remote}/evidence_ledger.jsonl.sha256 && echo yes")".Trim()
+    if ($hasLedger -eq "yes") {
+        & scp -q -i $SshKeyPath -o BatchMode=yes `
+            "${VpsHost}:${remote}/evidence_ledger.jsonl" `
+            "${VpsHost}:${remote}/evidence_ledger.jsonl.sha256" `
+            $dest
+        if ($LASTEXITCODE -ne 0) { throw "ledger scp failed (exit $LASTEXITCODE)" }
+        $lexp = (Get-Content "$dest\evidence_ledger.jsonl.sha256").Split(' ')[0]
+        $lact = (Get-FileHash "$dest\evidence_ledger.jsonl" -Algorithm SHA256).Hash.ToLower()
+        if ($lexp -ne $lact) { throw "ledger checksum mismatch: expected $lexp got $lact" }
+        $ledgerNote = "ledger_sha256=$lact"
+    }
+
     icacls $dest /reset /Q | Out-Null
     Get-ChildItem $dest | ForEach-Object { icacls $_.FullName /inheritance:e /Q | Out-Null }
 
     $size = (Get-Item "$dest\production.dump").Length
-    Write-Log "OK $latest bytes=$size sha256=$actual"
+    Write-Log "OK $latest bytes=$size sha256=$actual $ledgerNote"
 
     Get-ChildItem $OutDir -Directory | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$RetainDays) } | ForEach-Object {
         Remove-Item $_.FullName -Recurse -Force

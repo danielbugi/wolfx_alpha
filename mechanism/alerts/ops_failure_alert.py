@@ -46,6 +46,21 @@ EXIT_MEANINGS: Mapping[str, Mapping[int, str]] = {
         5: "REFUSED before touching anything: usually FORWARD_COLLECTION_ARMED does not match CURRENT_MECHANISM_SHA (an image re-pin disarms the "
            "collector until the arming file is re-created), or there is no trustworthy market calendar. Every night it stays refused is a lost session.",
     },
+    "donchian-nightly-backup": {
+        1: "DATABASE BACKUP FAILED: no dump was kept for this night (see logs/nightly_backup.log for the reason). The previous nights' dumps are untouched; "
+           "fix the cause and run the backup by hand before the next pipeline night.",
+        4: "DATABASE BACKUP OK, EVIDENCE LEDGER COPY FAILED: tonight's database dump is kept and valid, but the Evidence Ledger file is NOT in this backup "
+           "(see the LEDGER line in logs/nightly_backup.log: missing file, copy/checksum failure or lock timeout). Check the ledger file and re-run the backup.",
+    },
+    "donchian-evidence-ledger": {
+        2: "NOT READY: the session's prices are not in the database yet. The later fire re-checks; if it is still not ready, the next night records the "
+           "session as delayed processing (or missed beyond the cap).",
+        5: "REFUSED before touching anything: not armed for the pinned image (EVIDENCE_LEDGER_ARMED vs CURRENT_EVIDENCE_LEDGER_SHA), the ledger "
+           "directory is missing, or there is no trustworthy market calendar.",
+        8: "NO DATABASE CONNECTION: nothing was captured. The later fire re-checks.",
+        9: "LEDGER FILE CORRUPT: the hash chain does not verify (an edited, truncated or half-written file). Nothing was appended; restore the file "
+           "from the last good backup copy before the next capture.",
+    },
 }
 SERVICE_RESULTS = {"exit-code": "exited with a failure status", "timeout": "timed out", "signal": "was killed by a signal",
                    "core-dump": "crashed (core dump)", "watchdog": "watchdog timeout", "start-limit-hit": "hit its start limit",

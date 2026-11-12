@@ -8,13 +8,20 @@
 #   /opt/donchian/backups/nightly/<UTC timestamp>/production.dump(.sha256)
 #   retained: RETAIN_DAYS (default 14) most recent runs, older ones deleted after a new run succeeds
 #   every run appends one line to /opt/donchian/logs/nightly_backup.log: OK or FAILED + reason
+#   plus, independently, one LEDGER line for the Evidence Ledger copy: LEDGER OK | LEDGER NOT_ACTIVATED | LEDGER FAILED + reason
+#
+# Exit statuses (the unit's OnFailure= alert, donchian-nightly-backup-alert.service, fires for 1 and 4):
+#   0  database dump OK and the ledger copied (or the ledger is not activated)
+#   1  database dump FAILED (nothing kept for this night)
+#   4  database dump OK and KEPT, but the Evidence Ledger copy FAILED (the ledger is not in tonight's backup)
 #
 # Off-box copy is a SEPARATE leg (deploy/db/pull_nightly_backup.ps1, run from the admin machine,
 # outside this VPS) -- a failure here must not depend on that machine being reachable, so this
 # script never blocks on it.
 set -uo pipefail
 
-BASE=/opt/donchian
+BASE="${DONCHIAN_BASE:-/opt/donchian}"      # the override exists only so the script can be tested against a scratch directory
+LEDGER_LOCK_WAIT="${LEDGER_LOCK_WAIT:-600}"
 OUT="$BASE/backups/nightly"
 LOG="$BASE/logs/nightly_backup.log"
 RETAIN_DAYS="${RETAIN_DAYS:-14}"
@@ -53,15 +60,35 @@ rm -f "$DIR/.restore_list_err"
 sha256sum "$DIR/production.dump" | awk '{print $1"  production.dump"}' > "$DIR/production.dump.sha256"
 ( cd "$DIR" && sha256sum -c production.dump.sha256 > /dev/null ) || fail "checksum self-check failed"
 
+# Evidence Ledger (docs/research/EVIDENCE_LEDGER.md): an append-only research file that is NOT in the database. Copied under the ledger's own lock (the
+# capture holds it while appending), so a half-written line is never copied. Its status is reported on its OWN log line and exit status: a failed copy
+# never fails or deletes the database dump above (fail() would delete it), it makes the run exit 4 so the owner is alerted.
+# Activated = the directory /opt/donchian/evidence_ledger exists (created at activation); then a missing ledger file is a failure, not "absent".
+LEDGER_DIR="$BASE/evidence_ledger"
+LEDGER="$LEDGER_DIR/ledger.jsonl"
+LEDGER_RC=0
+if [ ! -d "$LEDGER_DIR" ]; then
+  LEDGER_NOTE="LEDGER NOT_ACTIVATED dir=$DIR"
+elif [ ! -f "$LEDGER" ]; then
+  LEDGER_NOTE="LEDGER FAILED dir=$DIR reason=ledger_file_missing"; LEDGER_RC=4
+elif flock -w "$LEDGER_LOCK_WAIT" "$LEDGER.lock" cp -p "$LEDGER" "$DIR/evidence_ledger.jsonl" \
+     && ( cd "$DIR" && sha256sum evidence_ledger.jsonl > evidence_ledger.jsonl.sha256 && sha256sum -c evidence_ledger.jsonl.sha256 > /dev/null ); then
+  LEDGER_NOTE="LEDGER OK dir=$DIR lines=$(wc -l < "$DIR/evidence_ledger.jsonl") sha256=$(cut -d' ' -f1 "$DIR/evidence_ledger.jsonl.sha256")"
+else
+  rm -f "$DIR/evidence_ledger.jsonl" "$DIR/evidence_ledger.jsonl.sha256"
+  LEDGER_NOTE="LEDGER FAILED dir=$DIR reason=copy_or_checksum_failed_or_lock_timeout"; LEDGER_RC=4
+fi
+
 chmod 700 "$DIR"
 chmod 600 "$DIR"/*
 chown -R root:root "$DIR"
 
 SIZE=$(stat -c %s "$DIR/production.dump")
 log "OK db=$DB dir=$DIR bytes=$SIZE sha256=$(cut -d' ' -f1 "$DIR/production.dump.sha256")"
+log "$LEDGER_NOTE"
 
 # retention: delete completed runs older than RETAIN_DAYS, only after this run succeeded
 find "$OUT" -mindepth 1 -maxdepth 1 -type d -mtime "+$RETAIN_DAYS" -print -exec rm -rf {} \; \
   | while read -r d; do log "retention: removed $d"; done
 
-exit 0
+exit "$LEDGER_RC"
