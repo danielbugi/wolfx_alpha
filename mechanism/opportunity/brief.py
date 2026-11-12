@@ -106,7 +106,8 @@ def build(data: Mapping[str, Any], session: date, window_days: int = DEFAULT_WIN
         er = match_earnings(earnings.get(symbol, []), qe, public_day, session)
         if er and _aware(er["fetched_at"]) > cut:
             pit["earnings_refetched_after_cutoff"] += 1
-            expectations, er_day = E.expectations_fact(None, None, "the vendor row was refreshed after the knowledge cutoff; the value known then cannot be proven"), None
+            # values excluded; the report DATE (a past fact) still anchors the market window, so a later re-fetch does not move the window
+            expectations, er_day = E.expectations_fact(None, None, "the vendor row was refreshed after the knowledge cutoff; the value known then cannot be proven"), er["report_date"]
         else:
             expectations, er_day = E.expectations_fact(er, pre_release.get((symbol, er["report_date"])) if er else None), (er["report_date"] if er else None)
 

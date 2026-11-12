@@ -190,8 +190,13 @@ def test_late_detected_revised_or_recomputed_inputs_are_excluded():
 
 
 def test_a_vendor_row_refreshed_after_the_cutoff_is_not_used():
-    rep = B.build(world(event("AAA"), [er("AAA", date(2026, 11, 4), 8.0, fetched=B.cutoff(SESSION) + timedelta(seconds=1))]), SESSION)
-    assert "cannot be proven" in brief_of(rep, "AAA")["evidence"]["expectations"]["note"]
+    late = er("AAA", date(2026, 11, 3), 8.0, fetched=B.cutoff(SESSION) + timedelta(seconds=1))
+    rep = B.build(world(event("AAA"), [late]), SESSION)
+    b = brief_of(rep, "AAA")
+    assert "cannot be proven" in b["evidence"]["expectations"]["note"] and rep["pit_exclusions"] == {"earnings_refetched_after_cutoff": 1}
+    on_time = brief_of(B.build(world(event("AAA"), [dict(late, fetched_at=datetime(2026, 11, 6, tzinfo=UTC))]), SESSION), "AAA")
+    assert b["first_public"] == on_time["first_public"] == "2026-11-03"                              # a later re-fetch does not move the market window
+    assert b["evidence"]["market"] == on_time["evidence"]["market"]
 
 
 def test_no_price_after_the_session_is_read():
