@@ -88,6 +88,7 @@ def store():
 
 @pytest.fixture
 def client(store, monkeypatch):
+    monkeypatch.setenv(R.ENABLED_ENV, "1")
     monkeypatch.setattr(R, "_feed_limiter", R.RateLimiter(10_000))
     monkeypatch.setattr(R, "_detail_limiter", R.RateLimiter(10_000))
     app = FastAPI()
@@ -197,6 +198,19 @@ def test_unapplied_migration_is_a_503_without_details(client, store):
 
 
 # ======================================================================================================== rate limiting + client IP
+@pytest.mark.parametrize("value", [None, "0", "true", "yes", ""])
+def test_the_public_api_is_off_unless_explicitly_enabled(client, store, monkeypatch, value):
+    if value is None:
+        monkeypatch.delenv(R.ENABLED_ENV, raising=False)
+    else:
+        monkeypatch.setenv(R.ENABLED_ENV, value)
+    for path in ("/api/public/signals", "/api/public/signals/AAA/2026-09-30/margin-expansion"):
+        r = client.get(path)
+        assert r.status_code == 503 and r.json() == {"detail": "Fundamental Updates are not available yet"}
+    monkeypatch.setenv(R.ENABLED_ENV, "1")
+    assert client.get("/api/public/signals").status_code == 200
+
+
 def test_token_bucket():
     now = [0.0]
     rl = R.RateLimiter(60, clock=lambda: now[0])

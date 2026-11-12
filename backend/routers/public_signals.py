@@ -14,6 +14,9 @@ Safety, in order of the request:
   * ALLOWLIST: only the publication record is read and only allowlisted fields are returned (services/public_signals_service.py).
   * CACHING: Cache-Control public, max-age=300; detail pages carry an ETag (version + content hash) and answer If-None-Match with 304.
 This router imports nothing from auth and is mounted without require_authenticated_user; nothing here writes.
+
+OFF SWITCH (2026-11-12): every route answers 503 unless PUBLIC_SIGNALS_ENABLED=1. Migration 41 is applied for the owner-chat RECORD-ONLY
+validation, so without this switch a backend deploy would publish record-only updates. Public exposure is its own owner approval.
 """
 import ipaddress
 import logging
@@ -29,7 +32,16 @@ from services.public_signals_service import DEFAULT_LIMIT, MAX_LIMIT, BadRequest
 
 logger = logging.getLogger(__name__)
 
-public_signals_router = APIRouter(prefix="/api/public/signals", tags=["public-signals"])
+ENABLED_ENV = "PUBLIC_SIGNALS_ENABLED"
+
+
+def require_enabled() -> None:
+    """Read at request time, so flipping the switch needs only an env change and a restart, never a code change."""
+    if os.environ.get(ENABLED_ENV) != "1":
+        raise HTTPException(status_code=503, detail="Fundamental Updates are not available yet")
+
+
+public_signals_router = APIRouter(prefix="/api/public/signals", tags=["public-signals"], dependencies=[Depends(require_enabled)])
 
 CACHE_CONTROL = "public, max-age=300"
 FEED_PER_MIN, DETAIL_PER_MIN = 60, 120
