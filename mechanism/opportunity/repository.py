@@ -2,7 +2,7 @@
 by the explicit session; the knowledge-cutoff filters are applied in brief.py, on the timestamps returned here.
 
 Reads: fundamental_inflection_event, fundamental_feature, sec_filing, companies, earnings_calendar, price_discontinuities, stock_prices, market_index_prices
-(prices and the benchmark through research.labels.repository, the fwd_v1 readers, unchanged)."""
+(its own small price queries: the fwd_v1 label engine stays import-isolated, test_import_separation)."""
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -11,8 +11,6 @@ from typing import Any, Dict, Iterator, List, Sequence
 
 from psycopg2.extras import RealDictCursor
 
-from research.labels import repository as labels_repo
-from research.labels import sessions as labels_sessions
 
 METHOD = "inflection_v2_sec_pit"
 BENCHMARK = "^GSPC"
@@ -30,6 +28,9 @@ SELECT e.id, e.symbol, e.quarter_end, e.event_type, e.severity, e.available_at, 
  WHERE e.method_version = %s AND e.event_type = ANY(%s) AND e.available_at BETWEEN %s AND %s
  ORDER BY e.symbol, e.quarter_end, e.event_type
 """
+
+BARS_SQL = "SELECT symbol, date, close FROM stock_prices WHERE symbol = ANY(%s) AND date BETWEEN %s AND %s AND close IS NOT NULL ORDER BY symbol, date"
+BENCH_SQL = "SELECT date, close FROM market_index_prices WHERE symbol = %s AND date BETWEEN %s AND %s AND close IS NOT NULL ORDER BY date"
 
 DISCONTINUITY_SQL = """
 SELECT symbol, date, kind, ratio, detected_at FROM price_discontinuities WHERE symbol = ANY(%s) AND date BETWEEN %s AND %s ORDER BY symbol, date
@@ -68,12 +69,15 @@ def load(conn, session: date, start: date, headline_types: Sequence[str], price_
         events = _rows(conn, EVENTS_SQL, (METHOD, list(headline_types), start, session))
         symbols = sorted({e["symbol"] for e in events})
         earnings = _rows(conn, EARNINGS_SQL, (symbols, price_start, session)) if symbols else []
-        sessions, calendar_source = labels_sessions.derive_sessions(conn, price_start, session, BENCHMARK)
-        bars = labels_repo.fetch_bars(conn, symbols, price_start, session) if symbols else {}
-        bench = labels_repo.fetch_benchmark(conn, BENCHMARK, price_start, session)
+        bench = {r["date"]: float(r["close"]) for r in _rows(conn, BENCH_SQL, (BENCHMARK, price_start, session))}
+        bars: Dict[str, Dict[date, float]] = {}
+        for r in (_rows(conn, BARS_SQL, (symbols, price_start, session)) if symbols else []):
+            bars.setdefault(r["symbol"], {})[r["date"]] = float(r["close"])
         disc = _rows(conn, DISCONTINUITY_SQL, (symbols, price_start, session)) if symbols else []
-    return {"events": events, "earnings": earnings, "discontinuities": disc, "pre_release": {}, "sessions": list(sessions), "calendar_source": calendar_source,
-            "bars": {s: {d: b.close for d, b in by.items() if b.close is not None} for s, by in bars.items()}, "bench": bench}
+    # Sessions = the S&P 500's trading days (weekdays with an index close). A session missing from the index would also lack the benchmark
+    # close the market response needs, so that window is 'not available' rather than silently shifted.
+    return {"events": events, "earnings": earnings, "discontinuities": disc, "pre_release": {}, "sessions": sorted(d for d in bench if d.weekday() < 5),
+            "calendar_source": "market_index_prices:^GSPC", "bars": bars, "bench": bench}
 
 
 def latest_session(conn) -> date:
