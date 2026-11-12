@@ -363,6 +363,17 @@ except ImportError as e:
 except Exception as e:
     logger.error(f"❌ Error including deep value router: {e}")
 
+# Opportunity Intelligence v0: owner-only, read-only change briefs (docs/architecture/OPPORTUNITY_INTELLIGENCE.md)
+try:
+    from routers.opportunity import opportunity_router
+
+    app.include_router(opportunity_router)
+    logger.info("✅ Opportunity router included successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  Opportunity router not available: {e}")
+except Exception as e:
+    logger.error(f"❌ Error including opportunity router: {e}")
+
 # Import and include system health router (production-readiness checks --
 # distinct from the basic /api/health liveness check above)
 try:
