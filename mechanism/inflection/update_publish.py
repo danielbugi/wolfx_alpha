@@ -16,6 +16,10 @@ Duplicate-notification guards (each one alone prevents a repeat):
   * an exactly-once delivery claim per update (inflection_alert_delivery, dedupe key 'fu_owner:<update_key>:v1', UNIQUE): a re-run, the
     00:15 retry or a second process cannot send the same update twice; a FAILED send may be retried, a claimed or sent one never;
   * the 30-day company cooldown (a company is not posted again for a different quarter/type within 30 days);
+  * the per-session cap holds ACROSS runs: the session's own earlier picks (version-1 rows published inside the session's window, from its 16:00
+    New York close to the next weekday's close) are exempt from the cooldown, so a re-run reproduces the same picks ('exists') instead of
+    choosing the next companies, and no run records more than MAX_POSTS updates for one session. --record is refused outside that window (a late
+    manual run would otherwise land in the next session's window);
   * the legacy owner alerts must be OFF: sending refuses while INFLECTION_ALERTS_ENABLED=1, so one event can never reach the owner twice
     (once as an old alert, once as a Fundamental Update).
 
@@ -41,9 +45,10 @@ import argparse
 import json
 import os
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional
+from zoneinfo import ZoneInfo
 
 MECH = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(MECH))
@@ -80,6 +85,10 @@ RECENT_SQL = """SELECT DISTINCT ON (p.update_key) p.update_key, p.event_id, p.ve
                  WHERE p.update_key IN (SELECT update_key FROM fundamental_update_publication WHERE version = 1 AND published_at >= %s)
                  ORDER BY p.update_key, p.version DESC"""
 
+NY = ZoneInfo("America/New_York")
+SESSION_PICKS_SQL = """SELECT update_key, symbol FROM fundamental_update_publication
+                        WHERE version = 1 AND published_at >= %s AND published_at < %s"""
+
 POSTED_SQL = """SELECT symbol, MAX(published_at)::date AS last FROM fundamental_update_publication
                  WHERE version = 1 AND published_at >= %s GROUP BY symbol"""
 
@@ -103,6 +112,21 @@ def load_posted(db, session: date, cooldown_days: int = S.COOLDOWN_DAYS) -> Dict
     return {r["symbol"]: r["last"] for r in rows}
 
 
+def session_window(session: date):
+    """[the session's 16:00 New York close, the next weekday's 16:00 New York close): every scheduled run for the session (22:45 UTC and its 00:15
+    retry, or a weekend retry) falls inside; the next session's run, which starts after that session's own close, never does."""
+    nxt = session + timedelta(days=1)
+    while nxt.weekday() >= 5:
+        nxt += timedelta(days=1)
+    return datetime.combine(session, time(16), tzinfo=NY), datetime.combine(nxt, time(16), tzinfo=NY)
+
+
+def load_session_picks(db, session: date) -> Dict[str, str]:
+    """update_key -> symbol of the version-1 updates already published for this session (inside its window)."""
+    start, end = session_window(session)
+    return {r["update_key"]: r["symbol"] for r in db.execute_dict_query(SESSION_PICKS_SQL, (start, end))}
+
+
 def delivery_key(update_key: str) -> str:
     return f"{CHANNEL}:{update_key}:v1"
 
@@ -121,17 +145,27 @@ def gate(record: bool, send: bool, env: Mapping[str, str], ledger_ok: bool) -> O
 
 
 def run(session: date, *, db, ledger=None, delivery=None, sender: Optional[Callable[[Any], None]] = None, record: bool = False, send: bool = False,
-        env: Mapping[str, str] = os.environ, log: Callable[[str], None] = print) -> Dict[str, Any]:
-    """`ledger`: update_ledger.Ledger (publish). `delivery`: alerts.Delivery (claim/mark). `sender(update)`: sends one update to the owner chat."""
+        env: Mapping[str, str] = os.environ, log: Callable[[str], None] = print, now: Optional[datetime] = None) -> Dict[str, Any]:
+    """`ledger`: update_ledger.Ledger (publish). `delivery`: alerts.Delivery (claim/mark). `sender(update)`: sends one update to the owner chat.
+    `now`: the wall clock, used ONLY to refuse --record outside the session's window (the session itself is always explicit)."""
     ledger_ok = ledger_present(db)
     refused = gate(record, send, env, ledger_ok)
+    if not refused and record:
+        start, end = session_window(session)
+        t = now or datetime.now(timezone.utc)
+        if not start <= t < end:
+            refused = (f"--record for session {session} is only allowed inside its window {start.isoformat()} .. {end.isoformat()} "
+                       f"(now {t.astimezone(timezone.utc).isoformat()}): nothing recorded or sent")
     out: Dict[str, Any] = {"session": session.isoformat(), "record": record, "send": send, "refused": refused, "selected": [], "excluded": 0,
-                           "outranked": 0, "cooldown": 0, "published": 0, "exists": 0, "sent": 0, "skipped_already_claimed": 0, "send_failed": 0}
+                           "outranked": 0, "cooldown": 0, "published": 0, "exists": 0, "session_full": 0, "sent": 0, "skipped_already_claimed": 0,
+                           "send_failed": 0}
     if refused:
         log(f"FU_PUBLISH refused: {refused}")
         return out
     events = load_events(db, session)
-    posted = load_posted(db, session) if ledger_ok else {}
+    picks = load_session_picks(db, session) if ledger_ok else {}
+    mine = set(picks.values())
+    posted = {sym: d for sym, d in (load_posted(db, session) if ledger_ok else {}).items() if sym not in mine}   # this session's picks stay eligible
     r = S.select(events, session, posted)
     out.update(excluded=len(r["excluded"]), outranked=len(r["outranked"]), cooldown=len(r["cooldown"]))
     for c in r["selected"]:
@@ -140,8 +174,13 @@ def run(session: date, *, db, ledger=None, delivery=None, sender: Optional[Calla
         out["selected"].append(item)
         if not record:
             continue
+        if u.key not in picks and len(picks) >= S.MAX_POSTS:
+            item["ledger"] = "session_full"                       # the session already has its MAX_POSTS updates (an earlier run)
+            out["session_full"] += 1
+            continue
         item["ledger"] = ledger.publish(u, event_id=c.lead.get("id"), method_version=SOURCE_VERSION)        # 'published' | 'exists'
         out[item["ledger"]] = out.get(item["ledger"], 0) + 1
+        picks.setdefault(u.key, c.symbol)
         if not send:
             continue
         key = delivery_key(u.key)

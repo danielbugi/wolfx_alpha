@@ -2,7 +2,7 @@
 Pure: a fake database, ledger, delivery claim and sender; no network, no real database."""
 import os
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
 
@@ -16,9 +16,13 @@ from test_update_select import SESSION, ev  # noqa: E402
 ON = {"FU_OWNER_SEND_ENABLED": "1", "INFLECTION_ALERTS_ENABLED": "0"}
 
 
+IN_WINDOW = datetime(2026, 11, 6, 3, 45, tzinfo=timezone.utc)        # the 22:45 ET run for session 2026-11-05 (inside its window)
+
+
 class FakeDb:
-    def __init__(self, events, ledger=True, posted=None):
-        self.events, self.ledger, self.posted, self.calls, self.recent = events, ledger, posted or {}, [], []
+    """`live`: a FakeLedger whose rows ARE the publication table (cooldown and the session's picks read back from it, as in production)."""
+    def __init__(self, events, ledger=True, posted=None, live=None):
+        self.events, self.ledger, self.posted, self.calls, self.recent, self.live = events, ledger, posted or {}, [], [], live
 
     def execute_dict_query(self, q, params=None):
         self.calls.append(q)
@@ -31,8 +35,12 @@ class FakeDb:
             return [dict(e) for e in self.events]
         if "DISTINCT ON (p.update_key)" in q:
             return list(self.recent)
+        if "SELECT update_key, symbol FROM fundamental_update_publication" in q:
+            assert params[0] < params[1]
+            return [{"update_key": k, "symbol": u.symbol} for k, u in (self.live.rows.items() if self.live else ())]
         if "FROM fundamental_update_publication" in q:
-            return [{"symbol": s, "last": d} for s, d in self.posted.items()]
+            live = {u.symbol: IN_WINDOW.date() for u in self.live.rows.values()} if self.live else {}
+            return [{"symbol": s, "last": d} for s, d in {**self.posted, **live}.items()]
         raise AssertionError(q)
 
 
@@ -79,12 +87,13 @@ def night():
             ev("DDD", "fcf_turnaround", cap=2e9), ev("OLD", available_at="2026-10-01", quarter_end="2026-06-30")]
 
 
-def go(events=None, *, record=True, send=True, env=ON, ledger=None, delivery=None, sender=None, db=None):
+def go(events=None, *, record=True, send=True, env=ON, ledger=None, delivery=None, sender=None, db=None, now=IN_WINDOW):
     sent = []
     db = db or FakeDb(night() if events is None else events)
     ledger = ledger or FakeLedger()
     delivery = delivery or FakeDelivery()
-    out = P.run(SESSION, db=db, ledger=ledger, delivery=delivery, sender=sender or sent.append, record=record, send=send, env=env, log=lambda s: None)
+    out = P.run(SESSION, db=db, ledger=ledger, delivery=delivery, sender=sender or sent.append, record=record, send=send, env=env, log=lambda s: None,
+                now=now)
     return out, sent, ledger, delivery
 
 
@@ -226,3 +235,61 @@ def test_revise_refuses_without_the_ledger_and_cannot_be_combined_with_sending()
     out = P.revise(SESSION, db=FakeDb([], ledger=False), ledger=FakeLedger(), env={"FU_CORRECTIONS_ENABLED": "1"}, log=lambda s: None)
     assert out["refused"] == "migration 41 is not applied"
     assert P.main(["--session", "2026-11-05", "--revise", "--send"]) == P.EXIT_REFUSED
+
+
+# ------------------------------------------------------------------ the per-session cap holds across runs (night-1 finding 2026-11-13)
+def live(events=None):
+    ledger = FakeLedger()
+    return FakeDb(night() if events is None else events, live=ledger), ledger
+
+
+def test_a_rerun_of_the_same_session_reproduces_its_picks_instead_of_choosing_the_next_companies():
+    db, ledger = live()
+    out1, sent1, _, delivery = go(db=db, ledger=ledger)
+    out2, sent2, _, _ = go(db=db, ledger=ledger, delivery=delivery)              # the 00:15 retry after a failure later in the pipeline
+    assert out1["published"] == 3 and [u.symbol for u in sent1] == ["AAA", "BBB", "CCC"]
+    assert out2["published"] == 0 and out2["exists"] == 3 and out2["cooldown"] == 0 and sent2 == []
+    assert sorted(u.symbol for u in ledger.rows.values()) == ["AAA", "BBB", "CCC"]  # DDD is never recorded for this session
+
+
+def test_a_rerun_never_records_more_than_the_cap_even_if_a_new_company_now_outranks_one():
+    db, ledger = live()
+    go(db=db, ledger=ledger, send=False)
+    db.events = night() + [ev("EEE", "profitability_turnaround", cap=9e9)]          # detected between the two runs, ranks first
+    out2, _, _, _ = go(db=db, ledger=ledger, send=False)
+    assert out2["published"] == 0 and out2["session_full"] >= 1 and len(ledger.rows) == 3 and "EEE" not in {u.symbol for u in ledger.rows.values()}
+
+
+def test_a_failed_send_is_still_retried_by_the_same_sessions_rerun():
+    def boom(u):
+        raise RuntimeError("x")
+    db, ledger = live()
+    _, _, _, delivery = go(db=db, ledger=ledger, sender=boom)
+    out2, sent2, _, _ = go(db=db, ledger=ledger, delivery=delivery)
+    assert out2["sent"] == 3 and [u.symbol for u in sent2] == ["AAA", "BBB", "CCC"] and len(ledger.rows) == 3
+
+
+def test_the_next_session_is_not_capped_by_this_sessions_picks():
+    db, ledger = live()
+    go(db=db, ledger=ledger, send=False)
+    start, end = P.session_window(SESSION)
+    nxt_start, _ = P.session_window(date(2026, 11, 6))
+    assert end == nxt_start and start < end
+
+
+@pytest.mark.parametrize("now", [datetime(2026, 11, 5, 20, 59, tzinfo=timezone.utc),       # before the session's close (15:59 New York)
+                                 datetime(2026, 11, 6, 21, 0, tzinfo=timezone.utc)])       # at the next session's close
+def test_record_outside_the_sessions_window_is_refused(now):
+    out, sent, ledger, delivery = go(now=now)
+    assert "only allowed inside its window" in out["refused"] and ledger.rows == {} and sent == []
+
+
+def test_a_dry_run_is_allowed_at_any_time():
+    out, _, _, _ = go(record=False, send=False, now=datetime(2026, 12, 1, tzinfo=timezone.utc))
+    assert out["refused"] is None and len(out["selected"]) == 3
+
+
+def test_the_window_runs_from_the_close_to_the_next_weekdays_close():
+    s, e = P.session_window(date(2026, 11, 13))                                          # a Friday: the window spans the weekend
+    assert s.astimezone(timezone.utc) == datetime(2026, 11, 13, 21, 0, tzinfo=timezone.utc)
+    assert e.astimezone(timezone.utc) == datetime(2026, 11, 16, 21, 0, tzinfo=timezone.utc)
