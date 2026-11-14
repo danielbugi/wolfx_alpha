@@ -172,3 +172,27 @@ def test_rollback_refuses_with_rows_and_removes_everything_when_confirmed(ledger
         assert cur.fetchone() == ("migration 41 removed",)
         c.rollback()                                                                      # DDL is transactional: the test leaves everything in place
     assert _sql("SELECT count(*) > 0 FROM fundamental_update_publication") == [(True,)]
+
+
+# ------------------------------------------------------------------ overlapping recording runs (update_publish.SessionLock, real PostgreSQL)
+def test_only_one_recording_run_per_session_holds_the_lock_and_a_crash_releases_it(ledger):
+    from datetime import date
+    from inflection import update_publish as P
+    day = date(2099, 1, 2 + random.randint(0, 25))                    # a session no real run uses
+    with P.SessionLock(_connect, day) as first:
+        assert first.acquired
+        with P.SessionLock(_connect, day) as second:                   # an overlapping run (another connection)
+            assert not second.acquired
+        with P.SessionLock(_connect, date(2099, 2, 1)) as other:        # another session is independent
+            assert other.acquired
+    with P.SessionLock(_connect, day) as again:                        # released on exit
+        assert again.acquired
+    conn = psycopg2.connect(**_dsn())                                  # a run that dies without unlocking: its connection closes
+    cur = conn.cursor()
+    cur.execute("SELECT pg_try_advisory_lock(%s, %s)", (P.LOCK_CLASS, day.toordinal()))
+    assert cur.fetchone()[0]
+    with P.SessionLock(_connect, day) as blocked:
+        assert not blocked.acquired
+    conn.close()
+    with P.SessionLock(_connect, day) as after_crash:
+        assert after_crash.acquired
