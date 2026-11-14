@@ -20,6 +20,10 @@ Duplicate-notification guards (each one alone prevents a repeat):
     New York close to the next weekday's close) are exempt from the cooldown, so a re-run reproduces the same picks ('exists') instead of
     choosing the next companies, and no run records more than MAX_POSTS updates for one session. --record is refused outside that window (a late
     manual run would otherwise land in the next session's window);
+  * a re-run REUSES the session's recorded picks first (even if a newer event now outranks one), then fills only the empty slots, so its picks
+    never change and a failed send of an original pick is retried;
+  * overlapping runs: --record holds a per-session PostgreSQL advisory lock (session-level, on its own connection) for the whole run. A second
+    run for the same session while one holds it refuses before reading or writing anything; a crashed run's lock dies with its connection.
   * the legacy owner alerts must be OFF: sending refuses while INFLECTION_ALERTS_ENABLED=1, so one event can never reach the owner twice
     (once as an old alert, once as a Fundamental Update).
 
@@ -86,8 +90,9 @@ RECENT_SQL = """SELECT DISTINCT ON (p.update_key) p.update_key, p.event_id, p.ve
                  ORDER BY p.update_key, p.version DESC"""
 
 NY = ZoneInfo("America/New_York")
-SESSION_PICKS_SQL = """SELECT update_key, symbol FROM fundamental_update_publication
-                        WHERE version = 1 AND published_at >= %s AND published_at < %s"""
+SESSION_PICKS_SQL = """SELECT update_key, symbol, event_type FROM fundamental_update_publication
+                        WHERE version = 1 AND published_at >= %s AND published_at < %s ORDER BY id"""
+LOCK_CLASS = 4655                        # pg_try_advisory_lock(LOCK_CLASS, session ordinal): one Fundamental Updates recording run per session
 
 POSTED_SQL = """SELECT symbol, MAX(published_at)::date AS last FROM fundamental_update_publication
                  WHERE version = 1 AND published_at >= %s GROUP BY symbol"""
@@ -121,10 +126,60 @@ def session_window(session: date):
     return datetime.combine(session, time(16), tzinfo=NY), datetime.combine(nxt, time(16), tzinfo=NY)
 
 
-def load_session_picks(db, session: date) -> Dict[str, str]:
-    """update_key -> symbol of the version-1 updates already published for this session (inside its window)."""
+def load_session_picks(db, session: date) -> Dict[str, Dict[str, str]]:
+    """update_key -> {symbol, event_type} of the version-1 updates already published for this session (inside its window), in publication order."""
     start, end = session_window(session)
-    return {r["update_key"]: r["symbol"] for r in db.execute_dict_query(SESSION_PICKS_SQL, (start, end))}
+    return {r["update_key"]: {"symbol": r["symbol"], "event_type": r["event_type"]} for r in db.execute_dict_query(SESSION_PICKS_SQL, (start, end))}
+
+
+class SessionLock:
+    """Session-level advisory lock on a connection of its own, held for the whole recording run. `acquired` is False when another run holds it."""
+
+    def __init__(self, connect, session: date):
+        self._cm, self._session, self.acquired = connect(), session, False
+
+    def __enter__(self):
+        self._conn = self._cm.__enter__()
+        cur = self._conn.cursor()
+        cur.execute("SELECT pg_try_advisory_lock(%s, %s)", (LOCK_CLASS, self._session.toordinal()))
+        self.acquired = bool(cur.fetchone()[0])
+        self._conn.commit()
+        return self
+
+    def __exit__(self, *exc):
+        try:
+            if self.acquired:
+                cur = self._conn.cursor()
+                cur.execute("SELECT pg_advisory_unlock(%s, %s)", (LOCK_CLASS, self._session.toordinal()))
+                self._conn.commit()
+        finally:
+            return self._cm.__exit__(*exc)
+
+
+def plan(r: Mapping[str, Any], picks: Mapping[str, Mapping[str, str]]):
+    """The run's work list: the session's recorded picks first (found among this run's candidates, whatever their rank now), then this run's
+    selection for the empty slots only, within MAX_POSTS and MAX_PER_TYPE counted together with the recorded picks.
+    Returns (companies to process, recorded keys not rebuildable now, selected companies left out because the session is full)."""
+    pool = {}
+    for bucket in ("selected", "outranked", "type_capped", "cooldown"):
+        for c in r.get(bucket, []):
+            pool.setdefault(c.update.key, c)
+    reused = [pool[k] for k in picks if k in pool]
+    missing = [k for k in picks if k not in pool]
+    per_type: Dict[str, int] = {}
+    for p in picks.values():
+        per_type[p["event_type"]] = per_type.get(p["event_type"], 0) + 1
+    fill, full, slots = [], [], S.MAX_POSTS - len(picks)
+    for c in r["selected"]:
+        if c.update.key in picks:
+            continue
+        t = c.lead["event_type"]
+        if len(fill) >= slots or per_type.get(t, 0) >= S.MAX_PER_TYPE:
+            full.append(c)
+            continue
+        fill.append(c)
+        per_type[t] = per_type.get(t, 0) + 1
+    return reused + fill, missing, full
 
 
 def delivery_key(update_key: str) -> str:
@@ -157,30 +212,29 @@ def run(session: date, *, db, ledger=None, delivery=None, sender: Optional[Calla
             refused = (f"--record for session {session} is only allowed inside its window {start.isoformat()} .. {end.isoformat()} "
                        f"(now {t.astimezone(timezone.utc).isoformat()}): nothing recorded or sent")
     out: Dict[str, Any] = {"session": session.isoformat(), "record": record, "send": send, "refused": refused, "selected": [], "excluded": 0,
-                           "outranked": 0, "cooldown": 0, "published": 0, "exists": 0, "session_full": 0, "sent": 0, "skipped_already_claimed": 0,
-                           "send_failed": 0}
+                           "outranked": 0, "cooldown": 0, "published": 0, "exists": 0, "session_full": 0, "reused": 0, "pick_not_rebuildable": 0,
+                           "sent": 0, "skipped_already_claimed": 0, "send_failed": 0}
     if refused:
         log(f"FU_PUBLISH refused: {refused}")
         return out
     events = load_events(db, session)
     picks = load_session_picks(db, session) if ledger_ok else {}
-    mine = set(picks.values())
+    mine = {p["symbol"] for p in picks.values()}
     posted = {sym: d for sym, d in (load_posted(db, session) if ledger_ok else {}).items() if sym not in mine}   # this session's picks stay eligible
     r = S.select(events, session, posted)
-    out.update(excluded=len(r["excluded"]), outranked=len(r["outranked"]), cooldown=len(r["cooldown"]))
-    for c in r["selected"]:
+    work, missing, full = plan(r, picks)
+    out.update(excluded=len(r["excluded"]), outranked=len(r["outranked"]), cooldown=len(r["cooldown"]), reused=sum(c.update.key in picks for c in work),
+               pick_not_rebuildable=len(missing), session_full=len(full))
+    for k in missing:
+        log(f"FU_PUBLISH pick_not_rebuildable {k}: recorded for this session but no longer a candidate (the corrections step handles it)")
+    for c in work:
         u = c.update
         item = {"symbol": c.symbol, "key": u.key, "event_type": u.event_type, "public_date": u.public_date, "ledger": None, "delivery": None}
         out["selected"].append(item)
         if not record:
             continue
-        if u.key not in picks and len(picks) >= S.MAX_POSTS:
-            item["ledger"] = "session_full"                       # the session already has its MAX_POSTS updates (an earlier run)
-            out["session_full"] += 1
-            continue
         item["ledger"] = ledger.publish(u, event_id=c.lead.get("id"), method_version=SOURCE_VERSION)        # 'published' | 'exists'
         out[item["ledger"]] = out.get(item["ledger"], 0) + 1
-        picks.setdefault(u.key, c.symbol)
         if not send:
             continue
         key = delivery_key(u.key)
@@ -293,8 +347,15 @@ def main(argv=None) -> int:
     if gate(a.record, a.send, os.environ, ledger_ok):
         run(a.session, db=db, record=a.record, send=a.send)          # logs the refusal
         return EXIT_REFUSED
-    out = run(a.session, db=db, ledger=Ledger(db.get_sync_connection) if a.record else None, delivery=DbDelivery(db) if a.send else None,
-              sender=owner_sender() if a.send else None, record=a.record, send=a.send)
+    if not a.record:
+        run(a.session, db=db, record=False, send=False)                # a dry run: no lock needed, writes nothing
+        return EXIT_OK
+    with SessionLock(db.get_sync_connection, a.session) as lock:
+        if not lock.acquired:
+            print(f"FU_PUBLISH refused: another recording run for session {a.session} holds the lock; nothing read, recorded or sent")
+            return EXIT_REFUSED
+        out = run(a.session, db=db, ledger=Ledger(db.get_sync_connection), delivery=DbDelivery(db) if a.send else None,
+                  sender=owner_sender() if a.send else None, record=True, send=a.send)
     return EXIT_SEND_FAILED if out["send_failed"] else EXIT_OK
 
 

@@ -35,9 +35,9 @@ class FakeDb:
             return [dict(e) for e in self.events]
         if "DISTINCT ON (p.update_key)" in q:
             return list(self.recent)
-        if "SELECT update_key, symbol FROM fundamental_update_publication" in q:
-            assert params[0] < params[1]
-            return [{"update_key": k, "symbol": u.symbol} for k, u in (self.live.rows.items() if self.live else ())]
+        if "SELECT update_key, symbol, event_type FROM fundamental_update_publication" in q:
+            assert params[0] < params[1] and "ORDER BY id" in q
+            return [{"update_key": k, "symbol": u.symbol, "event_type": u.event_type} for k, u in (self.live.rows.items() if self.live else ())]
         if "FROM fundamental_update_publication" in q:
             live = {u.symbol: IN_WINDOW.date() for u in self.live.rows.values()} if self.live else {}
             return [{"symbol": s, "last": d} for s, d in {**self.posted, **live}.items()]
@@ -252,12 +252,61 @@ def test_a_rerun_of_the_same_session_reproduces_its_picks_instead_of_choosing_th
     assert sorted(u.symbol for u in ledger.rows.values()) == ["AAA", "BBB", "CCC"]  # DDD is never recorded for this session
 
 
-def test_a_rerun_never_records_more_than_the_cap_even_if_a_new_company_now_outranks_one():
+def test_a_rerun_reuses_its_picks_even_if_a_new_company_now_outranks_one():
     db, ledger = live()
     go(db=db, ledger=ledger, send=False)
     db.events = night() + [ev("EEE", "profitability_turnaround", cap=9e9)]          # detected between the two runs, ranks first
     out2, _, _, _ = go(db=db, ledger=ledger, send=False)
-    assert out2["published"] == 0 and out2["session_full"] >= 1 and len(ledger.rows) == 3 and "EEE" not in {u.symbol for u in ledger.rows.values()}
+    assert out2["published"] == 0 and out2["exists"] == 3 and out2["reused"] == 3 and out2["session_full"] == 1
+    assert [x["symbol"] for x in out2["selected"]] == ["AAA", "BBB", "CCC"] and "EEE" not in {u.symbol for u in ledger.rows.values()}
+
+
+def test_a_displaced_original_pick_with_a_failed_send_is_still_retried():
+    def boom(u):
+        raise RuntimeError("x")
+    db, ledger = live()
+    _, _, _, delivery = go(db=db, ledger=ledger, sender=boom)
+    db.events = night() + [ev("EEE", "profitability_turnaround", cap=9e9)]
+    out2, sent2, _, _ = go(db=db, ledger=ledger, delivery=delivery)
+    assert sorted(u.symbol for u in sent2) == ["AAA", "BBB", "CCC"] and out2["sent"] == 3 and len(ledger.rows) == 3
+
+
+def test_a_partial_first_run_is_completed_only_up_to_the_cap_and_type_limit():
+    db, ledger = live()
+    go(events=[ev("AAA", "profitability_turnaround", cap=5e9)], db=FakeDb([ev("AAA", "profitability_turnaround", cap=5e9)], live=ledger), ledger=ledger, send=False)
+    out2, _, _, _ = go(db=db, ledger=ledger, send=False)                            # the full night arrives: 2 empty slots
+    assert out2["reused"] == 1 and out2["published"] == 2 and len(ledger.rows) == 3
+
+
+def test_a_recorded_pick_that_is_no_longer_a_candidate_is_reported_not_replaced_beyond_the_cap():
+    db, ledger = live()
+    go(db=db, ledger=ledger, send=False)
+    db.events = [e for e in night() if e["symbol"] != "BBB"]                       # BBB's event vanished (a restatement)
+    out2, _, _, _ = go(db=db, ledger=ledger, send=False)
+    assert out2["pick_not_rebuildable"] == 1 and out2["published"] == 0 and len(ledger.rows) == 3
+
+
+def test_main_refuses_when_another_run_holds_the_session_lock(monkeypatch, capsys):
+    import types
+    calls = []
+
+    class Busy:
+        def __init__(self, connect, session):
+            self.acquired = False
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(P, "SessionLock", Busy)
+    monkeypatch.setattr(P, "run", lambda *a, **k: calls.append(k) or {"send_failed": 0, "refused": None})
+    monkeypatch.setattr(P, "ledger_present", lambda db: True)
+    fake_shared = types.ModuleType("shared")
+    fake_shared.db = types.SimpleNamespace(get_sync_connection=lambda: None)
+    monkeypatch.setitem(sys.modules, "shared", fake_shared)
+    monkeypatch.setenv("FU_OWNER_SEND_ENABLED", "0")
+    assert P.main(["--session", "2026-11-05", "--record"]) == P.EXIT_REFUSED
+    assert calls == [] and "holds the lock" in capsys.readouterr().out
 
 
 def test_a_failed_send_is_still_retried_by_the_same_sessions_rerun():
