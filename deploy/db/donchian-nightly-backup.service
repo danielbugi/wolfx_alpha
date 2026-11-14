@@ -1,7 +1,10 @@
+# Exit 1 = the database dump failed (nothing kept); exit 4 = the dump is OK and kept but the Evidence Ledger copy failed. Both fire the owner-only alert below
+# (logs/ops_alerts.log + one private message to the owner; never a channel). Installing this file is a manual administrator step.
 [Unit]
 Description=First Light: nightly production database backup
 After=docker.service
 Requires=docker.service
+OnFailure=donchian-nightly-backup-alert.service
 
 [Service]
 Type=oneshot
