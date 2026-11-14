@@ -1,0 +1,11 @@
+# OnFailure= target of donchian-nightly-backup.service (exit 1: database dump failed; exit 4: dump OK and kept, Evidence Ledger copy failed).
+# It runs run_ops_alert.sh, which ALWAYS writes one line to /opt/donchian/logs/ops_alerts.log and, once per UTC day and exit status, sends ONE message to
+# the owner's PRIVATE chat with the bot (mechanism/alerts/ops_failure_alert.py; needs OPS_ALERTS_ENABLED=1). Never a channel; it never retries the backup.
+# Installing this file is a manual administrator step; no script, workflow or CD path installs units.
+[Unit]
+Description=First Light: nightly backup FAILED (database dump or Evidence Ledger copy) -- owner alert + logs/ops_alerts.log
+
+[Service]
+Type=oneshot
+TimeoutStartSec=10m
+ExecStart=/opt/donchian/scripts/run_ops_alert.sh donchian-nightly-backup

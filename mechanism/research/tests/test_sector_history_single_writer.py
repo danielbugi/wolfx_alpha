@@ -30,6 +30,8 @@ ALLOWED_MENTIONS = {
     "deploy/db/research_roles_rollback.sql": "role rollback",
     "deploy/db/rollback_24_31.sql": "schema rollback: DROP-only (no row is ever written; test_rollback_24_31_db pins that it refuses while any table holds a row)",
     "mechanism/validate_release_b.py": "read-only production validator: classifies the tables as append-only (privilege checks only)",
+    "mechanism/evidence_ledger/cli.py": "Evidence Ledger capture/report: SELECT-only point-in-time sector lookups (captured_at <= the capture or the "
+                                        "session cutoff) inside a read-only transaction; it writes only its own ledger file",
 }
 WRITE = re.compile(r"\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM|TRUNCATE(?:\s+TABLE)?|COPY|MERGE\s+INTO|REPLACE\s+INTO)\s+(?:ONLY\s+)?(?:public\.)?("
                    + "|".join(TABLES) + r")\b", re.I)

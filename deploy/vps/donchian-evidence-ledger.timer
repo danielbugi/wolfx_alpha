@@ -1,0 +1,17 @@
+# COMMITTED BUT DORMANT. A timer only fires after an administrator installs it and runs `systemctl enable --now donchian-evidence-ledger.timer`.
+#
+# Two fires per day, Jerusalem time (the tag every other production timer uses), both inside the quiet stretch after the night's writers:
+#   07:30  first attempt: after the pipeline (and its 02:15 retry), the final post-market retry (06:00), the discontinuity scan (06:20) and the forward
+#          collector's first fire (06:45), so the session's prices and the night's Fundamental Updates events are final.
+#   10:15  the recovery attempt: the same session again; a captured night appends nothing (first capture wins), a not-ready night (exit 2) is caught here.
+# Both finish well before the nightly database backup (11:45), which copies the ledger file under the ledger's own lock.
+# Persistent=false: enabling, restarting or rebooting never triggers a catch-up run. A missed night is a visible gap: its discoveries are first captured on a later
+# night and are labelled late_first_capture, never back-dated.
+[Timer]
+OnCalendar=*-*-* 07:30:00 Asia/Jerusalem
+OnCalendar=*-*-* 10:15:00 Asia/Jerusalem
+Persistent=false
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

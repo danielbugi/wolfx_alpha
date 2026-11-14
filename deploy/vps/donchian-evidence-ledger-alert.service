@@ -1,0 +1,10 @@
+# COMMITTED BUT DORMANT. OnFailure= target of donchian-evidence-ledger.service (exit 2 not ready, 5 refused, 8 no database, 9 corrupt ledger; 3 = locked is
+# not a failure). Runs run_ops_alert.sh: one line in /opt/donchian/logs/ops_alerts.log and, once per UTC day and status, ONE message to the owner's private
+# chat (needs OPS_ALERTS_ENABLED=1). Never a channel; it never retries or changes the capture. Installing it is a manual administrator step.
+[Unit]
+Description=First Light: Evidence Ledger capture FAILED -- owner alert + logs/ops_alerts.log
+
+[Service]
+Type=oneshot
+TimeoutStartSec=10m
+ExecStart=/opt/donchian/scripts/run_ops_alert.sh donchian-evidence-ledger
